@@ -1,0 +1,176 @@
+// Helpers de DOM. Nunca usamos innerHTML com conteúdo do usuário/IA: tudo vira nó de texto.
+import { t } from './i18n.js';
+
+export function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v == null || v === false) continue;
+    if (k === 'class') el.className = v;
+    else if (k === 'style' && typeof v === 'object') Object.assign(el.style, v);
+    else if (k.startsWith('on') && typeof v === 'function') el.addEventListener(k.slice(2).toLowerCase(), v);
+    else if (k === 'dataset') Object.assign(el.dataset, v);
+    else if (k === 'value' || k === 'checked' || k === 'disabled' || k === 'selected' || k === 'type' && tag === 'input') el[k] = v;
+    else el.setAttribute(k, v === true ? '' : v);
+  }
+  const add = (c) => {
+    if (c == null || c === false) return;
+    if (Array.isArray(c)) c.forEach(add);
+    else el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
+  };
+  kids.forEach(add);
+  return el;
+}
+
+const ICONS = {
+  main: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/><path d="M19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9L19 15Z"/>',
+  worlds: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 4 5.7 4 9s-1.4 6.4-4 9c-2.6-2.6-4-5.7-4-9s1.4-6.4 4-9Z"/>',
+  characters: '<circle cx="9" cy="8" r="3.4"/><path d="M2.5 20c.6-3.6 3.2-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M17.5 14.6c2.4.2 4 1.7 4.5 4.4"/>',
+  worldbuilding: '<path d="M12 3 3 8l9 5 9-5-9-5Z"/><path d="m3 13 9 5 9-5"/><path d="m3 17.5 9 4.5 9-4.5"/>',
+  library: '<path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16.4 5.2 3.8-.9 3 15-3.8.9z" transform="translate(-1 0)"/>',
+  config: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
+  send: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  search: '<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  play: '<path d="M7 4.5v15l13-7.5L7 4.5Z"/>',
+  download: '<path d="M12 4v11M7 10.5l5 5 5-5M4 20h16"/>',
+  edit: '<path d="M4 20h4L19 9l-4-4L4 16v4Z"/><path d="m13.5 6.5 4 4"/>',
+  trash: '<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/>',
+  more: '<circle cx="5" cy="12" r="1.4"/><circle cx="12" cy="12" r="1.4"/><circle cx="19" cy="12" r="1.4"/>',
+  clip: '<path d="m21 11-8.5 8.5a5.5 5.5 0 0 1-7.8-7.8l9-9a3.7 3.7 0 0 1 5.2 5.2l-9 9a1.8 1.8 0 0 1-2.6-2.6L15 7.5"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  sparkle: '<path d="M12 3l1.9 5.1L19 10l-5.1 1.9L12 17l-1.9-5.1L5 10l5.1-1.9L12 3Z"/>',
+  copy: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M16 8V6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v8a2 2 0 0 0 2 2h2"/>',
+  upload: '<path d="M12 16V5M7 9.5l5-5 5 5M4 20h16"/>',
+  refresh: '<path d="M20 11a8 8 0 0 0-14.5-4M4 4v4h4M4 13a8 8 0 0 0 14.5 4M20 20v-4h-4"/>',
+  tag: '<path d="M3 12V4h8l10 10-8 8L3 12Z"/><circle cx="7.5" cy="8.5" r="1.2"/>',
+  panel: '<rect x="3" y="4" width="18" height="16" rx="3"/><path d="M9 4v16"/>',
+  warn: '<path d="M12 4 2.5 20h19L12 4Z"/><path d="M12 10v4M12 17h0"/>',
+  file: '<path d="M6 3h8l5 5v13H6z"/><path d="M14 3v5h5"/>',
+  image: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 4 4 3-3 4 4"/>',
+  video: '<rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3"/>',
+  audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+  doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>',
+  sheet: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/>',
+  slides: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
+  mic: '<rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/>',
+  globe: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c2.6 2.6 4 5.7 4 9s-1.4 6.4-4 9c-2.6-2.6-4-5.7-4-9s1.4-6.4 4-9Z"/>',
+};
+export function icon(name, size = 18) {
+  const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  s.setAttribute('width', size); s.setAttribute('height', size); s.setAttribute('viewBox', '0 0 24 24');
+  s.setAttribute('fill', 'none'); s.setAttribute('stroke', 'currentColor'); s.setAttribute('stroke-width', '1.7');
+  s.setAttribute('stroke-linecap', 'round'); s.setAttribute('stroke-linejoin', 'round');
+  s.innerHTML = ICONS[name] || ICONS.file; // conteúdo estático, nunca vindo do usuário
+  return s;
+}
+export const kindIcon = (kind) => icon({ image: 'image', video: 'video', audio: 'audio', document: 'doc', spreadsheet: 'sheet', presentation: 'slides', text: 'file' }[kind] || 'file', 16);
+
+export function toast(msg, type = '') {
+  const box = document.getElementById('toasts');
+  const el = h('div', { class: 'toast ' + type }, msg);
+  box.appendChild(el);
+  setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; setTimeout(() => el.remove(), 300); }, type === 'err' ? 6000 : 3000);
+}
+
+export function modal(title, body, buttons) {
+  return new Promise((resolve) => {
+    const close = (v) => { bg.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const onKey = (e) => { if (e.key === 'Escape') close(null); };
+    const foot = h('div', { class: 'foot' }, (buttons || []).map((b) => h('button', { class: 'btn ' + (b.cls || ''), onclick: () => close(b.value) }, b.label)));
+    const bg = h('div', { class: 'modal-bg', onmousedown: (e) => { if (e.target === bg) close(null); } }, h('div', { class: 'modal' }, h('h2', null, title), body, foot));
+    document.body.appendChild(bg);
+    document.addEventListener('keydown', onKey);
+    const first = bg.querySelector('input,textarea,select'); if (first) first.focus();
+  });
+}
+export async function confirmDialog(msg, danger = true, okLabel) {
+  const v = await modal(t('Confirmar'), h('p', { class: 'muted', style: { margin: 0 } }, msg),
+    [{ label: t('Cancelar'), value: false }, { label: okLabel || (danger ? t('Apagar') : t('Continuar')), value: true, cls: danger ? 'danger' : 'primary' }]);
+  return v === true;
+}
+
+// campo de tags (chips + input)
+export function tagsInput(values, onChange, placeholder) {
+  let list = (values || []).slice();
+  const wrap = h('div', { class: 'tags' });
+  const input = h('input', { placeholder: placeholder || t('adicionar tag…') });
+  const commit = (raw) => {
+    raw.split(/[,;\n]/).map((s) => s.trim().toLowerCase()).filter(Boolean).forEach((v) => { if (!list.includes(v) && list.length < 20) list.push(v); });
+    render(); onChange(list.slice());
+  };
+  function render() {
+    wrap.replaceChildren(...list.map((v) => h('span', { class: 'chip solid' }, v, h('span', { class: 'x', onclick: () => { list = list.filter((x) => x !== v); render(); onChange(list.slice()); } }, '×'))), input);
+  }
+  input.addEventListener('keydown', (e) => {
+    if ((e.key === 'Enter' || e.key === ',') && input.value.trim()) { e.preventDefault(); const v = input.value; input.value = ''; commit(v); }
+    else if (e.key === 'Backspace' && !input.value && list.length) { list.pop(); render(); onChange(list.slice()); }
+  });
+  input.addEventListener('blur', () => { if (input.value.trim()) { const v = input.value; input.value = ''; commit(v); } });
+  wrap.addEventListener('click', () => input.focus());
+  render();
+  wrap.get = () => list.slice();
+  return wrap;
+}
+
+export function seg(options, value, onChange) {
+  const el = h('div', { class: 'seg' });
+  const paint = (v) => el.replaceChildren(...options.map(([val, label]) => h('button', { type: 'button', class: val === v ? 'on' : '', onclick: () => { paint(val); onChange(val); } }, label)));
+  paint(value);
+  return el;
+}
+
+export function field(label, control, hint) {
+  return h('div', { class: 'field' }, label ? h('label', { class: 'f' }, label) : null, control, hint ? h('div', { class: 'hint' }, hint) : null);
+}
+export function range(min, max, step, value, onInput, fmt) {
+  const out = h('output', null, fmt ? fmt(value) : value);
+  const inp = h('input', { type: 'range', min, max, step, value });
+  inp.addEventListener('input', () => { const v = parseFloat(inp.value); out.textContent = fmt ? fmt(v) : v; onInput(v); });
+  return h('div', { class: 'rng' }, inp, out);
+}
+export function select(options, value, onChange, attrs) {
+  const el = h('select', attrs, options.map(([v, l]) => h('option', { value: v, selected: v === value }, l)));
+  el.value = value;
+  el.addEventListener('change', () => onChange(el.value));
+  return el;
+}
+export function checkbox(label, checked, onChange) {
+  const inp = h('input', { type: 'checkbox', checked: !!checked });
+  inp.addEventListener('change', () => onChange(inp.checked));
+  return h('label', { class: 'check' }, inp, h('span', null, label));
+}
+export function accordion(title, body, open = false, right) {
+  const el = h('div', { class: 'acc' + (open ? ' open' : '') },
+    h('div', { class: 'hd', onclick: () => el.classList.toggle('open') }, h('span', { class: 'tt' }, title), right || null, h('span', { class: 'chev' }, icon('chev', 16))),
+    h('div', { class: 'bd' }, body));
+  return el;
+}
+
+export function popover(anchor, content, onClose) {
+  const r = anchor.getBoundingClientRect();
+  const pop = h('div', { class: 'pop' }, content);
+  document.body.appendChild(pop);
+  const w = pop.offsetWidth, hgt = pop.offsetHeight;
+  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+  pop.style.top = (r.top - hgt - 8 > 8 ? r.top - hgt - 8 : r.bottom + 8) + 'px';
+  const off = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
+  const close = () => { pop.remove(); document.removeEventListener('mousedown', off); if (onClose) onClose(); };
+  setTimeout(() => document.addEventListener('mousedown', off), 0);
+  pop.close = close;
+  return pop;
+}
+
+export const fmtBytes = (n) => { if (!n) return '0 B'; const u = ['B', 'KB', 'MB', 'GB']; let i = 0; while (n >= 1024 && i < 3) { n /= 1024; i++; } return (i ? n.toFixed(n < 10 ? 1 : 0) : n) + ' ' + u[i]; };
+export const fmtDate = (iso) => { try { return new Date(iso).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }); } catch (e) { return ''; } };
+export function download(filename, text, mime = 'application/json') {
+  const a = h('a', { href: URL.createObjectURL(new Blob([text], { type: mime })), download: filename });
+  document.body.appendChild(a); a.click(); a.remove();
+}
+export function debounce(fn, ms) { let tm; return (...a) => { clearTimeout(tm); tm = setTimeout(() => fn(...a), ms); }; }
+export const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
+export function gradient(p) {
+  const sky = (p && p.sky) || '#2a2a2a', ground = (p && p.ground) || '#111';
+  return `linear-gradient(180deg, ${sky} 0%, ${sky} 52%, ${ground} 52%, ${ground} 100%)`;
+}

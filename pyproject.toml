@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "asta"
+dynamic = ["version"]
+description = "WebUI para criar mundos virtuais 3D jogáveis e persistentes, habitados por personagens com agentes de IA."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+authors = [{ name = "KMC" }]
+keywords = ["ai", "agents", "worlds", "three.js", "roleplay", "game", "webui"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Topic :: Games/Entertainment",
+]
+# Zero dependências obrigatórias: o núcleo usa apenas a biblioteca padrão do Python.
+dependencies = []
+
+[project.optional-dependencies]
+# Modelos locais rodando dentro do próprio ASTA (GGUF baixado do Hugging Face)
+local = ["llama-cpp-python>=0.2.90"]
+# Extração de texto de PDFs mais precisa
+docs = ["pypdf>=4.0"]
+
+[project.urls]
+Homepage = "https://github.com/KMC1525/ASTA"
+Issues = "https://github.com/KMC1525/ASTA/issues"
+
+[project.scripts]
+asta = "asta.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["asta*"]
+
+[tool.setuptools.package-data]
+asta = ["web/**/*", "runtime/**/*"]
+
+[tool.setuptools.dynamic]
+version = { attr = "asta.__version__" }

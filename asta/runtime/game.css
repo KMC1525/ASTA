@@ -1,0 +1,92 @@
+/* ASTA runtime — interface do jogo (preto + detalhes brancos) */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:var(--bg);color:var(--text);font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;touch-action:none;user-select:none}
+#app{position:fixed;inset:0}
+#view{position:absolute;inset:0;width:100%;height:100%;display:block;outline:none}
+#hud{position:absolute;inset:0;pointer-events:none}
+.muted{color:rgba(255,255,255,.55)}.small{font-size:12px}
+.btn{pointer-events:auto;cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(10,10,10,.7);color:var(--text);border-radius:999px;padding:8px 16px;font:inherit;backdrop-filter:blur(8px);transition:background .15s,border-color .15s,transform .1s}
+.btn:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.35)}
+.btn:active{transform:scale(.97)}
+.btn:disabled{opacity:.4;cursor:default}
+.btn.primary{background:var(--accent);color:#000;border-color:var(--accent);font-weight:600;padding:11px 28px;font-size:15px}
+.btn.primary:hover{background:#fff;opacity:.92}
+.btn.icon{width:38px;height:38px;padding:0;display:grid;place-items:center;font-size:16px}
+.btn.on{background:rgba(255,255,255,.16);border-color:rgba(255,255,255,.4)}
+
+/* tela inicial */
+#start{position:absolute;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,rgba(0,0,0,.55),rgba(0,0,0,.92));z-index:20;padding:20px}
+#start.hidden{display:none}
+#start .card{width:min(520px,100%);text-align:center}
+#start .brand{letter-spacing:.5em;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:18px;padding-left:.5em}
+#start h1{font-size:clamp(26px,5vw,38px);font-weight:600;letter-spacing:-.02em;margin:0 0 10px}
+#start p{margin:6px 0 18px}
+#s-status{margin-top:14px;min-height:18px}
+.help{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px 14px;justify-content:center;color:rgba(255,255,255,.5)}
+.help kbd,.kbd{display:inline-block;min-width:22px;padding:1px 6px;border:1px solid rgba(255,255,255,.25);border-radius:6px;font:11px ui-monospace,Menlo,monospace;color:#fff;text-align:center}
+
+/* HUD */
+.hud-tl{position:absolute;left:16px;top:14px;font-size:12px;color:rgba(255,255,255,.6);letter-spacing:.02em;max-width:40vw;text-shadow:0 1px 6px #000}
+#compass{position:absolute;left:50%;top:12px;transform:translateX(-50%);font-size:12px;letter-spacing:.2em;color:rgba(255,255,255,.75);text-shadow:0 1px 6px #000;padding:3px 12px;border:1px solid rgba(255,255,255,.14);border-radius:999px;background:rgba(0,0,0,.35)}
+#minimap{position:absolute;right:14px;top:14px;width:132px;height:132px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(0,0,0,.45)}
+#clock{position:absolute;right:14px;top:154px;width:132px;text-align:center;font-size:12px;color:rgba(255,255,255,.7);text-shadow:0 1px 6px #000}
+#place{position:absolute;left:50%;top:44px;transform:translateX(-50%);font-size:13px;color:#fff;text-shadow:0 1px 8px #000;opacity:0;transition:opacity .5s}
+#place.show{opacity:.95}
+#crosshair{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px 0 0 -3px;border-radius:50%;background:rgba(255,255,255,.85);box-shadow:0 0 0 1.5px rgba(0,0,0,.45)}
+#prompt{position:absolute;left:50%;bottom:92px;transform:translateX(-50%);padding:8px 16px;border-radius:999px;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.2);color:#fff;font-size:14px;opacity:0;transition:opacity .15s;white-space:nowrap}
+#prompt.show{opacity:1;pointer-events:auto;cursor:pointer}
+#toolbar{position:absolute;left:14px;bottom:14px;display:flex;gap:8px}
+#toast{position:absolute;left:50%;bottom:150px;transform:translateX(-50%);padding:8px 16px;border-radius:12px;background:rgba(0,0,0,.75);border:1px solid rgba(255,255,255,.18);font-size:13px;opacity:0;transition:opacity .25s;max-width:min(90vw,520px);text-align:center}
+#toast.show{opacity:1}
+#fps{position:absolute;left:14px;top:40px;font:11px ui-monospace,Menlo,monospace;color:#9f9}
+.bubble{position:absolute;max-width:260px;padding:8px 12px;border-radius:14px;background:rgba(0,0,0,.78);border:1px solid rgba(255,255,255,.22);color:#fff;font-size:13px;transform:translate(-50%,-100%);pointer-events:none;transition:opacity .3s}
+.bubble b{display:block;font-size:11px;opacity:.6;margin-bottom:2px;font-weight:500}
+
+/* painel de conversa */
+#chat{position:absolute;left:50%;bottom:14px;transform:translateX(-50%);width:min(660px,calc(100vw - 20px));max-height:min(62vh,520px);display:none;flex-direction:column;background:rgba(6,6,6,.88);border:1px solid rgba(255,255,255,.2);border-radius:18px;backdrop-filter:blur(14px);pointer-events:auto;z-index:15;box-shadow:0 20px 60px rgba(0,0,0,.6);user-select:text}
+#chat.open{display:flex}
+#chat .ch-head{display:flex;align-items:center;gap:10px;padding:12px 14px;border-bottom:1px solid rgba(255,255,255,.1)}
+#chat .ch-av{width:30px;height:30px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;font-weight:700;font-size:13px;flex:none}
+#chat .ch-name{font-weight:600}
+#chat .ch-sub{font-size:12px;color:rgba(255,255,255,.5)}
+#chat .grow{flex:1;min-width:0}
+#chat .ch-msgs{overflow:auto;padding:12px 14px;display:flex;flex-direction:column;gap:8px;min-height:90px}
+#chat .m{max-width:86%;padding:8px 12px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word;line-height:1.45}
+#chat .m.me{align-self:flex-end;background:#fff;color:#000;border-bottom-right-radius:4px}
+#chat .m.npc{align-self:flex-start;background:rgba(255,255,255,.1);border-bottom-left-radius:4px}
+#chat .m.sys{align-self:center;color:rgba(255,255,255,.5);font-size:12px;background:none;padding:2px}
+#chat .m.act{align-self:flex-start;color:rgba(255,255,255,.55);font-size:12px;font-style:italic;background:none;padding:0 4px}
+#chat .ch-in{display:flex;gap:8px;padding:10px 12px;border-top:1px solid rgba(255,255,255,.1);align-items:flex-end}
+#chat textarea{flex:1;resize:none;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.15);border-radius:14px;color:#fff;padding:9px 12px;font:inherit;outline:none;max-height:90px;min-height:38px}
+#chat textarea:focus{border-color:rgba(255,255,255,.45)}
+#chat .btn.send{background:#fff;color:#000;border-color:#fff}
+#chat .btn.rec.on{background:#fff;color:#000;animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.55}}
+
+/* configurações do jogo */
+#settings{position:absolute;inset:0;display:none;place-items:center;background:rgba(0,0,0,.6);z-index:30;pointer-events:auto;padding:14px}
+#settings.open{display:grid}
+#settings .panel{width:min(480px,100%);max-height:92vh;overflow:auto;background:#050505;border:1px solid rgba(255,255,255,.2);border-radius:18px;padding:18px 20px;user-select:text}
+#settings h2{margin:0 0 4px;font-size:17px}
+#settings h3{margin:18px 0 8px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:rgba(255,255,255,.5);font-weight:600}
+#settings label{display:block;margin:8px 0 3px;font-size:12px;color:rgba(255,255,255,.65)}
+#settings input,#settings select{width:100%;background:rgba(255,255,255,.07);border:1px solid rgba(255,255,255,.16);border-radius:10px;color:#fff;padding:8px 10px;font:inherit;outline:none}
+#settings input[type=checkbox]{width:auto;margin-right:8px}
+#settings input[type=range]{padding:0}
+#settings .row{display:flex;gap:10px}.row>*{flex:1}
+#settings .check{display:flex;align-items:center;margin:8px 0;color:var(--text);font-size:13px}
+#settings .foot{display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+#settings select option{background:#111}
+
+/* controles de toque */
+#touch{display:none}
+body.touch #touch{display:block}
+#joy{position:absolute;left:22px;bottom:38px;width:128px;height:128px;border-radius:50%;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.06);pointer-events:auto;touch-action:none}
+#joy i{position:absolute;left:50%;top:50%;width:52px;height:52px;margin:-26px;border-radius:50%;background:rgba(255,255,255,.35)}
+#tbtns{position:absolute;right:22px;bottom:38px;display:flex;flex-direction:column;gap:10px;pointer-events:auto}
+#tbtns .btn{width:56px;height:56px;padding:0;font-size:15px}
+body.touch #toolbar{bottom:auto;top:56px}
+body.touch #minimap{width:96px;height:96px}
+body.touch #clock{top:116px;width:96px}
+body.touch #chat{bottom:8px}
+@media (max-width:640px){#minimap{width:96px;height:96px}#clock{top:116px;width:96px}#compass{top:10px;font-size:11px}}

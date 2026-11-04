@@ -1,0 +1,117 @@
+"""Provedor nativo da API Messages da Anthropic (Claude)."""
+from __future__ import annotations
+
+import json
+from typing import Any, Dict, Iterator, List
+
+from . import http
+from .base import Provider, ProviderError, content_images, content_text, split_system
+
+API_VERSION = "2023-06-01"
+
+
+class AnthropicProvider(Provider):
+    vision = True
+
+    def __init__(self, cfg: Dict[str, Any]):
+        super().__init__(cfg)
+        self.base = (cfg.get("base_url") or "https://api.anthropic.com").rstrip("/")
+        self.key = cfg.get("api_key") or ""
+        self.label = cfg.get("label", "Anthropic")
+
+    def _headers(self) -> Dict[str, str]:
+        if not self.key:
+            raise ProviderError("Informe a chave de API da Anthropic em Configuração → Provedores.")
+        return {"x-api-key": self.key, "anthropic-version": API_VERSION}
+
+    def _convert(self, messages: List[dict], system: str):
+        sys_text, rest = split_system(messages, system)
+        out: List[dict] = []
+        for m in rest:
+            role = "assistant" if m["role"] == "assistant" else "user"
+            content = m.get("content")
+            blocks: List[dict] = []
+            imgs = content_images(content)
+            if imgs and self.vision:
+                for img in imgs:
+                    blocks.append(
+                        {
+                            "type": "image",
+                            "source": {
+                                "type": "base64",
+                                "media_type": img.get("media_type", "image/png"),
+                                "data": img.get("data", ""),
+                            },
+                        }
+                    )
+            txt = content_text(content)
+            if txt.strip():
+                blocks.append({"type": "text", "text": txt})
+            if not blocks:
+                continue
+            if out and out[-1]["role"] == role:  # a API exige alternância de papéis
+                out[-1]["content"].extend(blocks)
+            else:
+                out.append({"role": role, "content": blocks})
+        if not out or out[0]["role"] != "user":
+            out.insert(0, {"role": "user", "content": [{"type": "text", "text": "(início)"}]})
+        return sys_text, out
+
+    def _body(self, messages, system, temperature, max_tokens, stream) -> dict:
+        if not self.model:
+            raise ProviderError("Nenhum modelo selecionado. Escolha um modelo em Configuração → Provedores.")
+        sys_text, msgs = self._convert(messages, system)
+        body: Dict[str, Any] = {
+            "model": self.model,
+            "max_tokens": int(max_tokens),
+            "messages": msgs,
+            "temperature": temperature,
+            "stream": stream,
+        }
+        if sys_text:
+            body["system"] = sys_text
+        return body
+
+    def _chat(self, messages, system, temperature, max_tokens, json_mode) -> str:
+        body = self._body(messages, system, temperature, max_tokens, False)
+        for _ in range(2):
+            try:
+                data = http.post_json(self.base + "/v1/messages", body, self._headers(), timeout=300)
+                break
+            except ProviderError as err:
+                if err.status == 400 and "temperature" in str(err).lower() and "temperature" in body:
+                    body.pop("temperature")
+                    continue
+                raise
+        else:  # pragma: no cover
+            raise ProviderError("A API rejeitou os parâmetros da requisição.")
+        parts = [b.get("text", "") for b in data.get("content", []) if b.get("type") == "text"]
+        return "".join(parts).strip()
+
+    def _stream(self, messages, system, temperature, max_tokens) -> Iterator[str]:
+        body = self._body(messages, system, temperature, max_tokens, True)
+        for _ in range(2):
+            started = False
+            try:
+                for evt, data in http.stream_sse(self.base + "/v1/messages", body, self._headers(), timeout=300):
+                    started = True
+                    if evt == "error":
+                        raise ProviderError(data[:300])
+                    if evt != "content_block_delta":
+                        continue
+                    try:
+                        delta = json.loads(data).get("delta", {})
+                    except json.JSONDecodeError:
+                        continue
+                    if delta.get("type") == "text_delta" and delta.get("text"):
+                        yield delta["text"]
+                return
+            except ProviderError as err:
+                if not started and err.status == 400 and "temperature" in str(err).lower() and "temperature" in body:
+                    body.pop("temperature")
+                    continue
+                raise
+
+    def list_models(self) -> List[str]:
+        data = http.get_json(self.base + "/v1/models?limit=100", self._headers(), timeout=20)
+        return [m["id"] for m in data.get("data", []) if m.get("id")]

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="ui/ux/theme.css">
+</head>
+<body style="background:{{BG}}">
+<div id="app">
+  <canvas id="view"></canvas>
+  <div id="hud"></div>
+  <div id="start">
+    <div class="card">
+      <div class="brand">ASTA</div>
+      <h1 id="s-title">{{TITLE}}</h1>
+      <p id="s-desc" class="muted"></p>
+      <p id="s-intro"></p>
+      <button id="s-play" class="btn primary" disabled>…</button>
+      <div id="s-status" class="muted small"></div>
+      <div id="s-help" class="help small"></div>
+    </div>
+  </div>
+  <noscript><div style="padding:24px;color:#fff">Este mundo precisa de JavaScript.</div></noscript>
+</div>
+<script src="code/config.js"></script>
+<script src="code/world.data.js"></script>
+<script src="chars/chars.js"></script>
+<script src="sound/sound.js"></script>
+<script src="ui/ux/ux.js"></script>
+<script src="code/vendor/three.min.js"></script>
+<script src="code/core.js"></script>
+<script src="code/scene.js"></script>
+<script src="code/actors.js"></script>
+<script src="code/audio.js"></script>
+<script src="code/agent.js"></script>
+<script src="code/main.js"></script>
+</body>
+</html>
