@@ -15,82 +15,19 @@ from ..providers import ProviderError, build_provider
 from ..storage import Store
 from ..util import hardware_info, new_id, now_iso, safe_filename, slugify, text
 from . import prompts, rulebased
-from .llm import call_json
+from .runner import TRANSIENT, Cancelled, Runner  # noqa: F401  (reexportados)
 from .schema import (
     BIOME_DEFAULTS, BUDGETS, budget_for, normalize_audio, normalize_ux, normalize_world, palette_for,
 )
 
 STEPS = ["attachments", "analyst", "planner", "characters", "architect", "sound_ux", "reviewer", "package"]
-TRANSIENT = (408, 409, 425, 429, 500, 502, 503, 504, 529)
 
 
-class Cancelled(Exception):
-    pass
+class Pipeline(Runner):
+    domain = "world"
 
-
-class Pipeline:
     def __init__(self, store: Store, emit: Callable[[dict], None], cancelled: Callable[[], bool] = lambda: False):
-        self.store = store
-        self.emit = emit
-        self.cancelled = cancelled
-        self.logs: List[Tuple[str, str]] = []
-        self.warnings: List[str] = []
-        self._log_n = 0
-
-    # ------------------------------------------------------------------ helpers
-    def _check(self) -> None:
-        if self.cancelled():
-            raise Cancelled()
-
-    def _step(self, sid: str, status: str, **detail: Any) -> None:
-        self.emit({"type": "step", "id": sid, "status": status, "detail": detail, "t": time.time()})
-
-    def _log(self, agent: str, system: str, instruction: str, payload: Any, output: str) -> None:
-        self._log_n += 1
-        body = (
-            f"# Agente: {agent}\n\n## Instruções\n\n```\n{system}{instruction}\n```\n\n"
-            f"## Entrada (JSON)\n\n```json\n{json.dumps(payload, ensure_ascii=False, indent=2)[:20000]}\n```\n\n"
-            f"## Saída\n\n```json\n{output}\n```\n"
-        )
-        self.logs.append((f"{self._log_n:02d}-{agent}.md", body))
-
-    def _agent(
-        self, step: str, agent: str, instruction: str, payload: Dict[str, Any], fallback: Callable[[Dict[str, Any]], Dict[str, Any]],
-        *, images: Optional[List[dict]] = None, tokens_mult: float = 1.0, feedback: bool = False,
-    ) -> Tuple[Dict[str, Any], bool]:
-        """Executa um agente. JSON inválido → fallback determinístico. Erro de rede/credencial → falha o job."""
-        self._check()
-        status = "running"
-        self._step(step, status, revision=feedback)
-        system = prompts.system_prompt(agent, self.language, self.gen.get("content", "free"))
-        last: Optional[Exception] = None
-        for attempt in range(3):
-            try:
-                obj, raw = call_json(
-                    self.provider, system, instruction, payload, images=images,
-                    temperature=float(self.gen.get("temperature", 0.8)),
-                    max_tokens=int(int(self.gen.get("max_tokens", 6000)) * tokens_mult),
-                    cancelled=self.cancelled,
-                )
-                self._log(agent, system, instruction, payload, raw)
-                return obj, False
-            except ProviderError as exc:
-                if str(exc) == "cancelado":
-                    raise Cancelled() from None
-                last = exc
-                if exc.status in TRANSIENT and attempt < 2:
-                    for _ in range(int(3 * (attempt + 1) * 2)):  # espera cancelável
-                        self._check()
-                        time.sleep(0.5)
-                    continue
-                raise
-            except ValueError as exc:  # JSON inválido mesmo após reparo
-                last = exc
-                break
-        self.warnings.append(f"{agent}: fallback ({last})")
-        out = fallback(payload)
-        self._log(agent, system, instruction, payload, "// FALLBACK determinístico: " + str(last) + "\n" + json.dumps(out, ensure_ascii=False, indent=2))
-        return out, True
+        super().__init__(store, emit, cancelled)
 
     # ------------------------------------------------------------------ execução
     def run(self, req: Dict[str, Any]) -> Dict[str, Any]:
@@ -108,7 +45,7 @@ class Pipeline:
         budget = budget_for(tier)
         prompt = str(req.get("prompt") or "").strip()
         project = st.get_project(req["project_id"]) if req.get("project_id") else None
-        if req.get("project_id") and not project:
+        if req.get("project_id") and (not project or project.get("kind", "world") != "world"):
             raise ValueError("Projeto não encontrado")
         previous = st.load_version(project["id"]) if project else None
         self.language = "the same language as the user's prompt"

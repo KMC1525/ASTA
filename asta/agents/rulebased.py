@@ -12,12 +12,13 @@ import re
 from typing import Any, Dict, List
 
 PT_WORDS = {" de ", " que ", " um ", " uma ", " com ", " para ", " em ", " no ", " na ", " os ", " as ", " do ", " da ",
-            " você", " vila", " mundo", " floresta", " noite", " chuva", " olá", " oi ", " não", " sim", " por "}
+            " você", " vila", " mundo", " floresta", " noite", " chuva", " olá", " oi ", " não", " sim", " por ",
+            " meu ", " minha ", " nome ", " estou ", " hoje ", " tudo ", " bem ", " gosto ", " quero ", " mas ", " como ", " pra ", " muito ", " obrigad"}
 ES_WORDS = {" el ", " los ", " las ", " una ", " con ", " para ", " en ", " del ", " qué ", " usted", " hola", " bosque", " noche"}
 
 
 def detect_lang(txt: str) -> str:
-    t = f" {txt.lower()} "
+    t = " " + re.sub(r"[^\w\s¿¡]", " ", txt.lower()) + " "  # pontuação não atrapalha ("oi!" = " oi ")
     if re.search(r"[぀-ヿ]", t):
         return "ja"
     if re.search(r"[가-힯]", t):
@@ -28,7 +29,7 @@ def detect_lang(txt: str) -> str:
         return "ru"
     pt = sum(1 for w in PT_WORDS if w in t) + (2 if re.search(r"[ãõçê]", t) else 0)
     es = sum(1 for w in ES_WORDS if w in t) + (2 if re.search(r"[ñ¿¡]", t) else 0)
-    en = sum(1 for w in (" the ", " and ", " with ", " you ", " of ", " in ", " is ", " a ") if w in t)
+    en = sum(1 for w in (" the ", " and ", " with ", " you ", " of ", " in ", " is ", " a ", " my ", " name ", " i ", " am ", " hello ", " hi ") if w in t)
     if pt > en and pt >= es:
         return "pt"
     if es > en and es > pt:

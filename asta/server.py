@@ -9,7 +9,6 @@ from __future__ import annotations
 import json
 import mimetypes
 import re
-import threading
 import time
 import traceback
 import urllib.parse
@@ -19,20 +18,27 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from . import __version__, builder, hf, voice
 from .agents.llm import call_json
-from .agents.pipeline import Cancelled, Pipeline, create_edit_version
+from .agents.pipeline import Cancelled, Pipeline, create_edit_version  # noqa: F401
 from .cards import character_from_png, import_character, normalize_character
+from .games2d.builder import rebuild_game
+from .jobs import HttpError, Job, JobManager  # noqa: F401  (reexportados)
 from .providers import ProviderError, build_provider, describe_presets, provider_config
+from .routes_avatars import AvatarRoutes
+from .routes_canvas import CanvasRoutes
+from .routes_games import GameRoutes
 from .storage import Store
 from .util import hardware_info, new_id, safe_filename, slugify, text
 
 WEB_DIR = Path(__file__).parent / "web"
-PLAY_ALLOWED = ("Game.html", "code/", "chars/", "sound/", "ui/", "README.md", "CHANGELOG.md")
+PLAY_ALLOWED = ("Game.html", "code/", "chars/", "sound/", "ui/", "data/", "assets/", "README.md", "CHANGELOG.md")
 
 MIME = {
     ".js": "text/javascript; charset=utf-8", ".mjs": "text/javascript; charset=utf-8", ".css": "text/css; charset=utf-8",
     ".html": "text/html; charset=utf-8", ".json": "application/json; charset=utf-8", ".md": "text/markdown; charset=utf-8",
     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".mp3": "audio/mpeg", ".wav": "audio/wav",
     ".ogg": "audio/ogg", ".webm": "audio/webm", ".zip": "application/zip", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8",
+    ".mp4": "video/mp4", ".m4a": "audio/mp4", ".webp": "image/webp", ".gif": "image/gif", ".flac": "audio/flac", ".opus": "audio/ogg",
+    ".mov": "video/quicktime", ".mkv": "video/x-matroska",
 }
 
 
@@ -41,95 +47,7 @@ def guess_mime(path: str) -> str:
     return MIME.get(ext) or mimetypes.guess_type(path)[0] or "application/octet-stream"
 
 
-# --------------------------------------------------------------------------- jobs
-
-
-class Job:
-    def __init__(self, kind: str):
-        self.id = new_id("j_")
-        self.kind = kind
-        self.events: List[dict] = []
-        self.status = "running"  # running | done | error | cancelled
-        self.cond = threading.Condition()
-        self._cancel = threading.Event()
-        self.created = time.time()
-        self.result: Optional[dict] = None
-
-    def emit(self, ev: dict) -> None:
-        with self.cond:
-            ev = dict(ev)
-            ev["seq"] = len(self.events)
-            self.events.append(ev)
-            if len(self.events) > 2000:
-                del self.events[:500]
-            self.cond.notify_all()
-
-    def finish(self, status: str, result: Optional[dict] = None) -> None:
-        with self.cond:
-            self.status = status
-            self.result = result
-            self.cond.notify_all()
-
-    def cancel(self) -> None:
-        self._cancel.set()
-
-    @property
-    def cancelled(self) -> bool:
-        return self._cancel.is_set()
-
-
-class JobManager:
-    def __init__(self) -> None:
-        self.jobs: Dict[str, Job] = {}
-        self.lock = threading.Lock()
-
-    def start(self, kind: str, fn: Callable[[Job], Optional[dict]]) -> Job:
-        job = Job(kind)
-        with self.lock:
-            for jid in [j for j, x in self.jobs.items() if x.status != "running" and time.time() - x.created > 3600]:
-                self.jobs.pop(jid, None)
-            self.jobs[job.id] = job
-
-        def run() -> None:
-            try:
-                res = fn(job)
-                job.finish("done", res)
-            except Cancelled:
-                job.emit({"type": "cancelled"})
-                job.finish("cancelled")
-            except ProviderError as exc:
-                if str(exc) == "cancelado":
-                    job.emit({"type": "cancelled"})
-                    job.finish("cancelled")
-                else:
-                    job.emit({"type": "error", "message": str(exc), "kind": "provider"})
-                    job.finish("error")
-            except ValueError as exc:  # entrada inválida: mensagem para o usuário, sem traceback
-                job.emit({"type": "error", "message": str(exc), "kind": "validation"})
-                job.finish("error")
-            except Exception as exc:  # noqa: BLE001
-                traceback.print_exc()
-                job.emit({"type": "error", "message": str(exc) or exc.__class__.__name__, "kind": "internal"})
-                job.finish("error")
-
-        threading.Thread(target=run, daemon=True, name=f"job-{job.id}").start()
-        return job
-
-    def get(self, jid: str) -> Optional[Job]:
-        return self.jobs.get(jid)
-
-    def running(self, kind: str) -> Optional[Job]:
-        return next((j for j in self.jobs.values() if j.kind == kind and j.status == "running"), None)
-
-
 # --------------------------------------------------------------------------- aplicação
-
-
-class HttpError(Exception):
-    def __init__(self, status: int, message: str):
-        super().__init__(message)
-        self.status = status
-        self.message = message
 
 
 class App:
@@ -146,7 +64,7 @@ class App:
 
     def dispatch(self, req: "Request") -> bool:
         for method, rx, fn in self.routes:
-            if method != req.method:
+            if method != req.method and not (req.method == "HEAD" and method == "GET"):  # HEAD = GET sem corpo
                 continue
             m = rx.match(req.path)
             if m:
@@ -236,6 +154,13 @@ class App:
         a("POST", r"/api/play/(?P<pid>[\w-]+)/stt", self.r_stt)
         a("GET", r"/play/(?P<pid>[\w-]+)", self.r_play_redirect)
         a("GET", r"/play/(?P<pid>[\w-]+)/(?:v(?P<n>\d+)/)?(?P<rest>.*)", self.r_play_file)
+
+        self.avatar_routes = AvatarRoutes(self)
+        self.avatar_routes.register()
+        self.game_routes = GameRoutes(self)
+        self.game_routes.register()
+        self.canvas_routes = CanvasRoutes(self)
+        self.canvas_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:
@@ -445,7 +370,7 @@ class App:
     # ----- projetos
     def _summary(self, p: dict) -> dict:
         return {
-            "id": p["id"], "name": p["name"], "description": p.get("description", ""), "tags": p["tags"],
+            "id": p["id"], "kind": p.get("kind", "world"), "genre": p.get("genre", ""), "name": p["name"], "description": p.get("description", ""), "tags": p["tags"],
             "created": p["created"], "updated": p["updated"], "current": p["current"], "versions": len(p["versions"]),
             "palette": p.get("palette", {}), "settings": p.get("settings", {}), "language": p.get("language", ""),
             "attachments": p.get("attachments", []),
@@ -453,12 +378,17 @@ class App:
         }
 
     def r_projects(self, req: "Request") -> None:
-        req.json([self._summary(p) for p in self.store.list_projects()])
+        kind = req.query.get("kind", [""])[0] or None
+        req.json([self._summary(p) for p in self.store.list_projects(kind)])
 
     def r_project_get(self, req: "Request", pid: str) -> None:
         project = self.store.get_project(pid)
         if not project:
             raise HttpError(404, "Projeto não encontrado")
+        if project["kind"] == "game2d":
+            gver = self.store.load_game_version(pid)
+            req.json({**self._summary(project), "versions_list": project["versions"], "game": gver["game"] if gver else None})
+            return
         ver = self.store.load_version(pid)
         req.json({**self._summary(project), "versions_list": project["versions"], "worldbuilding_id": project.get("worldbuilding_id", ""),
                   "character_ids": project.get("character_ids", []),
@@ -487,6 +417,8 @@ class App:
 
     def r_project_edit(self, req: "Request", pid: str) -> None:
         body = req.body_json()
+        if (self.store.get_project(pid) or {}).get("kind") == "game2d":
+            raise HttpError(400, "Jogos 2D são atualizados pela IA (botão Atualizar) ou editando data/game.json no ZIP.")
         try:
             project = create_edit_version(self.store, pid, body if isinstance(body, dict) else {})
         except ValueError as exc:
@@ -494,7 +426,13 @@ class App:
         req.json(self._summary(project))
 
     def r_project_rebuild(self, req: "Request", pid: str) -> None:
-        """Gera uma nova versão com o motor 3D mais recente (sem chamar a IA)."""
+        """Gera uma nova versão com o motor mais recente (3D ou 2D), sem chamar a IA."""
+        if (self.store.get_project(pid) or {}).get("kind") == "game2d":
+            try:
+                req.json(self._summary(rebuild_game(self.store, pid, f"Motor do jogo atualizado (ASTA {__version__}).")))
+            except ValueError as exc:
+                raise HttpError(404, str(exc))
+            return
         try:
             project = create_edit_version(self.store, pid, {"_summary": f"Motor do jogo atualizado (ASTA {__version__})."})
         except ValueError as exc:
@@ -696,40 +634,60 @@ class Request:
     def _head(self, status: int, mime: str, length: Optional[int], extra: Optional[Dict[str, str]] = None) -> None:
         h = self.h
         h.send_response(status)
-        h.send_header("Content-Type", mime)
+        headers = {"Content-Type": mime, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", "Referrer-Policy": "no-referrer"}
         if length is not None:
-            h.send_header("Content-Length", str(length))
-        h.send_header("Cache-Control", "no-store")
-        h.send_header("X-Content-Type-Options", "nosniff")
-        h.send_header("Referrer-Policy", "no-referrer")
-        for k, v in (extra or {}).items():
+            headers["Content-Length"] = str(length)
+        headers.update(extra or {})  # `extra` pode sobrescrever (ex.: Cache-Control de mídias imutáveis)
+        for k, v in headers.items():
             h.send_header(k, v)
         h.end_headers()
 
     def json(self, obj: Any, status: int = 200) -> None:
         data = json.dumps(obj, ensure_ascii=False).encode("utf-8")
         self._head(status, "application/json; charset=utf-8", len(data))
-        self.h.wfile.write(data)
+        if self.method != "HEAD":
+            self.h.wfile.write(data)
 
     def bytes(self, data: bytes, mime: str, status: int = 200) -> None:
         self._head(status, mime, len(data))
         if self.method != "HEAD":
             self.h.wfile.write(data)
 
-    def file(self, path: Path, mime: str, download_name: str = "") -> None:
+    def file(self, path: Path, mime: str, download_name: str = "", cache: bool = False) -> None:
+        """Envia um arquivo, com suporte a `Range` (necessário p/ buscar em <video>/<audio>)."""
         size = path.stat().st_size
-        extra = {}
+        extra = {"Accept-Ranges": "bytes"}
+        if cache:  # arquivos com id único (nunca mudam)
+            extra["Cache-Control"] = "private, max-age=3600"
         if download_name:
             extra["Content-Disposition"] = f'attachment; filename="{safe_filename(download_name)}"'
-        self._head(200, mime, size, extra)
+        status, start, end = 200, 0, size - 1
+        rng = (self.headers.get("Range") or "").strip()
+        m = re.match(r"^bytes=(\d*)-(\d*)$", rng)
+        if m and size and (m.group(1) or m.group(2)):
+            a, b = m.groups()
+            if not a:  # sufixo: os últimos N bytes
+                start, end = max(0, size - int(b)), size - 1
+            else:
+                start, end = int(a), min(int(b), size - 1) if b else size - 1
+            if start > end or start >= size:
+                self._head(416, "text/plain", 0, {"Content-Range": f"bytes */{size}"})
+                return
+            status = 206
+            extra["Content-Range"] = f"bytes {start}-{end}/{size}"
+        length = max(0, end - start + 1) if size else 0
+        self._head(status, mime, length, extra)
         if self.method == "HEAD":
             return
         with open(path, "rb") as fh:
-            while True:
-                chunk = fh.read(1 << 20)
+            fh.seek(start)
+            left = length
+            while left > 0:
+                chunk = fh.read(min(1 << 20, left))
                 if not chunk:
                     break
                 self.h.wfile.write(chunk)
+                left -= len(chunk)
 
     def static(self, root: Path, rel: str) -> None:
         target = (root / rel).resolve()

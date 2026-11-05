@@ -6,11 +6,12 @@ import ssl
 import urllib.error
 import urllib.request
 import uuid
-from typing import Any, Dict, Iterator, Optional, Tuple
+from typing import Any, Dict, Iterator, List, Optional, Tuple
 
+from .. import __version__
 from .base import ProviderError
 
-USER_AGENT = "ASTA/0.1 (+https://github.com/KMC1525/ASTA)"
+USER_AGENT = f"ASTA/{__version__} (+https://github.com/KMC1525/ASTA)"
 
 
 def _ctx() -> ssl.SSLContext:
@@ -99,6 +100,49 @@ def post_multipart(
         return json.loads(body)
     except json.JSONDecodeError:
         return {"text": body}
+
+
+def multipart_body(fields: Dict[str, Any], files: List[Tuple[str, str, bytes, str]]) -> Tuple[bytes, str]:
+    """Monta um corpo multipart/form-data. `files`: [(campo, nome_do_arquivo, bytes, mime)]. Devolve (corpo, content_type)."""
+    boundary = "----asta" + uuid.uuid4().hex
+    parts: List[bytes] = []
+    for key, val in fields.items():
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{key}"\r\n\r\n{val}\r\n'.encode("utf-8"))
+    for field, filename, data, mime in files:
+        safe = filename.replace('"', "").replace("\r", "").replace("\n", "")
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{field}"; filename="{safe}"\r\nContent-Type: {mime}\r\n\r\n'.encode("utf-8"))
+        parts.append(data)
+        parts.append(b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode("utf-8"))
+    return b"".join(parts), f"multipart/form-data; boundary={boundary}"
+
+
+def post_multipart_files(
+    url: str, fields: Dict[str, Any], files: List[Tuple[str, str, bytes, str]],
+    headers: Optional[Dict[str, str]] = None, timeout: float = 300, raw: bool = False,
+) -> Any:
+    """POST multipart com vários arquivos. `raw=True` devolve (bytes, content_type); senão o JSON (ou {"text": ...})."""
+    body, ctype = multipart_body(fields, files)
+    hdrs = dict(headers or {})
+    hdrs["Content-Type"] = ctype
+    with request(url, headers=hdrs, method="POST", timeout=timeout, raw_body=body) as resp:
+        data, mime = resp.read(), resp.headers.get("Content-Type", "application/octet-stream")
+    if raw:
+        return data, mime
+    text_ = data.decode("utf-8", "replace")
+    try:
+        return json.loads(text_)
+    except json.JSONDecodeError:
+        return {"text": text_}
+
+
+def get_bytes(url: str, headers: Optional[Dict[str, str]] = None, timeout: float = 300, max_bytes: int = 400 * 1024 * 1024) -> Tuple[bytes, str]:
+    """Baixa um arquivo (imagem/vídeo/áudio devolvido por uma API). Limita o tamanho."""
+    with request(url, headers={"Accept": "*/*", **(headers or {})}, timeout=timeout) as resp:
+        data = resp.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ProviderError("O arquivo devolvido pelo provedor é grande demais.")
+        return data, resp.headers.get("Content-Type", "application/octet-stream")
 
 
 def stream_sse(

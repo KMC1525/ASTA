@@ -6,12 +6,13 @@ import { h, icon, toast } from './ui.js';
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Principal', 'main'], ['worlds', 'Mundos', 'worlds'], ['characters', 'Personagens', 'characters'],
-  ['worldbuilding', 'Worldbuilding', 'worldbuilding'], ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
+  ['main', 'Principal', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'],
+  ['characters', 'Personagens', 'characters'], ['worldbuilding', 'Worldbuilding', 'worldbuilding'], ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
   main: () => import('./views/home.js'), worlds: () => import('./views/worlds.js'), characters: () => import('./views/characters.js'),
   worldbuilding: () => import('./views/worldbuilding.js'), library: () => import('./views/library.js'), config: () => import('./views/config.js'),
+  avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), canvas: () => import('./views/canvas.js'),
 };
 
 export function go(route, ctx) {

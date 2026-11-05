@@ -92,7 +92,7 @@ def _readme(project: Dict[str, Any], data: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
-def _changelog(project: Dict[str, Any]) -> str:
+def changelog_text(project: Dict[str, Any]) -> str:
     lines = ["# Changelog", "", f"Histórico de versões de **{project['name']}**. A versão mais recente aparece primeiro.", ""]
     for v in sorted(project.get("versions", []), key=lambda x: x["n"], reverse=True):
         kind = "atualização por IA" if v.get("source") == "ai" else "edição manual"
@@ -194,7 +194,7 @@ def build_package(store, project: Dict[str, Any], data: Dict[str, Any]) -> Path:
     page = page.replace("{{BG}}", ux["theme"]["bg"])
     (pkg / "Game.html").write_text(page, "utf-8")
     (pkg / "README.md").write_text(_readme(project, data), "utf-8")
-    (pkg / "CHANGELOG.md").write_text(_changelog(project), "utf-8")
+    (pkg / "CHANGELOG.md").write_text(changelog_text(project), "utf-8")
 
     # ---- cópia dos JSONs na pasta da versão (fonte de verdade p/ edição sem IA)
     for key, obj in (

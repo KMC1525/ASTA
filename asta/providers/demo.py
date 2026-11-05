@@ -1,8 +1,8 @@
 """Provedor Demo: funciona 100% offline, sem IA, para testar o fluxo e a interface.
 
 Ele reconhece os agentes do pipeline pelo marcador `[[ASTA_AGENT:nome]]` no prompt de
-sistema e responde com o gerador determinístico (agents/rulebased.py). Nas conversas
-de NPC responde com falas simples e algumas ações — suficiente para ver tudo funcionando.
+sistema e responde com o gerador determinístico (agents/rulebased*.py). Nas conversas
+de NPC e de avatar (`[[ASTA_CHAT:avatar]]`) responde com falas simples — suficiente para ver tudo funcionando.
 """
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ import json
 import re
 from typing import Iterator, List
 
-from ..agents import rulebased
+from ..agents import rulebased, rulebased_avatars, rulebased_games
 from .base import Provider, content_text, split_system
 
 AGENTS = {
@@ -20,6 +20,12 @@ AGENTS = {
     "architect": rulebased.architect,
     "sound_ux": rulebased.sound_ux,
     "reviewer": rulebased.reviewer,
+    "avatar_analyst": rulebased_avatars.analyst,
+    "avatar_designer": rulebased_avatars.designer,
+    "avatar_reviewer": rulebased_avatars.reviewer,
+    "game_analyst": rulebased_games.analyst,
+    "game_designer": rulebased_games.designer,
+    "game_reviewer": rulebased_games.reviewer,
 }
 
 
@@ -50,6 +56,8 @@ class DemoProvider(Provider):
                 except json.JSONDecodeError:
                     data = {}
             return json.dumps(AGENTS[m.group(1)](data), ensure_ascii=False)
+        if "[[ASTA_CHAT:avatar]]" in sys_text:
+            return rulebased_avatars.avatar_reply(sys_text, last_user)
         return rulebased.npc_reply(sys_text, last_user)
 
     def _stream(self, messages, system, temperature, max_tokens) -> Iterator[str]:

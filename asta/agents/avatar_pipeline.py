@@ -1,0 +1,190 @@
+"""Pipeline multi-agentes que cria avatars: Anexos → Analista → Designer → Revisor → Salvar.
+
+Aceita texto, imagens e qualquer anexo (documentos, planilhas, áudio, vídeo…) e cria 1 ou vários
+avatars de uma vez. Resposta inválida de um agente → fallback por regras (sempre entrega).
+"""
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any, Callable, Dict, List, Optional
+
+from .. import attachments as att
+from .. import voice
+from ..avatars import MAX_CHAT_AVATARS, MIN_FIELD_AGE, RELATIONSHIPS, normalize_avatar
+from ..providers import build_provider
+from ..storage import Store
+from ..util import text
+from . import prompts_avatar as P
+from . import rulebased_avatars as rb
+from .runner import Runner
+
+STEPS = ["attachments", "analyst", "designer", "reviewer", "save"]
+IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif"}
+
+
+class AvatarPipeline(Runner):
+    domain = "avatar"
+
+    def __init__(self, store: Store, emit: Callable[[dict], None], cancelled: Callable[[], bool] = lambda: False):
+        super().__init__(store, emit, cancelled)
+
+    def run(self, req: Dict[str, Any]) -> Dict[str, Any]:
+        st = self.store
+        settings = st.get_settings()
+        content = "nsfw" if req.get("content") == "nsfw" else "sfw"
+        relationship = text(req.get("relationship"), "auto", 12).lower()
+        relationship = relationship if relationship in RELATIONSHIPS else "auto"
+        count_hint = int(max(0, min(int(req.get("count") or 0), MAX_CHAT_AVATARS)))
+        prompt = str(req.get("prompt") or "").strip()
+        gen = settings["generation"]
+        self.gen = {"temperature": gen.get("temperature", 0.8), "max_tokens": min(int(gen.get("max_tokens", 6000)), 6000),
+                    "content": "free" if content == "nsfw" else "sfw"}
+        pid = settings["active"].get("generation", "demo")
+        self.provider = build_provider(settings, pid, st.models_dir)
+        self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "count": count_hint, "content": content})
+
+        # ---------- anexos
+        self._step("attachments", "running")
+        uploads = [m for m in (st.get_upload(u) for u in (req.get("attachment_ids") or [])[:40]) if m]
+        analyzed: List[Dict[str, Any]] = []
+        transcribe = voice.transcriber(settings)
+        for meta in uploads:
+            self._check()
+            analyzed.append(att.analyze(Path(meta["path"]), meta["name"], meta.get("mime", ""), transcribe=transcribe))
+        digest = att.build_digest(analyzed)
+        images = att.collect_images(analyzed)
+        self._step("attachments", "done" if uploads else "skipped", count=len(uploads), images=len(images))
+        if not prompt and not digest and not uploads:
+            raise ValueError("Descreva o avatar ou anexe algo (imagem, texto, documento…) para criá-lo.")
+
+        # ---------- 1. Analista
+        brief, fb = self._agent(
+            "analyst", "avatar_analyst", P.ANALYST,
+            {"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship, "content": content,
+             "attached_images": len(images), "language_hint": text(req.get("language"), "", 12)},
+            rb.analyst, images=images,
+        )
+        brief_avatars = [a for a in (brief.get("avatars") or []) if isinstance(a, dict) and text(a.get("name"), "")]
+        if not brief_avatars:  # modelo omitiu a lista → regras
+            brief = rb.analyst({"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship})
+            brief_avatars = brief["avatars"]
+        cap = count_hint or MAX_CHAT_AVATARS
+        brief["avatars"] = brief_avatars[:cap]
+        for a in brief["avatars"]:
+            a["age"] = _age(a.get("age"))
+            if relationship != "auto":
+                a["relationship"] = relationship
+        brief["language"] = text(brief.get("language"), "pt-BR", 12)
+        brief["group"] = bool(brief.get("group")) and len(brief["avatars"]) > 1
+        from . import prompts
+
+        self.language = prompts.lang_name(brief["language"])
+        self._step("analyst", "warn" if fb else "done", count=len(brief["avatars"]), names=[a["name"] for a in brief["avatars"]])
+
+        # ---------- 2. Designer
+        detail = "short" if str(req.get("detail")) == "short" else "detailed"
+        payload = {"brief": brief, "content": content, "detail": detail,
+                   "user": {"name": settings["avatars"].get("user_name", ""), "persona": settings["avatars"].get("user_persona", "")}}
+        mult = max(1.0, len(brief["avatars"]) * 0.7)
+        cards_raw, fb = self._agent("designer", "avatar_designer", P.DESIGNER, payload, rb.designer, tokens_mult=mult)
+        cards = self._finish_cards(cards_raw, brief, content, relationship)
+        self._step("designer", "warn" if fb else "done", count=len(cards))
+
+        # ---------- 3. Revisor (+ uma rodada de correção)
+        review = self._review(cards, brief, prompt, content)
+        if not review.get("approved", True) and review.get("issues"):
+            fb_text = "\n".join(f"- [{i.get('avatar')}] {i.get('problem')} → {i.get('fix')}" for i in review["issues"] if isinstance(i, dict))[:3000]
+            self.emit({"type": "revision", "round": 1, "issues": len(review["issues"])})
+            redo, _ = self._agent("designer", "avatar_designer", P.DESIGNER + "\n\nFEEDBACK TO FIX:\n" + fb_text, payload, rb.designer,
+                                  tokens_mult=mult, feedback=True)
+            fixed = self._finish_cards(redo, brief, content, relationship)
+            if fixed:
+                cards = fixed
+            self._step("designer", "done", count=len(cards), revision=True)
+            review = self._review(cards, brief, prompt, content)
+        if not review.get("approved", True):
+            self.warnings.append("reviewer: not approved after revision")
+
+        # ---------- 4. Salvar
+        return self._save(cards, brief, uploads, analyzed, review)
+
+    # ------------------------------------------------------------------ etapas
+    def _finish_cards(self, raw: Dict[str, Any], brief: Dict[str, Any], content: str, relationship: str) -> List[Dict[str, Any]]:
+        items = [c for c in (raw.get("avatars") or []) if isinstance(c, dict)]
+        by_name = {text(c.get("name"), "").lower(): c for c in items}
+        out: List[Dict[str, Any]] = []
+        names = [a["name"] for a in brief["avatars"]]
+        for i, a in enumerate(brief["avatars"]):
+            card = by_name.get(a["name"].lower()) or (items[i] if i < len(items) else None)
+            if card is None or not text(card.get("system_prompt"), ""):  # o modelo esqueceu este avatar → regras
+                card = rb.designer({"brief": {**brief, "avatars": [a]}, "content": content})["avatars"][0]
+                self.warnings.append(f"designer: {a['name']} completed by fallback")
+            card = dict(card)
+            card.setdefault("name", a["name"])
+            card["name"] = a["name"] or card["name"]
+            card["age"] = _age(card.get("age") if card.get("age") not in (None, "") else a.get("age"))
+            card["content"] = content
+            if relationship != "auto":
+                card["relationship"] = relationship
+            elif card.get("relationship") not in RELATIONSHIPS:
+                card["relationship"] = a.get("relationship", "friend")
+            card["source"] = "ai"
+            if not card.get("looks") and a.get("looks"):
+                card["looks"] = a["looks"]
+            norm = normalize_avatar(card)
+            if "minor_described" in norm["flags"]:
+                self.warnings.append(f"{norm['name']}: descrito como menor de idade → apenas SFW e amizade")
+            out.append(norm)
+        return out[:MAX_CHAT_AVATARS]
+
+    def _review(self, cards, brief, prompt, content):
+        payload = {"request": prompt[:1500], "brief": {k: brief.get(k) for k in ("language", "group", "tone")}, "content": content,
+                   "avatars": [{"name": c["name"], "age": c["age"], "relationship": c["relationship"], "content": c["content"],
+                                "personality": c["personality"], "greeting": c["greeting"], "system_prompt": c["system_prompt"][:700]} for c in cards]}
+        review, fb = self._agent("reviewer", "avatar_reviewer", P.REVIEWER, payload, rb.reviewer)
+        review["approved"] = bool(review.get("approved", True))
+        self._step("reviewer", "warn" if fb else "done", approved=review["approved"], score=review.get("score"),
+                   issues=len(review.get("issues") or []))
+        return review
+
+    def _save(self, cards, brief, uploads, analyzed, review) -> Dict[str, Any]:
+        self._check()
+        self._step("save", "running")
+        st = self.store
+        saved = [st.avatars.save(c) for c in cards]
+        images = [(m, a) for m, a in zip(uploads, analyzed) if a["kind"] == "image" and a["ext"] in IMAGE_EXTS]
+        for i, av in enumerate(saved):
+            idx = (brief["avatars"][i].get("image_index") if i < len(brief["avatars"]) else None)
+            if not isinstance(idx, int) or not 0 <= idx < len(images):
+                idx = i if len(images) == len(saved) else (0 if len(saved) == 1 and images else None)
+            if idx is None:
+                continue
+            meta, item = images[idx]
+            try:
+                data = Path(meta["path"]).read_bytes()
+                if len(data) <= 8 * 1024 * 1024:
+                    st.save_portrait(av["id"], data, item["ext"])
+            except OSError:
+                self.warnings.append(f"{av['name']}: não foi possível guardar o retrato")
+        for meta in uploads:
+            st.delete_upload(meta["id"])
+        self._step("save", "done", count=len(saved))
+        result = {
+            "type": "done", "avatar_ids": [a["id"] for a in saved],
+            "avatars": [{"id": a["id"], "name": a["name"], "relationship": a["relationship"], "content": a["content"], "greeting": a["greeting"]} for a in st_refresh(st, saved)],
+            "group": bool(brief.get("group")), "warnings": self.warnings, "approved": review.get("approved", True),
+        }
+        self.emit(result)
+        return result
+
+
+def _age(value: Any, default: int = 24) -> int:
+    """Idade como informada: nunca "envelhecemos" um personagem descrito como menor (ele fica SFW/platônico)."""
+    try:
+        return max(MIN_FIELD_AGE, min(int(float(value)), 120))
+    except (TypeError, ValueError):
+        return default
+
+
+def st_refresh(store: Store, saved: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    return [store.avatars.get(a["id"]) or a for a in saved]

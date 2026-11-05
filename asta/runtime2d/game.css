@@ -1,0 +1,36 @@
+/* ASTA runtime 2D — interface do jogo (preto + detalhes brancos) */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#ececec;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;touch-action:none;user-select:none}
+#view{position:fixed;left:0;top:0;width:100%;height:100%;display:block;outline:none;cursor:default}
+.hidden{display:none!important}
+.muted{color:rgba(255,255,255,.6)}.small{font-size:12px}
+.g2-btn{cursor:pointer;border:1px solid rgba(255,255,255,.25);background:rgba(10,10,10,.7);color:#fff;border-radius:999px;padding:9px 20px;font:inherit}
+.g2-btn:hover{background:rgba(255,255,255,.12)}.g2-btn:disabled{opacity:.4;cursor:default}
+.g2-btn.primary{background:#fff;color:#000;border-color:#fff;font-weight:600;padding:12px 34px;font-size:16px}
+.g2-btn.primary:hover{background:#e8e8e8}
+#start{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,rgba(0,0,0,.5),rgba(0,0,0,.94));z-index:20;padding:20px}
+#start .card{width:min(520px,100%);text-align:center}
+#start .brand{letter-spacing:.5em;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:18px;padding-left:.5em}
+#start h1{font-size:clamp(26px,5vw,40px);font-weight:600;letter-spacing:-.02em;margin:0 0 10px}
+#start p{margin:6px 0 20px}
+#s-status{margin-top:12px;min-height:16px}
+.help{margin-top:22px;color:rgba(255,255,255,.5)}
+#g2-bar{position:fixed;right:10px;top:10px;display:flex;gap:6px;z-index:10;opacity:.55;transition:opacity .2s}
+#g2-bar:hover{opacity:1}
+.g2-ib{width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(8,10,22,.7);color:#fff;cursor:pointer;font-size:14px;display:grid;place-items:center;padding:0}
+.g2-ib:hover{background:rgba(255,255,255,.15)}
+body.has-bar #g2-bar{top:auto;bottom:10px}
+#g2-input{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);z-index:15;padding:20px}
+#g2-input .g2-card{background:rgba(10,12,28,.96);border:2px solid rgba(255,255,255,.7);border-radius:14px;padding:22px 24px;width:min(380px,100%);display:flex;flex-direction:column;gap:12px}
+#g2-input label{font-size:17px;font-weight:600}
+#g2-input input{font:inherit;font-size:17px;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.3);border-radius:10px;color:#fff;padding:10px 14px;outline:none;user-select:text}
+#g2-input input:focus{border-color:#fff}
+#g2-touch{position:fixed;left:0;right:0;bottom:0;height:0;z-index:12;pointer-events:none}
+.g2-pad{position:fixed;left:18px;bottom:22px;width:150px;height:150px;pointer-events:none}
+.g2-pad .g2-tb{position:absolute;width:50px;height:50px}
+.g2-pad .u{left:50px;top:0}.g2-pad .d{left:50px;bottom:0}.g2-pad .l{left:0;top:50px}.g2-pad .r{right:0;top:50px}
+.g2-pad.lr{width:170px;height:70px}.g2-pad.lr .l{left:0;top:10px;width:70px;height:60px}.g2-pad.lr .r{left:90px;top:10px;width:70px;height:60px}
+.g2-acts{position:fixed;right:18px;bottom:26px;display:flex;gap:14px;pointer-events:none}
+.g2-tb{pointer-events:auto;touch-action:none;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:18px;display:grid;place-items:center;padding:0;cursor:pointer}
+.g2-acts .g2-tb{width:68px;height:68px;font-size:22px}
+.g2-tb.on{background:rgba(255,255,255,.4)}

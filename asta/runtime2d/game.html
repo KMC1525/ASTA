@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<title>{{TITLE}}</title>
+<link rel="stylesheet" href="ui/theme.css">
+</head>
+<body>
+<canvas id="view" tabindex="0"></canvas>
+<div id="g2-bar" class="hidden">
+  <button id="b-mute" class="g2-ib">🔊</button><button id="b-full" class="g2-ib">⛶</button><button id="b-reset" class="g2-ib">↺</button>
+</div>
+<div id="g2-touch" class="hidden"></div>
+<div id="start">
+  <div class="card">
+    <div class="brand">ASTA</div>
+    <h1 id="s-title">{{TITLE}}</h1>
+    <p id="s-desc" class="muted"></p>
+    <button id="s-play" class="g2-btn primary" disabled>…</button>
+    <div id="s-status" class="muted small"></div>
+    <div id="s-help" class="help small"></div>
+  </div>
+</div>
+<noscript><div style="padding:24px;color:#fff">Este jogo precisa de JavaScript.</div></noscript>
+<script src="code/config.js"></script>
+<script src="data/game.js"></script>
+<script src="code/common.js"></script>
+<script src="code/{{ENGINE}}"></script>
+<script src="code/main.js"></script>
+</body>
+</html>

@@ -159,6 +159,11 @@ def import_character(data: Any) -> Dict[str, Any]:
 
 def character_from_png(raw: bytes) -> Dict[str, Any]:
     """Lê o card embutido (chunk tEXt 'chara'/'ccv3') de um PNG de personagem."""
+    return import_character(png_card_data(raw))
+
+
+def png_card_data(raw: bytes) -> Dict[str, Any]:
+    """Devolve o JSON do Character Card embutido num PNG (SillyTavern/Janitor/Chub)."""
     if raw[:8] != b"\x89PNG\r\n\x1a\n":
         raise ValueError("Arquivo não é PNG")
     pos = 8
@@ -191,4 +196,6 @@ def character_from_png(raw: bytes) -> Dict[str, Any]:
         data = json.loads(base64.b64decode(payload).decode("utf-8"))
     except Exception as exc:  # noqa: BLE001
         raise ValueError("Card do PNG está corrompido") from exc
-    return import_character(data)
+    if not isinstance(data, dict):
+        raise ValueError("Card do PNG está corrompido")
+    return data

@@ -16,12 +16,21 @@ POLICY_FREE = (
 POLICY_SFW = "Content policy: keep everything suitable for all audiences (SFW): no explicit sexual content or gratuitous gore."
 
 
-def system_prompt(agent: str, language: str, content_mode: str) -> str:
+# O que cada domínio de pipeline produz (entra no preâmbulo do prompt de sistema dos agentes).
+DOMAINS = {
+    "world": "a playable, persistent 3D virtual world (rendered with three.js in a web browser) inhabited by NPCs that are AI agents",
+    "avatar": "one or more complete AI companion avatars (friends, partners, companions) that the user will chat with by text and voice",
+    "game2d": "a complete, playable 2D game: you write the game as JSON data and a deterministic HTML5-canvas engine plays it "
+              "(you never write code)",
+}
+
+
+def system_prompt(agent: str, language: str, content_mode: str, domain: str = "world") -> str:
     policy = POLICY_SFW if content_mode == "sfw" else POLICY_FREE
     return (
         f"[[ASTA_AGENT:{agent}]]\n"
-        "You are one agent inside ASTA, a multi-agent studio that turns a user's prompt and attachments into a playable, "
-        "persistent 3D virtual world (rendered with three.js in a web browser) inhabited by NPCs that are AI agents.\n"
+        "You are one agent inside ASTA, a multi-agent studio that turns a user's prompt and attachments into "
+        f"{DOMAINS.get(domain, DOMAINS['world'])}.\n"
         "Reply with exactly ONE valid JSON object and nothing else: no markdown fences, no commentary.\n"
         f"Write every user-facing text (titles, names, descriptions, dialogue, character prompts) in the user's language ({language}).\n"
         f"{policy}\n\n"

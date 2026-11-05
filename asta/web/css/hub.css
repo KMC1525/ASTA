@@ -1,0 +1,16 @@
+/* Hub de criação (Principal) e biblioteca unificada */
+.modes{display:flex;gap:8px;justify-content:center;margin:-8px 0 22px;flex-wrap:wrap}
+.mode{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer;font-size:14px;transition:background .12s,color .12s,border-color .12s}
+.mode:hover{color:var(--text);border-color:var(--line3)}
+.mode.on{background:#fff;color:#000;border-color:#fff;font-weight:600}
+.tool.nopad{padding:3px 6px 3px 12px;gap:4px}
+.tool .step-b{width:24px;height:24px;border-radius:50%;border:1px solid var(--line2);background:var(--bg2);color:var(--text);cursor:pointer;line-height:1;padding:0}
+.tool .step-b:hover{background:var(--bg3)}
+.tool .cnt{min-width:88px;text-align:center;font-size:13px}
+.proj .thumb .badge.vb{background:rgba(0,0,0,.55)}
+.proj .thumb .apic{box-shadow:0 0 0 3px rgba(255,255,255,.12)}
+@media (max-width:760px){
+  #side{overflow-x:auto}
+  #side nav{min-width:max-content;gap:0}
+  #side .item{min-width:58px}
+}
