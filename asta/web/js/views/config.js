@@ -1,6 +1,7 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { refreshState, renderSide, saveSettings, state } from '../main.js';
+import { QUALITY_LABEL } from '../quant.js';
 import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {
@@ -134,7 +135,8 @@ async function local() {
   async function paintInstalled() {
     const { models } = await api('/api/hf/local');
     installed.replaceChildren(...(models.length ? models.map((m) => h('div', { class: 'row nw', style: { padding: '10px 0', borderBottom: '1px solid var(--line)' } },
-      h('div', { class: 'grow' }, h('div', { class: 'mono', style: { fontSize: '13px' } }, m.name), h('div', { class: 'dim small' }, fmtBytes(m.size))),
+      h('div', { class: 'grow' }, h('div', { class: 'mono', style: { fontSize: '13px' } }, m.name), h('div', { class: 'dim small' }, fmtBytes(m.size) + (m.parts > 1 ? ' · ' + t('{n} partes', { n: m.parts }) : ''))),
+      m.quant ? h('span', { class: 'chip solid', title: t(QUALITY_LABEL[m.quality] || '') }, m.quant) : null,
       h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { generation: 'local_hf' } }); toast(t('Usando na geração'), 'ok'); } }, t('Usar na geração')),
       h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { characters: 'local_hf' } }); toast(t('Usando nos personagens'), 'ok'); } }, t('Usar nos personagens')),
       h('button', { class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog(t('Apagar o arquivo {n}?', { n: m.name }))) { await api('/api/hf/local/' + encodeURIComponent(m.name), { method: 'DELETE' }); paintInstalled(); } } }, icon('trash', 13)))) :
@@ -150,19 +152,33 @@ async function local() {
   async function openRepo(repo) {
     files.replaceChildren(h('div', { class: 'spinner' }));
     try {
-      const r = await api('/api/hf/files?repo=' + encodeURIComponent(repo));
-      files.replaceChildren(h('div', { class: 'small muted' }, repo + ' — ' + t('sua RAM: {n} GB. Prefira arquivos até ~60% da RAM.', { n: ram })),
-        ...r.files.map((f) => { const fits = f.size / 1024 ** 3 <= ram * 0.6; return h('div', { class: 'row nw', style: { padding: '8px 0', borderBottom: '1px solid var(--line)' } },
-          h('div', { class: 'grow mono', style: { fontSize: '12px', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis' } }, f.name), h('span', { class: 'chip ' + (fits ? 'solid' : '') }, fmtBytes(f.size) + (fits ? ' ✓' : ' ⚠')),
-          h('button', { class: 'btn sm', onclick: () => dl(repo, f.name, f.size) }, icon('download', 13), t('Baixar'))); }));
+      const [r, loc] = await Promise.all([api('/api/hf/files?repo=' + encodeURIComponent(repo)), api('/api/hf/local')]);
+      const have = new Set(loc.models.map((m) => m.name));
+      if (!r.files.length) return files.replaceChildren(h('div', { class: 'res err' }, t('Nenhum arquivo GGUF utilizável neste repositório.')));
+      let pick = r.files.find((f) => f.recommended) || r.files[0];
+      const list = h('div', { class: 'col', style: { gap: '6px' } }), btn = h('button', { class: 'btn primary' });
+      const paint = () => {
+        list.replaceChildren(...r.files.map((f) => h('label', { class: 'quant' + (f === pick ? ' on' : ''), onclick: () => { pick = f; paint(); } },
+          h('input', { type: 'radio', name: 'quant', checked: f === pick }),
+          h('div', { class: 'grow', style: { minWidth: 0 } },
+            h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, f.quant || t('sem rótulo')), f.quality ? h('span', { class: 'dim small' }, t(QUALITY_LABEL[f.quality])) : null,
+              f.recommended ? h('span', { class: 'chip on' }, t('Recomendada')) : null, have.has(f.name) ? h('span', { class: 'chip' }, t('Já baixado')) : null, f.parts > 1 ? h('span', { class: 'chip' }, t('{n} partes', { n: f.parts })) : null),
+            h('div', { class: 'mono dim', style: { fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, f.name)),
+          h('span', { class: 'chip ' + (f.fits ? 'solid' : '') }, fmtBytes(f.size) + (f.fits ? ' ✓' : ' ⚠')))));
+        btn.replaceChildren(icon('download', 14), t('Baixar {q} ({s})', { q: pick.quant || pick.name, s: fmtBytes(pick.size) }));
+      };
+      btn.onclick = () => dl(repo, pick);
+      paint();
+      files.replaceChildren(h('div', { class: 'small muted' }, repo + ' — ' + t('Escolha a quantização: menos bits = arquivo menor e mais rápido, mas com menos qualidade. Sua RAM: {n} GB; ✓ = cabe (até ~60% da RAM).', { n: ram })), list, h('div', { style: { marginTop: '10px' } }, btn));
     } catch (e) { files.replaceChildren(h('div', { class: 'res err' }, e.message)); }
   }
-  async function dl(repo, file, size) {
+  async function dl(repo, f) {
+    const file = f.name, size = f.size;
     if (size / 1024 ** 3 > ram * 0.9 && !(await confirmDialog(t('Este modelo é maior que a sua RAM e provavelmente ficará muito lento. Baixar mesmo assim?'), false, t('Baixar')))) return;
     const bar = h('i'), label = h('span', { class: 'small muted' }, '0%');
     prog.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'mono small' }, file), h('span', { class: 'grow' }), label, h('button', { class: 'btn sm', id: 'dl-cancel' }, t('Cancelar'))), h('div', { class: 'bar' }, bar)));
     let jid;
-    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, file } })).job_id; } catch (e) { return toast(e.message, 'err'); }
+    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, files: f.files, sizes: f.sizes } })).job_id; } catch (e) { return toast(e.message, 'err'); }
     prog.querySelector('#dl-cancel').onclick = () => api('/api/jobs/' + jid + '/cancel', { method: 'POST' });
     events('/api/jobs/' + jid + '/events', (ev) => {
       if (ev.type === 'progress' && ev.total) { const p = ev.done / ev.total; bar.style.width = Math.round(p * 100) + '%'; label.textContent = Math.round(p * 100) + '% · ' + fmtBytes(ev.done) + ' / ' + fmtBytes(ev.total); }

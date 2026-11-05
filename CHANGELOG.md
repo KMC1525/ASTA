@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.2] — 2026-11-05
+
+### Adicionado
+- **Escolha da quantização** dos modelos locais do Hugging Face (*Configuração → Modelos locais*): o ASTA identifica a quantização de cada arquivo GGUF (Q2_K … Q8_0, IQ*, F16/BF16…), mostra a qualidade esperada, marca quais cabem na sua RAM e **recomenda** uma opção equilibrada (em geral Q4_K_M); você escolhe qual baixar e o botão mostra o tamanho.
+- Modelos divididos em partes (`-00001-of-00003.gguf`) são baixados juntos, com progresso somado, e aparecem como uma só opção; partes já baixadas são aproveitadas ao retomar. Repositórios com partes faltando e arquivos de projetor de visão (`mmproj`) não entram na lista de quantizações.
+- A lista **Baixados** mostra a quantização e o número de partes de cada modelo; apagar um modelo dividido remove todas as partes. Antes de baixar, o ASTA confere o espaço livre em disco.
+- API: `GET /api/hf/files` devolve `quant`, `bits`, `quality`, `parts`, `files`, `sizes`, `fits` e `recommended`; `POST /api/hf/download` aceita `files` (e `sizes`), mantendo o campo antigo `file`.
+
 ## [0.2.1] — 2026-11-05
 
 ### Alterado
@@ -103,7 +111,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.2...HEAD
+[0.2.2]: https://github.com/KMC1525/ASTA/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/KMC1525/ASTA/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/KMC1525/ASTA/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/KMC1525/ASTA/releases/tag/v0.1.0

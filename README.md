@@ -197,7 +197,9 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 | Hugging Face GGUF (embedded) | **local** | downloads the `.gguf` straight from Hugging Face and runs inside ASTA (`pip install "asta[local]"`) |
 | Demo | offline | rule-based generator to test everything without a key |
 
-You choose one model **to generate** (the most capable) and another **for the characters and avatars** (a fast, cheap one is enough). *Configuration → Local models* searches Hugging Face, tells you which files fit your RAM and downloads them with progress.
+You choose one model **to generate** (the most capable) and another **for the characters and avatars** (a fast, cheap one is enough).
+
+**Local models and quantization.** *Configuration → Local models* searches Hugging Face for GGUF models. Each repository offers the same model in several **quantizations** (Q2_K … Q8_0, F16): fewer bits mean a smaller, faster file that needs less RAM, but lower quality. ASTA reads the quantization of every file, labels its quality, marks which ones fit your RAM, **recommends** a balanced one (usually Q4_K_M) and lets you **pick the one to download**, with progress, resume and a disk-space check. Models split into several parts (`-00001-of-00003.gguf`) are downloaded together and shown as one entry, and the quantization of each downloaded model is shown in the *Downloaded* list.
 
 **Media models** (Canvas), configured per type in *Configuration → Media* and overridable on every node:
 

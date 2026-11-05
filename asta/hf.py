@@ -1,8 +1,14 @@
-"""Busca e download de modelos GGUF no Hugging Face (sem dependências externas)."""
+"""Busca e download de modelos GGUF no Hugging Face (sem dependências externas).
+
+Cada repositório costuma trazer o mesmo modelo em várias **quantizações** (Q2_K … Q8_0, F16): quanto menos bits, menor o arquivo
+e a necessidade de RAM, e menor a qualidade. `list_files` identifica a quantização de cada arquivo, junta modelos divididos em
+partes (`-00001-of-00003.gguf`) numa só opção e indica qual cabe na sua RAM; o usuário escolhe qual baixar.
+"""
 from __future__ import annotations
 
 import os
 import re
+import shutil
 import urllib.parse
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
@@ -13,6 +19,30 @@ from .providers.base import ProviderError
 HF = "https://huggingface.co"
 REPO_RE = re.compile(r"^[A-Za-z0-9][\w.-]{0,95}/[A-Za-z0-9][\w.-]{0,95}$")
 FILE_RE = re.compile(r"^[\w][\w .+()=-]{0,200}\.gguf$")
+QUANT_RE = re.compile(r"(?<![A-Za-z0-9])((?:IQ|Q)\d(?:_[A-Z0-9]+)*|BF16|F16|F32|MXFP4)(?![A-Za-z0-9])", re.I)
+SHARD_RE = re.compile(r"^(?P<base>.+)-(?P<n>\d{5})-of-(?P<total>\d{5})\.gguf$", re.I)
+# qualidade esperada por número de bits (aproximação dos guias do llama.cpp)
+QUALITY = {1: "very_low", 2: "very_low", 3: "low", 4: "good", 5: "very_good", 6: "high", 8: "lossless"}
+PREFERRED = ("Q4_K_M", "Q5_K_M", "Q4_K_S", "Q5_K_S", "Q6_K", "Q4_0", "Q8_0", "Q3_K_L", "Q3_K_M")  # ordem de preferência ao recomendar
+
+
+def parse_quant(name: str) -> Dict[str, Any]:
+    """Quantização de um arquivo pelo nome: {"quant": "Q4_K_M", "bits": 4, "quality": "good"} (vazio se não achar)."""
+    base = Path(name).name
+    m = SHARD_RE.match(base)
+    base = (m.group("base") + ".gguf") if m else base
+    found = QUANT_RE.findall(base)
+    if not found:
+        return {"quant": "", "bits": 0, "quality": ""}
+    q = found[-1].upper()
+    if q in ("F16", "BF16"):
+        return {"quant": q, "bits": 16, "quality": "original"}
+    if q == "F32":
+        return {"quant": q, "bits": 32, "quality": "original"}
+    if q == "MXFP4":
+        return {"quant": q, "bits": 4, "quality": "good"}
+    bits = int(re.search(r"\d", q).group())
+    return {"quant": q, "bits": bits, "quality": QUALITY.get(bits, "good")}
 
 
 def _headers(token: str) -> Dict[str, str]:
@@ -28,24 +58,78 @@ def search(query: str, token: str = "", limit: int = 20) -> List[Dict[str, Any]]
     ]
 
 
-def list_files(repo: str, token: str = "") -> List[Dict[str, Any]]:
+def group_files(raw: List[Dict[str, Any]], ram_gb: float = 0) -> List[Dict[str, Any]]:
+    """Agrupa arquivos GGUF em opções de download: junta partes divididas, ignora projetores de visão (mmproj) e marca a recomendada.
+
+    Cada opção: {name (arquivo principal), files (todas as partes), sizes (por parte), size (soma), parts, quant, bits, quality, fits, recommended}.
+    """
+    groups: Dict[str, Dict[str, Any]] = {}
+    for f in raw:
+        base = Path(f["name"]).name
+        if "mmproj" in base.lower():
+            continue
+        m = SHARD_RE.match(base)
+        key = str(Path(f["name"]).parent / m.group("base")) if m else f["name"]
+        g = groups.setdefault(key, {"parts": {}, "total": int(m.group("total")) if m else 1})
+        g["parts"][int(m.group("n")) if m else 1] = f
+    out = []
+    for g in groups.values():
+        if len(g["parts"]) != g["total"]:  # partes faltando no repositório: não dá para usar
+            continue
+        parts = [g["parts"][k] for k in sorted(g["parts"])]
+        out.append({"name": parts[0]["name"], "files": [p["name"] for p in parts], "sizes": {p["name"]: p["size"] for p in parts}, "size": sum(p["size"] for p in parts), "parts": len(parts), **parse_quant(parts[0]["name"])})
+    out.sort(key=lambda f: (f["size"], f["name"]))
+    limit = ram_gb * 0.6 * 1024 ** 3
+    for f in out:
+        f["fits"] = bool(ram_gb) and f["size"] <= limit
+        f["recommended"] = False
+    fitting = [f for f in out if f["fits"] and f["quant"]]
+    pick = None
+    for q in PREFERRED:  # a melhor entre as preferidas que cabem; senão a maior que cabe até 6 bits; senão a menor de todas
+        pick = next((f for f in fitting if f["quant"] == q and f["bits"] <= 6), None)
+        if pick:
+            break
+    pick = pick or next(iter(sorted([f for f in fitting if f["bits"] <= 6], key=lambda f: -f["size"])), None) or (out[0] if out else None)
+    if pick:
+        pick["recommended"] = True
+    return out
+
+
+def list_files(repo: str, token: str = "", ram_gb: float = 0) -> List[Dict[str, Any]]:
     if not REPO_RE.match(repo or ""):
         raise ProviderError("Repositório inválido (use o formato dono/nome).")
     data = http.get_json(f"{HF}/api/models/{repo}/tree/main?recursive=1", _headers(token), timeout=20)
     files = []
     for it in data:
         path = it.get("path", "")
-        if it.get("type") == "file" and path.lower().endswith(".gguf"):
+        if it.get("type") == "file" and path.lower().endswith(".gguf") and FILE_RE.match(Path(path).name):
             size = (it.get("lfs") or {}).get("size") or it.get("size") or 0
             files.append({"name": path, "size": size})
-    files.sort(key=lambda f: f["size"])
-    return files
+    return group_files(files, ram_gb)
+
+
+def shard_files(models_dir: Path, name: str) -> List[Path]:
+    """Todos os arquivos de um modelo local: ele mesmo ou, se for dividido, todas as partes."""
+    m = SHARD_RE.match(Path(name).name)
+    if not m:
+        return [models_dir / Path(name).name]
+    total = int(m.group("total"))
+    return [models_dir / f"{m.group('base')}-{k:05d}-of-{total:05d}.gguf" for k in range(1, total + 1)]
 
 
 def local_models(models_dir: Path) -> List[Dict[str, Any]]:
+    """Modelos baixados. Um modelo dividido em partes aparece uma vez (pela primeira parte), com o tamanho total."""
     out = []
     for p in sorted(models_dir.glob("*.gguf")):
-        out.append({"name": p.name, "size": p.stat().st_size})
+        m = SHARD_RE.match(p.name)
+        if m and int(m.group("n")) != 1:
+            continue
+        parts = [x for x in shard_files(models_dir, p.name)]
+        if not all(x.exists() for x in parts):
+            continue  # partes faltando: o modelo não carrega
+        if "mmproj" in p.name.lower():
+            continue
+        out.append({"name": p.name, "size": sum(x.stat().st_size for x in parts), "parts": len(parts), **parse_quant(p.name)})
     return out
 
 
@@ -86,3 +170,37 @@ def download(
         resp.close()
     os.replace(part, dest)
     return dest
+
+
+def download_many(
+    repo: str, filenames: List[str], models_dir: Path, token: str = "", sizes: Optional[Dict[str, int]] = None,
+    progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False,
+) -> Path:
+    """Baixa uma opção (um arquivo ou todas as partes de um modelo dividido) com progresso somado. Devolve o arquivo principal."""
+    if not filenames or len(filenames) > 99:
+        raise ProviderError("Nada para baixar.")
+    sizes = sizes or {}
+    total = sum(int(sizes.get(f, 0)) for f in filenames)
+    if total:
+        pending = total - sum((models_dir / Path(f).name).stat().st_size for f in filenames if (models_dir / Path(f).name).exists())
+        if shutil.disk_usage(models_dir).free < max(0, pending) * 1.02 + (50 << 20):
+            raise ProviderError("Sem espaço em disco suficiente para este modelo.")
+    base = 0
+    first: Optional[Path] = None
+    for i, f in enumerate(filenames):
+        done_file = models_dir / Path(f).name
+        if sizes.get(f) and done_file.exists() and done_file.stat().st_size == int(sizes[f]):  # parte já baixada (retomada)
+            base += int(sizes[f])
+            first = first or done_file
+            if progress:
+                progress(base, total)
+            continue
+
+        def prog(done: int, tot: int, base: int = base) -> None:
+            if progress:
+                progress(base + done, total or (base + tot))
+
+        path = download(repo, f, models_dir, token, prog, cancelled)
+        first = first or path
+        base += int(sizes.get(f, 0)) or path.stat().st_size
+    return first  # type: ignore[return-value]

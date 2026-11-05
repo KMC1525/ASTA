@@ -25,7 +25,7 @@ const steps = await import(pathToFileURL(join(root, 'views', 'steps.js')).href);
 const av = await import(pathToFileURL(join(root, 'avatar_ui.js')).href);
 const cn = await import(pathToFileURL(join(root, 'canvas_nodes.js')).href);
 ['WORLD', 'AVATAR', 'GAME', 'GENRE_LABEL', 'MOOD', 'AMB'].forEach((n) => walkv(steps[n]));
-walkv(av.REL_LABEL); walkv(cn.LABEL); walkv(cn.TYPE_HELP); cn.GROUPS.forEach(([g]) => bag.add(g));
+walkv(av.REL_LABEL); walkv((await import(pathToFileURL(join(root, 'quant.js')).href)).QUALITY_LABEL); walkv(cn.LABEL); walkv(cn.TYPE_HELP); cn.GROUPS.forEach(([g]) => bag.add(g));
 for (const s of bag) if (!(s in EN)) missing.add(s);
 const empty = Object.entries(EN).filter(([, v]) => !String(v).trim()).map(([k]) => k);
 console.log(JSON.stringify({ missing: [...missing], empty, keys: Object.keys(EN).length }));

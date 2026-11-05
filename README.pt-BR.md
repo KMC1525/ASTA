@@ -198,7 +198,9 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 | Hugging Face GGUF (embutido) | **local** | baixa o `.gguf` direto do Hugging Face e roda dentro do ASTA (`pip install "asta[local]"`) |
 | Demo | offline | gerador de regras para testar tudo sem chave |
 
-Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personagens e avatars** (um rápido e barato basta). Em *Configuração → Modelos locais* há busca no Hugging Face, indicação de quais arquivos cabem na sua RAM e download com progresso.
+Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personagens e avatars** (um rápido e barato basta).
+
+**Modelos locais e quantização.** Em *Configuração → Modelos locais* você busca modelos GGUF no Hugging Face. Cada repositório traz o mesmo modelo em várias **quantizações** (Q2_K … Q8_0, F16): menos bits significam um arquivo menor e mais rápido, que precisa de menos RAM, porém com menos qualidade. O ASTA lê a quantização de cada arquivo, indica a qualidade, marca quais cabem na sua RAM, **recomenda** uma equilibrada (em geral a Q4_K_M) e deixa você **escolher qual baixar**, com progresso, retomada e checagem de espaço em disco. Modelos divididos em várias partes (`-00001-of-00003.gguf`) são baixados juntos e aparecem como uma só opção, e a quantização de cada modelo baixado aparece na lista *Baixados*.
 
 **Modelos de mídia** (Canvas), configurados por tipo em *Configuração → Mídia* e substituíveis em cada nó:
 

@@ -461,7 +461,7 @@ class App:
 
     def r_hf_files(self, req: "Request") -> None:
         try:
-            req.json({"files": hf.list_files(req.query.get("repo", [""])[0], self._hf_token())})
+            req.json({"files": hf.list_files(req.query.get("repo", [""])[0], self._hf_token(), hardware_info().get("ram_gb") or 0)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
 
@@ -473,15 +473,22 @@ class App:
         path = self.store.models_dir / safe_filename(name)
         if not path.exists() or path.suffix != ".gguf":
             raise HttpError(404, "Modelo não encontrado")
-        path.unlink()
+        for p in hf.shard_files(self.store.models_dir, path.name):  # modelo dividido: apaga todas as partes
+            p.unlink(missing_ok=True)
+        path.unlink(missing_ok=True)
         req.json({"ok": True})
 
     def r_hf_download(self, req: "Request") -> None:
         body = req.body_json()
-        repo, fname = text(body.get("repo"), "", 200), text(body.get("file"), "", 260)
+        repo = text(body.get("repo"), "", 200)
+        names = [text(f, "", 260) for f in body.get("files")][:99] if isinstance(body.get("files"), list) else [text(body.get("file"), "", 260)]
+        names = [n for n in names if n]
+        if not names:
+            raise HttpError(400, "Escolha uma quantização para baixar.")
+        sizes = {n: int(body["sizes"].get(n, 0)) for n in names} if isinstance(body.get("sizes"), dict) and all(isinstance(v, (int, float)) for v in body["sizes"].values()) else {}
 
         def work(job: Job) -> None:
-            job.emit({"type": "start", "file": fname})
+            job.emit({"type": "start", "file": names[0], "parts": len(names)})
             last = [0.0]
 
             def progress(done: int, total: int) -> None:
@@ -489,7 +496,7 @@ class App:
                     last[0] = time.time()
                     job.emit({"type": "progress", "done": done, "total": total})
 
-            path = hf.download(repo, fname, self.store.models_dir, self._hf_token(), progress, lambda: job.cancelled)
+            path = hf.download_many(repo, names, self.store.models_dir, self._hf_token(), sizes, progress, lambda: job.cancelled)
             job.emit({"type": "done", "name": path.name})
 
         job = self.jobs.start("download", work)

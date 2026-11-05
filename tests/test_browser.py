@@ -55,6 +55,19 @@ class BrowserTests(unittest.TestCase):
     def test_03_canvas_editor_and_video_timeline(self):
         self.run_script("canvas_ui.js")
 
+    def test_04_local_models_quantization_picker(self):
+        from unittest import mock
+
+        from asta import hf
+        from tests.test_hf import FakeHF
+
+        fake = FakeHF()
+        try:
+            with mock.patch.object(hf, "HF", fake.url):
+                self.run_script("models_ui.js")
+        finally:
+            fake.close()
+
 
 if __name__ == "__main__":
     unittest.main()
