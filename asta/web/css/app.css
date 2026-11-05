@@ -118,7 +118,7 @@ button.chip{cursor:pointer}button.chip:hover{border-color:var(--line3);color:var
 .composer .send:hover:not(:disabled){background:var(--accent-h)}
 .tool{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer;font-size:13px;max-width:210px}
 .tool:hover{color:var(--text);border-color:var(--line3)}.tool.on{color:var(--strong);border-color:var(--dim)}
-.tool select{border:0;background:transparent;padding:0 18px 0 0;width:auto;max-width:150px;color:inherit;cursor:pointer;background-position:right 0 center}
+.tool select{border:0;background:transparent;padding:0 18px 0 0;width:auto;max-width:230px;color:inherit;cursor:pointer;background-position:right 0 center}
 .attach-row{display:flex;gap:8px;flex-wrap:wrap;padding:2px 6px 8px}
 .att{display:flex;align-items:center;gap:8px;background:var(--bg2);border:1px solid var(--line2);border-radius:12px;padding:6px 10px;font-size:12px;max-width:240px}
 .att .n{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.att .s{color:var(--dim)}.att .x{cursor:pointer;color:var(--muted)}.att .x:hover{color:var(--strong)}

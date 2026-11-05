@@ -5,6 +5,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.3.1] — 2026-11-05
+
+### Adicionado
+- **Novas relações para os avatares: namorada, namorado, esposa e marido** (`girlfriend`, `boyfriend`, `wife`, `husband`). Aparecem na caixa de criação (*Relação:*), no editor do avatar e nas listas, e funcionam na API (`relationship` em `POST /api/avatars/generate` e nos cards). **Todas podem ser SFW ou NSFW**, como qualquer avatar adulto: o modo de conteúdo continua sendo escolhido à parte (`content`), e a regra fixa vale nos dois — nada de conteúdo sexual envolvendo menores.
+  - O prompt de conversa descreve cada relação: namorada/namorado/parceiro(a) são afetuosos, atenciosos, brincalhões e românticos; **esposa/marido** conversam como quem divide a vida com você (casa, rotina, planos), de forma íntima e comprometida.
+  - **O gênero é sugerido pela relação** quando o card não diz o gênero (namorada/esposa → feminino; namorado/marido → masculino); o que o card diz sempre vale.
+  - O gerador sem IA (Demo) reconhece as relações no pedido — "uma esposa chamada Marta", "meu marido Theo", "my girlfriend Nina"… — e escreve primeira mensagem e respostas de cada uma. Os prompts dos agentes (analista, designer, escritor e revisor do system prompt) também conhecem as quatro.
+  - "Parceiro(a)" (`partner`) continua existindo como relação romântica genérica; cards antigos não mudam.
+- Exportação Character Card V2 leva a nova relação (`extensions.asta.relationship`).
+
+### Regras que continuam valendo
+- **Menor de idade nunca tem relação romântica ou conjugal** (inclusive as novas): vira amigo(a), sempre SFW e platônico — pelo campo de idade ou por qualquer texto do card.
+- **Pessoa real** continua sempre SFW (a relação é mantida, o conteúdo sexual não existe).
+
+### Corrigido
+- O seletor *Relação:* da caixa de criação cortava o texto ("Relationship: automatic" aparecia pela metade); a largura máxima aumentou para caber as opções.
+
+### Testes
+- Relações novas e antigas, gênero sugerido, SFW/NSFW em todas, menor de idade (por idade e por texto) e pessoa real, prompts de conversa, reconhecimento no Demo (português e inglês), geração pela API em SFW e NSFW, edição, exportação V2 e, no navegador, as opções na criação e no editor, o texto sem corte e o rótulo na lista.
+
 ## [0.3.0] — 2026-11-05
 
 Atualização geral com foco em **personalização** e **experiência do usuário**. Tudo que já funcionava continua igual: o padrão é exatamente a aparência de sempre (tema escuro, destaque branco, tamanho 100%).
@@ -396,7 +416,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.1...HEAD
+[0.3.1]: https://github.com/KMC1525/ASTA/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/KMC1525/ASTA/compare/v0.2.18...v0.3.0
 [0.2.18]: https://github.com/KMC1525/ASTA/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/KMC1525/ASTA/compare/v0.2.16...v0.2.17

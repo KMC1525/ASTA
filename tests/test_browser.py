@@ -143,6 +143,9 @@ class BrowserTests(unittest.TestCase):
             httpd.server_close()
             shutil.rmtree(tmp, ignore_errors=True)
 
+    def test_14_relationship_options_girlfriend_boyfriend_wife_husband(self):
+        self.run_script("relationships_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -23,7 +23,7 @@ Since **v0.2** it is a universal creation hub with four modes, all from the same
 | Mode | You get |
 |---|---|
 | 🌍 **3D worlds** | Playable, persistent 3D worlds (first or third person) inhabited by NPCs that are embedded AI agents. |
-| 🙂 **Avatars** | Friends, partners, companions and mentors to chat with by **text and voice** — one at a time or **several talking to each other**. |
+| 🙂 **Avatars** | Friends, girlfriends/boyfriends, wives/husbands, companions and mentors to chat with by **text and voice** — one at a time or **several talking to each other**. |
 | 🎮 **2D games** | Complete 2D games of any kind: visual novels, RPGs, platformers, side scrollers, point & click adventures. |
 | 🧩 **Canvas** | A simple node flow (inspired by ElevenLabs Flow, much lighter than ComfyUI) to generate and edit **images, videos, sounds and voices**, with a built-in video **Editor** and project-wide **styles**. |
 
@@ -130,7 +130,7 @@ ui/ux/             theme and in-game interface config
 
 Companions in the spirit of Janitor and SillyTavern, built into ASTA.
 
-- **Complete avatar cards**: name, relationship (friend, partner, companion, mentor, custom), age, gender, personality, appearance, scenario, first message, speech examples, optional full system prompt, group talkativeness, **voice** (pitch/rate/voice) and a **portrait** — upload one or use the drawn face that changes with the avatar's mood.
+- **Complete avatar cards**: name, relationship (friend, **girlfriend, boyfriend, wife, husband**, partner, companion, mentor, custom — each romantic or married relationship can be **SFW or NSFW**; the relationship also suggests the gender when you leave it empty), age, gender, personality, appearance, scenario, first message, speech examples, optional full system prompt, group talkativeness, **voice** (pitch/rate/voice) and a **portrait** — upload one or use the drawn face that changes with the avatar's mood.
 - **Create them with AI** from a text description, **images, or any attached file** (documents, spreadsheets, chat logs…): one avatar or **several at once** ("three college friends: Theo, Mia and Caio").
 - **Single chat** (you ↔ one avatar) and **group chat** (you ↔ up to 8 avatars). In a group, a *director* decides who answers (mentions, talkativeness) and, with **free chat** on, the avatars **keep talking to each other on their own**, like a real group chat, until they pause and wait for you.
 - **Text and voice**: streaming replies, speak replies out loud, dictate with the microphone, or hands-free **voice conversation** — browser speech for free, or any OpenAI-compatible STT/TTS server (cloud or local).

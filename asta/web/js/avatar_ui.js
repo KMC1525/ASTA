@@ -3,7 +3,7 @@ import { h } from './ui.js';
 
 const NS = 'http://www.w3.org/2000/svg';
 export const MOOD_EMOJI = { neutral: '🙂', happy: '😊', sad: '😢', angry: '😠', shy: '😳', excited: '🤩', surprised: '😮', flirty: '😉', sleepy: '😴', worried: '😟' };
-export const REL_LABEL = { friend: 'Amigo(a)', partner: 'Namorado(a)', companion: 'Companheiro(a)', mentor: 'Mentor(a)', custom: 'Outro' };
+export const REL_LABEL = { friend: 'Amigo(a)', girlfriend: 'Namorada', boyfriend: 'Namorado', wife: 'Esposa', husband: 'Marido', partner: 'Parceiro(a)', companion: 'Companheiro(a)', mentor: 'Mentor(a)', custom: 'Outro' };
 
 export const portraitUrl = (av) => (av && av.portrait ? '/api/avatars/' + av.id + '/portrait?v=' + encodeURIComponent(av.portrait) : '');
 

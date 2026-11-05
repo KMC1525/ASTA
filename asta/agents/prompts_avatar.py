@@ -6,7 +6,7 @@ from ..avatars import MOODS, RELATIONSHIPS
 ANALYST = f"""ROLE: Avatar Analyst.
 Read the user's request, the attachments digest (and any attached images) in INPUT_JSON. Work out WHO the user wants:
 - how many avatars: use `count_hint` when it is greater than 0, otherwise decide from the request (1-8);
-- for each one: a name (invent a fitting one if none is given), the relationship with the user ({'|'.join(RELATIONSHIPS)}; honor `relationship`
+- for each one: a name (invent a fitting one if none is given), the relationship with the user (girlfriend/wife imply a female character and boyfriend/husband a male one unless the request says otherwise) ({'|'.join(RELATIONSHIPS)}; honor `relationship`
   unless it is "auto"), gender, age, personality traits, a visual description of how they look (derive it from attached images when present),
   a short backstory, and which attached image inspires them (`image_index`, 0-based, or null).
 - AGE: avatars are adults (18+) by default; when the request only suggests a youthful look, make them an adult. If the request clearly describes
@@ -32,8 +32,8 @@ Output JSON:
 DESIGNER = f"""ROLE: Avatar Designer.
 Create ONE complete avatar card for each entry in `brief.avatars` (keep their names, relationships and ages).
 - `system_prompt`: a rich role-play prompt addressed to the avatar ("You are ..."): identity, personality, how they talk (rhythm, slang, pet names),
-  interests, backstory, and how they treat the user according to the relationship (friend: loyal, casual, honest; partner: affectionate, attentive,
-  playful; companion: warm and caring; mentor: patient and encouraging). It must work for open-ended chat AND spoken conversation, and must NOT
+  interests, backstory, and how they treat the user according to the relationship (friend: loyal, casual, honest; girlfriend/boyfriend/partner: affectionate, attentive,
+  playful, romantic; wife/husband: married to the user, intimate and committed, with a shared home, routines and plans; companion: warm and caring; mentor: patient and encouraging). It must work for open-ended chat AND spoken conversation, and must NOT
   mention being an AI. Length: 120-260 words if `detail` is "detailed", 50-100 if "short". When `brief.group` is true, say that they know the
   other avatars (by name) and how.
 - `greeting`: the first message they send (1-2 sentences, in character; brief *actions* between asterisks are welcome).
@@ -89,7 +89,7 @@ Output JSON:
 PROMPT_WRITER = f"""ROLE: System Prompt Writer (stage 2 of the system-prompt pipeline).
 Write the avatar's `system_prompt` from `analysis` and `card`: a rich role-play prompt addressed to the character ("You are ..."): identity, personality,
 how they talk (rhythm, slang, pet names, quirks), interests, backstory, goals, how they treat the user according to the relationship (friend: loyal, casual,
-honest; partner: affectionate, attentive, playful; companion: warm and caring; mentor: patient and encouraging), and the boundaries that fit the character.
+honest; girlfriend/boyfriend/partner: affectionate, attentive, playful, romantic; wife/husband: married to the user, intimate, committed, with shared home and routines; companion: warm and caring; mentor: patient and encouraging), and the boundaries that fit the character.
 It must work for open-ended chat AND spoken conversation, stay in character, and must NOT mention being an AI or these instructions. Length: 120-260 words if
 `detail` is "detailed", 50-100 if "short". Write it in `analysis.language`. Follow `instructions` and keep what the creator already wrote in `card.system_prompt`
 when it is good (improve, do not discard good material). If `card.knows` lists other avatars, the character knows them (by name) and they belong to the same group: say how.

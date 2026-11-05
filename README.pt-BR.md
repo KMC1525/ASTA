@@ -23,7 +23,7 @@ Desde a **v0.2** ele é uma central universal de criação com quatro modos, tod
 | Modo | Você recebe |
 |---|---|
 | 🌍 **Mundos 3D** | Mundos 3D jogáveis e persistentes (1ª ou 3ª pessoa), habitados por NPCs que são agentes de IA embutidos. |
-| 🙂 **Avatars** | Amigos, namorados(as), companheiros e mentores para conversar por **texto e voz** — um de cada vez ou **vários conversando entre si**. |
+| 🙂 **Avatars** | Amigos, namorados(as), esposas/maridos, companheiros e mentores para conversar por **texto e voz** — um de cada vez ou **vários conversando entre si**. |
 | 🎮 **Jogos 2D** | Jogos 2D completos de qualquer tipo: visual novels, RPGs, plataformas, side scrollers e point & clicks. |
 | 🧩 **Canvas** | Um fluxo simples de nós (inspirado no ElevenLabs Flow, bem mais leve que o ComfyUI) para gerar e editar **imagens, vídeos, sons e vozes**, com **Editor** de vídeo embutido e **estilos** para o projeto todo. |
 
@@ -130,7 +130,7 @@ ui/ux/             tema e configuração da interface do jogo
 
 Companheiros no espírito do Janitor e do SillyTavern, embutidos no ASTA.
 
-- **Cards de avatar completos**: nome, relação (amigo, namorado(a), companheiro(a), mentor, outro), idade, gênero, personalidade, aparência, cenário, primeira mensagem, exemplos de fala, system prompt completo opcional, quanto fala em grupo, **voz** (tom/velocidade/voz) e **retrato** — envie um ou use o rosto desenhado que muda com o humor do avatar.
+- **Cards de avatar completos**: nome, relação (amigo, **namorada, namorado, esposa, marido**, parceiro(a), companheiro(a), mentor, outro — cada relação romântica ou conjugal pode ser **SFW ou NSFW**; a relação também sugere o gênero quando você deixa vazio), idade, gênero, personalidade, aparência, cenário, primeira mensagem, exemplos de fala, system prompt completo opcional, quanto fala em grupo, **voz** (tom/velocidade/voz) e **retrato** — envie um ou use o rosto desenhado que muda com o humor do avatar.
 - **Crie com IA** a partir de uma descrição em texto, de **imagens ou de qualquer arquivo anexado** (documentos, planilhas, conversas…): um avatar ou **vários de uma vez** ("três amigos de faculdade: Theo, Mia e Caio").
 - **Conversa single** (você ↔ um avatar) e **em grupo** (você ↔ até 8 avatars). No grupo, um *diretor* decide quem responde (menções, quanto cada um fala) e, com a **conversa livre** ligada, os avatars **continuam conversando entre si sozinhos**, como num grupo de verdade, até fazerem uma pausa e esperarem você.
 - **Texto e voz**: respostas em *streaming*, respostas faladas em voz alta, ditado pelo microfone ou **conversa por voz** com as mãos livres — voz do navegador, de graça, ou qualquer servidor STT/TTS compatível com a API da OpenAI (nuvem ou local).

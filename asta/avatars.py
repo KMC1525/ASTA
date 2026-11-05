@@ -23,7 +23,10 @@ from .util import num, text
 
 AVATAR_SCHEMA = "asta.avatar.v1"
 CHAT_SCHEMA = "asta.avatar_chat.v1"
-RELATIONSHIPS = ("friend", "partner", "companion", "mentor", "custom")
+RELATIONSHIPS = ("friend", "girlfriend", "boyfriend", "wife", "husband", "partner", "companion", "mentor", "custom")
+# relações românticas/conjugais: podem ser SFW ou NSFW (como qualquer avatar adulto). Menor de idade nunca tem uma delas.
+ROMANTIC = ("girlfriend", "boyfriend", "wife", "husband", "partner")
+_REL_GENDER = {"girlfriend": "female", "wife": "female", "boyfriend": "male", "husband": "male"}  # gênero sugerido quando o card não diz o gênero
 CONTENT_MODES = ("sfw", "nsfw")
 CHARACTER_TYPES = ("fictional", "real")  # real = pessoa de verdade (viva ou histórica, famosa ou não): sempre SFW
 MIN_AGE = 18  # maioridade
@@ -102,7 +105,7 @@ def normalize_avatar(data: Dict[str, Any], keep_id: Optional[str] = None) -> Dic
         # regra fixa: menor de idade nunca é NSFW nem parceiro(a)
         flags.append("minor_described")
         content = "sfw"
-        if rel in ("partner", "custom"):
+        if rel in ROMANTIC or rel == "custom":
             rel = "friend"
     if ctype == "real":
         # regra fixa: pessoa real nunca é NSFW (vale também para cards importados/editados à mão)
@@ -116,7 +119,7 @@ def normalize_avatar(data: Dict[str, Any], keep_id: Optional[str] = None) -> Dic
         "id": keep_id or text(data.get("id"), "", 60),
         "name": name,
         "relationship": rel,
-        "gender": text(data.get("gender"), "", 30),
+        "gender": text(data.get("gender"), "", 30) or _REL_GENDER.get(rel, ""),
         "age": int(num(data.get("age"), 24, MIN_FIELD_AGE, 120)),
         "content": content,
         "character_type": ctype,
@@ -262,12 +265,17 @@ POLICY_NSFW = (
     "Fixed rule: you and everyone in the scene are adults (18+); never write sexual content involving minors."
 )
 REL_LABEL = {
-    "friend": "a close friend", "partner": "the user's romantic partner", "companion": "a warm, caring companion",
+    "friend": "a close friend", "girlfriend": "the user's girlfriend", "boyfriend": "the user's boyfriend", "wife": "the user's wife", "husband": "the user's husband",
+    "partner": "the user's romantic partner", "companion": "a warm, caring companion",
     "mentor": "a supportive mentor", "custom": "someone in the user's life",
 }
 STYLE_HINT = {
     "friend": "like a close friend texting: casual, funny, loyal, honest",
     "partner": "like a loving partner: affectionate, attentive, playful, personal",
+    "girlfriend": "like a loving girlfriend: affectionate, attentive, playful, flirty, personal",
+    "boyfriend": "like a loving boyfriend: affectionate, attentive, playful, flirty, personal",
+    "wife": "like a devoted wife sharing a life with the user: intimate, committed, caring, with shared home, routines and plans",
+    "husband": "like a devoted husband sharing a life with the user: intimate, committed, caring, with shared home, routines and plans",
     "companion": "like a warm companion: attentive, curious, comforting",
     "mentor": "like a wise, encouraging mentor: clear, patient, motivating",
     "custom": "naturally, true to your personality",

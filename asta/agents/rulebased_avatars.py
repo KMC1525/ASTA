@@ -8,7 +8,7 @@ from __future__ import annotations
 import re
 from typing import Any, Dict, List, Tuple
 
-from ..avatars import MIN_FIELD_AGE, MOODS, REL_LABEL
+from ..avatars import MIN_FIELD_AGE, MOODS, REL_LABEL, ROMANTIC, _REL_GENDER
 from .rulebased import CLOTH, SKIN, _rng, detect_lang
 
 FEMALE = ["Luna", "Mia", "Clara", "Sofia", "Nina", "Alice", "Lia", "Yara", "Bia", "Aurora", "Helena", "Maya"]
@@ -36,7 +36,11 @@ TRAITS = {  # padrão regex → (en, pt, es, talkativeness)
 }
 NUMBER_WORDS = {"dois": 2, "duas": 2, "two": 2, "três": 3, "tres": 3, "three": 3, "quatro": 4, "four": 4, "cinco": 5, "five": 5, "seis": 6, "six": 6}
 REL_WORDS = [
-    ("partner", r"namorad|girlfriend|boyfriend|partner|espos|wife|husband|crush|parceir|novi[oa]\b|romântic|romantic"),
+    ("wife", r"esposa|\bwife\b"),
+    ("husband", r"marido|esposo|husband"),
+    ("girlfriend", r"namorada|girlfriend"),
+    ("boyfriend", r"namorado\b|boyfriend"),
+    ("partner", r"namorados|partner|crush|parceir|novi[oa]\b|romântic|romantic"),
     ("mentor", r"mentor|professor|teacher|coach|tutor|instrutor"),
     ("companion", r"companheir|companion|assistente|assistant"),
     ("friend", r"amig|friend|parça|melhor amig|bestie|colega"),
@@ -154,7 +158,7 @@ def analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
     used = set(names)
     for i in range(count):
         name = names[i] if i < len(names) else (ref_names[i] if each and i < len(ref_names) else "")
-        gender = _gender_for(name, i, genders, strong)
+        gender = _REL_GENDER.get(rel) or _gender_for(name, i, genders, strong)  # "namorada"/"esposa" → mulher; "namorado"/"marido" → homem
         pool = FEMALE if gender == "female" else MALE
         if not name:
             options = [n for n in pool if n not in used] or [n for n in NEUTRAL if n not in used]
@@ -189,6 +193,10 @@ def _card(a: Dict[str, Any], lang: str, content: str, group: List[str], rng) -> 
     rel_text = {
         "friend": _t(lang, "melhor amigo(a)", "best friend", "mejor amigo(a)"),
         "partner": _t(lang, "namorado(a)", "romantic partner", "pareja"),
+        "girlfriend": _t(lang, "namorada", "girlfriend", "novia"),
+        "boyfriend": _t(lang, "namorado", "boyfriend", "novio"),
+        "wife": _t(lang, "esposa", "wife", "esposa"),
+        "husband": _t(lang, "marido", "husband", "esposo"),
         "companion": _t(lang, "companheiro(a)", "companion", "compañero(a)"),
         "mentor": _t(lang, "mentor(a)", "mentor", "mentor(a)"),
         "custom": _t(lang, "pessoa próxima", "close person", "persona cercana"),
@@ -220,12 +228,17 @@ def _card(a: Dict[str, Any], lang: str, content: str, group: List[str], rng) -> 
                      "¡Hola! Qué bueno verte por aquí. ¿Cómo fue tu día? *sonríe*"),
         "partner": _t(lang, f"Oi, amor... eu estava pensando em você. Como você está? *sorri*", f"Hey you... I was just thinking about you. How are you? *smiles*",
                       "Hola, cariño... estaba pensando en ti. ¿Cómo estás? *sonríe*"),
+        "wife": _t(lang, "Oi, amor... que bom você ter chegado. Vem cá, me conta como foi o seu dia. *sorri e te abraça*", "Hi, love... I'm so glad you're home. Come here, tell me how your day was. *smiles and hugs you*",
+                   "Hola, amor... qué bueno que llegaste. Ven, cuéntame cómo fue tu día. *sonríe y te abraza*"),
         "companion": _t(lang, "Olá! Estou aqui por você. O que está passando pela sua cabeça hoje?", "Hello! I'm here for you. What's on your mind today?",
                         "¡Hola! Estoy aquí para ti. ¿Qué tienes en mente hoy?"),
         "mentor": _t(lang, "Olá! Pronto(a) para trabalhar no que importa? Me conte no que você quer evoluir.", "Hello! Ready to work on what matters? Tell me what you want to improve.",
                      "¡Hola! ¿Listo(a) para trabajar en lo importante? Cuéntame en qué quieres mejorar."),
         "custom": _t(lang, "Oi! Que bom que você apareceu.", "Hi! I'm glad you showed up.", "¡Hola! Me alegra que hayas aparecido."),
-    }[rel]
+    }
+    greet["girlfriend"] = greet["boyfriend"] = greet["partner"]
+    greet["husband"] = greet["wife"]
+    greet = greet[rel]
     greet = _agree(greet, fem)
     examples = _t(
         lang,
@@ -450,7 +463,7 @@ def avatar_reply(system: str, user_text: str) -> str:
     elif has(" feliz", " animad", " consegui", " passei", " happy", " excited", " great news", " got the job", " alegre"):
         body, mood = _pick("feeling_good", lang, rng), "happy"
     elif has(" te amo", " gosto de você", " love you", " like you", " saudade", " miss you", " linda", " lindo", " beautiful", " handsome", " cute"):
-        if rel == "partner" or nsfw:
+        if rel in ROMANTIC or nsfw:
             body, mood = _pick("love", lang, rng), "shy"
         else:
             body, mood = _t(lang, "Aww, que fofo! Também gosto muito de você, de verdade. *sorri*", "Aww, that's sweet! I really like you too, truly. *smiles*"), "happy"
