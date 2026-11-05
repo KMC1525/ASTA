@@ -60,8 +60,11 @@ jobs:
       - uses: actions/checkout@v4
       - name: Sintaxe do install.sh
         run: sh -n install.sh
-      - name: Instalar a partir desta pasta e reinstalar (atualização)
+      - name: Instalar a partir desta pasta e reinstalar (atualização), com uma biblioteca opcional leve
         run: |
-          ASTA_SOURCE="$PWD" sh install.sh
-          ASTA_SOURCE="$PWD" sh install.sh
+          ASTA_SOURCE="$PWD" ASTA_EXTRAS=docs sh install.sh
+          ASTA_SOURCE="$PWD" ASTA_EXTRAS=docs sh install.sh
           "$HOME/.local/bin/asta" version
+          "$HOME/.asta/app/venv/bin/python" -c "import pypdf"
+      - name: Instalar só o ASTA (sem bibliotecas opcionais)
+        run: ASTA_SOURCE="$PWD" ASTA_EXTRAS=none ASTA_APP_DIR="$RUNNER_TEMP/core" ASTA_BIN_DIR="$RUNNER_TEMP/corebin" sh install.sh

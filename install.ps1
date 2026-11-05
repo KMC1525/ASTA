@@ -3,7 +3,8 @@
 #   irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 #
 # O MESMO comando instala e atualiza. Seus dados (%USERPROFILE%\.asta) nunca são tocados.
-# Variáveis opcionais: $env:ASTA_EXTRAS = "local" | "media" | "docs" (combine com vírgula: "local,media")
+# Variáveis opcionais: $env:ASTA_EXTRAS = "all" (padrão: instala/atualiza TODAS as bibliotecas do ASTA) | "none" (só o ASTA)
+#                                         | lista: "docs,media,local". Uma biblioteca que falhe não aborta a instalação.
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
 
 $ErrorActionPreference = 'Stop'
@@ -42,7 +43,7 @@ if (-not (Test-Path $venvPy)) {
 }
 
 # 3) instala / atualiza
-$spec = if ($Extras) { "asta[$Extras]" } else { 'asta' }
+$spec = 'asta'
 if ($Source -match '://') { $req = "$spec @ $Source" }
 elseif (Test-Path $Source) { $req = "$spec @ " + ([System.Uri](Resolve-Path $Source).Path).AbsoluteUri }
 else { $req = $Source }
@@ -56,6 +57,17 @@ $new = & $venvPy -I -c "import asta; print(asta.__version__)"
 $shim = Join-Path $BinDir 'asta.cmd'
 Set-Content -Path $shim -Value "@echo off`r`n`"$venv\Scripts\asta.exe`" %*" -Encoding ASCII
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+# 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa); a lista vem da versão recém-instalada
+$asta = Join-Path $venv 'Scripts\asta.exe'
+$libsFailed = $false
+if ($Extras -in @('none', 'core')) { Note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$Extras)." }
+else {
+  Say 'Instalando/atualizando as bibliotecas do ASTA (a primeira vez pode demorar e baixar vários GB) …'
+  $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'   # avisos do pip no stderr não podem abortar o instalador
+  & $asta libs
+  if ($LASTEXITCODE -ne 0) { $libsFailed = $true }
+  $ErrorActionPreference = $prevEap
+}
 if (($userPath -split ';') -notcontains $BinDir) {
   [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $BinDir), 'User')
   Note 'Adicionei o comando ao seu PATH — abra um NOVO terminal para usá-lo.'
@@ -64,6 +76,7 @@ if (($userPath -split ';') -notcontains $BinDir) {
 if (-not $old) { Say "✓ ASTA $new instalado." }
 elseif ($old -eq $new) { Say "✓ ASTA $new já estava atualizado (arquivos reinstalados)." }
 else { Say "✓ ASTA atualizado: $old → $new." }
+if ($libsFailed) { Note '⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs' }
 Write-Host ''
 Note 'Para abrir a WebUI:   asta'
-Note 'Para atualizar:       rode este mesmo comando de novo (ou: asta update)'
+Note 'Para atualizar:       rode este mesmo comando de novo (ou: asta update) — atualiza o ASTA e as bibliotecas dele'

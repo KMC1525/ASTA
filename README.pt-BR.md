@@ -57,19 +57,21 @@ asta
 
 A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de instalação de novo (ou `asta update`).
 
+**Instalar e atualizar também instala e atualiza todas as bibliotecas do ASTA** — as opcionais, que liberam recursos extras (leitura de PDF mais precisa, modelos locais de imagem/vídeo/som/voz do Canvas, modelos de linguagem GGUF embutidos). A primeira instalação pode demorar e baixar vários GB (o PyTorch dos modelos do Canvas); se quiser só o núcleo leve, use `ASTA_EXTRAS=none`. Uma biblioteca que falhe (por exemplo o `llama-cpp-python` sem compilador C++) gera só um aviso: o ASTA continua funcionando, e dá para tentar de novo com `asta libs`.
+
 <details>
 <summary>Opções de instalação</summary>
 
 | Variável | Efeito |
 |---|---|
-| `ASTA_EXTRAS=local` | instala também o suporte a modelos de linguagem GGUF embutidos (`llama-cpp-python`) |
-| `ASTA_EXTRAS=media` | instala também modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`) |
-| `ASTA_EXTRAS=docs` | extração de PDFs mais precisa (`pypdf`) |
+| `ASTA_EXTRAS=all` (padrão) | instala/atualiza **todas** as bibliotecas: `docs` + `media` + `local` |
+| `ASTA_EXTRAS=none` | instala só o ASTA (nenhuma dependência) |
+| `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos de linguagem GGUF embutidos (`llama-cpp-python`) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
 
-Dá para combinar extras: `ASTA_EXTRAS=local,media`. Instalação manual: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
-Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `asta doctor` mostra o diagnóstico do seu hardware e dos componentes opcionais.
+Instalação manual: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
+Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `asta update` atualiza o ASTA **e todas as bibliotecas dele** (`--core` só o ASTA, `--extras docs,media` para escolher) · `asta libs` instala/atualiza só as bibliotecas · `asta doctor` mostra o diagnóstico do seu hardware e dos componentes opcionais. As bibliotecas são atualizadas junto com as dependências delas, então os recursos do Canvas e dos modelos locais ficam em dia.
 
 </details>
 

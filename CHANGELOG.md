@@ -5,6 +5,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.3] — 2026-11-05
+
+### Alterado
+- **Instalar e atualizar agora também instala e atualiza todas as bibliotecas do ASTA.** O `install.sh`, o `install.ps1` e o `asta update` passam a instalar/atualizar, por padrão, os três grupos de bibliotecas opcionais — `docs` (PDFs mais precisos), `media` (modelos locais de imagem, vídeo, som e voz do Canvas) e `local` (modelos GGUF embutidos) —, sempre junto com as dependências delas (`--upgrade-strategy eager`). Antes, isso só acontecia com `ASTA_EXTRAS` definido e o `asta update` não tocava nas bibliotecas.
+- Uma biblioteca que falhe (por exemplo, `llama-cpp-python` sem compilador) vira um aviso com a dica de como tentar de novo: o ASTA e as outras bibliotecas continuam sendo instalados.
+- `ASTA_EXTRAS` agora aceita `all` (padrão), `none` (só o ASTA, sem dependências) ou uma lista (`docs,media,local`).
+
+### Adicionado
+- Comando `asta libs [--extras …]`: instala/atualiza só as bibliotecas, lendo a lista da versão do ASTA instalada (então bibliotecas novas de versões futuras entram sozinhas).
+- `asta update --core` (só o ASTA) e `asta update --extras …` (escolher as bibliotecas).
+- Extra `asta[all]` no pacote (todas as bibliotecas de uma vez).
+- Testes da linha de comando e dos instaladores; o CI instala com uma biblioteca opcional leve e também só o núcleo.
+
 ## [0.2.2] — 2026-11-05
 
 ### Adicionado
@@ -111,7 +124,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.2...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.3...HEAD
+[0.2.3]: https://github.com/KMC1525/ASTA/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/KMC1525/ASTA/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/KMC1525/ASTA/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/KMC1525/ASTA/compare/v0.1.0...v0.2.0

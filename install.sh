@@ -5,8 +5,9 @@
 #
 # O MESMO comando instala e atualiza. Seus dados (~/.asta: personagens, mundos,
 # configurações) nunca são tocados. Opções (variáveis de ambiente):
-#   ASTA_EXTRAS=local|media|docs        instala extras opcionais (separe por vírgula): modelos GGUF locais / modelos locais de
-#                                       imagem, vídeo, som e voz do Canvas / PDFs mais precisos
+#   ASTA_EXTRAS=all|none|docs,media,local   bibliotecas opcionais do ASTA. Padrão: all (instala/atualiza TODAS: PDFs mais
+#                                       precisos, modelos locais de imagem/vídeo/som/voz do Canvas e modelos GGUF embutidos).
+#                                       "none" instala só o ASTA (sem dependências). Uma biblioteca que falhe não aborta a instalação.
 #   ASTA_SOURCE=<url|pasta|requisito>   instala de outra origem (padrão: GitHub, branch main)
 #   ASTA_APP_DIR=<pasta>                onde fica o programa (padrão: ~/.asta/app)
 #   ASTA_BIN_DIR=<pasta>                onde fica o comando `asta` (padrão: ~/.local/bin)
@@ -54,7 +55,6 @@ fi
 
 # 3) instala / atualiza
 SPEC="asta"
-[ -n "$EXTRAS" ] && SPEC="asta[$EXTRAS]"
 case "$SOURCE" in
   *://*|git+*) REQ="$SPEC @ $SOURCE" ;;
   /*|./*|../*|~*) REQ="$SPEC @ file://$(cd "$SOURCE" && pwd)" ;;
@@ -70,7 +70,19 @@ NEW="$("$APP_DIR/venv/bin/python" -I -c 'import asta; print(asta.__version__)')"
 mkdir -p "$BIN_DIR"
 ln -sf "$APP_DIR/venv/bin/asta" "$BIN_DIR/asta"
 
+# 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa). A lista vem da versão recém-instalada.
+LIBS_FAILED=0
+case "$EXTRAS" in
+  none|core) note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$EXTRAS)." ;;
+  *) say "Instalando/atualizando as bibliotecas do ASTA (a primeira vez pode demorar e baixar vários GB) …"
+     if [ -n "$EXTRAS" ]; then ASTA_EXTRAS="$EXTRAS" "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1
+     else "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1; fi ;;
+esac
+
 if [ -z "$OLD" ]; then say "✓ ASTA $NEW instalado."; elif [ "$OLD" = "$NEW" ]; then say "✓ ASTA $NEW já estava atualizado (arquivos reinstalados)."; else say "✓ ASTA atualizado: $OLD → $NEW."; fi
+if [ "$LIBS_FAILED" = "1" ]; then
+  note "⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs"
+fi
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) note "Adicione ao seu PATH para usar o comando 'asta':"
@@ -78,7 +90,7 @@ case ":$PATH:" in
 esac
 echo
 note "Para abrir a WebUI:   asta"
-note "Para atualizar:       rode este mesmo comando de novo (ou: asta update)"
+note "Para atualizar:       rode este mesmo comando de novo (ou: asta update) — atualiza o ASTA e as bibliotecas dele"
 echo
 
 if [ "$RUN" = "1" ]; then exec "$APP_DIR/venv/bin/asta"; fi

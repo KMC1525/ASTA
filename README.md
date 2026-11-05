@@ -57,19 +57,21 @@ asta
 
 The WebUI opens at `http://localhost:8787`. To update, run the install command again (or `asta update`).
 
+**Installing and updating also install and update all of ASTA's libraries** — the optional ones that unlock extra features (more accurate PDF reading, local image/video/sound/voice models for the Canvas, embedded GGUF language models). The first install can take a while and download several GB (PyTorch for the Canvas models); if you only want the lightweight core, set `ASTA_EXTRAS=none`. A library that fails to install (for example `llama-cpp-python` without a C++ compiler) only produces a warning: ASTA still works, and you can retry with `asta libs`.
+
 <details>
 <summary>Install options</summary>
 
 | Variable | Effect |
 |---|---|
-| `ASTA_EXTRAS=local` | also installs embedded GGUF language-model support (`llama-cpp-python`) |
-| `ASTA_EXTRAS=media` | also installs local image/video/sound/voice models for the Canvas (`torch`, `diffusers`, `transformers`) |
-| `ASTA_EXTRAS=docs` | more accurate PDF extraction (`pypdf`) |
+| `ASTA_EXTRAS=all` (default) | installs/updates **every** library: `docs` + `media` + `local` |
+| `ASTA_EXTRAS=none` | installs only ASTA itself (no dependencies at all) |
+| `ASTA_EXTRAS=docs,media,local` | pick libraries: `docs` = more accurate PDF extraction (`pypdf`) · `media` = local image/video/sound/voice models for the Canvas (`torch`, `diffusers`, `transformers`…) · `local` = embedded GGUF language models (`llama-cpp-python`) |
 | `ASTA_SOURCE=<url\|folder>` | install from another source (fork, branch, local folder) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | where the program and the `asta` command live |
 
-You can combine extras: `ASTA_EXTRAS=local,media`. Manual install: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
-Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta doctor` prints a diagnosis of your hardware and optional components.
+Manual install: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
+Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta update` upgrades ASTA **and all its libraries** (`--core` for ASTA only, `--extras docs,media` to choose) · `asta libs` installs/upgrades just the libraries · `asta doctor` prints a diagnosis of your hardware and optional components. Libraries are upgraded together with their own dependencies, so the Canvas and local-model features stay current.
 
 </details>
 

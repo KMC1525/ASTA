@@ -27,6 +27,8 @@ local = ["llama-cpp-python>=0.2.90"]
 docs = ["pypdf>=4.0"]
 # Modelos locais do Hugging Face para o Canvas (imagem, vídeo, som, voz e transcrição)
 media = ["torch", "diffusers>=0.30", "transformers>=4.44", "accelerate", "safetensors", "sentencepiece", "numpy", "pillow"]
+# Tudo de uma vez (é o que os instaladores e o `asta update` usam por padrão)
+all = ["pypdf>=4.0", "torch", "diffusers>=0.30", "transformers>=4.44", "accelerate", "safetensors", "sentencepiece", "numpy", "pillow", "llama-cpp-python>=0.2.90"]
 
 [project.urls]
 Homepage = "https://github.com/KMC1525/ASTA"
