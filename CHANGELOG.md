@@ -5,6 +5,31 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.3.3] — 2026-11-05
+
+Revisão da seção **Avatars**, principalmente da hora em que o usuário conversa com o avatar. Cada item foi reproduzido (em teste ou no navegador) antes de corrigir.
+
+### Corrigido
+- **A resposta inteira sumia quando o modelo começava a fala com o nome do usuário ou de outro participante** (`Kaua: oi, tudo bem?`, imitando o formato do histórico): o ASTA cortava "tudo a partir da fala do outro" e sobrava nada, então o avatar "não respondia". Agora, se só sobraria vazio, ele tira o rótulo e mantém a fala; falas inventadas do outro no meio do texto continuam sendo cortadas.
+- **Não havia como parar uma resposta em andamento.** O botão de enviar agora vira **Parar** enquanto o avatar responde: a fala é interrompida, o balão "digitando" some e **nada pela metade é salvo** no histórico.
+- **A tela era puxada para baixo a cada trecho recebido**, mesmo quando você tinha subido para ler o histórico (principalmente na conversa livre em grupo). Agora ela só acompanha se você está no fim; se subiu, aparece o botão **↓ Novas mensagens**. Mandar uma mensagem sua sempre leva ao fim.
+- **O título da conversa ficava preso ao nome antigo** do avatar. Conversas sem título escolhido agora usam o nome atual dos avatares (título escolhido por você é mantido); ao salvar *Configurar conversa*, a lista lateral atualiza na hora.
+- **O que você digitava e não enviava se perdia** ao trocar de conversa. O rascunho agora é guardado por conversa e volta ao reabrir; o campo respeita o limite de 6.000 caracteres (antes o texto passado disso era cortado em silêncio).
+- **Conversas com mais de 8 avatares eram cortadas em silêncio** (a lista de avatares e a janela "Nova conversa" deixavam marcar mais). Agora o limite de 8 aparece na seleção e a API responde com erro claro.
+- Ao sair da conversa, o ouvinte de `visibilitychange` ficava registrado (um a mais a cada vez que a tela abria); agora é removido.
+
+### Adicionado
+- **Ações em cada mensagem** (aparecem ao passar o mouse ou focar com o teclado): **copiar**, **editar** (no lugar; Enter/Ctrl+Enter salva conforme a sua tecla de envio, Esc cancela) e **apagar**; na última resposta, **Responder de novo** — descarta a(s) resposta(s) daquela rodada (em grupo, todas) e gera outra a partir da sua última mensagem, sem duplicá-la. Editar/apagar enquanto o avatar responde é recusado com aviso (a edição vale para as próximas respostas, pois o histórico é reenviado ao modelo).
+  - API: `POST /api/avatar-chats/<id>/regenerate` (SSE, evento `removed`), `PUT` e `DELETE /api/avatar-chats/<id>/messages/<mid>`.
+- **Memórias:** além de "Esquecer tudo", dá para **esquecer uma lembrança só** e **ensinar algo ao avatar** ("meu aniversário é em março"). API: `POST /api/avatars/<id>/memory` e `DELETE …/memory?index=N`.
+- Aviso "Mostrando as últimas 200 mensagens" em históricos longos.
+
+### Testes
+- Rótulo no começo da fala; refazer a resposta (a dois e em grupo, sem duplicar a mensagem do usuário, sem mensagem para refazer); editar e apagar (inclusive recusa durante uma resposta e ids de outra conversa); memórias; limite de 8; títulos que seguem o nome. No navegador, com um servidor local simulado e lento: parar no meio (botão, balão e histórico), responder de novo, editar, apagar, rascunho, rolagem inteligente, memórias e renomear.
+
+### Observação
+- Não consegui exercitar aqui a conversa por voz (microfone e síntese) nem um modelo de IA real: a revisão dessas partes foi por leitura do código, sem problemas óbvios além dos listados.
+
 ## [0.3.2] — 2026-11-05
 
 ### Corrigido
@@ -429,7 +454,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.2...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.3...HEAD
+[0.3.3]: https://github.com/KMC1525/ASTA/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/KMC1525/ASTA/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/KMC1525/ASTA/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/KMC1525/ASTA/compare/v0.2.18...v0.3.0

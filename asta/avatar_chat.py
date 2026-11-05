@@ -125,7 +125,8 @@ class ChatEngine:
         if not avatars:
             raise ValueError("Escolha pelo menos um avatar existente.")
         avatars = avatars[:av.MAX_CHAT_AVATARS]
-        chat = {"avatar_ids": [a["id"] for a in avatars], "title": opts.get("title") or ", ".join(a["name"] for a in avatars)[:80],
+        # sem título escolhido, o nome vem dos avatares na hora de mostrar (renomear um avatar atualiza a conversa)
+        chat = {"avatar_ids": [a["id"] for a in avatars], "title": opts.get("title") or "",
                 "content": opts.get("content", "auto"), "user_name": opts.get("user_name", ""), "user_persona": opts.get("user_persona", ""),
                 "auto_talk": opts.get("auto_talk", self._settings()["avatars"].get("auto_talk", True)), "messages": []}
         uname = self.user_name(chat, self._settings())
@@ -155,6 +156,10 @@ class ChatEngine:
         chat["autonomous_turns"] = 0
         self._save(chat)
         emit({"type": "user", "message": msg})
+        self._respond(chat, avatars, settings, uname, user_text, emit, cancelled)
+
+    def _respond(self, chat, avatars, settings, uname, user_text, emit, cancelled) -> None:
+        """A rodada de respostas dos avatars a `user_text` (a mensagem do usuário já está salva no histórico)."""
         provider, info = resolve_provider(settings, "characters", self.store.models_dir)
         emit({"type": "provider", **info})  # a interface mostra qual IA responde (e avisa quando é só o Demo)
         speaker = first_speaker(chat, avatars, user_text, self.rng)
@@ -170,6 +175,60 @@ class ChatEngine:
                 break
             speaker = follow_up(chat, avatars, last, chain, max_chain, self.rng)
         emit({"type": "end", "reason": "done"})
+
+    # ----- refazer a resposta, editar e apagar mensagens
+    def regenerate(self, chat_id: str, emit: Callable[[dict], None], cancelled: Callable[[], bool] = lambda: False) -> None:
+        """Descarta a(s) resposta(s) dos avatars à última mensagem do usuário e responde de novo."""
+        stop = self._tick_stop.get(chat_id)
+        if stop:
+            stop.set()
+        with self._lock_for(chat_id):
+            chat, avatars = self._load(chat_id)
+            msgs = chat["messages"]
+            idx = next((i for i in range(len(msgs) - 1, -1, -1) if msgs[i]["role"] == "user"), -1)
+            if idx < 0:
+                raise ValueError("Ainda não há uma mensagem sua para os avatares responderem de novo.")
+            dropped = [m["id"] for m in msgs[idx + 1:]]
+            chat["messages"], chat["autonomous_turns"] = msgs[:idx + 1], 0
+            self._save(chat)
+            emit({"type": "removed", "ids": dropped})
+            settings = self._settings()
+            self._respond(chat, avatars, settings, self.user_name(chat, settings), msgs[idx]["text"], emit, cancelled)
+
+    def _edit_locked(self, chat_id: str, fn: Callable[[Dict[str, Any]], Any]) -> Any:
+        lock = self._lock_for(chat_id)
+        if not lock.acquire(blocking=False):
+            raise ValueError("Espere o avatar terminar de responder para mexer nas mensagens.")
+        try:
+            chat = self.store.avatar_chats.get(chat_id)
+            if not chat:
+                raise ValueError("Conversa não encontrada")
+            out = fn(chat)
+            self._save(chat)
+            return out
+        finally:
+            lock.release()
+
+    def delete_message(self, chat_id: str, message_id: str) -> None:
+        def run(chat):
+            before = len(chat["messages"])
+            chat["messages"] = [m for m in chat["messages"] if m["id"] != message_id]
+            if len(chat["messages"]) == before:
+                raise KeyError(message_id)
+        self._edit_locked(chat_id, run)
+
+    def edit_message(self, chat_id: str, message_id: str, body: str) -> Dict[str, Any]:
+        body = (body or "").strip()[:6000]
+        if not body:
+            raise ValueError("A mensagem não pode ficar vazia (use apagar).")
+
+        def run(chat):
+            for m in chat["messages"]:
+                if m["id"] == message_id:
+                    m["text"] = body
+                    return m
+            raise KeyError(message_id)
+        return self._edit_locked(chat_id, run)
 
     # ----- conversa livre entre avatars
     def tick(self, chat_id: str, emit: Callable[[dict], None], cancelled: Callable[[], bool] = lambda: False, more: bool = False) -> None:

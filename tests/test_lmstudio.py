@@ -3,6 +3,7 @@ import json
 import socket
 import sys
 import threading
+import time
 import unittest
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -27,8 +28,9 @@ MODELS = [
 class FakeLMStudio:
     """Servidor falso do LM Studio: /api/v0/models (estado dos modelos), /v1/models e /v1/chat/completions (com streaming)."""
 
-    def __init__(self, models=None, native=True, api_key="", reply=("Oi", ", ", "tudo bem?")):
-        self.models, self.native, self.api_key, self.reply = list(MODELS if models is None else models), native, api_key, list(reply)
+    def __init__(self, models=None, native=True, api_key="", reply=("Oi", ", ", "tudo bem?"), delay=0.0):
+        """`reply`: pedaços da resposta, ou uma função (nº da chamada, corpo da requisição) → pedaços. `delay`: pausa entre os pedaços do streaming (para testar «Parar»)."""
+        self.models, self.native, self.api_key, self.reply, self.delay, self.calls = list(MODELS if models is None else models), native, api_key, reply, delay, 0
         self.requests = []
         outer = self
 
@@ -70,16 +72,24 @@ class FakeLMStudio:
                 loaded = [m["id"] for m in outer.models if m.get("state") == "loaded" and m.get("type") != "embeddings"]
                 if body.get("model") not in [m["id"] for m in outer.models] or body.get("model") in ("text-embedding-nomic",):
                     return self._send({"error": {"message": f"model '{body.get('model')}' not found"}}, 404)
+                outer.calls += 1
+                chunks = list(outer.reply(outer.calls, body) if callable(outer.reply) else outer.reply)
                 if body.get("stream"):
                     self.send_response(200)
                     self.send_header("Content-Type", "text/event-stream")
                     self.end_headers()
-                    for c in outer.reply:
-                        self.wfile.write(b"data: " + json.dumps({"choices": [{"delta": {"content": c}}]}).encode() + b"\n\n")
-                    self.wfile.write(b"data: [DONE]\n\n")
-                    self.wfile.flush()
+                    try:
+                        for c in chunks:
+                            if outer.delay:
+                                time.sleep(outer.delay)
+                            self.wfile.write(b"data: " + json.dumps({"choices": [{"delta": {"content": c}}]}).encode() + b"\n\n")
+                            self.wfile.flush()
+                        self.wfile.write(b"data: [DONE]\n\n")
+                        self.wfile.flush()
+                    except OSError:  # o ASTA fechou a conexão (botão Parar)
+                        pass
                     return
-                self._send({"choices": [{"message": {"content": "".join(outer.reply)}}], "model": body["model"], "loaded": loaded})
+                self._send({"choices": [{"message": {"content": "".join(chunks)}}], "model": body["model"], "loaded": loaded})
 
         self.httpd = ThreadingHTTPServer(("127.0.0.1", 0), H)
         self.httpd.daemon_threads = True

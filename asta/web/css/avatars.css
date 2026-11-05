@@ -54,3 +54,16 @@
 .chengine{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--line);flex:none;font-size:13px}
 .chengine.warn{background:rgba(245,185,66,.08);color:#f5c76b;border-bottom-color:rgba(245,185,66,.25)}
 .chengine.ok{padding:4px 16px}
+
+/* ações de cada mensagem, «Parar», «Novas mensagens» e edição no lugar */
+.mbody{position:relative}
+.macts{display:flex;gap:2px;opacity:0;transition:opacity .15s;position:absolute;top:-14px;right:6px;z-index:2;background:var(--bg1);border:1px solid var(--line);border-radius:999px;padding:1px;pointer-events:none}
+.msg:hover .macts,.msg:focus-within .macts{pointer-events:auto}
+.msg:hover .macts,.msg:focus-within .macts{opacity:1}
+.msg{margin-top:4px}
+@media (hover:none){.macts{opacity:.7}}
+.macts .btn.icon.sm{width:24px;height:24px}
+.medit{min-height:64px;border-radius:12px;font-size:inherit}
+.chatmain{position:relative}
+.newmsgs{position:absolute;left:50%;transform:translateX(-50%);bottom:84px;z-index:5;border:1px solid var(--line3);background:var(--bg1);color:var(--text);border-radius:999px;padding:6px 14px;font-size:12px;cursor:pointer;box-shadow:0 6px 20px var(--shadow)}
+.chinput .btn.danger{background:transparent;border-color:var(--err);color:var(--err)}

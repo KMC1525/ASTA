@@ -51,6 +51,7 @@ class AvatarRoutes:
         a("POST", r"/api/avatars/(?P<aid>[\w-]+)/portrait", self.r_portrait_put)
         a("DELETE", r"/api/avatars/(?P<aid>[\w-]+)/portrait", self.r_portrait_delete)
         a("GET", r"/api/avatars/(?P<aid>[\w-]+)/memory", self.r_memory_get)
+        a("POST", r"/api/avatars/(?P<aid>[\w-]+)/memory", self.r_memory_add)
         a("DELETE", r"/api/avatars/(?P<aid>[\w-]+)/memory", self.r_memory_delete)
 
         a("GET", r"/api/avatar-chats", self.r_chats)
@@ -61,6 +62,9 @@ class AvatarRoutes:
         a("POST", r"/api/avatar-chats/(?P<cid>[\w-]+)/send", self.r_chat_send)
         a("POST", r"/api/avatar-chats/(?P<cid>[\w-]+)/tick", self.r_chat_tick)
         a("POST", r"/api/avatar-chats/(?P<cid>[\w-]+)/reset", self.r_chat_reset)
+        a("POST", r"/api/avatar-chats/(?P<cid>[\w-]+)/regenerate", self.r_chat_regenerate)
+        a("PUT", r"/api/avatar-chats/(?P<cid>[\w-]+)/messages/(?P<mid>[\w-]+)", self.r_message_edit)
+        a("DELETE", r"/api/avatar-chats/(?P<cid>[\w-]+)/messages/(?P<mid>[\w-]+)", self.r_message_delete)
 
     # ------------------------------------------------------------------ cards
     def _avatar(self, aid: str) -> Dict[str, Any]:
@@ -140,9 +144,27 @@ class AvatarRoutes:
         req.json({"memories": self.store.get_memories(aid)})
 
     def r_memory_delete(self, req, aid: str) -> None:
+        """Sem `index`: esquece tudo. Com `?index=N`: esquece só a lembrança N."""
         self._avatar(aid)
+        raw = req.query.get("index", [""])[0]
+        if raw != "":
+            try:
+                req.json({"memories": self.store.delete_memory(aid, int(raw))})
+            except ValueError:
+                raise HttpError(400, "Índice inválido")
+            return
         self.store.clear_memories(aid)
         req.json({"ok": True})
+
+    def r_memory_add(self, req, aid: str) -> None:
+        """O usuário ensina algo ao avatar: {"text": "..."}."""
+        self._avatar(aid)
+        body = req.body_json()
+        note = text(body.get("text"), "", 240) if isinstance(body, dict) else ""
+        if not note:
+            raise HttpError(400, "Escreva o que o avatar deve lembrar.")
+        limit = int(num(self.store.get_settings()["avatars"].get("memory_limit"), 40, 5, 500))
+        req.json({"memories": self.store.add_memories(aid, [note], limit)})
 
     # ------------------------------------------------------------------ geração por IA
     def r_generate(self, req) -> None:
@@ -210,7 +232,8 @@ class AvatarRoutes:
 
     def _summary(self, chat: Dict[str, Any]) -> Dict[str, Any]:
         last = chat["messages"][-1] if chat["messages"] else None
-        return {"id": chat["id"], "title": chat["title"], "mode": chat["mode"], "avatar_ids": chat["avatar_ids"], "content": chat["content"],
+        names = [a["name"] for a in (self.store.avatars.get(i) for i in chat["avatar_ids"]) if a]
+        return {"id": chat["id"], "title": chat["title"] or ", ".join(names)[:80], "names": names, "mode": chat["mode"], "avatar_ids": chat["avatar_ids"], "content": chat["content"],
                 "auto_talk": chat["auto_talk"], "updated": chat["updated"], "count": len(chat["messages"]),
                 "last": {"name": last["name"], "text": last["text"][:120], "role": last["role"]} if last else None}
 
@@ -221,9 +244,11 @@ class AvatarRoutes:
         body = req.body_json()
         if not isinstance(body, dict):
             raise HttpError(400, "JSON inválido")
-        ids: List[str] = [text(i, "", 60) for i in (body.get("avatar_ids") or [])][:MAX_CHAT_AVATARS]
+        ids: List[str] = [text(i, "", 60) for i in (body.get("avatar_ids") or [])][:MAX_CHAT_AVATARS + 1]
         if not ids:
             raise HttpError(400, "Escolha pelo menos um avatar.")
+        if len(ids) > MAX_CHAT_AVATARS:
+            raise HttpError(400, f"No máximo {MAX_CHAT_AVATARS} avatares por conversa.")
         if len(ids) == 1 and body.get("reuse"):  # "Conversar" volta à conversa single já existente do avatar
             for c in self.store.avatar_chats.list():
                 if c["avatar_ids"] == ids:
@@ -286,6 +311,31 @@ class AvatarRoutes:
         if not message:
             raise HttpError(400, "Escreva uma mensagem.")
         self._stream(req, lambda emit: self.engine.send(cid, message, emit))
+
+    def r_chat_regenerate(self, req, cid: str) -> None:
+        self._chat(cid)
+        self._stream(req, lambda emit: self.engine.regenerate(cid, emit))
+
+    def r_message_edit(self, req, cid: str, mid: str) -> None:
+        self._chat(cid)
+        body = req.body_json()
+        try:
+            msg = self.engine.edit_message(cid, mid, body.get("text") if isinstance(body, dict) else "")
+        except KeyError:
+            raise HttpError(404, "Mensagem não encontrada")
+        except ValueError as exc:
+            raise HttpError(409 if "Espere" in str(exc) else 400, str(exc))
+        req.json(msg)
+
+    def r_message_delete(self, req, cid: str, mid: str) -> None:
+        self._chat(cid)
+        try:
+            self.engine.delete_message(cid, mid)
+        except KeyError:
+            raise HttpError(404, "Mensagem não encontrada")
+        except ValueError as exc:
+            raise HttpError(409, str(exc))
+        req.json({"ok": True})
 
     def r_chat_tick(self, req, cid: str) -> None:
         self._chat(cid)

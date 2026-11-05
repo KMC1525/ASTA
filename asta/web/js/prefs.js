@@ -14,3 +14,4 @@ export const sendHint = () => (ui().send_key === 'ctrl_enter' ? 'Ctrl+Enter' : '
 
 // Abas da Configuração (a paleta de comandos também leva a cada uma)
 export const CONFIG_TABS = [['providers', 'Provedores'], ['media', 'Mídia'], ['generation', 'Geração'], ['creative', 'Avatars e jogos'], ['voice', 'Voz'], ['local', 'Modelos locais'], ['appearance', 'Aparência'], ['system', 'Sistema']];
+export const DRAFT_PREFIX = 'asta.draft.';  // rascunhos do chat dos avatares (por conversa, na sessão do navegador)

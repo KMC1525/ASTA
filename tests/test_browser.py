@@ -146,6 +146,22 @@ class BrowserTests(unittest.TestCase):
     def test_14_relationship_options_girlfriend_boyfriend_wife_husband(self):
         self.run_script("relationships_ui.js")
 
+    def test_15_chat_interaction_stop_regenerate_edit_delete_draft_scroll_memories(self):
+        from tests.test_lmstudio import FakeLMStudio
+
+        def reply(n, body):
+            last = str(body["messages"][-1]["content"])
+            return ["parte "] * 25 if "[lento]" in last else [f"Resposta {n}"]
+
+        fake = FakeLMStudio(reply=reply, delay=0.12)
+        try:
+            self.run_script("chat_interaction_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
 
 if __name__ == "__main__":
     unittest.main()

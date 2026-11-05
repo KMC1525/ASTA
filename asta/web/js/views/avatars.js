@@ -57,7 +57,7 @@ async function renderList(root, ctx) {
   function card(a) {
     const on = sel.has(a.id);
     return h('div', { class: 'av-card' + (on ? ' on' : '') },
-      h('label', { class: 'av-sel', title: t('Selecionar para conversa em grupo') }, h('input', { type: 'checkbox', checked: on, onchange: (e) => { e.target.checked ? sel.add(a.id) : sel.delete(a.id); paint(); } })),
+      h('label', { class: 'av-sel', title: t('Selecionar para conversa em grupo') }, h('input', { type: 'checkbox', checked: on, onchange: (e) => { if (e.target.checked && sel.size >= 8) { e.target.checked = false; return toast(t('No máximo 8 avatares por conversa.'), 'err'); } e.target.checked ? sel.add(a.id) : sel.delete(a.id); paint(); } })),
       h('div', { class: 'av-pic', onclick: () => openChat([a.id]) }, avatarPic(a, 88)),
       h('div', { class: 'av-info' },
         h('div', { class: 'av-name', title: a.name }, a.name),

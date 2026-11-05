@@ -399,6 +399,18 @@ class Store:
             write_json(path, {"memories": items})
             return items
 
+    def delete_memory(self, avatar_id: str, index: int) -> List[str]:
+        """Esquece uma lembrança só (posição `index` da lista). Devolve a lista nova."""
+        path = self._avatar_file(self.avatar_memory_dir, avatar_id, ".json")
+        if path is None:
+            return []
+        with self._lock:
+            items = self.get_memories(avatar_id)
+            if 0 <= index < len(items):
+                items.pop(index)
+                write_json(path, {"memories": items})
+            return items
+
     def clear_memories(self, avatar_id: str) -> None:
         path = self._avatar_file(self.avatar_memory_dir, avatar_id, ".json")
         if path:

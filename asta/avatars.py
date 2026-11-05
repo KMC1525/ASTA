@@ -452,6 +452,7 @@ def parse_reply(raw: str, name: str = "", others: Optional[List[str]] = None) ->
 def clean_group_text(body: str, name: str, others: List[str]) -> str:
     """Remove o prefixo "Nome:" e corta se o modelo começar a escrever falas de outros participantes."""
     s = body.strip()
+    original = s
     if name:
         # "Aya: oi", "**Aya:** oi", "**Aya**: oi", "[Aya]: oi"
         s = re.sub(r"^\s*[\[(]?(\**)" + re.escape(name) + r"\**[\])]?\s*:\s*(?:\*+\s*)?", lambda m: "", s, count=1, flags=re.I)
@@ -459,4 +460,8 @@ def clean_group_text(body: str, name: str, others: List[str]) -> str:
         m = re.search(r"(?:^|\n)\s*\**" + re.escape(other) + r"\**\s*:", s, flags=re.I)
         if m:
             s = s[:m.start()]
+    if not s.strip() and original:
+        # o texto começava com o nome de outro participante (ou do usuário) e sobrou nada: era só um rótulo — tira o rótulo em vez de apagar a fala toda
+        lead = re.sub(r"^\s*\**(?:" + "|".join(re.escape(o) for o in others if o) + r")\**\s*:\s*(?:\*+\s*)?", "", original, count=1, flags=re.I) if others else original
+        s = lead if lead.strip() else ""
     return re.sub(r"\n{3,}", "\n\n", s).strip()

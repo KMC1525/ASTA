@@ -434,6 +434,171 @@ class ChatEngineTests(TmpCase):
         self.assertTrue([e for e in self.events if e["type"] == "silence"])
 
 
+class InteractionTests(TmpCase):
+    """Conversa usuário × avatar: responder de novo, editar/apagar mensagens, memórias, rótulos de fala."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = Store(self.tmp / "home")
+        self.engine = ChatEngine(self.store, random.Random(1))
+        self.events = []
+
+    def say(self, chat_id, text, reply, regenerate=False):
+        prov = ScriptedChat(reply)
+        info = {"id": "x", "label": "x", "model": "x", "demo": False, "auto": False, "reason": ""}
+        with mock.patch.object(avatar_chat, "resolve_provider", return_value=(prov, info)):
+            (self.engine.regenerate(chat_id, self.events.append) if regenerate else self.engine.send(chat_id, text, self.events.append))
+        return prov
+
+    def avatar(self, name, **kw):
+        return self.store.avatars.save({"name": name, "age": 26, "greeting": "", **kw})["id"]
+
+    def texts(self, chat_id):
+        return [(m["role"], m["text"]) for m in self.store.avatar_chats.get(chat_id)["messages"]]
+
+    def test_a_reply_that_starts_with_a_participant_label_is_not_erased(self):
+        """O modelo escrevia «Kaua: ...» no começo da fala (imitando o formato do histórico) e a resposta inteira sumia."""
+        self.assertEqual(av.parse_reply("Kaua: eu amei isso!", "Aya", ["Kaua"])["say"], "eu amei isso!")
+        self.assertEqual(av.parse_reply("**Você:** claro que sim", "Aya", ["Você"])["say"], "claro que sim")
+        self.assertEqual(av.parse_reply("Que bom!\nKaua: e você?", "Aya", ["Kaua"])["say"], "Que bom!")  # falas inventadas do outro continuam sendo cortadas
+        self.assertEqual(av.parse_reply("Bia: oi", "Aya", ["Bia"])["say"], "oi")
+        self.assertEqual(av.parse_reply("só texto", "Aya", ["Kaua"])["say"], "só texto")
+        chat = self.engine.create_chat([self.avatar("Aya")], user_name="Kaua")
+        self.say(chat["id"], "oi", "Kaua: oi, tudo bem?")
+        self.assertEqual(self.texts(chat["id"])[-1], ("avatar", "oi, tudo bem?"))
+
+    def test_regenerate_drops_the_old_replies_and_answers_the_last_user_message_again(self):
+        chat = self.engine.create_chat([self.avatar("Aya")])
+        self.say(chat["id"], "primeira", "Resposta antiga")
+        self.say(chat["id"], "segunda", "Outra resposta")
+        self.events.clear()
+        prov = self.say(chat["id"], "", "Resposta nova", regenerate=True)
+        self.assertEqual(self.texts(chat["id"]), [("user", "primeira"), ("avatar", "Resposta antiga"), ("user", "segunda"), ("avatar", "Resposta nova")])
+        removed = next(e for e in self.events if e["type"] == "removed")
+        self.assertEqual(len(removed["ids"]), 1)
+        self.assertEqual(prov.calls[0][-1]["content"], "segunda")  # respondeu à última mensagem do usuário, sem duplicá-la
+        self.assertEqual([m["role"] for m in prov.calls[0]], ["user", "assistant", "user"])
+        # sem nenhuma mensagem do usuário não há o que refazer
+        empty = self.engine.create_chat([self.avatar("Bia", greeting="Oi!")])
+        with self.assertRaises(ValueError):
+            self.engine.regenerate(empty["id"], self.events.append)
+
+    def test_regenerate_in_a_group_drops_every_reply_of_that_round(self):
+        a, b = self.avatar("Aya", talkativeness=1.0), self.avatar("Bia", talkativeness=1.0)
+        chat = self.engine.create_chat([a, b])
+        self.say(chat["id"], "Aya, Bia, oi!", "Oi pessoal!")
+        before = [m for m in self.store.avatar_chats.get(chat["id"])["messages"] if m["role"] == "avatar"]
+        self.assertTrue(before)
+        self.events.clear()
+        self.say(chat["id"], "", "Resposta nova do grupo", regenerate=True)
+        msgs = self.store.avatar_chats.get(chat["id"])["messages"]
+        self.assertEqual([m["role"] for m in msgs][0], "user")
+        self.assertEqual(len([e for e in self.events if e["type"] == "removed"][0]["ids"]), len(before))
+        self.assertFalse({m["id"] for m in before} & {m["id"] for m in msgs})
+
+    def test_edit_and_delete_messages(self):
+        chat = self.engine.create_chat([self.avatar("Aya")])
+        self.say(chat["id"], "oi", "olá!")
+        user, reply = self.store.avatar_chats.get(chat["id"])["messages"]
+        out = self.engine.edit_message(chat["id"], user["id"], "  oi, tudo bem?  ")
+        self.assertEqual((out["text"], out["role"], out["id"]), ("oi, tudo bem?", "user", user["id"]))
+        self.assertEqual(self.texts(chat["id"])[0], ("user", "oi, tudo bem?"))
+        with self.assertRaises(ValueError):
+            self.engine.edit_message(chat["id"], user["id"], "   ")
+        with self.assertRaises(KeyError):
+            self.engine.edit_message(chat["id"], "m_nao_existe", "x")
+        self.engine.delete_message(chat["id"], reply["id"])
+        self.assertEqual(self.texts(chat["id"]), [("user", "oi, tudo bem?")])
+        with self.assertRaises(KeyError):
+            self.engine.delete_message(chat["id"], reply["id"])
+        # edição vai para o próximo prompt
+        prov = self.say(chat["id"], "e agora?", "certo")
+        self.assertIn("oi, tudo bem?", prov.calls[0][0]["content"])
+
+    def test_messages_cannot_be_edited_while_the_avatar_is_replying(self):
+        chat = self.engine.create_chat([self.avatar("Aya", greeting="Oi")])
+        mid = self.store.avatar_chats.get(chat["id"])["messages"][0]["id"]
+        lock = self.engine._lock_for(chat["id"])
+        with lock:  # simula uma resposta em andamento
+            with self.assertRaises(ValueError) as cm:
+                self.engine.edit_message(chat["id"], mid, "x")
+            self.assertIn("Espere", str(cm.exception))
+            with self.assertRaises(ValueError):
+                self.engine.delete_message(chat["id"], mid)
+
+    def test_memories_can_be_added_and_forgotten_one_by_one(self):
+        aid = self.avatar("Aya")
+        self.store.add_memories(aid, ["gosta de café", "mora em Recife", "tem um gato"])
+        self.assertEqual(self.store.delete_memory(aid, 1), ["gosta de café", "tem um gato"])
+        self.assertEqual(self.store.delete_memory(aid, 99), ["gosta de café", "tem um gato"])  # índice fora da lista: nada acontece
+        self.assertEqual(self.store.delete_memory(aid, -1), ["gosta de café", "tem um gato"])
+        self.assertEqual(self.store.get_memories(aid), ["gosta de café", "tem um gato"])
+        self.assertEqual(self.store.delete_memory("../x", 0), [])
+
+
+class InteractionApiTests(ServerCase):
+    def mk(self, n=1, **kw):
+        ids = [self.c.json("POST", "/api/avatars", {"name": f"Av{i}", "age": 26, "greeting": "", **kw})[1]["id"] for i in range(n)]
+        return ids, self.c.json("POST", "/api/avatar-chats", {"avatar_ids": ids})[1]
+
+    def test_regenerate_edit_and_delete_over_http(self):
+        ids, chat = self.mk()
+        self.c.sse(f"/api/avatar-chats/{chat['id']}/send", {"text": "oi"}, method="POST")
+        user, reply = self.c.json("GET", f"/api/avatar-chats/{chat['id']}")[1]["messages"]
+        ev = self.c.sse(f"/api/avatar-chats/{chat['id']}/regenerate", {}, method="POST")
+        self.assertEqual([e["type"] for e in ev if e["type"] in ("removed", "message")], ["removed", "message"])
+        self.assertEqual(self.c.json("PUT", f"/api/avatar-chats/{chat['id']}/messages/{user['id']}", {"text": "oi de novo"})[1]["text"], "oi de novo")
+        self.assertEqual(self.c.json("PUT", f"/api/avatar-chats/{chat['id']}/messages/{user['id']}", {"text": ""})[0], 400)
+        self.assertEqual(self.c.json("PUT", f"/api/avatar-chats/{chat['id']}/messages/m_nao_existe", {"text": "x"})[0], 404)
+        self.assertEqual(self.c.json("DELETE", f"/api/avatar-chats/{chat['id']}/messages/{user['id']}")[0], 200)
+        self.assertEqual(self.c.json("DELETE", f"/api/avatar-chats/{chat['id']}/messages/{user['id']}")[0], 404)
+        self.assertEqual(self.c.json("DELETE", f"/api/avatar-chats/nao-existe/messages/{user['id']}")[0], 404)
+        # sem mensagem do usuário não há o que refazer: erro claro no stream
+        ids2, chat2 = self.mk(greeting="Oi!")
+        ev = self.c.sse(f"/api/avatar-chats/{chat2['id']}/regenerate", {}, method="POST")
+        self.assertTrue(any(e["type"] == "error" and "responderem de novo" in e["message"] for e in ev))
+
+    def test_message_ids_do_not_cross_conversations(self):
+        ids, chat = self.mk()
+        ids2, other = self.mk()
+        self.c.sse(f"/api/avatar-chats/{chat['id']}/send", {"text": "oi"}, method="POST")
+        mid = self.c.json("GET", f"/api/avatar-chats/{chat['id']}")[1]["messages"][0]["id"]
+        self.assertEqual(self.c.json("DELETE", f"/api/avatar-chats/{other['id']}/messages/{mid}")[0], 404)
+        self.assertEqual(self.c.json("GET", f"/api/avatar-chats/{chat['id']}")[1]["messages"][0]["id"], mid)
+
+    def test_memory_endpoints(self):
+        ids, chat = self.mk()
+        aid = ids[0]
+        st, r = self.c.json("POST", f"/api/avatars/{aid}/memory", {"text": "meu aniversário é em março"})
+        self.assertEqual((st, r["memories"]), (200, ["meu aniversário é em março"]))
+        self.c.json("POST", f"/api/avatars/{aid}/memory", {"text": "gosto de café"})
+        self.assertEqual(self.c.json("POST", f"/api/avatars/{aid}/memory", {"text": "  "})[0], 400)
+        self.assertEqual(self.c.json("POST", f"/api/avatars/{aid}/memory", ["x"])[0], 400)
+        st, r = self.c.json("DELETE", f"/api/avatars/{aid}/memory?index=0")
+        self.assertEqual(r["memories"], ["gosto de café"])
+        self.assertEqual(self.c.json("DELETE", f"/api/avatars/{aid}/memory?index=abc")[0], 400)
+        self.assertEqual(self.c.json("POST", "/api/avatars/nao-existe/memory", {"text": "x"})[0], 404)
+        self.c.json("DELETE", f"/api/avatars/{aid}/memory")
+        self.assertEqual(self.c.json("GET", f"/api/avatars/{aid}/memory")[1]["memories"], [])
+
+    def test_conversation_limit_and_titles_follow_the_avatar_names(self):
+        ids = [self.c.json("POST", "/api/avatars", {"name": f"Lim{i}", "age": 26})[1]["id"] for i in range(9)]
+        st, r = self.c.json("POST", "/api/avatar-chats", {"avatar_ids": ids})
+        self.assertEqual(st, 400)
+        self.assertIn("No máximo 8", r["error"])
+        self.assertEqual(self.c.json("POST", "/api/avatar-chats", {"avatar_ids": ids[:8]})[0], 200)
+        # sem título escolhido, o nome vem do avatar (renomear atualiza a conversa); título escolhido pelo usuário é mantido
+        aid = self.c.json("POST", "/api/avatars", {"name": "Marina", "age": 30})[1]["id"]
+        chat = self.c.json("POST", "/api/avatar-chats", {"avatar_ids": [aid]})[1]
+        titled = self.c.json("POST", "/api/avatar-chats", {"avatar_ids": [aid], "title": "Meu papo"})[1]
+        card = self.c.json("GET", f"/api/avatars/{aid}")[1]
+        self.c.json("PUT", f"/api/avatars/{aid}", {**card, "name": "Marina Souza"})
+        by_id = {c["id"]: c for c in self.c.json("GET", "/api/avatar-chats")[1]}
+        self.assertEqual(by_id[chat["id"]]["title"], "Marina Souza")
+        self.assertEqual(by_id[chat["id"]]["names"], ["Marina Souza"])
+        self.assertEqual(by_id[titled["id"]]["title"], "Meu papo")
+
+
 class DeleteAvatarTests(TmpCase):
     def test_deleting_an_avatar_cleans_its_conversations(self):
         """Antes ficava uma conversa fantasma que, ao abrir, quebrava a tela do chat."""
