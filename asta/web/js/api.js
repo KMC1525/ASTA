@@ -1,4 +1,5 @@
 // Cliente da API local do ASTA.
+import { t } from './i18n.js';
 export class ApiError extends Error {
   constructor(message, status, data) { super(message); this.status = status; this.data = data; }
 }
@@ -10,7 +11,7 @@ export async function api(path, { method = 'GET', body, raw, headers } = {}) {
     else { opts.body = JSON.stringify(body); opts.headers['Content-Type'] = 'application/json'; }
   }
   let res;
-  try { res = await fetch(path, opts); } catch (e) { throw new ApiError('Sem conexão com o servidor do ASTA.', 0); }
+  try { res = await fetch(path, opts); } catch (e) { throw new ApiError(t('Sem conexão com o servidor do ASTA.'), 0); }
   const ct = res.headers.get('Content-Type') || '';
   const data = ct.includes('json') ? await res.json().catch(() => ({})) : await res.text();
   if (!res.ok) throw new ApiError((data && data.error) || `Erro ${res.status}`, res.status, data);
@@ -41,7 +42,7 @@ export function upload(file, onProgress) {
       let data = {}; try { data = JSON.parse(xhr.responseText); } catch (e) { /* ok */ }
       if (xhr.status >= 200 && xhr.status < 300) resolve(data); else reject(new ApiError(data.error || `Erro ${xhr.status}`, xhr.status, data));
     };
-    xhr.onerror = () => reject(new ApiError('Falha no upload.', 0));
+    xhr.onerror = () => reject(new ApiError(t('Falha no upload.'), 0));
     xhr.send(file);
   });
 }

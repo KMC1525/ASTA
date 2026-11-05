@@ -81,7 +81,7 @@ export default async function render(root, ctx, id) {
         field(t('Cenário'), h('textarea', { rows: 2, placeholder: t('Onde e como vocês se conhecem…'), oninput: (e) => { d.scenario = e.target.value; } }, d.scenario)),
         field(t('System prompt'), h('textarea', { rows: 8, placeholder: t('Quem é, como fala, o que sente… Escreva como “Você é …”. Vazio = usa os campos acima.'), oninput: (e) => { d.system_prompt = e.target.value; } }, d.system_prompt)),
         field(t('Primeira mensagem'), h('textarea', { rows: 2, oninput: (e) => { d.greeting = e.target.value; } }, d.greeting)),
-        field(t('Exemplos de fala'), h('textarea', { rows: 4, placeholder: 'Usuário: …\nAvatar: …', oninput: (e) => { d.examples = e.target.value; } }, d.examples), t('Mostram o estilo do avatar ao modelo.')),
+        field(t('Exemplos de fala'), h('textarea', { rows: 4, placeholder: t('Usuário: …\nAvatar: …'), oninput: (e) => { d.examples = e.target.value; } }, d.examples), t('Mostram o estilo do avatar ao modelo.')),
         field(t('Falante em grupo'), range(0.1, 1, 0.05, d.talkativeness, (v) => { d.talkativeness = v; }, (v) => Math.round(v * 100) + '%'), t('Quanto mais alto, mais o avatar puxa a conversa nos grupos.'))),
 
       h('div', { class: 'card sect' }, h('h3', null, t('Voz')), h('datalist', { id: 'voices' }, voices.map((v) => h('option', { value: v.name }, v.lang))),

@@ -273,12 +273,12 @@ def build_template(template: str, prompt: str = "") -> Dict[str, Any]:
         st, t_, im = _n("style_prompt", 60, 40, text="Ilustração em aquarela, cores suaves, traço delicado", **{"global": True}), _n("text", 60, 280, text=prompt or "Um gato dormindo numa janela"), _n("image", 420, 160)
         nodes, edges = [st, t_, im], [_e(t_, im, "prompt")]
     elif template == "scene":
-        st = _n("style_prompt", 60, 20, text="Cinematográfico, luz natural, cores quentes", **{"global": True})
-        sc = _n("text", 60, 250, text=prompt or "Uma faroleira acende o farol numa noite de tempestade")
-        im, vd = _n("image", 420, 40), _n("video", 800, 40, duration=5)
-        vo = _n("voice", 420, 330, text="A tempestade chegou, mas a luz do farol não vai se apagar.")
-        sf = _n("sound", 420, 560, kind="sfx", prompt="trovão distante e ondas batendo nas rochas", duration=8)
-        ed = _n("editor", 1180, 260)
+        st = _n("style_prompt", 40, 20, text="Cinematográfico, luz natural, cores quentes", **{"global": True})
+        sc = _n("text", 40, 300, text=prompt or "Uma faroleira acende o farol numa noite de tempestade")
+        im, vd = _n("image", 400, 20), _n("video", 780, 20, duration=5)
+        vo = _n("voice", 400, 700, text="A tempestade chegou, mas a luz do farol não vai se apagar.")
+        sf = _n("sound", 780, 640, kind="sfx", prompt="trovão distante e ondas batendo nas rochas", duration=8)
+        ed = _n("editor", 1160, 260)
         nodes = [st, sc, im, vd, vo, sf, ed]
         edges = [_e(sc, im, "prompt"), _e(sc, vd, "prompt"), _e(im, vd, "image"), _e(vd, ed, "clips"), _e(vo, ed, "clips"), _e(sf, ed, "clips")]
     return {"nodes": nodes, "edges": edges}

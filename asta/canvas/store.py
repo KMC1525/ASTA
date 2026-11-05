@@ -92,6 +92,16 @@ class CanvasStore:
             new["created"] = cur["created"]
             return self._write(new)
 
+    def append_nodes(self, cid: str, nodes: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """Acrescenta nós (já com ids únicos) a um canvas existente, mantendo o resto como está."""
+        with self._lock:
+            cur = self.get(cid)
+            if not cur:
+                return None
+            merged = normalize_canvas({**cur, "nodes": cur["nodes"] + list(nodes)}, keep_id=cid)
+            merged["created"] = cur["created"]
+            return self._write(merged)
+
     def update_meta(self, cid: str, name: Optional[str], description: Optional[str]) -> Optional[Dict[str, Any]]:
         with self._lock:
             cur = self.get(cid)

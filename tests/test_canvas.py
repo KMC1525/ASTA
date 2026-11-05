@@ -999,6 +999,18 @@ class CanvasApiTests(ServerCase):
         self.assertEqual(headers["Content-Type"], "audio/wav")
         self.c.json("DELETE", f"/api/canvases/{cid}")
 
+    def test_composer_attachments_become_nodes(self):
+        up_img = self.c.json("POST", "/api/uploads", raw=PNG, headers={"X-Filename": "ref.png", "Content-Type": "image/png"})[1]
+        up_txt = self.c.json("POST", "/api/uploads", raw="Roteiro: a faroleira acende o farol.".encode(), headers={"X-Filename": "roteiro.txt", "Content-Type": "text/plain"})[1]
+        status, c = self.c.json("POST", "/api/canvases", {"template": "text_image", "prompt": "x", "attachment_ids": [up_img["id"], up_txt["id"], "nao_existe"]})
+        self.assertEqual(status, 201)
+        by_type = {n["type"]: n for n in c["nodes"] if n["type"] in ("upload", "text") and n["x"] < 0}
+        self.assertEqual(len(by_type["upload"]["params"]["files"]), 1)
+        self.assertIn("faroleira", by_type["text"]["params"]["text"])
+        self.assertEqual(by_type["text"]["title"], "roteiro.txt")
+        self.assertEqual([a["kind"] for a in c["assets"]], ["image"])
+        self.c.json("DELETE", f"/api/canvases/{c['id']}")
+
     @unittest.skipUnless(HAVE_FFMPEG, "ffmpeg não instalado")
     def test_editor_autofill_endpoint(self):
         cid = self.c.json("POST", "/api/canvases", {"template": "scene"})[1]["id"]

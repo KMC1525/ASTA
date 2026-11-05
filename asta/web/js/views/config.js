@@ -6,10 +6,10 @@ import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, 
 export default async function render(root, ctx) {
   let tab = ctx.tab || 'providers';
   const body = h('div'), tabs = h('div', { class: 'tabs' });
-  const TABS = [['providers', 'Provedores'], ['generation', 'Geração'], ['voice', 'Voz'], ['local', 'Modelos locais'], ['system', 'Sistema']];
+  const TABS = [['providers', 'Provedores'], ['media', 'Mídia'], ['generation', 'Geração'], ['creative', 'Avatars e jogos'], ['voice', 'Voz'], ['local', 'Modelos locais'], ['system', 'Sistema']];
   const paintTabs = () => tabs.replaceChildren(...TABS.map(([id, l]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l))));
-  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, generation, voice, local, system }[tab]; body.replaceChildren(await fn()); };
-  root.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Configure tudo antes de trabalhar com os mundos virtuais.')))), tabs, body));
+  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, generation, creative, voice, local, system }[tab]; body.replaceChildren(await fn()); };
+  root.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
 }
 
@@ -201,4 +201,90 @@ async function system() {
       cmd(t('Atualizar (Windows PowerShell)'), 'irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex'),
       cmd(t('Ou, no terminal'), 'asta update'),
       h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O mesmo comando instala e atualiza. Depois de atualizar, use “Reconstruir com o motor mais recente” na Biblioteca para levar melhorias aos mundos antigos.'))));
+}
+
+// ---------------------------------------------------------------------------------- mídia (Canvas)
+const CAPS = [['image', 'Imagem'], ['video', 'Vídeo'], ['sound', 'Som e música'], ['voice', 'Voz (texto → fala)'], ['stt', 'Transcrição (fala → texto)']];
+async function media() {
+  let data = await api('/api/media/providers');
+  const container = h('div');
+  const paint = () => container.replaceChildren(defaults(), h('div', null, data.providers.filter((p) => p.id !== 'demo').map(card)), demoCard());
+
+  const reload = async () => { data = await api('/api/media/providers'); await refreshState(); paint(); };
+  function defaults() {
+    return h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Modelo padrão de cada tipo de mídia')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada nó do Canvas pode escolher outro provedor. Aqui fica o padrão do projeto. “Demo” funciona offline, sem IA, para testar os fluxos.')),
+      h('div', { class: 'grid2' }, CAPS.map(([cap, label]) => field(t(label), select(data.providers.filter((p) => p.caps.includes(cap)).map((p) => [p.id, t(p.label) + (p.needs_key && !p.has_key ? ' · ' + t('sem chave') : '')]), data.active[cap] || 'demo',
+        async (v) => { await saveSettings({ media: { active: { [cap]: v } } }); data.active[cap] = v; toast(t('Salvo'), 'ok'); })))));
+  }
+  function demoCard() {
+    const d = data.providers.find((p) => p.id === 'demo');
+    return h('div', { class: 'card', style: { marginTop: '16px' } }, h('h3', null, t(d.label)), h('p', { class: 'muted small', style: { margin: 0 } }, t(d.hint)));
+  }
+  function card(p) {
+    const draft = { key: '', url: p.base_url === p.default_url ? '' : p.base_url, models: Object.assign({}, p.models) };
+    const configured = (!p.needs_key || p.has_key) && (p.id !== 'custom' || p.base_url);
+    const res = h('div', { class: 'res' });
+    const inUse = CAPS.filter(([cap]) => data.active[cap] === p.id).map(([, l]) => t(l));
+    const body = h('div', { class: 'bd' });
+    const inputs = [];
+    if (p.needs_key) inputs.push(field(t('Chave de API'), h('div', { class: 'row nw' },
+      h('input', { type: 'password', autocomplete: 'off', placeholder: p.has_key ? '•••••••• (' + t('salva') + ')' : 'sk-…', oninput: (e) => { draft.key = e.target.value; } }),
+      p.has_key ? h('button', { class: 'btn sm danger', onclick: async () => { await saveSettings({ providers: { [p.id]: { api_key: null } } }); toast(t('Chave removida')); reload(); } }, t('Remover')) : null),
+      p.docs ? h('a', { href: p.docs, target: '_blank', rel: 'noopener', class: 'muted' }, t('Obter chave →')) : null));
+    if (p.local || p.id === 'custom' || p.default_url) {
+      if (p.id !== 'local_hf' && p.id !== 'voice_settings') inputs.push(field(t('Endereço do servidor'), h('input', { value: draft.url, placeholder: p.default_url || 'http://127.0.0.1:8000/v1', oninput: (e) => { draft.url = e.target.value.trim(); } })));
+    }
+    const listId = 'mm-' + p.id;
+    inputs.push(h('datalist', { id: listId }));
+    const modelCaps = CAPS.filter(([cap]) => p.caps.includes(cap) && p.id !== 'voice_settings' && p.id !== 'a1111');
+    if (modelCaps.length) inputs.push(h('div', { class: 'grid2' }, modelCaps.map(([cap, label]) => {
+      const dl = h('datalist', { id: listId + cap }, ((p.suggest || {})[cap] || []).map((m) => h('option', { value: m })));
+      return field(t('Modelo') + ' · ' + t(label), h('div', null, h('input', { list: listId + cap, value: draft.models[cap] || '', placeholder: t('padrão do provedor'), oninput: (e) => { draft.models[cap] = e.target.value.trim(); } }), dl));
+    })));
+    if (p.hint) inputs.push(h('p', { class: 'muted small' }, t(p.hint)));
+    const test = async () => {
+      res.className = 'res'; res.textContent = t('Testando…');
+      try { const r = await api('/api/media/test', { method: 'POST', body: { provider: p.id } }); res.className = 'res ok'; res.textContent = '✓ ' + r.message; }
+      catch (e) { res.className = 'res err'; res.textContent = '✗ ' + e.message; }
+    };
+    const save = async () => {
+      const patch = { media: { models: { [p.id]: draft.models }, urls: { [p.id]: draft.url } } };
+      if (draft.key) patch.providers = { [p.id]: { api_key: draft.key } };
+      await saveSettings(patch); toast(t('Salvo'), 'ok'); reload();
+    };
+    inputs.push(h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn sm primary', onclick: save }, t('Salvar')), h('button', { class: 'btn sm', onclick: async () => { await save(); test(); } }, t('Salvar e testar')),
+      h('span', { class: 'dim small' }, t('Use “Salvar e testar” para conferir a conexão.'))), res);
+    body.replaceChildren(...inputs);
+    const cardEl = h('div', { class: 'prov' + (inUse.length ? ' open' : '') });
+    cardEl.append(h('div', { class: 'hd', onclick: () => cardEl.classList.toggle('open') },
+      h('span', { class: 'dot', style: { width: '8px', height: '8px', borderRadius: '50%', background: configured ? 'var(--ok)' : 'var(--dim)' } }),
+      h('span', { class: 'nm' }, t(p.label)), p.local ? h('span', { class: 'badge' }, t('local')) : null,
+      h('span', { class: 'dim small', style: { marginLeft: '8px' } }, p.caps.map((c) => t((CAPS.find((x) => x[0] === c) || [0, c])[1])).join(' · ')),
+      h('span', { class: 'roles' }, inUse.map((l) => h('span', { class: 'chip on' }, l)))), body);
+    return cardEl;
+  }
+  paint();
+  return container;
+}
+
+// ---------------------------------------------------------------------------------- avatars e jogos 2D
+async function creative() {
+  const av = JSON.parse(JSON.stringify(state.settings.avatars)), g = JSON.parse(JSON.stringify(state.settings.games));
+  const num = (obj, key, min, max, step) => h('input', { type: 'number', min, max, step: step || 1, value: obj[key], oninput: (e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) obj[key] = v; } });
+  return h('div', null,
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Avatars')),
+      h('div', { class: 'grid2' },
+        field(t('Conteúdo padrão ao criar avatars'), seg([['sfw', 'SFW'], ['nsfw', 'NSFW']], av.content, (v) => { av.content = v; }), t('Cada avatar tem a própria escolha. NSFW só vale para personagens adultos: menores de idade são sempre SFW e nunca viram par romântico.')),
+        field(t('Como os avatars chamam você'), h('input', { value: av.user_name, placeholder: t('automático'), oninput: (e) => { av.user_name = e.target.value; } }))),
+      field(t('Sua persona (opcional)'), h('textarea', { rows: 2, placeholder: t('Quem você é para os avatars: gostos, história, jeito de falar…'), oninput: (e) => { av.user_persona = e.target.value; } }, av.user_persona)),
+      h('div', { class: 'grid2' }, field(t('Criatividade nas conversas'), range(0, 1.5, 0.05, av.temperature, (v) => { av.temperature = v; })), field(t('Máximo de tokens por resposta'), num(av, 'max_tokens', 50, 4000, 50))),
+      h('div', { class: 'grid2' }, field(t('Memória de curto prazo (turnos)'), num(av, 'history_turns', 2, 80)), field(t('Memórias de longo prazo por avatar'), num(av, 'memory_limit', 5, 200))),
+      h('div', { class: 'row' }, checkbox(t('Em grupo, os avatars conversam entre si sem você pedir'), av.auto_talk, (v) => { av.auto_talk = v; }), checkbox(t('Responder também por voz'), av.voice_reply, (v) => { av.voice_reply = v; })),
+      h('div', { class: 'grid2' }, field(t('Máximo de falas seguidas entre avatars'), num(av, 'auto_talk_max', 1, 40), t('Depois disso eles esperam uma mensagem sua.')), field(t('Segundos entre falas autônomas'), num(av, 'auto_talk_delay', 1, 60)))),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Jogos 2D')),
+      h('div', { class: 'grid2' }, field(t('Tamanho padrão do jogo'), seg([['short', t('Curto')], ['medium', t('Médio')], ['long', t('Longo')]], g.length, (v) => { g.length = v; })),
+        field(t('Rodadas de revisão'), select([['0', t('Nenhuma (mais rápido)')], ['1', '1'], ['2', '2']], String(g.revisions), (v) => { g.revisions = parseInt(v, 10); }), t('O agente Revisor pode pedir correções.'))),
+      h('div', { class: 'grid2' }, field(t('Criatividade (temperatura)'), range(0, 1.5, 0.05, g.temperature, (v) => { g.temperature = v; })), field(t('Máximo de tokens por agente'), num(g, 'max_tokens', 1000, 32000, 500)))),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn primary', onclick: async () => { await saveSettings({ avatars: av, games: g }); toast(t('Salvo'), 'ok'); } }, icon('check', 15), t('Salvar'))));
 }

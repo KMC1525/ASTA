@@ -11,10 +11,10 @@ from typing import Any, Dict
 
 from .canvas.engine import CanvasEngine
 from .canvas.media import MIME_EXT, build_media, describe_media_presets, sniff_mime
-from .canvas.schema import ASPECTS, CAPS, SIZES, TEMPLATES, describe_types
+from .canvas.schema import ASPECTS, CAPS, NODE_TYPES, SIZES, TEMPLATES, describe_types, normalize_params, normalize_result
 from .jobs import HttpError, Job
 from .providers import ProviderError
-from .util import safe_filename, text
+from .util import new_id, safe_filename, text
 
 
 class CanvasRoutes:
@@ -55,7 +55,8 @@ class CanvasRoutes:
         return self.app.jobs.running(f"canvas:{cid}")
 
     def r_templates(self, req) -> None:
-        req.json({"templates": TEMPLATES, "types": describe_types(), "caps": list(CAPS), "sizes": list(SIZES), "aspects": list(ASPECTS)})
+        req.json({"templates": TEMPLATES, "types": describe_types(), "caps": list(CAPS), "sizes": list(SIZES), "aspects": list(ASPECTS),
+                  "defaults": {k: normalize_params(k, {}) for k in NODE_TYPES}, "default_result": normalize_result({})})
 
     def r_list(self, req) -> None:
         req.json(self.cs.list())
@@ -63,7 +64,44 @@ class CanvasRoutes:
     def r_create(self, req) -> None:
         body = req.body_json()
         body = body if isinstance(body, dict) else {}
-        req.json(self.cs.create(text(body.get("name"), "", 80), text(body.get("template"), "blank", 20), text(body.get("prompt"), "", 6000)), 201)
+        c = self.cs.create(text(body.get("name"), "", 80), text(body.get("template"), "blank", 20), text(body.get("prompt"), "", 6000))
+        ids = [text(i, "", 60) for i in body.get("attachment_ids")][:20] if isinstance(body.get("attachment_ids"), list) else []
+        if ids:
+            c = self._attach_uploads(c["id"], ids) or c
+        req.json(c, 201)
+
+    def _attach_uploads(self, cid: str, ids: list):
+        """Anexos do compositor viram nós: imagens/vídeos/áudios → um nó "Mídia"; documentos com texto → um nó "Texto" cada."""
+        from . import attachments as att
+
+        limit = int(self.store.get_settings()["server"].get("max_upload_mb", 200)) * 1024 * 1024
+        files, texts = [], []
+        for uid in ids:
+            meta = self.store.get_upload(uid)
+            if not meta:
+                continue
+            path = Path(meta["path"])
+            if not path.is_file() or path.stat().st_size > limit:
+                continue
+            data = path.read_bytes()
+            mime = sniff_mime(data)
+            kind = mime.split("/")[0]
+            if kind in ("image", "audio", "video"):
+                a = self.cs.add_asset(cid, data, MIME_EXT.get(mime, "bin"), kind, name=meta["name"], mime=mime, provider="upload")
+                if a:
+                    files.append(a["id"])
+            else:
+                item = att.analyze(path, meta["name"], meta.get("mime", ""), max_chars=6000)
+                if item.get("text"):
+                    texts.append((meta["name"], item["text"]))
+        nodes, y = [], 40
+        if files:
+            nodes.append({"id": new_id("n_"), "type": "upload", "x": -360, "y": y, "title": "Anexos", "params": {"files": files}})
+            y += 300
+        for name, body_text in texts[:6]:
+            nodes.append({"id": new_id("n_"), "type": "text", "x": -360, "y": y, "title": name[:40], "params": {"text": body_text}})
+            y += 240
+        return self.cs.append_nodes(cid, nodes) if nodes else None
 
     def r_get(self, req, cid: str) -> None:
         self._canvas(cid)

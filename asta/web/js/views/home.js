@@ -141,16 +141,23 @@ async function gameComposer(root, project, carry) {
 }
 
 // ------------------------------------------------------------------ modo: Canvas
+const TPL_TEXT = {
+  blank: ['Em branco', 'Um canvas vazio: adicione os nós que quiser.'], text_image: ['Texto → Imagem', 'Um prompt de texto que vira uma imagem.'],
+  image_video: ['Texto → Imagem → Vídeo', 'Gera uma imagem e anima em um vídeo curto.'], styled: ['Com estilo do projeto', 'Style Prompt + prompt + imagem: o estilo vale para todo o canvas.'],
+  scene: ['Cena completa (imagem, voz e Editor)', 'Roteiro → imagem → vídeo + narração + som, tudo montado no Editor.'],
+};
+const TPL_LABEL = (x) => t((TPL_TEXT[x.id] || [x.label])[0]);
+const TPL_HINT = (x) => (x ? t((TPL_TEXT[x.id] || [0, x.hint])[1]) : '');
 async function canvasComposer(root, project, carry) {
-  const templates = await api('/api/canvas-templates');
+  const templates = (await api('/api/canvas-templates')).templates;
   const m = { template: 'text_image' };
-  const tplSel = select(templates.map((x) => [x.id, t(x.label)]), m.template, (v) => { m.template = v; hint.textContent = t((templates.find((x) => x.id === v) || {}).hint || ''); });
-  const hint = h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px' } }, t((templates[0] || {}).hint || ''));
+  const tplSel = select(templates.map((x) => [x.id, TPL_LABEL(x)]), m.template, (v) => { m.template = v; hint.textContent = TPL_HINT(templates.find((x) => x.id === v)); });
+  const hint = h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px' } }, TPL_HINT(templates.find((x) => x.id === m.template)));
   const composer = createComposer({
     placeholder: t('Descreva o que você quer produzir (opcional) — vira o primeiro prompt do fluxo…'), value: carry, allowEmpty: true, tools: [h('span', { class: 'tool' }, icon('canvas', 15), tplSel)],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
-      try { const c = await api('/api/canvases', { method: 'POST', body: { template: m.template, prompt: text, attachment_ids: ids } }); location.hash = '#/canvas/' + c.id; } catch (e) { toast0(e.message); composer.refresh(); }
+      try { const c = await api('/api/canvases', { method: 'POST', body: { template: m.template, prompt: text, attachment_ids: ids } }); location.hash = '#/canvas/edit/' + c.id; } catch (e) { toast0(e.message); composer.refresh(); }
     },
   });
   return { el: h('div', null, composer.el, hint), composer };

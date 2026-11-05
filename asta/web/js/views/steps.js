@@ -1,8 +1,8 @@
 // Etapas dos pipelines multi-agentes (nomes, descrições e o texto de detalhe de cada etapa) para a tela de acompanhamento.
 import { t } from '../i18n.js';
 
-const MOOD = { calm: 'Calmo', tense: 'Tenso', mysterious: 'Misterioso', epic: 'Épico', melancholic: 'Melancólico', joyful: 'Alegre' };
-const AMB = { wind: 'Vento', forest: 'Floresta', rain: 'Chuva', ocean: 'Oceano', city: 'Cidade', cave: 'Caverna', desert: 'Deserto', night: 'Noite', none: 'Nenhum' };
+export const MOOD = { calm: 'Calmo', tense: 'Tenso', mysterious: 'Misterioso', epic: 'Épico', melancholic: 'Melancólico', joyful: 'Alegre' };
+export const AMB = { wind: 'Vento', forest: 'Floresta', rain: 'Chuva', ocean: 'Oceano', city: 'Cidade', cave: 'Caverna', desert: 'Deserto', night: 'Noite', none: 'Nenhum' };
 const warnText = (s) => (s === 'warn' ? ' · ' + t('usou o gerador de regras (resposta inválida do modelo)') : '');
 export const GENRE_LABEL = { visual_novel: 'Visual Novel', rpg: 'RPG 2D', platformer: 'Plataforma', side_scroller: 'Side scroller', point_and_click: 'Point & click' };
 

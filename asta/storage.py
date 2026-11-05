@@ -85,7 +85,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     },
     "media": {
         # provedor padrão de cada capacidade do Canvas (cada nó pode escolher outro)
-        "active": {"image": "demo", "video": "demo", "sound": "demo", "voice": "demo", "stt": "demo"},
+        "active": {"image": "demo", "video": "demo", "sound": "demo", "voice": "demo", "stt": "voice_settings"},  # transcrição: usa Configuração → Voz
         "models": {},  # {"openai": {"image": "gpt-image-1"}} — modelo por provedor e capacidade
         "urls": {},  # {"a1111": "http://127.0.0.1:7860"} — endereço de servidores (locais ou compatíveis)
     },
