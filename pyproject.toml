@@ -5,12 +5,12 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "asta"
 dynamic = ["version"]
-description = "WebUI para criar mundos virtuais 3D jogáveis e persistentes, habitados por personagens com agentes de IA."
+description = "Central open source de criação com IA: mundos 3D com NPCs-agentes, avatars de chat e voz, jogos 2D e um Canvas de imagens, vídeos, sons e vozes."
 readme = "README.md"
 requires-python = ">=3.9"
 license = { text = "MIT" }
 authors = [{ name = "KMC" }]
-keywords = ["ai", "agents", "worlds", "three.js", "roleplay", "game", "webui"]
+keywords = ["ai", "agents", "worlds", "three.js", "roleplay", "avatars", "chatbot", "game", "2d-games", "visual-novel", "canvas", "image-generation", "video-editor", "webui"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "License :: OSI Approved :: MIT License",
@@ -25,6 +25,8 @@ dependencies = []
 local = ["llama-cpp-python>=0.2.90"]
 # Extração de texto de PDFs mais precisa
 docs = ["pypdf>=4.0"]
+# Modelos locais do Hugging Face para o Canvas (imagem, vídeo, som, voz e transcrição)
+media = ["torch", "diffusers>=0.30", "transformers>=4.44", "accelerate", "safetensors", "sentencepiece", "numpy", "pillow"]
 
 [project.urls]
 Homepage = "https://github.com/KMC1525/ASTA"
@@ -37,7 +39,7 @@ asta = "asta.cli:main"
 include = ["asta*"]
 
 [tool.setuptools.package-data]
-asta = ["web/**/*", "runtime/**/*"]
+asta = ["web/**/*", "runtime/**/*", "runtime2d/**/*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "asta.__version__" }

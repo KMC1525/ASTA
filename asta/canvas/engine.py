@@ -340,7 +340,7 @@ class CanvasEngine:
                 failed.add(nid)
                 stats["skipped"] += 1
                 continue
-            forced = force and (targets is not None and nid in targets)
+            forced = force and (not targets or nid in targets)
             h = self.node_hash(canvas, node)
             if not forced and node["result"]["state"] == "done" and node["result"]["hash"] == h:
                 self.emit({"type": "node", "id": nid, "state": "cached"})

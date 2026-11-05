@@ -5,7 +5,8 @@
 #
 # O MESMO comando instala e atualiza. Seus dados (~/.asta: personagens, mundos,
 # configurações) nunca são tocados. Opções (variáveis de ambiente):
-#   ASTA_EXTRAS=local|docs|local,docs   instala extras opcionais (modelos GGUF locais / PDFs)
+#   ASTA_EXTRAS=local|media|docs        instala extras opcionais (separe por vírgula): modelos GGUF locais / modelos locais de
+#                                       imagem, vídeo, som e voz do Canvas / PDFs mais precisos
 #   ASTA_SOURCE=<url|pasta|requisito>   instala de outra origem (padrão: GitHub, branch main)
 #   ASTA_APP_DIR=<pasta>                onde fica o programa (padrão: ~/.asta/app)
 #   ASTA_BIN_DIR=<pasta>                onde fica o comando `asta` (padrão: ~/.local/bin)

@@ -133,6 +133,8 @@ class MediaMock:
                 b = rec["body"] or {}
                 if p == "/v1/images/generations":
                     n = int(b.get("n", 1))
+                    if b.get("prompt", "").startswith("FILE-URL"):
+                        return self._send(200, {"data": [{"url": "file:///etc/hostname"}]})
                     if b.get("prompt", "").startswith("JSON-OK"):
                         return self._send(200, {"data": [{"url": f"{base}/files/a.png"}]})
                     return self._send(200, {"data": [{"b64_json": b64(proc.image(b.get("prompt", "") + str(i), "64x64", i))} for i in range(n)]})
@@ -443,6 +445,12 @@ class AdapterTests(unittest.TestCase):
         self.assertIn(b'name="prompt"', ed["raw"])
         # resposta com URL em vez de base64 (servidores compatíveis)
         self.assertEqual(len(p.image("JSON-OK", model="x")), 1)
+
+    def test_urls_returned_by_a_provider_must_be_http(self):
+        p = provider("openai", self.mock.url + "/v1", {"image": "x"})
+        with self.assertRaises(ProviderError) as cm:
+            p.image("FILE-URL")
+        self.assertIn("inválido", str(cm.exception))
 
     def test_openai_voice_stt_models_and_errors(self):
         p = provider("openai", self.mock.url + "/v1", {"voice": "tts-1", "stt": "whisper-1"})
@@ -845,6 +853,14 @@ class EngineTests(TmpCase):
             # trocar de provedor/modelo invalida o cache
             self.cs.patch_node_params(c["id"], "i", {"model": "dall-e-3"})
             self.assertIn("i", CanvasEngine(self.store, c["id"]).stale_ids(self.cs.get(c["id"])))
+
+    def test_force_without_targets_regenerates_every_node(self):
+        c = self.make([node("text", nid="t", text="uma ilha"), node("image", nid="i"), node("sound", nid="s", prompt="vento", duration=1)], [edge("t", "i", "prompt")])
+        self.run_engine(c["id"])
+        before = (self.result(c["id"], "i")["assets"], self.result(c["id"], "s")["assets"])
+        stats, _ = self.run_engine(c["id"], force=True)
+        self.assertEqual((stats["ran"], stats["cached"]), (2, 0))
+        self.assertNotEqual((self.result(c["id"], "i")["assets"], self.result(c["id"], "s")["assets"]), before)
 
     def test_cancellation_leaves_nodes_idle(self):
         c = self.cs.create("t", "scene")

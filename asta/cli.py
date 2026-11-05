@@ -83,11 +83,22 @@ def _doctor(_args: argparse.Namespace) -> int:
         print("Modelos locais embutidos (llama-cpp-python): disponível")
     except ImportError:
         print('Modelos locais embutidos: não instalado (opcional: pip install "asta[local]")')
+    libs = []
+    for mod in ("torch", "diffusers", "transformers"):
+        try:
+            __import__(mod)
+            libs.append(mod)
+        except ImportError:
+            pass
+    if len(libs) == 3:
+        print("Modelos locais de mídia do Canvas (torch, diffusers, transformers): disponível")
+    else:
+        print('Modelos locais de mídia do Canvas: não instalado (opcional: pip install "asta[media]")')
     return 0
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="asta", description="ASTA — mundos virtuais jogáveis com personagens de IA")
+    parser = argparse.ArgumentParser(prog="asta", description="ASTA — central open source de criação com IA: mundos 3D, avatars, jogos 2D e Canvas de mídia")
     sub = parser.add_subparsers(dest="cmd")
     run = sub.add_parser("run", help="inicia a WebUI (padrão)")
     for p in (parser, run):

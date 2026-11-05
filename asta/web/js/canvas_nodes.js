@@ -1,6 +1,6 @@
 // Canvas: tipos de nó na interface (paleta, controles de cada nó e área de resultado) e regras de compatibilidade das portas.
 import { t } from './i18n.js';
-import { accordion, checkbox, fmtBytes, h, icon, seg, select } from './ui.js';
+import { accordion, checkbox, h, icon, seg, select } from './ui.js';
 
 export const compatible = (out, accepts) => accepts.includes(out)
   || (out === 'media' && accepts.some((a) => ['image', 'video', 'audio', 'media'].includes(a)))
@@ -65,11 +65,13 @@ function providerBlock(c, n, cap, extraFields) {
   jsonEl.value = Object.keys(n.params.extra || {}).length ? JSON.stringify(n.params.extra) : '';
   jsonEl.addEventListener('keydown', cut);
   jsonEl.addEventListener('input', () => { try { extra = jsonEl.value.trim() ? JSON.parse(jsonEl.value) : {}; jsonEl.style.borderColor = ''; c.change(n, 'extra', extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {}); } catch (e) { jsonEl.style.borderColor = 'var(--err)'; } });
+  const accKey = n.id + ':' + cap;
   const adv = accordion(t('Avançado'), h('div', { class: 'col', style: { gap: '8px', display: 'flex', flexDirection: 'column' } },
     lab(t('Modelo'), model), dl,
     ...(extraFields || []),
     n.params.extra !== undefined ? lab(t('Parâmetros extras (JSON)'), jsonEl) : null,
-    n.params.ignore_global_styles !== undefined ? checkbox(t('Ignorar estilos globais'), n.params.ignore_global_styles, (v) => c.change(n, 'ignore_global_styles', v, true)) : null));
+    n.params.ignore_global_styles !== undefined ? checkbox(t('Ignorar estilos globais'), n.params.ignore_global_styles, (v) => c.change(n, 'ignore_global_styles', v, true)) : null), c.accOpen.has(accKey));
+  adv.firstChild.addEventListener('click', () => { if (adv.classList.contains('open')) c.accOpen.add(accKey); else c.accOpen.delete(accKey); });  // reabre depois de redesenhar o nó
   return [lab(t('Provedor'), sel), warn, adv];
 }
 
@@ -152,4 +154,3 @@ export function nodeResult(c, n) {
   if (items.length) box.append(h('div', { class: 'dim small', style: { marginTop: '6px' } }, items.map((a) => (a.provider ? t(c.providerLabel(a.provider)) : '') + (a.model ? ' · ' + a.model : '')).filter(Boolean)[0] || ''));
   return box.childNodes.length ? box : null;
 }
-export { fmtBytes };

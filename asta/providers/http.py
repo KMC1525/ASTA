@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import ssl
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from typing import Any, Dict, Iterator, List, Optional, Tuple
@@ -138,6 +139,8 @@ def post_multipart_files(
 
 def get_bytes(url: str, headers: Optional[Dict[str, str]] = None, timeout: float = 300, max_bytes: int = 400 * 1024 * 1024) -> Tuple[bytes, str]:
     """Baixa um arquivo (imagem/vídeo/áudio devolvido por uma API). Limita o tamanho."""
+    if urllib.parse.urlsplit(url).scheme not in ("http", "https"):  # nunca file://, ftp:// etc. vindos de uma resposta de API
+        raise ProviderError("O provedor devolveu um endereço de arquivo inválido.")
     with request(url, headers={"Accept": "*/*", **(headers or {})}, timeout=timeout) as resp:
         data = resp.read(max_bytes + 1)
         if len(data) > max_bytes:

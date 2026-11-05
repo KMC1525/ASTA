@@ -3,7 +3,7 @@
 #   irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 #
 # O MESMO comando instala e atualiza. Seus dados (%USERPROFILE%\.asta) nunca são tocados.
-# Variáveis opcionais: $env:ASTA_EXTRAS = "local" | "docs" | "local,docs"
+# Variáveis opcionais: $env:ASTA_EXTRAS = "local" | "media" | "docs" (combine com vírgula: "local,media")
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
 
 $ErrorActionPreference = 'Stop'

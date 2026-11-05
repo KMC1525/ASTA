@@ -27,6 +27,32 @@ jobs:
       - name: Testes
         run: python -m unittest discover -s tests -t . -v
 
+  browser:
+    name: Navegador, Canvas e vídeo (Linux)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: ffmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+      - name: Playwright e Chromium
+        run: |
+          mkdir -p "$RUNNER_TEMP/pw" && cd "$RUNNER_TEMP/pw"
+          npm init -y >/dev/null
+          npm install playwright
+          npx playwright install --with-deps chromium
+      - name: Instalar
+        run: python -m pip install -e .
+      - name: Testes de navegador, Canvas e jogos 2D
+        env:
+          NODE_PATH: ${{ runner.temp }}/pw/node_modules
+        run: python -m unittest tests.test_browser tests.test_canvas tests.test_games2d -v
+
   installer:
     name: Instalador (Linux)
     runs-on: ubuntu-latest

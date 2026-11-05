@@ -27,6 +27,7 @@ export default async function render(root, ctx, cid) {
     providerLabel: (pid) => (prov.providers.find((p) => p.id === pid) || { label: pid }).label,
     openConfig: () => { go('config', { tab: 'media' }); },
     change(n, key, value, rerender) { n.params[key] = value; dirty(); if (rerender) refreshNode(n.id); },
+    accOpen: new Set(),
     uploadTo: (n, files) => uploadFiles(files, null, n),
     openTimeline: (n) => openTimeline(n),
     run: (ids, force) => run(ids, force),
@@ -424,7 +425,8 @@ export default async function render(root, ctx, cid) {
   };
   document.addEventListener('keydown', onKey);
   addEventListener('hashchange', onLeave, { once: true });
-  addEventListener('beforeunload', () => { if (S.saveState === 'dirty') save(); });
+  const onUnload = () => { if (!document.body.contains(rootEl)) return removeEventListener('beforeunload', onUnload); if (S.saveState === 'dirty') save(); };
+  addEventListener('beforeunload', onUnload);
 
   for (const n of S.cv.nodes) addToDom(n);
   applyView(); paintSaved(); paintAssets(); paintHint();
