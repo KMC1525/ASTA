@@ -318,7 +318,7 @@ def avatar_reply(system: str, user_text: str) -> str:
     user_name = (re.search(r"The user is called (.+?)\.(?: |$)", system, re.M) or [None, ""])[1]
     nsfw = "ASTA adds no content filters" in system
     fem = not re.search(r"Gender: male", system)
-    last_line = ""
+    last_line, rows = "", []
     if group:
         block = user_text.split("[Group chat so far]\n", 1)[-1].split("\n\n", 1)[0]  # só o transcript, sem a instrução final
         rows = [r for r in block.splitlines() if re.match(r"^[^:\n]{1,40}: ", r)]
@@ -326,7 +326,8 @@ def avatar_reply(system: str, user_text: str) -> str:
         last_speaker, _, last_text = last_line.partition(": ")
     else:
         last_speaker, last_text = user_name, user_text
-    lang = detect_lang(last_text or user_text)
+    recent = " ".join(r.partition(": ")[2] for r in rows[-4:]) if group and rows else ""  # em grupo, o idioma vem das últimas falas (uma frase curta sozinha engana)
+    lang = detect_lang(recent or last_text or user_text)
     lang = lang if lang in ("pt", "en", "es") else "en"
     rng = _rng("avatar-reply", name, last_text, len(user_text))
     t = f" {last_text.lower()} "

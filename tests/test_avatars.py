@@ -37,6 +37,20 @@ def png_with_card(card: dict) -> bytes:
     return png[:iend] + text_chunk + png[iend:]
 
 
+class DemoGroupLanguageTests(unittest.TestCase):
+    def test_short_replies_in_a_group_keep_the_language_of_the_conversation(self):
+        from asta.agents.rulebased_avatars import avatar_reply
+
+        mia = av.normalize_avatar({"name": "Mia", "age": 24, "relationship": "friend"})
+        others = [av.normalize_avatar({"name": n, "age": 24}) for n in ("Theo", "Caio")]
+        system = av.build_system_prompt(mia, others, [], "Você", "", "sfw", group=True)
+        transcript = "Você: Pessoal, o que vamos fazer no fim de semana?\nTheo: Haha, Mia, essa foi boa!"
+        tail = "Nobody has written for a while: keep the conversation going naturally. Reply only as Mia."
+        reply = avatar_reply(system, f"[Group chat so far]\n{transcript}\n\n{tail}")
+        for english in ("that was", "good one", "What about you", "Pretty sure"):
+            self.assertNotIn(english, reply)
+
+
 class AvatarCardTests(TmpCase):
     def test_normalization_defaults_and_clamps(self):
         c = av.normalize_avatar({"name": "  Luna ", "age": 29, "relationship": "partner", "content": "nsfw", "tags": "Doce, divertida, doce",
