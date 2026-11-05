@@ -2,7 +2,7 @@
 .modes{display:flex;gap:8px;justify-content:center;margin:-8px 0 22px;flex-wrap:wrap}
 .mode{display:inline-flex;align-items:center;gap:8px;padding:9px 16px;border-radius:999px;border:1px solid var(--line2);background:transparent;color:var(--muted);cursor:pointer;font-size:14px;transition:background .12s,color .12s,border-color .12s}
 .mode:hover{color:var(--text);border-color:var(--line3)}
-.mode.on{background:#fff;color:#000;border-color:#fff;font-weight:600}
+.mode.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);font-weight:600}
 .tool.nopad{padding:3px 6px 3px 12px;gap:4px}
 .tool .step-b{width:24px;height:24px;border-radius:50%;border:1px solid var(--line2);background:var(--bg2);color:var(--text);cursor:pointer;line-height:1;padding:0}
 .tool .step-b:hover{background:var(--bg3)}
@@ -19,12 +19,12 @@
 .wtabs{padding-bottom:0}.wtabs .tabs{margin-bottom:0}.wtabs+div>.page{padding-top:22px}
 /* Escolha da quantização dos modelos locais */
 .quant{display:flex;align-items:center;gap:12px;padding:9px 12px;border:1px solid var(--line);border-radius:14px;cursor:pointer;background:var(--bg1)}
-.quant:hover{border-color:var(--line3)}.quant.on{border-color:#fff;background:var(--bg2)}
+.quant:hover{border-color:var(--line3)}.quant.on{border-color:var(--accent);background:var(--bg2)}
 .quant input{flex:none}
 .prerow{padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:var(--bg1)}
 
 /* Biblioteca: seleção para apagar vários itens e cartões de modelos locais */
 .selbar{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:14px;padding:10px 14px;background:var(--bg1);border:1px solid var(--line3);border-radius:var(--r-lg);position:sticky;top:8px;z-index:5}
-.proj .thumb .pick{position:absolute;left:10px;top:10px;z-index:2;width:20px;height:20px;cursor:pointer;accent-color:var(--accent,#fff)}
-.proj.picked{border-color:var(--accent,#fff);box-shadow:0 0 0 1px var(--accent,#fff)}
+.proj .thumb .pick{position:absolute;left:10px;top:10px;z-index:2;width:20px;height:20px;cursor:pointer;accent-color:var(--accent)}
+.proj.picked{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
 .proj.model .thumb{color:rgba(255,255,255,.85)}

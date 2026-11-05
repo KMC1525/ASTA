@@ -122,7 +122,7 @@ export async function renderLibrary(root, ctx, opts) {
       : k === 'canvas' ? h('div', { class: 'thumb', style: { backgroundImage: p.raw.thumb ? 'url(' + p.raw.thumb + ')' : hashGradient(p.id), backgroundSize: 'cover', backgroundPosition: 'center' } }, h('span', { class: 'badge vb' }, t(KIND_LABEL[k]) + ' · ' + p.raw.nodes + ' ' + t('nós')))
         : h('div', { class: 'thumb', style: { background: gradient(p.palette) } }, h('span', { class: 'badge vb' }, (k === 'game2d' ? (GENRE_LABEL[p.genre] || t(KIND_LABEL[k])) + ' · ' : '') + 'v' + p.current));
     const foot = k === 'avatar' ? [h('button', { class: 'btn sm primary', onclick: () => openChat([p.id]) }, icon('send', 13), t('Conversar')), h('a', { class: 'btn sm', href: '#/avatars/edit/' + p.id }, icon('edit', 13), t('Editar'))]
-      : k === 'canvas' ? [h('a', { class: 'btn sm primary', href: '#/canvas/' + p.id }, icon('canvas', 13), t('Abrir'))]
+      : k === 'canvas' ? [h('a', { class: 'btn sm primary', href: '#/canvas/edit/' + p.id }, icon('canvas', 13), t('Abrir'))]
         : [h('a', { class: 'btn sm primary', href: '/play/' + p.id + '/', target: '_blank', rel: 'noopener' }, icon('play', 13), t('Jogar')),
           h('button', { class: 'btn sm', title: t('Atualizar com IA — o mesmo jogo, várias vezes'), onclick: () => go('main', { project: { id: p.id, name: p.name, current: p.current, kind: k } }) }, icon('refresh', 13), t('Atualizar')),
           k === 'world' ? h('button', { class: 'btn sm ghost', title: t('Configurar mundo'), onclick: () => go('worlds', { select: p.id }) }, icon('edit', 13)) : null,

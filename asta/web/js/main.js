@@ -1,5 +1,7 @@
 import { api } from './api.js';
 import { setLang, t } from './i18n.js';
+import { applyUi, ui } from './prefs.js';
+import { installShell, maybeWelcome } from './shell.js';
 import { h, icon, toast } from './ui.js';
 
 // Estado global compartilhado entre as telas
@@ -37,11 +39,13 @@ export async function refreshState() {
   if (state.version && s.version && s.version !== state.version) { reloadPage(); return s; }
   Object.assign(state, { settings: s.settings, presets: s.presets, hardware: s.hardware, version: s.version, diskVersion: s.disk_version || '', home: s.home });
   setLang(state.settings.language);
+  applyUi(state.settings.ui);  // aparência (tema, cor, escala…) vinda do servidor; o cache local já pintou a tela no primeiro quadro
   return s;
 }
 export async function saveSettings(patch) {
   state.settings = await api('/api/settings', { method: 'PUT', body: patch });
   setLang(state.settings.language);
+  applyUi(state.settings.ui);
   renderSide();
   return state.settings;
 }
@@ -61,7 +65,8 @@ export function renderSide() {
   const stale = state.diskVersion && state.diskVersion !== state.version;   // há uma versão mais nova instalada do que a que está rodando
   side.replaceChildren(
     h('div', { class: 'brand', title: 'ASTA', onclick: () => go('main', {}) }, h('span', { class: 'logo' }, 'A'), h('span', { class: 'word' }, 'ASTA')),
-    h('nav', null, NAV.map(([id, label, ic]) => h('a', { class: 'item' + (cur === id ? ' active' : ''), href: '#/' + id, title: t(label), onclick: () => { state.ctx = {}; } }, icon(ic, 19), h('span', { class: 'lbl' }, t(label))))),
+    h('button', { class: 'searchbtn', type: 'button', title: t('Buscar (Ctrl+K)'), onclick: () => shell && shell.openPalette() }, icon('search', 16), h('span', null, t('Buscar…')), h('span', { class: 'kbd' }, 'Ctrl K')),
+    h('nav', { 'aria-label': t('Telas') }, NAV.filter(([id]) => id === cur || !(ui().sidebar_hidden || []).includes(id)).map(([id, label, ic]) => h('a', { class: 'item' + (cur === id ? ' active' : ''), href: '#/' + id, title: t(label), 'aria-current': cur === id ? 'page' : null, onclick: () => { state.ctx = {}; } }, icon(ic, 19), h('span', { class: 'lbl' }, t(label))))),
     h('div', { class: 'foot' },
       h('div', { class: 'chipstat', title: t('Provedor de geração'), onclick: () => go('config', { tab: 'providers' }) }, h('span', { class: 'dot ' + (demo ? 'warn' : 'ok') }), h('span', { class: 't' }, presetOf(gen).label)),
       stale ? h('div', { class: 'small t', style: { padding: '4px', color: 'var(--warn, #f5b942)' } }, t('Versão {v} instalada: feche o ASTA e abra de novo.', { v: state.diskVersion })) : null,
@@ -73,6 +78,8 @@ export function renderSide() {
 let renderToken = 0;
 async function render() {
   const token = ++renderToken, r = route(), main = document.getElementById('main');
+  document.title = 'ASTA — ' + t((NAV.find(([id]) => id === r) || [0, 'Principal'])[1]);
+  try { localStorage.setItem('asta.last', r); } catch (e) { /* ok */ }
   renderSide();
   main.replaceChildren(h('div', { class: 'page' }, h('div', { class: 'spinner' })));
   let mod;
@@ -103,8 +110,20 @@ async function render() {
   }
 }
 
+let shell = null;
 addEventListener('hashchange', () => { render(); });
 (async () => {
   try { await refreshState(); } catch (e) { document.getElementById('main').replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'errbox' }, e.message))); return; }
+  const skip = document.querySelector('.skip');
+  if (skip) { skip.textContent = t('Ir para o conteúdo'); skip.addEventListener('click', (e) => { e.preventDefault(); const m = document.getElementById('main'); if (m) m.focus(); }); }
+  const app = { state, NAV, go, saveSettings, renderSide, refreshState };
+  shell = installShell(app);
+  // tela inicial preferida (só quando o ASTA abre sem um endereço específico)
+  if (!location.hash || location.hash === '#' || location.hash === '#/') {
+    const start = ui().start_page === 'last' ? (localStorage.getItem('asta.last') || 'main') : ui().start_page;
+    if (start && start !== 'main' && VIEWS[start]) location.hash = '#/' + start;
+  }
   render();
+  maybeWelcome(app).catch((e) => console.error(e));
 })();
+window.ASTA_WELCOME = () => maybeWelcome({ state, NAV, go, saveSettings, renderSide, refreshState }, true);

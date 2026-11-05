@@ -1,15 +1,17 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { refreshState, renderSide, saveSettings, state } from '../main.js';
+import { accentSwatches, themeCards } from '../appearance.js';
+import { CONFIG_TABS, ui } from '../prefs.js';
 import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
-import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
+import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {
   let tab = ctx.tab || 'providers';
   const body = h('div'), tabs = h('div', { class: 'tabs' });
-  const TABS = [['providers', 'Provedores'], ['media', 'Mídia'], ['generation', 'Geração'], ['creative', 'Avatars e jogos'], ['voice', 'Voz'], ['local', 'Modelos locais'], ['system', 'Sistema']];
+  const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...TABS.map(([id, l]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l))));
-  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, generation, creative, voice, local, system }[tab]; body.replaceChildren(await fn()); };
+  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, generation, creative, voice, local, appearance, system }[tab]; body.replaceChildren(await fn()); };
   root.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
 }
@@ -291,12 +293,59 @@ async function local() {
 }
 
 // ---------------------------------------------------------------------------------- sistema
+// ---------------------------------------------------------------------------------- aparência e preferências
+async function appearance() {
+  const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
+  const U = () => ui();
+  const card = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, title), ...kids);
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['library', 'Biblioteca']];
+  const hidden = new Set(U().sidebar_hidden);
+  const importInput = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const r = await api('/api/settings/import', { method: 'POST', body: JSON.parse(await f.text()) });
+      toast(t('Configurações importadas: {n}.', { n: r.imported.join(', ') }), 'ok'); await refreshState(); location.reload();
+    } catch (er) { toast(er instanceof SyntaxError ? t('Este arquivo não é um JSON válido.') : er.message, 'err'); }
+  } });
+  return h('div', null,
+    card(t('Tema'), themeCards(U().theme, (v) => save({ theme: v })),
+      h('div', { class: 'field', style: { marginTop: '16px', marginBottom: 0 } }, h('label', { class: 'f' }, t('Cor de destaque')), accentSwatches(U().accent, (v) => save({ accent: v }, true)),
+        h('div', { class: 'hint' }, t('Usada em botões, seleções e na sua mensagem no chat.')))),
+    card(t('Leitura e conforto'),
+      h('div', { class: 'grid2' },
+        field(t('Tamanho da interface'), seg([[90, '90%'], [100, '100%'], [110, '110%'], [125, '125%'], [150, '150%']], U().scale, (v) => save({ scale: v })), t('Aumenta ou diminui tudo; útil em telas grandes ou pequenas.')),
+        field(t('Densidade'), seg([['comfortable', t('Confortável')], ['compact', t('Compacta')]], U().density, (v) => save({ density: v })), t('Compacta mostra mais conteúdo na tela.'))),
+      h('div', { class: 'grid2' },
+        field(t('Fonte'), seg([['system', t('Sistema')], ['serif', t('Serifada')], ['mono', t('Monoespaçada')]], U().font, (v) => save({ font: v }))),
+        field(t('Texto do chat dos avatares'), seg([['small', t('Pequeno')], ['medium', t('Médio')], ['large', t('Grande')]], U().chat_size, (v) => save({ chat_size: v })))),
+      field(t('Animações'), select([['auto', t('Automático (segue o sistema)')], ['reduce', t('Reduzir animações')], ['full', t('Sempre animar')]], U().motion, (v) => save({ motion: v })), t('“Reduzir” desliga transições e animações — bom para sensibilidade a movimento.'))),
+    card(t('Uso'),
+      h('div', { class: 'grid2' },
+        field(t('Idioma da interface'), select([['auto', t('Automático (navegador)')], ['pt-BR', 'Português (Brasil)'], ['en', 'English']], state.settings.language, async (v) => { await saveSettings({ language: v }); location.reload(); })),
+        field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
+          t('Com Enter, use Shift+Enter para quebrar a linha; com Ctrl+Enter, o Enter quebra a linha. Vale para o chat e para a caixa de criação.'))),
+      field(t('Tela inicial'), select([['main', t('Principal')], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })),
+        t('Qual tela abre quando você entra no ASTA.')),
+      checkbox(t('Atalhos de teclado (Alt+1…7, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
+      h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })) }, t('Ver atalhos')),
+        h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })) }, icon('search', 13), t('Abrir a busca (Ctrl+K)')))),
+    card(t('Barra lateral'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Principal” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
+      h('div', { class: 'row', style: { gap: '18px' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
+    card(t('Backup e padrões'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Leve suas preferências para outro computador. A exportação nunca inclui chaves de API nem tokens.')),
+      h('div', { class: 'row' },
+        h('button', { class: 'btn sm', onclick: async () => { const r = await fetch('/api/settings/export'); download('asta-configuracoes.json', await r.text()); toast(t('Configurações exportadas (sem chaves de API).'), 'ok'); } }, icon('download', 13), t('Exportar configurações')),
+        h('button', { class: 'btn sm', onclick: () => importInput.click() }, icon('upload', 13), t('Importar configurações')), importInput,
+        h('button', { class: 'btn sm', onclick: () => window.ASTA_WELCOME && window.ASTA_WELCOME() }, t('Rever as boas-vindas')),
+        h('span', { class: 'grow' }),
+        h('button', { class: 'btn sm danger', onclick: async () => { if (await confirmDialog(t('Voltar a aparência e as preferências de uso ao padrão? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar'))) { await api('/api/settings/reset', { method: 'POST', body: { section: 'ui' } }); await refreshState(); location.reload(); } } }, t('Restaurar padrões da aparência')))));
+}
+
 async function system() {
   const hw = state.hardware;
   const cmd = (label, text) => h('div', { class: 'field' }, h('label', { class: 'f' }, label), h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13))));
   return h('div', null,
-    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Idioma da interface')),
-      select([['auto', t('Automático (navegador)')], ['pt-BR', 'Português (Brasil)'], ['en', 'English']], state.settings.language, async (v) => { await saveSettings({ language: v }); location.reload(); })),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Seu hardware')),
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Sistema')), h('dd', null, hw.os + ' · ' + hw.arch), h('dt', null, 'CPU'), h('dd', null, t('{n} núcleos', { n: hw.cpus })),
         h('dt', null, 'RAM'), h('dd', null, hw.ram_gb ? hw.ram_gb + ' GB' : '—'), h('dt', null, 'GPU'), h('dd', null, hw.gpu || t('não detectada (NVIDIA)')),

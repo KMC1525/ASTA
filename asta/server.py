@@ -28,7 +28,7 @@ from .routes_canvas import CanvasRoutes
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
-from .util import hardware_info, new_id, safe_filename, slugify, text
+from .util import hardware_info, new_id, safe_filename, slugify, text, write_json
 
 WEB_DIR = Path(__file__).parent / "web"
 PLAY_ALLOWED = ("Game.html", "code/", "chars/", "sound/", "ui/", "data/", "assets/", "README.md", "CHANGELOG.md")
@@ -123,6 +123,9 @@ class App:
         a("GET", r"/api/state", self.r_state)
         a("GET", r"/api/settings", self.r_settings_get)
         a("PUT", r"/api/settings", self.r_settings_put)
+        a("GET", r"/api/settings/export", self.r_settings_export)
+        a("POST", r"/api/settings/import", self.r_settings_import)
+        a("POST", r"/api/settings/reset", self.r_settings_reset)
         a("POST", r"/api/providers/test", self.r_provider_test)
         a("POST", r"/api/providers/models", self.r_provider_models)
         a("GET", r"/api/lmstudio", self.r_lmstudio)
@@ -197,6 +200,43 @@ class App:
         if not isinstance(body, dict):
             raise HttpError(400, "JSON inválido")
         self.store.save_settings(body)
+        req.json(self.store.public_settings())
+
+    def r_settings_export(self, req: "Request") -> None:
+        """Baixa as configurações como arquivo, sem chaves de API nem tokens."""
+        from . import uiprefs
+
+        data = uiprefs.export_settings(self.store.get_settings())
+        req.bytes(json.dumps(data, ensure_ascii=False, indent=2).encode("utf-8"), "application/json; charset=utf-8")
+
+    def r_settings_import(self, req: "Request") -> None:
+        from . import uiprefs
+
+        body = req.body_json()
+        try:
+            patch = uiprefs.import_patch(body)
+        except ValueError as exc:
+            raise HttpError(400, str(exc))
+        self.store.save_settings(patch)
+        req.json({"imported": sorted(patch), "settings": self.store.public_settings()})
+
+    def r_settings_reset(self, req: "Request") -> None:
+        """Volta uma seção das configurações ao padrão (ui, generation, characters, avatars, games). Chaves de API nunca são tocadas."""
+        import copy
+
+        from . import uiprefs
+        from .storage import DEFAULT_SETTINGS
+
+        body = req.body_json()
+        section = str(body.get("section") or "") if isinstance(body, dict) else ""
+        if section not in uiprefs.RESETTABLE:
+            raise HttpError(400, "Seção inválida. Opções: " + ", ".join(uiprefs.RESETTABLE))
+        with self.store._lock:
+            current = self.store.get_settings()
+            current[section] = copy.deepcopy(DEFAULT_SETTINGS[section])
+            if section == "ui":
+                current["ui"]["welcome_done"] = True  # restaurar a aparência não reabre as boas-vindas
+            write_json(self.store.settings_path, current, private=True)
         req.json(self.store.public_settings())
 
     def r_provider_test(self, req: "Request") -> None:

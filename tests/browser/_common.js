@@ -12,6 +12,7 @@ exports.run = async function run(name, fn) {
     return r.json();
   };
   const open = async (viewport = { width: 1400, height: 900 }) => {
+    await api('/api/settings', { method: 'PUT', body: { ui: { welcome_done: true } } });  // sem o modal de boas-vindas da instalação nova
     const page = await browser.newPage({ viewport });
     page.on('pageerror', (e) => result.errors.push(`${name} pageerror: ${e.message}`));
     page.on('console', (m) => { if (m.type() === 'error') result.errors.push(`${name} console: ${m.text()}`); });

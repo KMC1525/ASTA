@@ -191,7 +191,19 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 | **2D games** | Your games: play, download, update. |
 | **Canvas** | Your canvases and the node editor. |
 | **Library** | Everything you created as updatable projects, plus the **local AI models you installed**, with search and automatic + custom tags. Press *Select* to pick several items and delete them at once; models can be deleted one at a time or in bulk. |
-| **Configuration** | Providers, media providers, generation, avatars and games, voice, local Hugging Face models and system. |
+| **Configuration** | Providers, media providers, generation, avatars and games, voice, local Hugging Face models, **appearance** and system. |
+
+### Make it yours (Configuration → Appearance)
+
+- **Theme:** dark (default), **light** or **automatic** (follows your system, live). The look is applied before the first frame, so it never flashes. The Canvas node graph and the video editor stay dark on purpose, like media editors.
+- **Accent color:** 6 presets or any color; buttons, selections and your chat bubble follow it (text contrast is picked automatically).
+- **Comfort:** interface size 90–150%, comfortable or compact density, system/serif/monospace font, avatar chat text size, and **reduce animations** (also respects your system setting).
+- **Usage:** interface language, **send with Enter or Ctrl+Enter** (chat and creation box), **start screen** (Main, a specific screen or *the last one I used*), keyboard shortcuts on/off.
+- **Sidebar:** hide the screens you do not use (*Main* and *Configuration* always stay; hidden ones remain reachable by search).
+- **Command palette — `Ctrl/⌘ + K`:** type to jump to any screen or Configuration tab, chat with or edit an avatar, open a project or canvas, or run an action (new avatar, toggle theme, export settings…). Shortcuts: `Alt+1…7` screens, `Alt+B` sidebar, `Alt+T` theme, `?` help.
+- **Backup:** *Export settings* (a JSON **without API keys or tokens**), *Import* on another computer, and *Reset appearance defaults* (keys, avatars and projects are never touched).
+- **First run:** a short welcome lets you pick theme, color and language and shows whether an AI is ready — only on a fresh install, never for people who already use ASTA.
+- Accessibility: visible keyboard focus, a *skip to content* link, accessible names on icon buttons, dialogs announced as such, and page titles per screen.
 
 ## How generation works
 

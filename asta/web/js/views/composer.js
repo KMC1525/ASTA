@@ -1,6 +1,7 @@
 import { upload, api } from '../api.js';
 import { t } from '../i18n.js';
 import { fmtBytes, h, icon, kindIcon, toast } from '../ui.js';
+import { isSendKey } from '../prefs.js';
 
 // Tipo (ícone) de um arquivo pelo nome
 export const kindOf = (n) => {
@@ -43,7 +44,7 @@ export function createComposer(opts) {
 
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
   ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(240, ta.scrollHeight) + 'px'; refresh(); });
-  ta.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(); } });
+  ta.addEventListener('keydown', (e) => { if (isSendKey(e)) { e.preventDefault(); send(); } });
   ta.addEventListener('paste', (e) => { const fs = [...(e.clipboardData ? e.clipboardData.files : [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
   sendBtn.addEventListener('click', send);
 

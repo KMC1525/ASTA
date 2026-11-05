@@ -13,7 +13,7 @@
 .cv-card{position:relative}
 .cv-tpls{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin:6px 0 14px}
 .cv-tpl{border:1px solid var(--line2);border-radius:14px;padding:10px 12px;cursor:pointer;background:var(--bg2);text-align:left}
-.cv-tpl:hover{border-color:var(--line3)}.cv-tpl.on{border-color:#fff;background:var(--bg3)}
+.cv-tpl:hover{border-color:var(--line3)}.cv-tpl.on{border-color:var(--accent);background:var(--bg3)}
 .cv-tpl b{display:block;font-size:13px;font-weight:600}.cv-tpl span{font-size:12px;color:var(--muted)}
 
 /* editor */
@@ -36,9 +36,9 @@
 .cv-edges .hit{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
 .cv-edges .vis{stroke:var(--c,#777);opacity:.85;pointer-events:none}
 .cv-edges .sel .vis{stroke-width:3.4;opacity:1}
-.cv-edges .tmp{stroke:#fff;stroke-dasharray:5 5;opacity:.7}
+.cv-edges .tmp{stroke:var(--strong);stroke-dasharray:5 5;opacity:.7}
 .cv-edges .del{pointer-events:all;cursor:pointer}
-.cv-edges .del circle{fill:#fff}.cv-edges .del text{fill:#000;font-size:13px;text-anchor:middle;dominant-baseline:central;font-weight:700}
+.cv-edges .del circle{fill:var(--strong)}.cv-edges .del text{fill:var(--bg);font-size:13px;text-anchor:middle;dominant-baseline:central;font-weight:700}
 .cv-node{position:absolute;background:var(--bg1);border:1px solid var(--line2);border-radius:18px;box-shadow:0 10px 36px rgba(0,0,0,.55);cursor:default;--c:var(--c-media)}
 .cv-node.sel{border-color:#8a8a8a;box-shadow:0 0 0 2px rgba(255,255,255,.1),0 10px 36px rgba(0,0,0,.55)}
 .cv-node.t-text,.cv-node.t-llm,.cv-node.t-transcribe{--c:var(--c-text)}
@@ -93,7 +93,7 @@
 .cv-node .digest{font-size:11px;color:var(--muted);background:var(--bg2);border-radius:10px;padding:7px 9px;max-height:90px;overflow:auto;line-height:1.45}
 .cv-root.running .cv-node .bd,.cv-root.running .cv-node .hd input.ti,.cv-root.running .cv-pal,.cv-root.running .pt{pointer-events:none}
 .cv-root.running .cv-pal{opacity:.5}
-.cv-surface.drop{outline:2px dashed #fff;outline-offset:-8px}
+.cv-surface.drop{outline:2px dashed var(--accent);outline-offset:-8px}
 .cv-zoom{position:absolute;left:14px;bottom:14px;display:flex;gap:6px;z-index:5}
 .cv-zoom .btn{background:var(--bg1)}
 .cv-hint{position:absolute;inset:0;display:grid;place-items:center;pointer-events:none;color:var(--dim);text-align:center;padding:30px}

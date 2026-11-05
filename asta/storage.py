@@ -30,12 +30,14 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .avatars import normalize_avatar, normalize_chat
+from .uiprefs import DEFAULT_UI, normalize_ui
 from .canvas.store import CanvasStore
 from .cards import normalize_character, normalize_worldbuilding
 from .util import asta_home, deep_merge, new_id, now_iso, read_json, safe_filename, write_json
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",  # auto | pt-BR | en
+    "ui": DEFAULT_UI,  # aparência, atalhos, barra lateral, chat (ver uiprefs.py)
     "active": {"generation": "demo", "characters": "auto"},  # characters "auto": IA de verdade sempre que houver (ver providers/auto.py)
     "providers": {},
     "generation": {
@@ -192,7 +194,9 @@ class Store:
     # ------------------------------------------------------------------ settings
     def get_settings(self) -> dict:
         saved = read_json(self.settings_path, {}) or {}
-        return deep_merge(copy.deepcopy(DEFAULT_SETTINGS), saved)
+        merged = deep_merge(copy.deepcopy(DEFAULT_SETTINGS), saved)
+        merged["ui"] = normalize_ui(merged.get("ui"))  # valor inválido (API/edição manual) volta ao padrão em vez de quebrar a interface
+        return merged
 
     def save_settings(self, patch: dict) -> dict:
         """Mescla `patch` nas configurações.
@@ -230,6 +234,7 @@ class Store:
                     _set_path(current, path, val.strip())
             _strip_flags(patch)
             merged = deep_merge(current, patch)
+            merged["ui"] = normalize_ui(merged.get("ui"))
             write_json(self.settings_path, merged, private=True)
             return merged
 

@@ -122,6 +122,27 @@ class BrowserTests(unittest.TestCase):
         finally:
             fake.close()
 
+    def test_12_customization_theme_accent_scale_palette_shortcuts_and_more(self):
+        self.run_script("customization_ui.js")
+        # a personalização não vaza para os demais testes: tudo de volta ao padrão
+        self.assertEqual(Store(self.tmp).get_settings()["ui"]["theme"], "dark")
+
+    def test_13_welcome_shows_only_on_a_fresh_install(self):
+        tmp = Path(tempfile.mkdtemp(prefix="asta-welcome-"))
+        httpd, _ = make_server("127.0.0.1", 0, Store(tmp))
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        try:
+            r = subprocess.run(["node", str(BROWSER / "welcome_ui.js")], capture_output=True, text=True, timeout=300, env={**os.environ, "ASTA_PORT": str(httpd.server_address[1])})
+            self.assertEqual(r.returncode, 0, r.stderr[-1500:])
+            out = json.loads(r.stdout.strip().splitlines()[-1])
+            failed = [k for k, v in out["checks"].items() if not v]
+            self.assertEqual((out["errors"], failed), ([], []))
+            self.assertGreater(len(out["checks"]), 4)
+        finally:
+            httpd.shutdown()
+            httpd.server_close()
+            shutil.rmtree(tmp, ignore_errors=True)
+
 
 if __name__ == "__main__":
     unittest.main()

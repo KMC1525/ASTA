@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { go, state } from '../main.js';
+import { isSendKey, sendHint } from '../prefs.js';
 import { avatarPic, MOOD_EMOJI, readSSE, REL_LABEL, richText, speakerColor } from '../avatar_ui.js';
 import { confirmDialog, field, fill, h, icon, modal, popover, select, toast } from '../ui.js';
 import { detectLang, Listener, listenSupported, Speaker, speechSupported } from '../voice.js';
@@ -25,7 +26,7 @@ export default async function render(root, ctx, chatId) {
   const head = h('div', { class: 'chhead' });
   const engineBar = h('div', { class: 'chengine' });   // qual IA responde (ou o aviso de que é só o Demo)
   const listEl = h('div', { class: 'chlist' });
-  const input = h('textarea', { rows: 1, placeholder: t('Escreva uma mensagem…') });
+  const input = h('textarea', { rows: 1, placeholder: t('Escreva uma mensagem…'), title: t('Enviar: {k}', { k: sendHint() }) });
   const sendBtn = h('button', { class: 'btn icon primary', title: t('Enviar'), onclick: () => send(input.value) }, icon('send', 17));
   const micBtn = h('button', { class: 'btn icon', title: t('Falar'), onclick: () => listener.toggle() }, icon('mic', 17));
 
@@ -91,7 +92,7 @@ export default async function render(root, ctx, chatId) {
     if (info.demo) {
       engineBar.className = 'chengine warn';
       engineBar.replaceChildren(h('div', { class: 'grow' }, h('b', null, t('Modo Demo: as respostas são pré-programadas, sem IA.')), ' ',
-        info.reason ? h('span', null, info.reason + ' ') : null, h('span', null, t('Configure um provedor de IA — nuvem ou local — para os avatares responderem com inteligência de verdade.'))),
+        info.reason ? h('span', null, t(info.reason) + ' ') : null, h('span', null, t('Configure um provedor de IA — nuvem ou local — para os avatares responderem com inteligência de verdade.'))),
         h('button', { class: 'btn sm primary', onclick: () => go('config', { tab: 'providers' }) }, t('Configurar IA')));
     } else {
       engineBar.className = 'chengine ok';
@@ -226,7 +227,7 @@ export default async function render(root, ctx, chatId) {
   }
 
   // ------------------------------------------------------------------ montagem
-  input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
+  input.addEventListener('keydown', (e) => { if (isSendKey(e)) { e.preventDefault(); send(input.value); } });
   input.addEventListener('input', () => { autosize(); clearTimeout(st.tick); });
   input.addEventListener('blur', () => { if (!st.busy) scheduleTick(); });
   root.replaceChildren(h('div', { class: 'chatpage' }, listEl, h('section', { class: 'chatmain' }, head, engineBar, msgs,

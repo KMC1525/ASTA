@@ -18,6 +18,8 @@ export function h(tag, attrs, ...kids) {
     else el.appendChild(c instanceof Node ? c : document.createTextNode(String(c)));
   };
   kids.forEach(add);
+  // acessibilidade: botão só com ícone usa o título como nome acessível
+  if (tag === 'button' && el.title && !el.getAttribute('aria-label') && !el.textContent.trim()) el.setAttribute('aria-label', el.title);
   return el;
 }
 
@@ -91,10 +93,11 @@ export function toast(msg, type = '') {
 
 export function modal(title, body, buttons) {
   return new Promise((resolve) => {
-    const close = (v) => { bg.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const back = document.activeElement;  // devolve o foco a quem abriu o diálogo
+    const close = (v) => { bg.remove(); document.removeEventListener('keydown', onKey); if (back && back.focus && document.contains(back)) { try { back.focus(); } catch (e) { /* ok */ } } resolve(v); };
     const onKey = (e) => { if (e.key === 'Escape') close(null); };
     const foot = h('div', { class: 'foot' }, (buttons || []).map((b) => h('button', { class: 'btn ' + (b.cls || ''), onclick: () => close(b.value) }, b.label)));
-    const bg = h('div', { class: 'modal-bg', onmousedown: (e) => { if (e.target === bg) close(null); } }, h('div', { class: 'modal' }, h('h2', null, title), body, foot));
+    const bg = h('div', { class: 'modal-bg', onmousedown: (e) => { if (e.target === bg) close(null); } }, h('div', { class: 'modal', role: 'dialog', 'aria-modal': 'true', 'aria-label': String(title) }, h('h2', null, title), body, foot));
     document.body.appendChild(bg);
     document.addEventListener('keydown', onKey);
     const first = bg.querySelector('input,textarea,select'); if (first) first.focus();

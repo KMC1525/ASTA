@@ -191,7 +191,19 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
-| **Configuração** | Provedores, provedores de mídia, geração, avatars e jogos, voz, modelos locais do Hugging Face e sistema. |
+| **Configuração** | Provedores, provedores de mídia, geração, avatars e jogos, voz, modelos locais do Hugging Face, **aparência** e sistema. |
+
+### Deixe do seu jeito (Configuração → Aparência)
+
+- **Tema:** escuro (padrão), **claro** ou **automático** (segue o sistema, ao vivo). A aparência é aplicada antes do primeiro quadro, então nunca pisca. O grafo de nós do Canvas e o editor de vídeo ficam escuros de propósito, como nos editores de mídia.
+- **Cor de destaque:** 6 predefinidas ou qualquer cor; botões, seleções e a sua bolha no chat seguem a cor (o contraste do texto é escolhido sozinho).
+- **Conforto:** tamanho da interface de 90 a 150%, densidade confortável ou compacta, fonte do sistema/serifada/monoespaçada, tamanho do texto do chat dos avatares e **reduzir animações** (também respeita a configuração do sistema).
+- **Uso:** idioma da interface, **enviar com Enter ou Ctrl+Enter** (chat e caixa de criação), **tela inicial** (Principal, uma tela específica ou *a última que usei*), atalhos de teclado ligados/desligados.
+- **Barra lateral:** esconda as telas que você não usa (*Principal* e *Configuração* ficam sempre; as escondidas continuam acessíveis pela busca).
+- **Paleta de comandos — `Ctrl/⌘ + K`:** digite para ir a qualquer tela ou aba da Configuração, conversar com/editar um avatar, abrir um projeto ou canvas, ou rodar uma ação (novo avatar, alternar tema, exportar configurações…). Atalhos: `Alt+1…7` telas, `Alt+B` barra lateral, `Alt+T` tema, `?` ajuda.
+- **Backup:** *Exportar configurações* (um JSON **sem chaves de API nem tokens**), *Importar* em outro computador e *Restaurar padrões da aparência* (chaves, avatares e projetos nunca são tocados).
+- **Primeira vez:** uma boas-vindas curta deixa escolher tema, cor e idioma e mostra se há uma IA pronta — só numa instalação nova, nunca para quem já usa o ASTA.
+- Acessibilidade: foco visível no teclado, link *ir para o conteúdo*, nomes acessíveis nos botões de ícone, diálogos anunciados como tal e título da página por tela.
 
 ## Como funciona a geração
 

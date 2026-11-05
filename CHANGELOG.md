@@ -5,6 +5,39 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.3.0] — 2026-11-05
+
+Atualização geral com foco em **personalização** e **experiência do usuário**. Tudo que já funcionava continua igual: o padrão é exatamente a aparência de sempre (tema escuro, destaque branco, tamanho 100%).
+
+### Adicionado — personalização (Configuração → nova aba **Aparência**)
+- **Tema escuro / claro / automático.** O automático segue o sistema e muda ao vivo. A aparência é aplicada por um script no `<head>` (`boot.js`) com o último valor guardado, **antes do primeiro quadro** — sem piscar de escuro para claro. O CSS inteiro foi migrado de cores fixas para variáveis; o grafo de nós do Canvas, o editor de vídeo e o visualizador de imagens ficam **sempre escuros** de propósito (como editores de mídia).
+- **Cor de destaque:** 6 predefinidas ou qualquer cor; botões, seleções, barras de progresso e a sua bolha no chat seguem a cor, com texto preto ou branco escolhido pelo contraste.
+- **Conforto:** tamanho da interface (90–150%, sem barras de rolagem a mais), densidade **compacta**, fonte (sistema, serifada, monoespaçada), tamanho do texto do chat e **reduzir animações** (respeita também `prefers-reduced-motion`).
+- **Uso:** idioma (movido para a aba Aparência), **tecla de envio** — Enter ou **Ctrl/⌘+Enter** — no chat dos avatares e na caixa de criação (Shift+Enter e a composição de texto por IME continuam respeitados), **tela inicial** (Principal, qualquer tela ou "a última que usei") e atalhos de teclado ligados/desligados.
+- **Barra lateral:** esconder as telas que você não usa (Principal e Configuração nunca somem; a tela atual sempre aparece; as escondidas seguem acessíveis pela busca).
+- **Backup e padrões:** *Exportar configurações* (JSON **sem chaves de API nem tokens** — vozes, Hugging Face e provedores saem sem segredos), *Importar configurações* (só seções conhecidas, valores validados, **nunca** troca as chaves de quem importa) e *Restaurar padrões da aparência* (nunca mexe em chaves, avatares ou projetos). API: `GET /api/settings/export`, `POST /api/settings/import`, `POST /api/settings/reset`.
+- As preferências vivem em `settings.ui` e são **validadas** (`asta/uiprefs.py`): um valor inválido, por API ou edição manual do `settings.json`, volta ao padrão em vez de quebrar a interface (cor só em hex, escala só entre as permitidas etc.).
+
+### Adicionado — experiência
+- **Paleta de comandos (`Ctrl/⌘+K`)** e botão *Buscar…* na barra lateral: vá a qualquer tela ou aba da Configuração, converse com/edite um avatar, abra um projeto ou canvas, ou rode ações (novo avatar, nova criação, alternar tema, recolher a barra, exportar configurações, ver atalhos, recarregar). Busca sem diferenciar acentos nem maiúsculas, navegação por setas/Enter/Esc, anunciada como diálogo com lista de opções.
+- **Atalhos:** `Alt+1…7` (telas), `Alt+B` (barra lateral), `Alt+T` (tema), `?` (ajuda com todos os atalhos). Podem ser desligados; `Ctrl+K` sempre funciona.
+- **Boas-vindas na primeira vez:** escolha de tema, cor e idioma com efeito ao vivo e o estado da IA (pronta, ou aviso de modo Demo com *Configurar IA*). Aparece **só numa instalação nova** (nada criado); quem já usa o ASTA nunca vê, e dá para rever em *Aparência → Rever as boas-vindas*.
+- **Acessibilidade:** anel de foco visível só no teclado, link *Ir para o conteúdo*, nome acessível automático em botões só de ícone, diálogos com `role="dialog"` e foco devolvido a quem abriu, avisos (toasts) anunciados, título da página por tela (`ASTA — Biblioteca`…), `aria-current` na barra lateral.
+- Telas e textos novos têm tradução para o inglês.
+
+### Corrigido
+- **Biblioteca → "Abrir" de um canvas** levava à lista de canvases em vez do editor (o endereço estava sem `/edit/`).
+- A faixa "Modo Demo" do chat mostrava o motivo em português mesmo com a interface em inglês.
+
+### Testes
+- Preferências (padrões, valores válidos e inválidos, cor, idempotência), gravação/carregamento sanitizados, exportação **sem nenhum segredo**, importação segura (não troca chaves, ignora seções desconhecidas, rejeita arquivos errados), ida e volta entre instalações, restaurar padrões (voz e provedores recusados).
+- Navegador: tema (inclusive aplicado antes do primeiro quadro e `auto` ao vivo), cor e contraste, escala sem barra de rolagem, densidade, fonte, animações, barra lateral, tela inicial e título, paleta (abrir, buscar avatar, Enter, Esc), atalhos (ligados/desligados), Ctrl+Enter vs. Enter no chat, exportar/restaurar e acessibilidade; boas-vindas numa instalação nova **e** a ausência dela para quem já usa.
+
+### Observação
+- Revi o tema claro com capturas de tela das principais telas (Principal, Configuração, Avatars, chat, Canvas), mas **não todas as telas em todos os estados**: se alguma cor ficar ruim no claro, o tema escuro (padrão) não é afetado.
+- O tamanho da interface usa a propriedade CSS `zoom` (Chrome, Edge, Safari e Firefox 126+); em navegadores sem ela o ajuste simplesmente não tem efeito.
+- Em telas de celular a busca (`Ctrl+K`) não tem botão (a barra inferior ficou como estava).
+
 ## [0.2.18] — 2026-11-05
 
 Revisão de bugs em tudo que envolve **avatares** e **provedores de IA** (nuvem e local). Cada item abaixo foi reproduzido antes de corrigir e tem teste de regressão (`tests/test_ai_regressions.py`).
@@ -363,7 +396,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.18...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/KMC1525/ASTA/compare/v0.2.18...v0.3.0
 [0.2.18]: https://github.com/KMC1525/ASTA/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/KMC1525/ASTA/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/KMC1525/ASTA/compare/v0.2.15...v0.2.16
