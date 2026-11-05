@@ -61,6 +61,8 @@ The WebUI opens at `http://localhost:8787`. To update, run the install command a
 
 **Installing and updating covers three layers:** (1) **Python** and its tools — installed or upgraded through your system's package manager (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` or Homebrew on Linux and macOS; `winget` on Windows), which may ask for your password (`sudo`); if the new Python is a newer version, ASTA's private environment is rebuilt for it automatically; (2) **ASTA** itself; (3) **all of ASTA's libraries**, described below. Set `ASTA_PYTHON=keep` to never touch the system Python.
 
+**Nothing already installed is installed again.** The installer, `asta update` and `asta libs` detect what is already there and only update it when needed: Python is only upgraded if the package manager has a newer version; the private environment is reused; ASTA itself is **not downloaded again** when the installed version already matches the published one (`ASTA_FORCE=1` or `asta update --force` reinstalls anyway); libraries already installed are only checked and upgraded if a newer version exists (only missing ones are installed); already-downloaded models are skipped.
+
 **Installing and updating also install and update all of ASTA's libraries** — the optional ones that unlock extra features (more accurate PDF reading, local image/video/sound/voice models for the Canvas, embedded GGUF language models). The first install can take a while and download several GB (PyTorch for the Canvas models); if you only want the lightweight core, set `ASTA_EXTRAS=none`. A library that fails to install (for example `llama-cpp-python` without a C++ compiler) only produces a warning: ASTA still works, and you can retry with `asta libs`.
 
 <details>
@@ -74,6 +76,7 @@ The WebUI opens at `http://localhost:8787`. To update, run the install command a
 | `ASTA_MODELS=all` (default) | downloads the **pre-installed local models** (see below): `none` skips them, `text` or `image` picks one |
 | `ASTA_PYTHON=auto` (default) | installs Python if missing and upgrades it (with `pip`, `setuptools`, `wheel`, `venv`) via the system package manager |
 | `ASTA_PYTHON=keep` | never installs or upgrades the system Python (ASTA's own `pip`/`setuptools`/`wheel` are still kept current) |
+| `ASTA_FORCE=1` | reinstall ASTA even if the installed version is already the latest published one |
 | `ASTA_SOURCE=<url\|folder>` | install from another source (fork, branch, local folder) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | where the program and the `asta` command live |
 
@@ -235,6 +238,8 @@ You choose one model **to generate** (the most capable) and another **for the ch
 | Image | [`Tongyi-MAI/Z-Image`](https://huggingface.co/Tongyi-MAI/Z-Image) (GGUF: `unsloth/Z-Image-GGUF`) | **Q4_K_M** | ~6.2 GB (model + VAE + Qwen3-4B text encoder) |
 
 They are the only two for now. Install them from *Configuration → Local models → Pre-installed models* with one click, or with `asta models install` (`asta models list` shows the status); `ASTA_MODELS=none` skips them in the installer. When the model's library is installed (`asta[local]`) and you are still on the Demo provider, ASTA makes them the default text model / Canvas image provider; if you already chose another provider, your choice is kept. Already-downloaded files are never downloaded again.
+
+**Context window.** The pre-installed text model starts with a **32K-token (32,768) context window**. You can change it any time in *Configuration → Providers → Hugging Face GGUF (embedded) → Context window (tokens)* (leave it empty or press *Use automatic* to go back to the default). Other local text models use 2K/4K/8K depending on your hardware unless you set a value. Bigger windows use more RAM; changing the value reloads the model.
 
 **GGUF models by type.** The *Local models* tab is split into **Text, Image, Video, Sound and music, Voice and Other**. Each type has its own Hugging Face search (filtered by the repository's task), its own folder (`models/`, `models/image`, `models/video`, …), the same quantization picker and its own *Downloaded* list. Text models run ASTA itself (`llama.cpp`); **Image and Video GGUF models (FLUX, Stable Diffusion, Wan…) run in the Canvas through `stable-diffusion.cpp`** (provider *GGUF local*, `pip install "asta[local]"`): press *Use in the Canvas* on a downloaded file. Extra load options (VAE, text encoders…) go in the node's *Advanced → extra parameters* (`{"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}}`). For **Sound, Voice and Other** ASTA currently only downloads and organizes the files — there is no built-in engine to run them yet.
 

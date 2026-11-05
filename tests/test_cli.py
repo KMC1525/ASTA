@@ -17,8 +17,9 @@ REQUIRES = [
 ]
 
 
-def run_cli(argv, env=None, results=None):
-    """Executa `asta ...` simulando o pip. `results`: {palavra do requisito: código de saída}. Devolve (código, comandos, saída)."""
+def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0"):
+    """Executa `asta ...` simulando o pip. `results`: {palavra do requisito: código de saída}. `installed`: {nome da biblioteca: versão} já instalada.
+    `remote`: versão do ASTA publicada (None = não deu para consultar). Devolve (código, comandos, saída)."""
     calls, results = [], results or {}
 
     def fake_run(cmd, *a, **k):
@@ -27,7 +28,9 @@ def run_cli(argv, env=None, results=None):
         return mock.Mock(returncode=code)
 
     out = io.StringIO()
+    have = installed or {}
     with mock.patch("importlib.metadata.requires", return_value=REQUIRES), mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
+            mock.patch.object(cli, "_installed_version", side_effect=lambda r: have.get(cli._req_name(r))), mock.patch.object(cli, "_remote_version", return_value=remote), \
             mock.patch.dict(os.environ, env or {}, clear=False), contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         if not env or "ASTA_EXTRAS" not in env:
             os.environ.pop("ASTA_EXTRAS", None)
@@ -58,7 +61,7 @@ class LibsTests(unittest.TestCase):
         for c in installs:
             self.assertIn("--upgrade", c)
             self.assertEqual(c[c.index("--upgrade-strategy") + 1], "eager")  # atualiza também as dependências das bibliotecas
-        self.assertIn("Bibliotecas atualizadas: docs, media, local", out)
+        self.assertIn("Bibliotecas prontas: docs, media, local", out)
 
     def test_one_failing_library_does_not_block_the_others(self):
         code, calls, out = run_cli(["libs"], results={"llama-cpp-python": 1})
@@ -66,6 +69,30 @@ class LibsTests(unittest.TestCase):
         self.assertEqual(len(pip_installs(calls)), 3)
         self.assertIn("com falha: local", out)
         self.assertIn("asta libs --extras local", out)
+
+    def test_libraries_already_installed_are_not_installed_again_only_updated_if_newer(self):
+        every = {"pypdf": "5.0", "torch": "2.5", "diffusers": "0.31", "llama-cpp-python": "0.3.1"}
+        code, calls, out = run_cli(["libs"], installed=every)
+        self.assertEqual(code, 0)
+        installs = pip_installs(calls)
+        self.assertEqual(len(installs), 3)
+        for c in installs:
+            self.assertIn("--quiet", c)  # só uma checagem: o pip não reinstala quem já está na versão mais nova
+            self.assertNotIn("--force-reinstall", c)
+        self.assertIn("já instaladas (pypdf 5.0)", out)
+        self.assertIn("só atualizo se houver versão mais nova", out)
+        self.assertIn("já estavam instaladas: docs, media, local", out)
+        # sem internet: o que já está instalado não vira erro
+        code, calls, out = run_cli(["libs"], installed=every, results={"pypdf": 1, "torch": 1, "llama": 1})
+        self.assertEqual(code, 0)
+        self.assertIn("sigo com as versões instaladas", out)
+
+    def test_only_the_missing_library_is_reported_as_installing(self):
+        code, calls, out = run_cli(["libs", "--extras", "media"], installed={"torch": "2.5"})
+        self.assertEqual(code, 0)
+        self.assertIn("instalando diffusers>=0.30", out)
+        self.assertIn("já instaladas (só atualizo se precisar): torch", out)
+        self.assertNotIn("--quiet", pip_installs(calls)[0])
 
     def test_choosing_libraries_and_the_environment_variable(self):
         self.assertEqual(len(pip_installs(run_cli(["libs", "--extras", "docs,media"])[1])), 2)
@@ -91,6 +118,34 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(calls[3][1:5], ["-m", "asta", "models", "install"])
         self.assertIn("Pronto", out)
         self.assertIn("gerenciador de pacotes", out)  # explica que o Python do sistema não é gerenciado nesse caso
+
+    def test_update_skips_downloading_asta_when_it_is_already_the_latest(self):
+        from asta import __version__
+
+        code, calls, out = run_cli(["update", "--no-python"], remote=__version__)
+        self.assertEqual(code, 0)
+        self.assertNotIn(cli.REPO_ZIP, [c[-1] for c in calls])
+        self.assertIn("já é a versão mais recente", out)
+        self.assertTrue(any(c[-1] == "libs" for c in calls))  # bibliotecas e modelos ainda são verificados
+        # --force reinstala; versão mais nova publicada e consulta que falhou também instalam
+        self.assertIn(cli.REPO_ZIP, [c[-1] for c in run_cli(["update", "--no-python", "--force"], remote=__version__)[1]])
+        self.assertIn(cli.REPO_ZIP, [c[-1] for c in run_cli(["update", "--no-python"], remote="99.0.0")[1]])
+        self.assertIn(cli.REPO_ZIP, [c[-1] for c in run_cli(["update", "--no-python"], remote=None)[1]])
+        self.assertIn(cli.REPO_ZIP, [c[-1] for c in run_cli(["update", "--no-python"], env={"ASTA_FORCE": "1"}, remote=__version__)[1]])
+
+    def test_remote_version_reads_the_published_init_file(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp:
+            f = Path(tmp) / "__init__.py"
+            f.write_text('"""x"""\n\n__version__ = "0.2.10"\n')
+            with mock.patch.dict(os.environ, {"ASTA_VERSION_URL": f.as_uri()}):
+                self.assertEqual(cli._remote_version(), "0.2.10")
+                self.assertTrue(cli._asta_is_current() is (cli._version_tuple(cli.__version__) >= (0, 2, 10)))
+            with mock.patch.dict(os.environ, {"ASTA_VERSION_URL": (Path(tmp) / "nada").as_uri()}):
+                self.assertIsNone(cli._remote_version())
+                self.assertFalse(cli._asta_is_current())
+        self.assertGreater(cli._version_tuple("0.2.10"), cli._version_tuple("0.2.9"))
 
     def test_flags_that_keep_the_system_python_alone(self):
         with mock.patch.object(cli, "_managed_app_dir", return_value=Path("/x/app")), mock.patch.object(cli, "_update_with_installer") as inst:
@@ -202,7 +257,8 @@ class PythonInstallerTests(unittest.TestCase):
         self.with_python()
         code, out = self.install()
         self.assertEqual(code, 0, out)
-        self.assertIn("Verificando atualizações do Python", out)
+        self.assertIn("Python já instalado", out)
+        self.assertIn("verificando se há versão mais nova", out)
         self.assertTrue(any(c.startswith("install -y python3 python3-venv python3-pip") for c in self.calls()))
 
     def test_keep_mode_never_touches_the_package_manager(self):
@@ -228,6 +284,45 @@ class PythonInstallerTests(unittest.TestCase):
 
         ver = subprocess.run([str(self.tmp / "app" / "venv" / "bin" / "python"), "-c", "import sys; print(sys.version_info[:2] >= (3, 10))"], capture_output=True, text=True).stdout.strip()
         self.assertEqual(ver, "True")
+
+    def fake_installed_asta(self, version):
+        """Deixa no venv um ASTA falso na versão dada (como se o instalador já tivesse rodado antes)."""
+        code, out = self.install(ASTA_PYTHON="keep")
+        self.assertEqual(code, 0, out)
+        venv = self.tmp / "app" / "venv"
+        site = next(venv.glob("lib/python*/site-packages"))
+        (site / "asta").mkdir()
+        (site / "asta" / "__init__.py").write_text(f'__version__ = "{version}"\n')
+        stub = venv / "bin" / "asta"
+        stub.write_text("#!/bin/sh\nexit 0\n")
+        stub.chmod(0o755)
+
+    def run_full(self, remote, **env):
+        remote_file = self.tmp / "remote_init.py"
+        remote_file.unlink(missing_ok=True)
+        if remote is not None:
+            remote_file.write_text(f'"""x"""\n__version__ = "{remote}"\n')
+        return self.install(ASTA_STEP="", ASTA_PYTHON="keep", ASTA_EXTRAS="none", ASTA_MODELS="none", ASTA_VERSION_URL=remote_file.as_uri(), **env)
+
+    def test_asta_already_at_the_latest_version_is_not_downloaded_again(self):
+        self.with_python()
+        self.fake_installed_asta("0.2.9")
+        code, out = self.run_full("0.2.9")
+        self.assertEqual(code, 0, out)
+        self.assertIn("Ambiente já existe", out)
+        self.assertIn("já instalado e na versão mais recente — nada a baixar", out)
+        self.assertNotIn("Baixando e instalando ASTA", out)
+        self.assertIn("ASTA 0.2.9 já estava atualizado", out)
+        code, out = self.run_full("0.2.8")  # a publicada é mais antiga que a instalada: nada a fazer também
+        self.assertIn("nada a baixar", out)
+
+    def test_asta_is_downloaded_when_newer_forced_or_the_check_fails(self):
+        self.with_python()
+        self.fake_installed_asta("0.2.9")
+        for remote, env in (("0.2.10", {}), ("0.2.9", {"ASTA_FORCE": "1"}), (None, {})):
+            code, out = self.run_full(remote, **env)
+            self.assertIn("Baixando e instalando ASTA", out, (remote, env))  # PIP_NO_INDEX=1: o pip de verdade falha, o que basta para provar a tentativa
+            self.assertNotIn("nada a baixar", out)
 
     def test_python_only_flag_stops_before_installing_asta(self):
         import subprocess

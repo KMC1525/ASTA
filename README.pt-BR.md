@@ -61,6 +61,8 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 
 **Instalar e atualizar cobre três camadas:** (1) o **Python** e as ferramentas dele — instalados ou atualizados pelo gerenciador de pacotes do seu sistema (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` ou Homebrew no Linux e no macOS; `winget` no Windows), que pode pedir sua senha (`sudo`); se o novo Python for de uma versão mais nova, o ambiente privado do ASTA é recriado para ele automaticamente; (2) o próprio **ASTA**; (3) **todas as bibliotecas do ASTA**, descritas abaixo. Use `ASTA_PYTHON=keep` para nunca mexer no Python do sistema.
 
+**Nada que já está instalado é instalado de novo.** O instalador, o `asta update` e o `asta libs` descobrem o que já existe e só atualizam se precisar: o Python só é atualizado se o gerenciador de pacotes tiver versão mais nova; o ambiente privado é reaproveitado; o próprio ASTA **não é baixado de novo** quando a versão instalada já é a publicada (`ASTA_FORCE=1` ou `asta update --force` reinstala mesmo assim); as bibliotecas já instaladas só são verificadas e atualizadas se houver versão mais nova (só as que faltam são instaladas); modelos já baixados são pulados.
+
 **Instalar e atualizar também instala e atualiza todas as bibliotecas do ASTA** — as opcionais, que liberam recursos extras (leitura de PDF mais precisa, modelos locais de imagem/vídeo/som/voz do Canvas, modelos de linguagem GGUF embutidos). A primeira instalação pode demorar e baixar vários GB (o PyTorch dos modelos do Canvas); se quiser só o núcleo leve, use `ASTA_EXTRAS=none`. Uma biblioteca que falhe (por exemplo o `llama-cpp-python` sem compilador C++) gera só um aviso: o ASTA continua funcionando, e dá para tentar de novo com `asta libs`.
 
 <details>
@@ -74,6 +76,7 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_MODELS=all` (padrão) | baixa os **modelos locais pré-instalados** (veja abaixo): `none` pula, `text` ou `image` escolhe um |
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
+| `ASTA_FORCE=1` | reinstala o ASTA mesmo que a versão instalada já seja a última publicada |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
 
@@ -236,6 +239,8 @@ Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personag
 | Imagem | [`Tongyi-MAI/Z-Image`](https://huggingface.co/Tongyi-MAI/Z-Image) (GGUF: `unsloth/Z-Image-GGUF`) | **Q4_K_M** | ~6,2 GB (modelo + VAE + codificador de texto Qwen3-4B) |
 
 São só esses dois por enquanto. Instale-os em *Configuração → Modelos locais → Modelos pré-instalados* com um clique, ou com `asta models install` (`asta models list` mostra o estado); `ASTA_MODELS=none` pula no instalador. Quando a biblioteca do modelo está instalada (`asta[local]`) e você ainda usa o provedor Demo, o ASTA os torna o modelo de texto padrão / o provedor de imagem do Canvas; se você já escolheu outro provedor, a sua escolha é mantida. Arquivos já baixados nunca são baixados de novo.
+
+**Janela de contexto.** O modelo de texto pré-instalado começa com uma janela de contexto de **32K tokens (32.768)**. Você pode mudar quando quiser em *Configuração → Provedores → Hugging Face GGUF (embutido) → Janela de contexto (tokens)* (deixe vazio ou use *Usar o automático* para voltar ao padrão). Os outros modelos de texto locais usam 2K/4K/8K conforme o hardware, a menos que você defina um valor. Janelas maiores usam mais RAM; mudar o valor recarrega o modelo.
 
 **Modelos GGUF por tipo.** A aba *Modelos locais* é dividida em **Texto, Imagem, Vídeo, Som e música, Voz e Outros**. Cada tipo tem a sua busca no Hugging Face (filtrada pela tarefa do repositório), a sua pasta (`models/`, `models/image`, `models/video`, …), o mesmo seletor de quantização e a sua lista de *Baixados*. Os modelos de texto rodam o próprio ASTA (`llama.cpp`); **os GGUF de Imagem e Vídeo (FLUX, Stable Diffusion, Wan…) rodam no Canvas pela `stable-diffusion.cpp`** (provedor *GGUF local*, `pip install "asta[local]"`): use *Usar no Canvas* num arquivo baixado. Opções extras de carregamento (VAE, codificadores de texto…) vão em *Avançado → parâmetros extras* do nó (`{"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}}`). Para **Som, Voz e Outros** o ASTA por enquanto só baixa e organiza os arquivos — ainda não há motor embutido para rodá-los.
 

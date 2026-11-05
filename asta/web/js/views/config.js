@@ -18,6 +18,8 @@ export default async function render(root, ctx) {
 async function providers() {
   const presets = state.presets;
   const localModels = (await api('/api/hf/local')).models.map((m) => m.name);
+  let preText = [];   // modelos de texto pré-instalados: o contexto base deles (32K) vale enquanto o usuário não escolher outro valor
+  try { preText = (await api('/api/preinstalled')).models.filter((m) => m.kind === 'text' && m.n_ctx); } catch (e) { /* sem a lista, só não mostramos o valor automático */ }
   const container = h('div');
   const rolesCard = () => {
     const S = state.settings;
@@ -32,7 +34,7 @@ async function providers() {
     const S = state.settings, cfg = (S.providers && S.providers[p.id]) || {};
     const isGen = S.active.generation === p.id, isChar = S.active.characters === p.id;
     const configured = p.id === 'demo' || cfg.has_key || cfg.model || (p.local && cfg.base_url);
-    const draft = { base_url: cfg.base_url || '', model: cfg.model || '', api_key: '', vision: cfg.vision != null ? cfg.vision : p.vision };
+    const draft = { base_url: cfg.base_url || '', model: cfg.model || '', api_key: '', vision: cfg.vision != null ? cfg.vision : p.vision, n_ctx: cfg.n_ctx > 0 ? cfg.n_ctx : 0 };
     const res = h('div', { class: 'res' });
     const dl = h('datalist', { id: 'models-' + p.id }, (p.kind === 'local_hf' ? localModels : []).map((m) => h('option', { value: m })));
     const cardEl = h('div', { class: 'prov' + (isGen || isChar ? ' open' : '') });
@@ -52,6 +54,7 @@ async function providers() {
     };
     const save = async () => {
       const patch = { base_url: draft.base_url, model: draft.model, vision: !!draft.vision };
+      if (p.kind === 'local_hf') patch.n_ctx = draft.n_ctx > 0 ? draft.n_ctx : 0;   // 0 = automático
       if (draft.api_key) patch.api_key = draft.api_key;
       await saveSettings({ providers: { [p.id]: patch } }); draft.api_key = ''; toast(t('Salvo'), 'ok'); await refreshState(); renderSide(); paint();
     };
@@ -66,6 +69,21 @@ async function providers() {
       inputs.push(field(t('Modelo'), h('div', { class: 'row nw' }, h('input', { list: 'models-' + p.id, value: draft.model, placeholder: p.kind === 'local_hf' ? t('arquivo .gguf baixado') : t('clique em “Carregar modelos”'), oninput: (e) => { draft.model = e.target.value.trim(); } }), dl,
         p.kind !== 'local_hf' ? h('button', { class: 'btn sm', onclick: loadModels }, icon('refresh', 13), t('Carregar modelos')) : null)));
       if (p.kind !== 'local_hf') inputs.push(checkbox(t('Aceita imagens (visão)'), draft.vision, (v) => { draft.vision = v; }));
+      else {
+        // janela de contexto: vazio = automático (32K nos modelos de texto pré-instalados; nos demais, conforme o hardware)
+        const ctxHint = h('p', { class: 'muted small', style: { margin: '4px 0 0' } });
+        const showCtx = () => {
+          const pre = preText.find((m) => (m.parts || [m.file]).includes(draft.model) || m.file.split('/').pop() === draft.model);
+          ctxHint.textContent = draft.n_ctx > 0 ? t('Usando {n} tokens de contexto.', { n: draft.n_ctx.toLocaleString() })
+            : pre ? t('Automático: {n} tokens (base do modelo pré-instalado).', { n: pre.n_ctx.toLocaleString() }) : t('Automático: conforme o seu hardware (2.048 a 8.192 tokens).');
+        };
+        const ctxDl = h('datalist', { id: 'ctx-' + p.id }, [4096, 8192, 16384, 32768, 65536, 131072].map((n) => h('option', { value: String(n) })));
+        const ctxIn = h('input', { type: 'number', list: 'ctx-' + p.id, min: 512, step: 1024, value: draft.n_ctx || '', placeholder: t('automática'), oninput: (e) => { draft.n_ctx = Math.max(0, parseInt(e.target.value || '0', 10) || 0); showCtx(); } });
+        inputs.push(field(t('Janela de contexto (tokens)'), h('div', { class: 'row nw' }, ctxIn, ctxDl,
+          h('button', { class: 'btn sm', onclick: () => { draft.n_ctx = 0; ctxIn.value = ''; showCtx(); } }, t('Usar o automático'))),
+          t('Quanto texto o modelo lê de uma vez. Janelas maiores usam mais memória (RAM). Os modelos de texto pré-instalados começam com 32.768 (32K); você pode ajustar quando quiser.')));
+        showCtx(); inputs.push(ctxHint);
+      }
       if (p.hint) inputs.push(h('p', { class: 'muted small' }, t(p.hint)));
     }
     inputs.push(h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: test }, t('Testar')), h('button', { class: 'btn sm primary', onclick: save }, t('Salvar')), p.id !== 'demo' ? h('span', { class: 'dim small' }, t('Ao testar, usamos os valores acima mesmo sem salvar.')) : null), res);
@@ -216,7 +234,7 @@ async function local() {
       } }, icon('download', 13), t('Instalar'));
       return h('div', { class: 'prerow' },
         h('div', { class: 'row nw' }, h('div', { class: 'grow', style: { minWidth: 0 } },
-          h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, m.label), h('span', { class: 'chip' }, t(GGUF_KINDS.find(([k]) => k === m.kind)[1])), h('span', { class: 'chip solid' }, m.quant), h('span', { class: 'dim small' }, fmtBytes(m.size))),
+          h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, m.label), h('span', { class: 'chip' }, t(GGUF_KINDS.find(([k]) => k === m.kind)[1])), h('span', { class: 'chip solid' }, m.quant), m.n_ctx ? h('span', { class: 'chip', title: t('Janela de contexto base; ajustável em Provedores → Hugging Face GGUF') }, t('Contexto {n}', { n: Math.round(m.n_ctx / 1024) + 'K' })) : null, h('span', { class: 'dim small' }, fmtBytes(m.size))),
           h('div', { class: 'dim small' }, t(m.hint)), h('div', { class: 'mono dim', style: { fontSize: '11px' } }, m.source + ' · ' + m.repo + ' · ' + m.license)), act), area);
     }));
   }

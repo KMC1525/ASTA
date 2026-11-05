@@ -90,8 +90,26 @@ def _lib_requirements(extra: str):
     return out
 
 
+def _req_name(req: str) -> str:
+    import re
+
+    m = re.match(r"\s*([A-Za-z0-9][A-Za-z0-9._-]*)", req)
+    return m.group(1) if m else req.strip()
+
+
+def _installed_version(req: str):
+    """Versão instalada da biblioteca de um requisito pip, ou None se ela não está neste ambiente."""
+    from importlib import metadata
+
+    try:
+        return metadata.version(_req_name(req))
+    except Exception:  # noqa: BLE001  (PackageNotFoundError e metadados quebrados)
+        return None
+
+
 def _libs(args: argparse.Namespace) -> int:
-    """Instala/atualiza as bibliotecas opcionais do ASTA. Uma que falhe não impede as outras."""
+    """Instala o que falta e atualiza (só se houver versão mais nova) as bibliotecas opcionais do ASTA. Uma que falhe não impede as outras.
+    O que já está instalado não é instalado de novo: o pip só mexe nele se existir uma versão mais nova."""
     chosen, unknown = _wanted_libs(getattr(args, "extras", "") or "")
     if unknown:
         print(f"Bibliotecas desconhecidas: {', '.join(unknown)}. Opções: {', '.join(LIBS)}, all, none.", file=sys.stderr)
@@ -99,23 +117,62 @@ def _libs(args: argparse.Namespace) -> int:
     if not chosen:
         print("Bibliotecas opcionais: nada a instalar (ASTA_EXTRAS=none).")
         return 0
-    failed = []
+    failed, present = [], []
     for extra in chosen:
         reqs = _lib_requirements(extra)
         if not reqs:
             print(f"Bibliotecas «{extra}»: nenhuma listada nesta versão — pulando.")
             continue
-        print(f"\nBibliotecas «{extra}» ({LIBS[extra]}): {', '.join(reqs)}")
-        res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--upgrade-strategy", "eager", "--disable-pip-version-check", *reqs])
+        have = {r: _installed_version(r) for r in reqs}
+        missing = [r for r in reqs if not have[r]]
+        base = [sys.executable, "-m", "pip", "install", "--upgrade", "--upgrade-strategy", "eager", "--disable-pip-version-check"]
+        if not missing:
+            print(f"\nBibliotecas «{extra}» ({LIBS[extra]}): já instaladas ({', '.join(f'{_req_name(r)} {v}' for r, v in have.items())}) — só atualizo se houver versão mais nova.")
+            res = subprocess.run([*base, "--quiet", *reqs])
+            if res.returncode != 0:
+                print(f"⚠  Não consegui verificar atualizações de «{extra}» agora (sem internet?); sigo com as versões instaladas.")
+            present.append(extra)
+            continue
+        ok_now = [r for r in reqs if have[r]]
+        print(f"\nBibliotecas «{extra}» ({LIBS[extra]}): instalando {', '.join(missing)}" + (f" · já instaladas (só atualizo se precisar): {', '.join(ok_now)}" if ok_now else ""))
+        res = subprocess.run([*base, *reqs])
         if res.returncode != 0:
             failed.append(extra)
             print(f"⚠  Não foi possível instalar «{extra}». O ASTA funciona sem ela; tente de novo depois com:  asta libs --extras {extra}")
     ok = [e for e in chosen if e not in failed]
-    print("\nBibliotecas atualizadas: " + (", ".join(ok) or "nenhuma") + (f" · com falha: {', '.join(failed)}" if failed else ""))
+    print("\nBibliotecas prontas: " + (", ".join(ok) or "nenhuma") + (f" (já estavam instaladas: {', '.join(present)})" if present else "")
+          + (f" · com falha: {', '.join(failed)}" if failed else ""))
     return 1 if failed else 0
 
 
 RAW = "https://raw.githubusercontent.com/KMC1525/ASTA/main/"
+
+
+def _version_tuple(v: str):
+    import re
+
+    return tuple(int(x) for x in re.findall(r"\d+", v or "")[:4])
+
+
+def _remote_version(timeout: float = 20.0):
+    """Versão do ASTA publicada na branch principal (ASTA_VERSION_URL troca o endereço), ou None se não deu para consultar."""
+    import re
+    import urllib.request
+
+    try:
+        with urllib.request.urlopen(os.environ.get("ASTA_VERSION_URL") or RAW + "asta/__init__.py", timeout=timeout) as resp:
+            m = re.search(r"__version__\s*=\s*[\"']([^\"']+)[\"']", resp.read(8192).decode("utf-8", "replace"))
+        return m.group(1) if m else None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _asta_is_current(force: bool = False) -> bool:
+    """True se o ASTA instalado já é a versão publicada (ou mais nova): nesse caso não há o que baixar nem reinstalar."""
+    if force or os.environ.get("ASTA_FORCE", "") not in ("", "0"):
+        return False
+    remote = _remote_version()
+    return bool(remote) and _version_tuple(remote) <= _version_tuple(__version__)
 
 
 def _managed_app_dir():
@@ -149,6 +206,8 @@ def _update_with_installer(args: argparse.Namespace) -> int:
         print(f"Não foi possível baixar o instalador ({exc}); atualizando só o ASTA e as bibliotecas.")
         return -1
     env = dict(os.environ, ASTA_APP_DIR=str(app))
+    if getattr(args, "force", False):
+        env["ASTA_FORCE"] = "1"
     if getattr(args, "core", False):
         env["ASTA_EXTRAS"] = "none"
     elif getattr(args, "extras", ""):
@@ -187,7 +246,7 @@ def _models(args: argparse.Namespace) -> int:
 
 
 def _update(args: argparse.Namespace) -> int:
-    """Atualiza o Python, o ASTA e todas as bibliotecas dele. --core: só o ASTA e as ferramentas do Python; --no-python: sem mexer no Python."""
+    """Atualiza o Python, o ASTA e todas as bibliotecas dele — só o que ainda não está instalado ou tem versão mais nova. --core: só o ASTA e as ferramentas do Python; --no-python: sem mexer no Python."""
     if not getattr(args, "no_python", False) and not getattr(args, "core", False) and os.environ.get("ASTA_PYTHON", "auto") != "keep":
         print("Atualizando o Python, o ASTA e as bibliotecas dele…")
         code = _update_with_installer(args)
@@ -195,11 +254,14 @@ def _update(args: argparse.Namespace) -> int:
             if code == 0 and os.name != "nt":
                 print("\nPronto! Reinicie o ASTA para usar a nova versão.")
             return code
-    print("Atualizando as ferramentas do Python e o ASTA…")
-    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "pip", "setuptools", "wheel"])  # falha = aviso
-    res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", REPO_ZIP])
-    if res.returncode != 0:
-        return res.returncode
+    print("Verificando as ferramentas do Python e o ASTA…")
+    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--quiet", "--disable-pip-version-check", "pip", "setuptools", "wheel"])  # já atualizadas = nada a fazer; falha = aviso
+    if _asta_is_current(getattr(args, "force", False)):
+        print(f"ASTA {__version__} já é a versão mais recente — nada a baixar. (Para reinstalar mesmo assim: asta update --force)")
+    else:
+        res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", REPO_ZIP])
+        if res.returncode != 0:
+            return res.returncode
     if not getattr(args, "core", False):
         # processo novo: lê os metadados da versão recém-instalada (ela pode ter bibliotecas novas)
         lib_cmd = [sys.executable, "-m", "asta", "libs"] + (["--extras", args.extras] if getattr(args, "extras", "") else [])
@@ -258,6 +320,7 @@ def main(argv=None) -> int:
     upd.add_argument("--core", action="store_true", help="atualiza só o ASTA (e pip/setuptools/wheel), sem o Python do sistema nem as bibliotecas opcionais")
     upd.add_argument("--no-python", action="store_true", help="não atualiza o Python do sistema (atualiza o ASTA, o pip e as bibliotecas)")
     upd.add_argument("--extras", default="", help="bibliotecas a atualizar: all (padrão), none ou lista (docs,media,local)")
+    upd.add_argument("--force", action="store_true", help="reinstala o ASTA mesmo que já esteja na versão mais recente")
     mod = sub.add_parser("models", help="modelos locais pré-instalados (texto e imagem): list | install")
     mod.add_argument("action", choices=("list", "install"), nargs="?", default="list")
     mod.add_argument("--which", default="", help="all (padrão), none, text, image ou ids (também ASTA_MODELS)")

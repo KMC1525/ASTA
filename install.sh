@@ -16,6 +16,9 @@
 #   ASTA_PYTHON=auto|keep               auto (padrão): instala o Python se faltar e o atualiza (com pip, venv, setuptools e wheel)
 #                                       pelo gerenciador de pacotes do sistema (apt, dnf, yum, pacman, zypper, apk, Homebrew).
 #                                       keep: nunca mexe no Python do sistema.
+#   ASTA_FORCE=1                        reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
+# O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o gerenciador de pacotes tiver versão nova, o ambiente
+# (venv) é reaproveitado, o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
 # Argumentos: sh -s -- --run            inicia o ASTA ao terminar.
 #             sh -s -- --python-only    só instala/atualiza o Python e as ferramentas dele (pip, setuptools, wheel).
 set -eu
@@ -83,9 +86,11 @@ python_hint() {
 PYMODE="${ASTA_PYTHON:-auto}"
 if find_python; then
   if [ "$PYMODE" != "keep" ]; then
-    note "Verificando atualizações do Python ($($PY --version 2>&1)) …"
+    PYBEFORE="$($PY --version 2>&1)"
+    note "Python já instalado ($PYBEFORE) — verificando se há versão mais nova …"
     pkg_python upgrade >/dev/null || note "Não foi possível atualizar o Python automaticamente (sem gerenciador de pacotes ou permissão); seguindo com o atual."
     find_python || true   # a atualização pode ter trazido uma versão mais nova
+    if [ "$($PY --version 2>&1)" != "$PYBEFORE" ]; then note "Python atualizado: $PYBEFORE → $($PY --version 2>&1)"; else note "Python já está na versão mais recente disponível."; fi
   fi
 else
   [ "$PYMODE" = "keep" ] && die "Python 3.9 ou superior não encontrado. Instale com: $(python_hint)"
@@ -106,7 +111,9 @@ if [ -e "$APP_DIR/venv" ]; then
     rm -rf "$APP_DIR/venv"
   fi
 fi
-if [ ! -x "$VENVPY" ]; then
+if [ -x "$VENVPY" ]; then
+  note "Ambiente já existe ($APP_DIR/venv) — reaproveitando."
+else
   note "Criando ambiente em $APP_DIR/venv …"
   "$PY" -m venv "$APP_DIR/venv" >/dev/null 2>&1 || {
     rm -rf "$APP_DIR/venv"
@@ -130,9 +137,32 @@ case "$SOURCE" in
   *) REQ="$SOURCE" ;;
 esac
 OLD="$("$APP_DIR/venv/bin/python" -I -c 'import asta; print(asta.__version__)' 2>/dev/null || true)"
-note "Baixando e instalando ASTA …"
-"$APP_DIR/venv/bin/python" -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir "$REQ" \
-  || die "Falha ao instalar. Verifique sua conexão e tente de novo."
+# Só baixa o ASTA se ele não está instalado ou se há uma versão mais nova. Com a origem padrão (ou ASTA_VERSION_URL) a versão publicada é
+# consultada; com outra origem (ASTA_SOURCE) não há como saber, então instala. ASTA_FORCE=1 sempre reinstala.
+SKIP_ASTA=0
+if [ -n "$OLD" ] && [ -x "$APP_DIR/venv/bin/asta" ] && { [ "${ASTA_FORCE:-0}" = "0" ] || [ -z "${ASTA_FORCE:-}" ]; } && { [ -z "${ASTA_SOURCE:-}" ] || [ -n "${ASTA_VERSION_URL:-}" ]; }; then
+  REMOTE="$(ASTA_VERSION_URL="${ASTA_VERSION_URL:-https://raw.githubusercontent.com/KMC1525/ASTA/main/asta/__init__.py}" "$APP_DIR/venv/bin/python" -I -c '
+import os, re, urllib.request
+try:
+    with urllib.request.urlopen(os.environ["ASTA_VERSION_URL"], timeout=20) as r:
+        m = re.search(r"__version__\s*=\s*[\"\x27]([^\"\x27]+)", r.read(8192).decode("utf-8", "replace"))
+    print(m.group(1) if m else "")
+except Exception:
+    print("")
+' 2>/dev/null || true)"
+  if [ -n "$REMOTE" ] && "$APP_DIR/venv/bin/python" -I -c 'import re, sys
+t = lambda v: tuple(int(x) for x in re.findall(r"\d+", v)[:4])
+sys.exit(0 if t(sys.argv[1]) <= t(sys.argv[2]) else 1)' "$REMOTE" "$OLD"; then
+    SKIP_ASTA=1
+  fi
+fi
+if [ "$SKIP_ASTA" = "1" ]; then
+  note "ASTA $OLD já instalado e na versão mais recente — nada a baixar."
+else
+  note "Baixando e instalando ASTA …"
+  "$APP_DIR/venv/bin/python" -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir "$REQ" \
+    || die "Falha ao instalar. Verifique sua conexão e tente de novo."
+fi
 NEW="$("$APP_DIR/venv/bin/python" -I -c 'import asta; print(asta.__version__)')"
 
 # 4) comando `asta`
@@ -143,17 +173,17 @@ ln -sf "$APP_DIR/venv/bin/asta" "$BIN_DIR/asta"
 LIBS_FAILED=0
 case "$EXTRAS" in
   none|core) note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$EXTRAS)." ;;
-  *) say "Instalando/atualizando as bibliotecas do ASTA (a primeira vez pode demorar e baixar vários GB) …"
+  *) say "Bibliotecas do ASTA: instalo o que falta e atualizo o que tiver versão mais nova (a primeira vez pode demorar e baixar vários GB) …"
      if [ -n "$EXTRAS" ]; then ASTA_EXTRAS="$EXTRAS" "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1
      else "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1; fi ;;
 esac
 
-if [ -z "$OLD" ]; then say "✓ ASTA $NEW instalado."; elif [ "$OLD" = "$NEW" ]; then say "✓ ASTA $NEW já estava atualizado (arquivos reinstalados)."; else say "✓ ASTA atualizado: $OLD → $NEW."; fi
+if [ -z "$OLD" ]; then say "✓ ASTA $NEW instalado."; elif [ "$OLD" = "$NEW" ]; then say "✓ ASTA $NEW já estava atualizado."; else say "✓ ASTA atualizado: $OLD → $NEW."; fi
 # 6) modelos locais pré-instalados (texto e imagem); o que já foi baixado é pulado
 MODELS_FAILED=0
 case "${ASTA_MODELS:-all}" in
   none|no|0) note "Modelos pré-instalados: pulados (ASTA_MODELS=${ASTA_MODELS})." ;;
-  *) say "Baixando os modelos locais pré-instalados (texto e imagem; vários GB na primeira vez) …"
+  *) say "Modelos locais pré-instalados (texto e imagem): baixo só o que ainda não está na pasta (vários GB na primeira vez) …"
      "$APP_DIR/venv/bin/asta" models install || MODELS_FAILED=1 ;;
 esac
 

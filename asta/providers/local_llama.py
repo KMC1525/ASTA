@@ -21,11 +21,28 @@ def _n_ctx(tier: str) -> int:
     return {"low": 2048, "medium": 4096, "high": 8192}.get(tier, 4096)
 
 
+MAX_CTX = 1 << 20
+
+
+def context_size(configured: Any, model_name: str, tier: str) -> int:
+    """Janela de contexto (tokens): o valor que o usuário definiu; senão o padrão do modelo pré-instalado (32K para os de texto); senão pelo hardware."""
+    try:
+        n = int(configured or 0)
+    except (TypeError, ValueError):
+        n = 0
+    if n > 0:
+        return max(512, min(n, MAX_CTX))
+    from .. import preinstalled  # import tardio: evita ciclo (preinstalled → hf → providers)
+
+    return preinstalled.default_n_ctx(model_name) or _n_ctx(tier)
+
+
 class LocalLlamaProvider(Provider):
     def __init__(self, cfg: Dict[str, Any]):
         super().__init__(cfg)
         self.label = cfg.get("label", "Hugging Face local")
         self.models_dir = Path(cfg.get("models_dir", "."))
+        self.n_ctx_cfg = cfg.get("n_ctx")
 
     def _model_path(self) -> Path:
         name = self.model
@@ -47,20 +64,22 @@ class LocalLlamaProvider(Provider):
                 "(ou use Ollama / LM Studio como provedor)."
             ) from None
         path = str(self._model_path())
+        hw = hardware_info()
+        ctx = context_size(self.n_ctx_cfg, Path(path).name, hw["tier"])
+        key = f"{path}|{ctx}"  # mudar a janela de contexto recarrega o modelo
         with _LOCK:
-            llm = _CACHE.get(path)
+            llm = _CACHE.get(key)
             if llm is None:
-                hw = hardware_info()
                 use_gpu = bool(hw.get("gpu")) or (hw["os"] == "Darwin" and "arm" in hw["arch"].lower())
                 llm = Llama(
                     model_path=path,
-                    n_ctx=_n_ctx(hw["tier"]),
+                    n_ctx=ctx,
                     n_threads=max(1, hw["cpus"] - 1),
                     n_gpu_layers=-1 if use_gpu else 0,
                     verbose=False,
                 )
                 _CACHE.clear()  # mantém apenas um modelo na RAM (hardware leve)
-                _CACHE[path] = llm
+                _CACHE[key] = llm
         return llm, path
 
     def _messages(self, messages: List[dict], system: str) -> List[dict]:

@@ -208,5 +208,74 @@ class PreinstalledApiTests(ServerCase):
             (self.store.models_dir / "Qwen3.8-2B-Q8_0.gguf").unlink(missing_ok=True)
 
 
+class ContextWindowTests(TmpCase):
+    """Modelos de texto pré-instalados começam com 32K de contexto; o usuário pode ajustar depois."""
+
+    def test_preinstalled_text_model_defaults_to_32k_and_other_models_follow_the_hardware(self):
+        from asta.providers.local_llama import MAX_CTX, context_size
+
+        self.assertEqual(pre.DEFAULT_TEXT_CTX, 32768)
+        self.assertEqual(pre.default_n_ctx("Qwen3.8-2B-Q8_0.gguf"), 32768)
+        self.assertEqual(pre.default_n_ctx("outro-modelo.gguf"), 0)
+        self.assertEqual(pre.default_n_ctx(""), 0)
+        for tier in ("low", "medium", "high"):  # o padrão do modelo pré-instalado vale em qualquer hardware
+            self.assertEqual(context_size(None, "Qwen3.8-2B-Q8_0.gguf", tier), 32768)
+        self.assertEqual([context_size(None, "outro.gguf", t) for t in ("low", "medium", "high")], [2048, 4096, 8192])
+        self.assertEqual(next(m for m in pre.status(Path(self.tmp)) if m["kind"] == "text")["n_ctx"], 32768)
+        self.assertEqual(next(m for m in pre.status(Path(self.tmp)) if m["kind"] == "image")["n_ctx"], 0)
+
+    def test_the_user_value_wins_and_is_clamped_and_invalid_values_fall_back_to_automatic(self):
+        from asta.providers.local_llama import MAX_CTX, context_size
+
+        self.assertEqual(context_size(8192, "Qwen3.8-2B-Q8_0.gguf", "low"), 8192)
+        self.assertEqual(context_size("65536", "outro.gguf", "low"), 65536)
+        self.assertEqual(context_size(100, "outro.gguf", "low"), 512)
+        self.assertEqual(context_size(10 ** 12, "outro.gguf", "low"), MAX_CTX)
+        for bad in (0, -5, "", None, "abc", [1]):
+            self.assertEqual(context_size(bad, "Qwen3.8-2B-Q8_0.gguf", "low"), 32768, bad)
+
+    def test_provider_config_carries_the_user_value_but_never_stores_the_default(self):
+        from asta.providers import provider_config
+        from asta.providers.local_llama import LocalLlamaProvider
+
+        self.assertNotIn("n_ctx", provider_config({}, "local_hf"))  # o 32K é calculado na hora, nunca gravado nas configurações
+        cfg = provider_config({"providers": {"local_hf": {"n_ctx": 16384}}}, "local_hf")
+        self.assertEqual(LocalLlamaProvider(cfg).n_ctx_cfg, 16384)
+        self.assertIsNone(LocalLlamaProvider(provider_config({}, "local_hf")).n_ctx_cfg)
+        # 0 gravado pelo botão «Usar o automático» = automático
+        self.assertEqual(LocalLlamaProvider(provider_config({"providers": {"local_hf": {"n_ctx": 0}}}, "local_hf")).n_ctx_cfg, 0)
+
+    def test_installing_the_model_does_not_overwrite_a_context_the_user_already_chose(self):
+        store = Store(Path(self.tmp) / "home")
+        store.save_settings({"providers": {"local_hf": {"n_ctx": 4096}}})
+        e = pre.entry("text-qwen3.8-2b-distill")
+        pre.apply(store, e)
+        self.assertEqual(store.get_settings()["providers"]["local_hf"]["n_ctx"], 4096)
+        self.assertEqual(store.get_settings()["providers"]["local_hf"]["model"], "Qwen3.8-2B-Q8_0.gguf")
+
+    def test_the_model_is_loaded_with_the_context_window_and_cached_per_size(self):
+        from asta.providers import local_llama
+
+        loaded = []
+
+        class FakeLlama:
+            def __init__(self, **kw):
+                loaded.append(kw["n_ctx"])
+
+        fake = mock.Mock(Llama=FakeLlama)
+        model = Path(self.tmp) / "Qwen3.8-2B-Q8_0.gguf"
+        model.write_bytes(b"x")
+        local_llama._CACHE.clear()
+        with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(local_llama, "hardware_info", return_value={"tier": "low", "ram_gb": 8, "cpus": 2, "gpu": "", "os": "Linux", "arch": "x86_64"}):
+            from asta.providers import provider_config
+
+            for ctx in (None, None, 8192, 8192):
+                cfg = provider_config({"providers": {"local_hf": {"model": str(model), **({"n_ctx": ctx} if ctx else {})}}}, "local_hf")
+                p = local_llama.LocalLlamaProvider(cfg)
+                p._llm()
+        self.assertEqual(loaded, [32768, 8192])  # 32K por padrão; mudar o valor recarrega; o mesmo valor reaproveita o modelo em memória
+        local_llama._CACHE.clear()
+
+
 if __name__ == "__main__":
     unittest.main()

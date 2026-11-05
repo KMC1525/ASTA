@@ -3,6 +3,9 @@
 São baixados pelo instalador (e pelo `asta update`) — ou com `asta models install` / pelo botão em Configuração → Modelos locais — e ficam
 nas mesmas pastas dos demais modelos locais. A quantização deles já vem definida pelo catálogo (e você pode baixar outras na mesma aba).
 
+Os modelos de texto pré-instalados usam uma janela de contexto base de **32K tokens** (`n_ctx`), que o usuário pode ajustar em
+Configuração → Modelos locais (a escolha dele sempre prevalece).
+
 Catálogo inicial (só estes dois):
 
 * texto  — `empero-ai/Qwen3.8-2B-Distill` em Q8_0 (GGUF oficial do autor: `empero-ai/Qwen3.8-2B-Distill-GGUF`);
@@ -21,6 +24,7 @@ CATALOG: List[Dict[str, Any]] = [
     {
         "id": "text-qwen3.8-2b-distill", "kind": "text", "label": "Qwen3.8 2B Distill", "source": "empero-ai/Qwen3.8-2B-Distill", "license": "apache-2.0",
         "repo": "empero-ai/Qwen3.8-2B-Distill-GGUF", "file": "Qwen3.8-2B-Q8_0.gguf", "quant": "Q8_0", "size": 2076674432,
+        "n_ctx": 32768,  # janela de contexto base dos modelos de texto pré-instalados (o usuário pode mudar)
         "hint": "Modelo de texto pequeno e rápido (2B, destilado para raciocínio): roda mundos, avatars, jogos e o nó Texto IA no seu computador.",
         "companions": [],
     },
@@ -46,6 +50,15 @@ def entry(entry_id: str) -> Dict[str, Any]:
     return e
 
 
+DEFAULT_TEXT_CTX = 32768
+
+
+def default_n_ctx(filename: str) -> int:
+    """Janela de contexto base (tokens) de um modelo de texto pré-instalado; 0 para os demais modelos."""
+    name = Path(filename or "").name
+    return next((int(e.get("n_ctx") or DEFAULT_TEXT_CTX) for e in CATALOG if e["kind"] == "text" and Path(e["file"]).name == name), 0)
+
+
 def _files(e: Dict[str, Any]) -> List[Dict[str, Any]]:
     out = [{"repo": e["repo"], "file": e["file"], "size": e["size"], "main": True}]
     out += [{"repo": c["repo"], "file": c["file"], "size": c["size"], "main": False} for c in e.get("companions", [])]
@@ -59,7 +72,7 @@ def installed(models_dir: Path, e: Dict[str, Any]) -> bool:
 
 def status(models_dir: Path) -> List[Dict[str, Any]]:
     return [{"id": e["id"], "kind": e["kind"], "label": e["label"], "source": e["source"], "license": e["license"], "repo": e["repo"], "file": e["file"], "quant": e["quant"],
-             "size": sum(f["size"] for f in _files(e)), "hint": e["hint"], "parts": [Path(f["file"]).name for f in _files(e)], "installed": installed(models_dir, e)} for e in CATALOG]
+             "size": sum(f["size"] for f in _files(e)), "hint": e["hint"], "n_ctx": int(e.get("n_ctx") or 0), "parts": [Path(f["file"]).name for f in _files(e)], "installed": installed(models_dir, e)} for e in CATALOG]
 
 
 def defaults_for(kind: str, filename: str) -> Dict[str, Any]:

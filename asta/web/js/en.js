@@ -529,4 +529,13 @@ export default {
   '{n} pronto para usar.': '{n} is ready to use.',
   'Modelo de texto pequeno e rápido (2B, destilado para raciocínio): roda mundos, avatars, jogos e o nó Texto IA no seu computador.': 'Small, fast text model (2B, distilled for reasoning): runs worlds, avatars, games and the AI-text node on your computer.',
   'Modelo de imagem da Tongyi-MAI (Alibaba). Vem com o VAE e o codificador de texto (Qwen3-4B) de que precisa; roda pelo provedor GGUF local do Canvas.': 'Image model from Tongyi-MAI (Alibaba). Comes with the VAE and the text encoder (Qwen3-4B) it needs; runs through the Canvas GGUF local provider.',
+  'Usando {n} tokens de contexto.': 'Using {n} tokens of context.',
+  'Automático: {n} tokens (base do modelo pré-instalado).': 'Automatic: {n} tokens (pre-installed model default).',
+  'Automático: conforme o seu hardware (2.048 a 8.192 tokens).': 'Automatic: based on your hardware (2,048 to 8,192 tokens).',
+  'Janela de contexto (tokens)': 'Context window (tokens)',
+  'automática': 'automatic',
+  'Usar o automático': 'Use automatic',
+  'Quanto texto o modelo lê de uma vez. Janelas maiores usam mais memória (RAM). Os modelos de texto pré-instalados começam com 32.768 (32K); você pode ajustar quando quiser.': 'How much text the model reads at once. Larger windows use more memory (RAM). Pre-installed text models start at 32,768 (32K); adjust it whenever you like.',
+  'Contexto {n}': 'Context {n}',
+  'Janela de contexto base; ajustável em Provedores → Hugging Face GGUF': 'Base context window; adjustable under Providers → Hugging Face GGUF',
 };

@@ -5,6 +5,27 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.10] — 2026-11-05
+
+### Alterado
+- **Terminal — não reinstala o que já está instalado.** O instalador (`install.sh`/`install.ps1`), o `asta update` e o `asta libs` agora descobrem o que já existe e só atualizam se precisar:
+  - **Python:** se já está instalado, só pergunta ao gerenciador de pacotes (apt, dnf, yum, pacman, zypper, apk, Homebrew, winget) se há versão mais nova e avisa o resultado (*"já está na versão mais recente"* ou *"atualizado: X → Y"*).
+  - **Ambiente (venv):** reaproveitado; só é recriado se o Python mudou de versão (como antes).
+  - **ASTA:** o instalador consulta a versão publicada na `main` e **não baixa nem reinstala** se a instalada já é a mesma (ou mais nova). Se a consulta falhar (sem internet) ou a origem for outra (`ASTA_SOURCE`), ele instala normalmente. `ASTA_FORCE=1` (ou `asta update --force`) reinstala mesmo assim.
+  - **Bibliotecas (`asta libs`):** mostra o que já está instalado (com a versão) e instala só o que falta; as já instaladas passam por uma checagem silenciosa e o pip só mexe nelas se houver versão mais nova. Sem internet, o que já está instalado vira aviso, não erro. O resumo final diz quais já estavam instaladas.
+  - **Modelos pré-instalados:** continuam sem baixar de novo arquivos que já estão na pasta.
+  - Novo `ASTA_VERSION_URL`: troca o endereço de onde a versão publicada é lida (usado nos testes e em forks).
+
+### Adicionado
+- **Janela de contexto de 32K nos modelos de texto pré-instalados.** O modelo de texto pré-instalado (`empero-ai/Qwen3.8-2B-Distill`, Q8_0) agora roda com **32.768 tokens** de contexto por padrão, em qualquer nível de hardware. Os demais modelos GGUF de texto continuam com 2.048/4.096/8.192 conforme o hardware.
+- **Ajustável pelo usuário:** campo **Janela de contexto (tokens)** no provedor *Hugging Face GGUF (embutido)* (*Configuração → Provedores*), com sugestões de 4K a 128K, o botão *Usar o automático* e o valor efetivo mostrado abaixo do campo; o cartão do modelo pré-instalado mostra o chip *Contexto 32K*. Valor mínimo 512, máximo ~1M; valor inválido volta ao automático. O padrão de 32K é calculado na hora e **nunca gravado** nas configurações — então instalar ou atualizar não sobrescreve o que você escolheu. Mudar o valor recarrega o modelo na memória (`settings.providers.local_hf.n_ctx`).
+- Testes: o contexto (padrão, ajuste, limites, valores inválidos, recarga do modelo, configuração do usuário preservada), o `asta libs` com bibliotecas já instaladas, o `asta update` que pula o ASTA já atualizado (e `--force`/`ASTA_FORCE`), e o `install.sh` real pulando/baixando o ASTA conforme a versão publicada.
+
+### Observação
+- Uma janela de 32K usa mais memória (RAM) do que as de 2K–8K: em computadores com pouca RAM, reduza o valor no campo acima. O carregamento real do modelo com 32K de contexto não foi exercitado neste ambiente de desenvolvimento (sem o `llama-cpp-python` real); o que está testado é o cálculo do valor e o repasse ao `Llama(n_ctx=…)`.
+- A checagem de versão compara o número em `asta/__init__.py`: uma correção publicada na `main` sem aumentar a versão não é baixada por quem já tem aquele número (use `ASTA_FORCE=1`).
+- O `install.ps1` (Windows) não pôde ser executado aqui; a lógica foi escrita espelhando o `install.sh`, que é testado.
+
 ## [0.2.9] — 2026-11-05
 
 ### Adicionado
@@ -199,7 +220,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.9...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.10...HEAD
+[0.2.10]: https://github.com/KMC1525/ASTA/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/KMC1525/ASTA/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/KMC1525/ASTA/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/KMC1525/ASTA/compare/v0.2.6...v0.2.7

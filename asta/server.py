@@ -101,6 +101,8 @@ class App:
             override["api_key"] = cfg["api_key"]
         if "vision" in cfg:
             override["vision"] = bool(cfg["vision"])
+        if cfg.get("n_ctx"):
+            override["n_ctx"] = cfg["n_ctx"]
         return build_provider(settings, pid, self.store.models_dir)
 
     # ------------------------------------------------------------------ rotas

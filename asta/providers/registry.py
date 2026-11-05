@@ -79,7 +79,7 @@ def provider_config(settings: Dict[str, Any], pid: str) -> Dict[str, Any]:
         raise ProviderError(f"Provedor desconhecido: {pid}")
     cfg = dict(preset)
     user = (settings.get("providers") or {}).get(pid, {})
-    for key in ("base_url", "api_key", "model", "vision"):
+    for key in ("base_url", "api_key", "model", "vision", "n_ctx"):
         if key in user and user[key] not in (None, ""):
             cfg[key] = user[key]
     if pid == "huggingface" and not cfg.get("api_key"):

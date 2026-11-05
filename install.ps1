@@ -11,6 +11,9 @@
 #                                         | "keep" (nunca mexe no Python do sistema)
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
+#                      $env:ASTA_FORCE = "1" → reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
+# O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o winget tiver versão nova, o ambiente (venv) é reaproveitado,
+# o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
 
 # 'Continue' de propósito: no Windows PowerShell 5.1, com 'Stop' qualquer texto que um programa externo (python, pip, winget) escreva no stderr
 # — até com 2>$null — vira uma exceção (NativeCommandError). Os erros que importam são checados por $LASTEXITCODE e por -ErrorAction Stop.
@@ -57,8 +60,13 @@ function Winget-Python($mode) {
 $py = Find-Python
 if ($py) {
   if ($PyMode -ne 'keep') {
-    Note ('Verificando atualizações do Python (' + (& $py[0] @($py | Select-Object -Skip 1) --version) + ') …')
-    if (Winget-Python 'upgrade') { Refresh-Path; $py = Find-Python } else { Note 'Não foi possível atualizar o Python automaticamente (sem o winget); seguindo com o atual.' }
+    $pyBefore = "$(& $py[0] @($py | Select-Object -Skip 1) --version)"
+    Note "Python já instalado ($pyBefore) — verificando se há versão mais nova …"
+    if (Winget-Python 'upgrade') {
+      Refresh-Path; $py = Find-Python
+      $pyAfter = "$(& $py[0] @($py | Select-Object -Skip 1) --version)"
+      if ($pyAfter -ne $pyBefore) { Note "Python atualizado: $pyBefore → $pyAfter" } else { Note 'Python já está na versão mais recente disponível.' }
+    } else { Note 'Não foi possível atualizar o Python automaticamente (sem o winget); seguindo com o atual.' }
   }
 } else {
   if ($PyMode -eq 'keep') { Die 'Python 3.9 ou superior não encontrado. Instale com:  winget install Python.Python.3.12   (ou https://www.python.org/downloads/) e rode este comando de novo.' }
@@ -82,7 +90,8 @@ if (Test-Path $venv) {
     Remove-Item -Recurse -Force -ErrorAction Stop $venv
   }
 }
-if (-not (Test-Path $venvPy)) {
+if (Test-Path $venvPy) { Note "Ambiente já existe ($venv) — reaproveitando." }
+else {
   Note "Criando ambiente em $venv …"
   & $py[0] @($py | Select-Object -Skip 1) -m venv $venv
   if ($LASTEXITCODE -ne 0) { Die 'Não foi possível criar o ambiente virtual.' }
@@ -101,9 +110,26 @@ elseif (Test-Path $Source) { $req = "$spec @ " + ([System.Uri](Resolve-Path -Err
 else { $req = $Source }
 $old = & $venvPy -I -c "import asta; print(asta.__version__)" 2>$null   # ASTA ainda não instalado: o Python escreve um erro no stderr, que é descartado
 if ($LASTEXITCODE -ne 0) { $old = $null }
-Note 'Baixando e instalando ASTA …'
-& $venvPy -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir $req
-if ($LASTEXITCODE -ne 0) { Die 'Falha ao instalar. Verifique sua conexão e tente de novo.' }
+# Só baixa o ASTA se ele não está instalado ou se há uma versão mais nova. Com a origem padrão (ou ASTA_VERSION_URL) a versão publicada é
+# consultada; com outra origem (ASTA_SOURCE) não há como saber, então instala. ASTA_FORCE=1 sempre reinstala.
+$skipAsta = $false
+$force = $env:ASTA_FORCE -and ($env:ASTA_FORCE -ne '0')
+if ($old -and (Test-Path (Join-Path $venv 'Scripts\asta.exe')) -and (-not $force) -and ((-not $env:ASTA_SOURCE) -or $env:ASTA_VERSION_URL)) {
+  $verUrl = if ($env:ASTA_VERSION_URL) { $env:ASTA_VERSION_URL } else { 'https://raw.githubusercontent.com/KMC1525/ASTA/main/asta/__init__.py' }
+  $remote = $null
+  try {
+    $txt = (Invoke-WebRequest -UseBasicParsing -TimeoutSec 20 -Uri $verUrl -ErrorAction Stop).Content
+    if ($txt -is [byte[]]) { $txt = [System.Text.Encoding]::UTF8.GetString($txt) }
+    if ($txt -match "__version__\s*=\s*[`"']([0-9][0-9.]*)") { $remote = $Matches[1] }
+  } catch { }
+  try { if ($remote -and ([version]$remote -le [version]("$old".Trim()))) { $skipAsta = $true } } catch { }
+}
+if ($skipAsta) { Note "ASTA $old já instalado e na versão mais recente — nada a baixar." }
+else {
+  Note 'Baixando e instalando ASTA …'
+  & $venvPy -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir $req
+  if ($LASTEXITCODE -ne 0) { Die 'Falha ao instalar. Verifique sua conexão e tente de novo.' }
+}
 $new = & $venvPy -I -c "import asta; print(asta.__version__)"
 
 # 4) comando `asta`
@@ -125,7 +151,7 @@ if (-not (($env:Path -split ';') | Where-Object { $_ -and (Same-Dir $_ $BinDir) 
 $libsFailed = $false
 if ($Extras -in @('none', 'core')) { Note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$Extras)." }
 else {
-  Say 'Instalando/atualizando as bibliotecas do ASTA (a primeira vez pode demorar e baixar vários GB) …'
+  Say 'Bibliotecas do ASTA: instalo o que falta e atualizo o que tiver versão mais nova (a primeira vez pode demorar e baixar vários GB) …'
   $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'   # avisos do pip no stderr não podem abortar o instalador
   & $asta libs
   if ($LASTEXITCODE -ne 0) { $libsFailed = $true }
@@ -136,14 +162,14 @@ else {
 $modelsFailed = $false
 if ($env:ASTA_MODELS -in @('none', 'no', '0')) { Note "Modelos pré-instalados: pulados (ASTA_MODELS=$($env:ASTA_MODELS))." }
 else {
-  Say 'Baixando os modelos locais pré-instalados (texto e imagem; vários GB na primeira vez) …'
+  Say 'Modelos locais pré-instalados (texto e imagem): baixo só o que ainda não está na pasta (vários GB na primeira vez) …'
   & $asta models install
   if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
 }
 if ($modelsFailed) { Note '⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install' }
 
 if (-not $old) { Say "✓ ASTA $new instalado." }
-elseif ($old -eq $new) { Say "✓ ASTA $new já estava atualizado (arquivos reinstalados)." }
+elseif ($old -eq $new) { Say "✓ ASTA $new já estava atualizado." }
 else { Say "✓ ASTA atualizado: $old → $new." }
 if ($libsFailed) { Note '⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs' }
 Write-Host ''
