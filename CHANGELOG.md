@@ -5,6 +5,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.4] — 2026-11-05
+
+### Alterado
+- **Instalar e atualizar agora também instala e atualiza o Python e os derivados dele.** O `install.sh` (Linux e macOS) e o `install.ps1` (Windows):
+  - instalam o **Python 3.9+** se ele faltar e **o atualizam** a cada execução, usando o gerenciador de pacotes do sistema — `apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` ou Homebrew; `winget` no Windows. No Linux isso inclui `python3-venv` e `python3-pip`. Pode pedir a senha (`sudo`);
+  - recriam o ambiente privado do ASTA quando o Python novo é de uma versão mais nova (as bibliotecas são reinstaladas em seguida) ou quando o ambiente antigo está quebrado;
+  - atualizam o `pip`, o `setuptools` e o `wheel` do ambiente antes de instalar o ASTA e suas bibliotecas.
+- `asta update` passa a rodar o instalador oficial (baixado do repositório), então atualiza **Python, ASTA e bibliotecas** de uma vez; no Windows o instalador continua numa nova janela. Em instalações manuais (`pip`, modo editável) ou sem internet, atualiza o `pip`/`setuptools`/`wheel`, o ASTA e as bibliotecas e avisa que o Python do sistema não é gerenciado pelo ASTA.
+- `ASTA_PYTHON=keep` (e `asta update --no-python`) mantém o Python do sistema como está; `asta update --core` atualiza só o ASTA e as ferramentas do Python.
+- `asta doctor` mostra também as versões do `pip` e do `setuptools`.
+- Metadados do pacote no formato atual do setuptools (licença SPDX, `setuptools>=77`), sem o aviso de descontinuação durante a instalação.
+
+### Adicionado
+- `sh install.sh --python-only` (ou `ASTA_STEP=python`, e `$env:ASTA_STEP = "python"` no Windows): só instala/atualiza o Python e as ferramentas dele.
+- Testes do instalador com gerenciador de pacotes simulado (Python ausente, atualização, modo `keep`, ambiente recriado) e do `asta update`; o CI usa `ASTA_PYTHON=keep` no job do instalador.
+
 ## [0.2.3] — 2026-11-05
 
 ### Alterado
@@ -124,7 +140,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.3...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.4...HEAD
+[0.2.4]: https://github.com/KMC1525/ASTA/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/KMC1525/ASTA/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/KMC1525/ASTA/compare/v0.2.1...v0.2.2
 [0.2.1]: https://github.com/KMC1525/ASTA/compare/v0.2.0...v0.2.1

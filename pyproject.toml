@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -8,12 +8,12 @@ dynamic = ["version"]
 description = "Central open source de criação com IA: mundos 3D com NPCs-agentes, avatars de chat e voz, jogos 2D e um Canvas de imagens, vídeos, sons e vozes."
 readme = "README.md"
 requires-python = ">=3.9"
-license = { text = "MIT" }
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [{ name = "KMC" }]
 keywords = ["ai", "agents", "worlds", "three.js", "roleplay", "avatars", "chatbot", "game", "2d-games", "visual-novel", "canvas", "image-generation", "video-editor", "webui"]
 classifiers = [
   "Programming Language :: Python :: 3",
-  "License :: OSI Approved :: MIT License",
   "Operating System :: OS Independent",
   "Topic :: Games/Entertainment",
 ]

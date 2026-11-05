@@ -115,11 +115,73 @@ def _libs(args: argparse.Namespace) -> int:
     return 1 if failed else 0
 
 
+RAW = "https://raw.githubusercontent.com/KMC1525/ASTA/main/"
+
+
+def _managed_app_dir():
+    """Pasta do programa se este ASTA foi instalado pelo instalador oficial (…/app/venv); None se foi instalado à mão (pip, editável)."""
+    from pathlib import Path
+
+    prefix = Path(sys.prefix).resolve()
+    if prefix.name != "venv":
+        return None
+    default = (Path(os.environ["LOCALAPPDATA"]) / "ASTA" / "app") if os.name == "nt" and os.environ.get("LOCALAPPDATA") else Path.home() / ".asta" / "app"
+    app = Path(os.environ.get("ASTA_APP_DIR") or default).expanduser().resolve()
+    return app if prefix == app / "venv" else None
+
+
+def _update_with_installer(args: argparse.Namespace) -> int:
+    """Roda o instalador oficial: ele atualiza o Python (e o pip/setuptools/wheel), o ASTA e as bibliotecas — o mesmo que o comando de instalação.
+    Devolve o código de saída, ou -1 se não foi possível usar o instalador (sem internet, instalação manual…)."""
+    import tempfile
+    import urllib.request
+
+    app = _managed_app_dir()
+    if app is None:
+        print("Este ASTA não foi instalado pelo instalador oficial: o Python do sistema não é gerenciado por ele (atualize-o pelo gerenciador de pacotes do seu sistema).")
+        return -1
+    windows = os.name == "nt"
+    name = "install.ps1" if windows else "install.sh"
+    try:
+        with urllib.request.urlopen(RAW + name, timeout=30) as resp:
+            script = resp.read()
+    except Exception as exc:  # noqa: BLE001
+        print(f"Não foi possível baixar o instalador ({exc}); atualizando só o ASTA e as bibliotecas.")
+        return -1
+    env = dict(os.environ, ASTA_APP_DIR=str(app))
+    if getattr(args, "core", False):
+        env["ASTA_EXTRAS"] = "none"
+    elif getattr(args, "extras", ""):
+        env["ASTA_EXTRAS"] = args.extras
+    with tempfile.NamedTemporaryFile("wb", suffix=os.path.splitext(name)[1], delete=False) as fh:
+        fh.write(script)
+        path = fh.name
+    if windows:
+        # o instalador recria arquivos que este processo está usando: ele continua numa janela nova, depois que o asta.exe terminar
+        subprocess.Popen(["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path], env=env, creationflags=getattr(subprocess, "CREATE_NEW_CONSOLE", 0))
+        print("A atualização continua numa nova janela (Python, ASTA e bibliotecas). Quando terminar, abra o ASTA de novo.")
+        return 0
+    try:
+        return subprocess.run(["sh", path], env=env).returncode
+    finally:
+        try:
+            os.unlink(path)
+        except OSError:
+            pass
+
+
 def _update(args: argparse.Namespace) -> int:
-    """Atualiza o ASTA e todas as bibliotecas dele (use --core para atualizar só o ASTA)."""
-    print("Atualizando o ASTA…")
-    cmd = [sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", REPO_ZIP]
-    res = subprocess.run(cmd)
+    """Atualiza o Python, o ASTA e todas as bibliotecas dele. --core: só o ASTA e as ferramentas do Python; --no-python: sem mexer no Python."""
+    if not getattr(args, "no_python", False) and not getattr(args, "core", False) and os.environ.get("ASTA_PYTHON", "auto") != "keep":
+        print("Atualizando o Python, o ASTA e as bibliotecas dele…")
+        code = _update_with_installer(args)
+        if code >= 0:
+            if code == 0 and os.name != "nt":
+                print("\nPronto! Reinicie o ASTA para usar a nova versão.")
+            return code
+    print("Atualizando as ferramentas do Python e o ASTA…")
+    subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--disable-pip-version-check", "pip", "setuptools", "wheel"])  # falha = aviso
+    res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--no-cache-dir", REPO_ZIP])
     if res.returncode != 0:
         return res.returncode
     if not getattr(args, "core", False):
@@ -138,6 +200,12 @@ def _doctor(_args: argparse.Namespace) -> int:
     print(f"Python {hw['python']} · {hw['os']} {hw['arch']}")
     print(f"CPU: {hw['cpus']} núcleos · RAM: {hw['ram_gb']} GB · GPU: {hw['gpu'] or 'não detectada (NVIDIA)'}")
     print(f"Nível de hardware: {hw['tier']}")
+    try:
+        from importlib import metadata
+
+        print(f"pip {metadata.version('pip')} · setuptools {metadata.version('setuptools')}")
+    except Exception:  # noqa: BLE001
+        print("pip: não encontrado neste ambiente")
     print(f"ffmpeg: {'sim' if hw['ffmpeg'] else 'não (opcional: análise de vídeo/áudio)'}")
     print(f"Pasta de dados: {asta_home()}")
     try:
@@ -169,8 +237,9 @@ def main(argv=None) -> int:
         p.add_argument("--port", type=int, default=8787, help="porta (padrão 8787)")
         p.add_argument("--no-browser", action="store_true", help="não abrir o navegador")
         p.add_argument("--home", help="pasta de dados (padrão ~/.asta)")
-    upd = sub.add_parser("update", help="atualiza o ASTA e todas as bibliotecas dele para a versão mais recente")
-    upd.add_argument("--core", action="store_true", help="atualiza só o ASTA, sem as bibliotecas opcionais")
+    upd = sub.add_parser("update", help="atualiza o Python, o ASTA e todas as bibliotecas dele para a versão mais recente")
+    upd.add_argument("--core", action="store_true", help="atualiza só o ASTA (e pip/setuptools/wheel), sem o Python do sistema nem as bibliotecas opcionais")
+    upd.add_argument("--no-python", action="store_true", help="não atualiza o Python do sistema (atualiza o ASTA, o pip e as bibliotecas)")
     upd.add_argument("--extras", default="", help="bibliotecas a atualizar: all (padrão), none ou lista (docs,media,local)")
     libs = sub.add_parser("libs", help="instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)")
     libs.add_argument("--extras", default="", help="all (padrão), none ou lista separada por vírgula (docs,media,local)")

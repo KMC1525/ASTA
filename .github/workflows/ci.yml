@@ -56,6 +56,8 @@ jobs:
   installer:
     name: Instalador (Linux)
     runs-on: ubuntu-latest
+    env:
+      ASTA_PYTHON: keep  # o Python do runner é gerenciado pelo GitHub; o teste do instalador não deve trocá-lo
     steps:
       - uses: actions/checkout@v4
       - name: Sintaxe do install.sh

@@ -35,7 +35,7 @@ Tudo o que você cria vai para uma só **Biblioteca** de projetos atualizáveis.
 
 ## Instalação
 
-Precisa só do **Python 3.9+**. O **mesmo comando instala e atualiza** (seus dados em `~/.asta` nunca são tocados).
+Você nem precisa ter o Python: o instalador **instala o Python para você se ele faltar** (3.9 ou mais novo) e **o atualiza** a cada execução, junto com as ferramentas dele (`pip`, `setuptools`, `wheel`, `venv`). O **mesmo comando instala e atualiza** tudo (seus dados em `~/.asta` nunca são tocados).
 
 **Linux e macOS**
 
@@ -57,6 +57,8 @@ asta
 
 A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de instalação de novo (ou `asta update`).
 
+**Instalar e atualizar cobre três camadas:** (1) o **Python** e as ferramentas dele — instalados ou atualizados pelo gerenciador de pacotes do seu sistema (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` ou Homebrew no Linux e no macOS; `winget` no Windows), que pode pedir sua senha (`sudo`); se o novo Python for de uma versão mais nova, o ambiente privado do ASTA é recriado para ele automaticamente; (2) o próprio **ASTA**; (3) **todas as bibliotecas do ASTA**, descritas abaixo. Use `ASTA_PYTHON=keep` para nunca mexer no Python do sistema.
+
 **Instalar e atualizar também instala e atualiza todas as bibliotecas do ASTA** — as opcionais, que liberam recursos extras (leitura de PDF mais precisa, modelos locais de imagem/vídeo/som/voz do Canvas, modelos de linguagem GGUF embutidos). A primeira instalação pode demorar e baixar vários GB (o PyTorch dos modelos do Canvas); se quiser só o núcleo leve, use `ASTA_EXTRAS=none`. Uma biblioteca que falhe (por exemplo o `llama-cpp-python` sem compilador C++) gera só um aviso: o ASTA continua funcionando, e dá para tentar de novo com `asta libs`.
 
 <details>
@@ -67,11 +69,13 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_EXTRAS=all` (padrão) | instala/atualiza **todas** as bibliotecas: `docs` + `media` + `local` |
 | `ASTA_EXTRAS=none` | instala só o ASTA (nenhuma dependência) |
 | `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos de linguagem GGUF embutidos (`llama-cpp-python`) |
+| `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
+| `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
 
 Instalação manual: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
-Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `asta update` atualiza o ASTA **e todas as bibliotecas dele** (`--core` só o ASTA, `--extras docs,media` para escolher) · `asta libs` instala/atualiza só as bibliotecas · `asta doctor` mostra o diagnóstico do seu hardware e dos componentes opcionais. As bibliotecas são atualizadas junto com as dependências delas, então os recursos do Canvas e dos modelos locais ficam em dia.
+Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `asta update` atualiza o **Python, o ASTA e todas as bibliotecas dele** rodando o instalador oficial (`--no-python` mantém o Python do sistema, `--core` atualiza só o ASTA e o `pip`/`setuptools`/`wheel`, `--extras docs,media` escolhe as bibliotecas; um ASTA instalado à mão com `pip` atualiza tudo menos o Python do sistema) · `asta libs` instala/atualiza só as bibliotecas, `sh install.sh --python-only` só o Python e as ferramentas dele · `asta doctor` mostra o diagnóstico do seu hardware e dos componentes opcionais. As bibliotecas são atualizadas junto com as dependências delas, então os recursos do Canvas e dos modelos locais ficam em dia.
 
 </details>
 

@@ -35,7 +35,7 @@ Everything you create lands in one **Library** of updatable projects.
 
 ## Install
 
-You only need **Python 3.9+**. The **same command installs and updates** (your data in `~/.asta` is never touched).
+You don't even need Python: the installer **installs Python for you if it is missing** (3.9 or newer) and **updates it** on every run, together with its tooling (`pip`, `setuptools`, `wheel`, `venv`). The **same command installs and updates** everything (your data in `~/.asta` is never touched).
 
 **Linux & macOS**
 
@@ -57,6 +57,8 @@ asta
 
 The WebUI opens at `http://localhost:8787`. To update, run the install command again (or `asta update`).
 
+**Installing and updating covers three layers:** (1) **Python** and its tools — installed or upgraded through your system's package manager (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` or Homebrew on Linux and macOS; `winget` on Windows), which may ask for your password (`sudo`); if the new Python is a newer version, ASTA's private environment is rebuilt for it automatically; (2) **ASTA** itself; (3) **all of ASTA's libraries**, described below. Set `ASTA_PYTHON=keep` to never touch the system Python.
+
 **Installing and updating also install and update all of ASTA's libraries** — the optional ones that unlock extra features (more accurate PDF reading, local image/video/sound/voice models for the Canvas, embedded GGUF language models). The first install can take a while and download several GB (PyTorch for the Canvas models); if you only want the lightweight core, set `ASTA_EXTRAS=none`. A library that fails to install (for example `llama-cpp-python` without a C++ compiler) only produces a warning: ASTA still works, and you can retry with `asta libs`.
 
 <details>
@@ -67,11 +69,13 @@ The WebUI opens at `http://localhost:8787`. To update, run the install command a
 | `ASTA_EXTRAS=all` (default) | installs/updates **every** library: `docs` + `media` + `local` |
 | `ASTA_EXTRAS=none` | installs only ASTA itself (no dependencies at all) |
 | `ASTA_EXTRAS=docs,media,local` | pick libraries: `docs` = more accurate PDF extraction (`pypdf`) · `media` = local image/video/sound/voice models for the Canvas (`torch`, `diffusers`, `transformers`…) · `local` = embedded GGUF language models (`llama-cpp-python`) |
+| `ASTA_PYTHON=auto` (default) | installs Python if missing and upgrades it (with `pip`, `setuptools`, `wheel`, `venv`) via the system package manager |
+| `ASTA_PYTHON=keep` | never installs or upgrades the system Python (ASTA's own `pip`/`setuptools`/`wheel` are still kept current) |
 | `ASTA_SOURCE=<url\|folder>` | install from another source (fork, branch, local folder) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | where the program and the `asta` command live |
 
 Manual install: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
-Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta update` upgrades ASTA **and all its libraries** (`--core` for ASTA only, `--extras docs,media` to choose) · `asta libs` installs/upgrades just the libraries · `asta doctor` prints a diagnosis of your hardware and optional components. Libraries are upgraded together with their own dependencies, so the Canvas and local-model features stay current.
+Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta update` upgrades **Python, ASTA and all its libraries** by running the official installer (`--no-python` keeps the system Python, `--core` updates only ASTA and `pip`/`setuptools`/`wheel`, `--extras docs,media` chooses libraries; an ASTA installed by hand with `pip` updates everything except the system Python) · `asta libs` installs/upgrades just the libraries, `sh install.sh --python-only` just Python and its tools · `asta doctor` prints a diagnosis of your hardware and optional components. Libraries are upgraded together with their own dependencies, so the Canvas and local-model features stay current.
 
 </details>
 
