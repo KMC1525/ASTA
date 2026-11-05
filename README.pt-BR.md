@@ -49,6 +49,8 @@ curl -fsSL https://raw.githubusercontent.com/KMC1525/ASTA/main/install.sh | sh
 irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 ```
 
+O instalador do Windows funciona tanto no Windows PowerShell 5.1, que já vem com o Windows, quanto no PowerShell 7. Se ele parar com algum erro, rode o mesmo comando de novo e abra uma issue com o texto que apareceu.
+
 Depois, em qualquer terminal:
 
 ```bash

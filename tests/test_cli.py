@@ -249,6 +249,9 @@ class InstallerTests(unittest.TestCase):
             self.assertIn("none", src)  # dá para pular com ASTA_EXTRAS=none
         self.assertIn("LIBS_FAILED", sh)  # falha de biblioteca = aviso
         self.assertIn("$libsFailed", ps)
+        # PowerShell 5.1: com ErrorActionPreference=Stop, o stderr de programas externos (mesmo com 2>$null) vira NativeCommandError
+        self.assertNotRegex(ps, r"(?m)^\$ErrorActionPreference\s*=\s*'Stop'")
+        self.assertIn("$ErrorActionPreference = 'Continue'", ps)
         for needle in ("winget install --id Python.Python.3.12", "winget upgrade", "ASTA_PYTHON", "pip setuptools wheel", "Recriando o ambiente"):
             self.assertIn(needle, ps)  # Windows: instala/atualiza o Python pelo winget e as ferramentas dele
         for needle in ("apt-get", "dnf", "pacman", "brew", "ASTA_PYTHON", "pip setuptools wheel", "Recriando o ambiente"):

@@ -10,7 +10,9 @@
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
 
-$ErrorActionPreference = 'Stop'
+# 'Continue' de propósito: no Windows PowerShell 5.1, com 'Stop' qualquer texto que um programa externo (python, pip, winget) escreva no stderr
+# — até com 2>$null — vira uma exceção (NativeCommandError). Os erros que importam são checados por $LASTEXITCODE e por -ErrorAction Stop.
+$ErrorActionPreference = 'Continue'
 $Source = if ($env:ASTA_SOURCE) { $env:ASTA_SOURCE } else { 'https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip' }
 $Extras = $env:ASTA_EXTRAS
 $Root   = Join-Path $env:LOCALAPPDATA 'ASTA'
@@ -65,7 +67,7 @@ if ($py) {
 Note ("Python: " + (& $py[0] @($py | Select-Object -Skip 1) --version))
 
 # 2) ambiente isolado. Se o Python foi atualizado para uma versão mais nova, o ambiente é recriado.
-New-Item -ItemType Directory -Force -Path $AppDir, $BinDir | Out-Null
+New-Item -ItemType Directory -Force -ErrorAction Stop -Path $AppDir, $BinDir | Out-Null
 $venv = Join-Path $AppDir 'venv'
 $venvPy = Join-Path $venv 'Scripts\python.exe'
 $pyV = (& $py[0] @($py | Select-Object -Skip 1) -c "import sys; print('%d.%d' % sys.version_info[:2])").Trim()
@@ -75,7 +77,7 @@ if (Test-Path $venv) {
   $vv = if ($vv) { "$vv".Trim() } else { '' }
   if ((-not $vv) -or ([version]$vv -lt [version]$pyV)) {
     Note "Recriando o ambiente para o Python $pyV (antes: $(if ($vv) { $vv } else { 'quebrado' })) — as bibliotecas serão reinstaladas …"
-    Remove-Item -Recurse -Force $venv
+    Remove-Item -Recurse -Force -ErrorAction Stop $venv
   }
 }
 if (-not (Test-Path $venvPy)) {
@@ -93,9 +95,10 @@ if ($env:ASTA_STEP -eq 'python') { Say "✓ Python $pyV e ferramentas (pip, setu
 # 3) instala / atualiza
 $spec = 'asta'
 if ($Source -match '://') { $req = "$spec @ $Source" }
-elseif (Test-Path $Source) { $req = "$spec @ " + ([System.Uri](Resolve-Path $Source).Path).AbsoluteUri }
+elseif (Test-Path $Source) { $req = "$spec @ " + ([System.Uri](Resolve-Path -ErrorAction Stop $Source).Path).AbsoluteUri }
 else { $req = $Source }
-$old = & $venvPy -I -c "import asta; print(asta.__version__)" 2>$null
+$old = & $venvPy -I -c "import asta; print(asta.__version__)" 2>$null   # ASTA ainda não instalado: o Python escreve um erro no stderr, que é descartado
+if ($LASTEXITCODE -ne 0) { $old = $null }
 Note 'Baixando e instalando ASTA …'
 & $venvPy -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir $req
 if ($LASTEXITCODE -ne 0) { Die 'Falha ao instalar. Verifique sua conexão e tente de novo.' }
@@ -103,7 +106,7 @@ $new = & $venvPy -I -c "import asta; print(asta.__version__)"
 
 # 4) comando `asta`
 $shim = Join-Path $BinDir 'asta.cmd'
-Set-Content -Path $shim -Value "@echo off`r`n`"$venv\Scripts\asta.exe`" %*" -Encoding ASCII
+Set-Content -ErrorAction Stop -Path $shim -Value "@echo off`r`n`"$venv\Scripts\asta.exe`" %*" -Encoding ASCII
 $userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
 # 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa); a lista vem da versão recém-instalada
 $asta = Join-Path $venv 'Scripts\asta.exe'

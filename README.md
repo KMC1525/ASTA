@@ -49,6 +49,8 @@ curl -fsSL https://raw.githubusercontent.com/KMC1525/ASTA/main/install.sh | sh
 irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 ```
 
+The Windows installer works on the Windows PowerShell 5.1 that ships with Windows as well as on PowerShell 7. If it ever stops with an error, re-run the same command and open an issue with the text it printed.
+
 Then, in any terminal:
 
 ```bash

@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.5] — 2026-11-05
+
+### Corrigido
+- **Windows:** o comando de instalação/atualização (`install.ps1`) falhava no Windows PowerShell 5.1 com `NativeCommandError` logo depois de criar o ambiente (`python.exe : Traceback (most recent call last)` na linha `$old = & $venvPy -I -c "import asta; …" 2>$null`). Nessa versão do PowerShell, com `$ErrorActionPreference = 'Stop'`, qualquer texto que um programa externo escreve no stderr vira uma exceção — até com `2>$null` — e, na primeira instalação, o `import asta` falha de propósito (o ASTA ainda não está instalado). O instalador agora usa `'Continue'` e checa os erros que importam por `$LASTEXITCODE` e `-ErrorAction Stop`; o mesmo vale para as chamadas ao `pip`, ao `winget` e à detecção do Python. Um teste garante que o `Stop` global não volte.
+
 ## [0.2.4] — 2026-11-05
 
 ### Alterado
@@ -140,7 +145,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.4...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.5...HEAD
+[0.2.5]: https://github.com/KMC1525/ASTA/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/KMC1525/ASTA/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/KMC1525/ASTA/compare/v0.2.2...v0.2.3
 [0.2.2]: https://github.com/KMC1525/ASTA/compare/v0.2.1...v0.2.2
