@@ -599,4 +599,10 @@ export default {
   '{n} corrigido(s)': '{n} fixed',
   'System prompts': 'System prompts',
   'Pipeline por avatar: analisa, gera, revisa e entrega o system prompt': 'Per-avatar pipeline: analyzes, generates, reviews and delivers the system prompt',
+  'Modo Demo: as respostas são pré-programadas, sem IA.': 'Demo mode: replies are pre-programmed, with no AI.',
+  'Configure um provedor de IA — nuvem ou local — para os avatares responderem com inteligência de verdade.': 'Set up an AI provider — cloud or local — so avatars reply with real intelligence.',
+  'Configurar IA': 'Set up AI',
+  'Responde com {n}': 'Replying with {n}',
+  'Automático (recomendado)': 'Automatic (recommended)',
+  'Responde a cada mensagem dos NPCs e dos avatares. Automático: usa o provedor de geração (nuvem ou local) ou, se não houver, o modelo local instalado — o Demo só entra quando nenhuma IA está disponível.': 'Replies to every NPC and avatar message. Automatic: uses the generation provider (cloud or local) or, if there is none, the installed local model — Demo is only used when no AI is available.',
 };

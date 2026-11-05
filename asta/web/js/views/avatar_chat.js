@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { t } from '../i18n.js';
-import { state } from '../main.js';
+import { go, state } from '../main.js';
 import { avatarPic, MOOD_EMOJI, readSSE, REL_LABEL, richText, speakerColor } from '../avatar_ui.js';
 import { confirmDialog, field, fill, h, icon, modal, popover, select, toast } from '../ui.js';
 import { detectLang, Listener, listenSupported, Speaker, speechSupported } from '../voice.js';
@@ -22,6 +22,7 @@ export default async function render(root, ctx, chatId) {
 
   const msgs = h('div', { class: 'chmsgs' });
   const head = h('div', { class: 'chhead' });
+  const engineBar = h('div', { class: 'chengine' });   // qual IA responde (ou o aviso de que é só o Demo)
   const listEl = h('div', { class: 'chlist' });
   const input = h('textarea', { rows: 1, placeholder: t('Escreva uma mensagem…') });
   const sendBtn = h('button', { class: 'btn icon primary', title: t('Enviar'), onclick: () => send(input.value) }, icon('send', 17));
@@ -82,6 +83,21 @@ export default async function render(root, ctx, chatId) {
       h('button', { class: 'btn ghost icon sm', title: t('Mais'), onclick: (e) => menu(e.currentTarget) }, icon('more', 16)));
   }
 
+  // Mostra qual IA está respondendo. No Demo (respostas pré-programadas, sem IA) avisa o motivo e leva à configuração.
+  function paintEngine(info) {
+    if (!info) { engineBar.replaceChildren(); engineBar.style.display = 'none'; return; }
+    engineBar.style.display = '';
+    if (info.demo) {
+      engineBar.className = 'chengine warn';
+      engineBar.replaceChildren(h('div', { class: 'grow' }, h('b', null, t('Modo Demo: as respostas são pré-programadas, sem IA.')), ' ',
+        info.reason ? h('span', null, info.reason + ' ') : null, h('span', null, t('Configure um provedor de IA — nuvem ou local — para os avatares responderem com inteligência de verdade.'))),
+        h('button', { class: 'btn sm primary', onclick: () => go('config', { tab: 'providers' }) }, t('Configurar IA')));
+    } else {
+      engineBar.className = 'chengine ok';
+      engineBar.replaceChildren(h('span', { class: 'dim small' }, '✦ ' + t('Responde com {n}', { n: t(info.label) + (info.model ? ' · ' + info.model : '') })));
+    }
+  }
+
   function paintList() {
     listEl.replaceChildren(h('div', { class: 'row', style: { padding: '2px 4px 10px' } }, h('strong', null, t('Conversas')), h('span', { class: 'grow' }),
       h('button', { class: 'btn sm', onclick: newChat }, icon('plus', 13), t('Nova'))),
@@ -92,7 +108,8 @@ export default async function render(root, ctx, chatId) {
 
   // ------------------------------------------------------------------ eventos do servidor
   function onEvent(ev) {
-    if (ev.type === 'typing') { startBubble(ev.avatar_id, ev.name); paintHead(); }
+    if (ev.type === 'provider') paintEngine(ev);
+    else if (ev.type === 'typing') { startBubble(ev.avatar_id, ev.name); paintHead(); }
     else if (ev.type === 'delta') {
       const b = st.bubbles[ev.avatar_id]; if (!b) return;
       b.buf += ev.text; b.row.classList.remove('typing'); richText(b.text, b.buf); scroll();
@@ -211,9 +228,10 @@ export default async function render(root, ctx, chatId) {
   input.addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); send(input.value); } });
   input.addEventListener('input', () => { autosize(); clearTimeout(st.tick); });
   input.addEventListener('blur', () => { if (!st.busy) scheduleTick(); });
-  root.replaceChildren(h('div', { class: 'chatpage' }, listEl, h('section', { class: 'chatmain' }, head, msgs,
+  root.replaceChildren(h('div', { class: 'chatpage' }, listEl, h('section', { class: 'chatmain' }, head, engineBar, msgs,
     h('div', { class: 'chinput' }, listenSupported() ? micBtn : null, input, sendBtn))));
-  paintList(); paintHead();
+  paintList(); paintHead(); paintEngine(null);
+  api('/api/avatars/engine').then(paintEngine).catch(() => {});
   chat.messages.slice(-200).forEach((m) => msgs.appendChild(row(m)));
   if (!chat.messages.length) note(t('Diga olá! Quando o avatar não souber algo sobre você, ele vai perguntar — e lembrar.'));
   scroll(); input.focus();

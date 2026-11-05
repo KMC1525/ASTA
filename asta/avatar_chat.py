@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import avatars as av
 from .agents import rulebased
-from .providers import build_provider
+from .providers import resolve_provider
 from .storage import Store
 from .util import new_id, now_iso
 
@@ -153,7 +153,8 @@ class ChatEngine:
         chat["autonomous_turns"] = 0
         self._save(chat)
         emit({"type": "user", "message": msg})
-        provider = build_provider(settings, settings["active"].get("characters", "demo"), self.store.models_dir)
+        provider, info = resolve_provider(settings, "characters", self.store.models_dir)
+        emit({"type": "provider", **info})  # a interface mostra qual IA responde (e avisa quando é só o Demo)
         speaker = first_speaker(chat, avatars, user_text, self.rng)
         max_chain = min(3, len(avatars))
         chain, last = 0, None
@@ -198,7 +199,8 @@ class ChatEngine:
             return
         speaker = autonomous_speaker(chat, avatars, self.rng)
         uname = self.user_name(chat, settings)
-        provider = build_provider(settings, settings["active"].get("characters", "demo"), self.store.models_dir)
+        provider, info = resolve_provider(settings, "characters", self.store.models_dir)
+        emit({"type": "provider", **info})
         chat["autonomous_turns"] = chat.get("autonomous_turns", 0) + 1
         self._save(chat)  # conta o turno mesmo que o avatar fique em silêncio (evita laço infinito de silêncios)
         self._speak(chat, avatars, speaker, provider, settings, uname, emit, cancelled, autonomous=True)

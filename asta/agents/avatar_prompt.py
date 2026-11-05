@@ -15,7 +15,7 @@ import re
 from typing import Any, Callable, Dict, Optional
 
 from ..avatars import declares_minor, normalize_avatar
-from ..providers import build_provider
+from ..providers import resolve_provider
 from ..storage import Store
 from ..util import text
 from . import prompts
@@ -63,8 +63,11 @@ class AvatarPromptPipeline(Runner):
 
         gen = settings["generation"]
         self.gen = {"temperature": gen.get("temperature", 0.8), "max_tokens": min(int(gen.get("max_tokens", 6000)), 4000), "content": "free" if want == "nsfw" else "sfw"}
-        pid = settings["active"].get("generation", "demo")
-        self.provider = build_provider(settings, pid, st.models_dir)
+        # avatars sempre usam IA de verdade quando existe alguma (nuvem ou modelo local), mesmo com a geração ainda no Demo
+        self.provider, info = resolve_provider(settings, "generation", st.models_dir)
+        pid = info["id"]
+        if info["demo"]:
+            self.warnings.append("modo Demo (sem IA): " + info["reason"])
         self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "content": want, "avatar_id": avatar_id})
 
         produced = self.produce(card, instructions, want, hint, detail)

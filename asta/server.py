@@ -22,7 +22,7 @@ from .agents.pipeline import Cancelled, Pipeline, create_edit_version  # noqa: F
 from .cards import character_from_png, import_character, normalize_character
 from .games2d.builder import rebuild_game
 from .jobs import HttpError, Job, JobManager  # noqa: F401  (reexportados)
-from .providers import ProviderError, build_provider, describe_presets, provider_config
+from .providers import ProviderError, build_provider, describe_presets, provider_config, resolve_provider
 from .routes_avatars import AvatarRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_games import GameRoutes
@@ -95,6 +95,9 @@ class App:
     # ----- helpers de provedor
     def provider(self, role: str = "generation", settings: Optional[dict] = None):
         settings = settings or self.store.get_settings()
+        if role == "characters":  # conversas: IA de verdade sempre que houver alguma (ver providers/auto.py)
+            provider, info = resolve_provider(settings, role, self.store.models_dir)
+            return provider, info["id"]
         pid = settings["active"].get(role, "demo")
         return build_provider(settings, pid, self.store.models_dir), pid
 

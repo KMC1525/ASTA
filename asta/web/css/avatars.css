@@ -49,3 +49,8 @@
 @keyframes pulse{50%{opacity:.6}}
 @media (max-width:900px){.chatpage{grid-template-columns:1fr}.chlist{display:none}}
 @media (max-width:760px){.chatpage{height:calc(100dvh - 60px)}}
+
+/* qual IA responde (aviso quando é só o Demo) */
+.chengine{display:flex;align-items:center;gap:12px;padding:8px 16px;border-bottom:1px solid var(--line);flex:none;font-size:13px}
+.chengine.warn{background:rgba(245,185,66,.08);color:#f5c76b;border-bottom-color:rgba(245,185,66,.25)}
+.chengine.ok{padding:4px 16px}

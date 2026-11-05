@@ -526,7 +526,7 @@ class SystemPromptPipelineTests(TmpCase):
         pipe = avatar_prompt.AvatarPromptPipeline(self.store, self.events.append)
         if provider is None:
             return pipe.run(req)
-        with mock.patch.object(avatar_prompt, "build_provider", return_value=provider):
+        with mock.patch.object(avatar_prompt, "resolve_provider", return_value=(provider, {"id": "scripted", "demo": False, "reason": ""})):
             return pipe.run(req)
 
     def steps(self):
@@ -635,7 +635,7 @@ class CreationUsesThePromptPipelineTests(TmpCase):
         from asta.agents import avatar_pipeline
 
         prov = ScriptedProvider(script)
-        with mock.patch.object(avatar_pipeline, "build_provider", return_value=prov):
+        with mock.patch.object(avatar_pipeline, "resolve_provider", return_value=(prov, {"id": "scripted", "demo": False, "reason": ""})):
             res = avatar_pipeline.AvatarPipeline(self.store, self.events.append).run(req)
         return res, prov
 
@@ -737,6 +737,116 @@ class SystemPromptApiTests(ServerCase):
             self.assertEqual((card["character_type"], card["content"]), (ctype, want), ctype)
             if ctype == "real":
                 self.assertTrue(any("pessoa real" in w for w in done["warnings"]))
+
+
+class ChatProviderChoiceTests(TmpCase):
+    """As conversas usam IA de verdade sempre que houver alguma (nuvem ou local); o Demo só entra quando nada está disponível."""
+
+    def settings(self, active=None, providers=None):
+        from asta.storage import DEFAULT_SETTINGS
+        import copy
+
+        s = copy.deepcopy(DEFAULT_SETTINGS)
+        s["active"].update(active or {})
+        s["providers"].update(providers or {})
+        return s
+
+    def resolve(self, settings, llama=False):
+        from unittest import mock
+
+        from asta.providers import auto
+
+        with mock.patch.object(auto, "_llama_installed", return_value=llama):
+            return auto.resolve(settings, "characters", self.tmp)
+
+    def test_default_is_auto_and_falls_back_to_demo_with_a_reason_when_nothing_is_available(self):
+        s = self.settings()
+        self.assertEqual(s["active"]["characters"], "auto")
+        provider, info = self.resolve(s)
+        self.assertEqual((info["id"], info["demo"], info["auto"]), ("demo", True, True))
+        self.assertIn("Nenhum provedor de IA", info["reason"])
+        self.assertEqual(self.resolve(self.settings({"characters": "demo"}))[1]["id"], "demo")  # valor antigo = auto
+
+    def test_follows_the_generation_provider_when_it_is_usable(self):
+        for chars in ("auto", "demo"):  # "demo" é o valor antigo, que também passa a seguir a IA configurada
+            provider, info = self.resolve(self.settings({"generation": "anthropic", "characters": chars}, {"anthropic": {"api_key": "k"}}))
+            self.assertEqual((info["id"], info["demo"], info["auto"]), ("anthropic", False, True), chars)
+        # sem a chave não é usável: não finge que é IA
+        self.assertTrue(self.resolve(self.settings({"generation": "anthropic"}))[1]["demo"])
+        # servidor local sem chave: precisa do modelo
+        self.assertTrue(self.resolve(self.settings({"generation": "ollama"}))[1]["demo"])
+        self.assertEqual(self.resolve(self.settings({"generation": "ollama"}, {"ollama": {"model": "llama3"}}))[1]["id"], "ollama")
+
+    def test_an_explicit_choice_is_always_respected(self):
+        provider, info = self.resolve(self.settings({"generation": "anthropic", "characters": "openai"}, {"anthropic": {"api_key": "k"}}))
+        self.assertEqual((info["id"], info["auto"], info["demo"]), ("openai", False, False))  # sem chave, o erro aparece na conversa: nada de trocar por outro
+
+    def test_local_model_is_used_when_the_library_is_there(self):
+        (self.tmp / "Qwen3.8-2B-Q8_0.gguf").write_bytes(b"x")  # o pré-instalado, já baixado
+        provider, info = self.resolve(self.settings(), llama=True)
+        self.assertEqual((info["id"], info["model"], info["demo"], info["auto"]), ("local_hf", "Qwen3.8-2B-Q8_0.gguf", False, True))
+        # o modelo escolhido pelo usuário tem prioridade sobre o pré-instalado, se o arquivo existir
+        (self.tmp / "meu-Q4_K_M.gguf").write_bytes(b"x")
+        self.assertEqual(self.resolve(self.settings({}, {"local_hf": {"model": "meu-Q4_K_M.gguf"}}), llama=True)[1]["model"], "meu-Q4_K_M.gguf")
+        # escolhido, mas o arquivo sumiu: cai no pré-instalado
+        self.assertEqual(self.resolve(self.settings({}, {"local_hf": {"model": "sumiu.gguf"}}), llama=True)[1]["model"], "Qwen3.8-2B-Q8_0.gguf")
+
+    def test_installed_model_without_the_library_explains_what_to_do(self):
+        (self.tmp / "Qwen3.8-2B-Q8_0.gguf").write_bytes(b"x")
+        provider, info = self.resolve(self.settings(), llama=False)
+        self.assertTrue(info["demo"])
+        self.assertIn("llama-cpp-python", info["reason"])
+        self.assertIn("Qwen3.8-2B-Q8_0.gguf", info["reason"])
+        # gerador local escolhido mas sem a biblioteca: não é usável
+        self.assertTrue(self.resolve(self.settings({"generation": "local_hf"}, {"local_hf": {"model": "Qwen3.8-2B-Q8_0.gguf"}}), llama=False)[1]["demo"])
+
+
+class AvatarCreationUsesAiTests(ServerCase):
+    def test_creation_uses_the_configured_ai_even_when_generation_is_still_demo_and_warns_when_there_is_none(self):
+        # sem nenhuma IA: cria no Demo, mas avisa
+        status, r = self.c.json("POST", "/api/avatars/generate", {"prompt": "Uma amiga chamada Luna"})
+        done = next(e for e in self.c.sse(f"/api/jobs/{r['job_id']}/events") if e["type"] == "done")
+        self.assertTrue(any("modo Demo" in w for w in done["warnings"]))
+        # com um modelo local instalado e a biblioteca: usa o modelo (geração continua "demo" nas configurações)
+        from unittest import mock
+
+        from asta.providers import auto
+
+        (self.store.models_dir / "Qwen3.8-2B-Q8_0.gguf").write_bytes(b"x")
+        self.addCleanup((self.store.models_dir / "Qwen3.8-2B-Q8_0.gguf").unlink)
+        with mock.patch.object(auto, "_llama_installed", return_value=True):
+            eng = self.c.json("GET", "/api/avatars/engine")[1]
+        self.assertEqual((eng["id"], eng["demo"]), ("local_hf", False))
+
+
+class ChatUsesRealAiTests(ServerCase):
+    def test_chat_answers_come_from_the_configured_ai_without_touching_the_characters_role(self):
+        with MockProviderServer() as mock:
+            self.c.json("PUT", "/api/settings", {"providers": {"custom": {"base_url": mock.url + "/v1", "model": "m", "api_key": "k"}}, "active": {"generation": "custom"}})
+            try:
+                self.assertEqual(self.c.json("GET", "/api/state")[1]["settings"]["active"]["characters"], "auto")
+                eng = self.c.json("GET", "/api/avatars/engine")[1]
+                self.assertEqual((eng["id"], eng["demo"], eng["model"]), ("custom", False, "m"))
+                aid = self.c.json("POST", "/api/avatars", {"name": "Aya", "age": 26, "greeting": ""})[1]["id"]
+                chat = self.c.json("POST", "/api/avatar-chats", {"avatar_ids": [aid]})[1]
+                ev = self.c.sse(f"/api/avatar-chats/{chat['id']}/send", {"text": "oi, tudo bem?"}, method="POST")
+                self.assertEqual("".join(e.get("text", "") for e in ev if e["type"] == "delta"), "Olá, mundo")  # veio da IA, não de uma resposta pronta
+                prov = next(e for e in ev if e["type"] == "provider")
+                self.assertEqual((prov["id"], prov["demo"]), ("custom", False))
+                self.assertTrue(mock.requests[-1]["body"]["stream"])
+            finally:
+                self.c.json("PUT", "/api/settings", {"active": {"generation": "demo"}, "providers": {"custom": {"api_key": None}}})
+
+    def test_without_any_ai_the_chat_says_it_is_demo_and_why(self):
+        eng = self.c.json("GET", "/api/avatars/engine")[1]
+        self.assertTrue(eng["demo"])
+        self.assertTrue(eng["reason"])
+        aid = self.c.json("POST", "/api/avatars", {"name": "Aya", "age": 26, "greeting": ""})[1]["id"]
+        chat = self.c.json("POST", "/api/avatar-chats", {"avatar_ids": [aid]})[1]
+        ev = self.c.sse(f"/api/avatar-chats/{chat['id']}/send", {"text": "oi"}, method="POST")
+        prov = next(e for e in ev if e["type"] == "provider")
+        self.assertTrue(prov["demo"] and prov["reason"])
+        self.assertTrue(any(e["type"] == "message" for e in ev))  # o Demo ainda responde, mas a interface avisa
 
 
 class HttpRangeTests(ServerCase):

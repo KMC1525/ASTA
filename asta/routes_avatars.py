@@ -9,7 +9,7 @@ from .agents.avatar_prompt import AvatarPromptPipeline
 from .avatar_chat import ChatEngine
 from .avatars import MAX_CHAT_AVATARS, avatar_from_png, export_card_v2, import_avatar
 from .jobs import HttpError, Job
-from .providers import ProviderError
+from .providers import ProviderError, resolve_provider
 from .util import text
 
 IMAGE_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
@@ -41,6 +41,7 @@ class AvatarRoutes:
         a("POST", r"/api/avatars/import", self.r_import)
         a("POST", r"/api/avatars/generate", self.r_generate)
         a("POST", r"/api/avatars/system-prompt", self.r_system_prompt)
+        a("GET", r"/api/avatars/engine", self.r_engine)
         a("GET", r"/api/avatars/(?P<aid>[\w-]+)", self.r_get)
         a("PUT", r"/api/avatars/(?P<aid>[\w-]+)", self.r_update)
         a("DELETE", r"/api/avatars/(?P<aid>[\w-]+)", self.r_delete)
@@ -168,6 +169,14 @@ class AvatarRoutes:
 
         job = self.app.jobs.start("avatar_generate", work)
         req.json({"job_id": job.id})
+
+    def r_engine(self, req) -> None:
+        """Qual IA responde nas conversas dos avatars agora (e, se for só o Demo, por quê)."""
+        try:
+            _, info = resolve_provider(self.store.get_settings(), "characters", self.store.models_dir)
+        except ProviderError as exc:
+            raise HttpError(400, str(exc))
+        req.json(info)
 
     def r_system_prompt(self, req) -> None:
         """Pipeline Analisa → Gera → Revisa → Entrega do system prompt de um avatar (existente ou rascunho do editor)."""

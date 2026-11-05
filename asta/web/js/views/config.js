@@ -23,10 +23,10 @@ async function providers() {
   const container = h('div');
   const rolesCard = () => {
     const S = state.settings;
-    const roleSel = (role, label, hint) => field(label, select(presets.map((p) => [p.id, t(p.label)]), S.active[role], async (v) => { await saveSettings({ active: { [role]: v } }); toast(t('Salvo'), 'ok'); paint(); }), hint);
+    const roleSel = (role, label, hint) => field(label, select((role === 'characters' ? [['auto', t('Automático (recomendado)')]] : []).concat(presets.map((p) => [p.id, t(p.label)])), role === 'characters' && S.active[role] === 'demo' ? 'auto' : S.active[role], async (v) => { await saveSettings({ active: { [role]: v } }); toast(t('Salvo'), 'ok'); paint(); }), hint);
     return h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Quem faz o quê')),
       h('div', { class: 'grid2' }, roleSel('generation', t('Geração de mundos'), t('Modelo mais capaz: roda os agentes (análise, planejamento, criação, revisão).')),
-        roleSel('characters', t('Personagens (chat e voz)'), t('Um modelo rápido e barato basta: responde a cada mensagem dos NPCs.'))));
+        roleSel('characters', t('Personagens (chat e voz)'), t('Responde a cada mensagem dos NPCs e dos avatares. Automático: usa o provedor de geração (nuvem ou local) ou, se não houver, o modelo local instalado — o Demo só entra quando nenhuma IA está disponível.'))));
   };
   const paint = () => container.replaceChildren(rolesCard(), h('div', null, presets.map(card)));
 

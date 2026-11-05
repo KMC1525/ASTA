@@ -111,7 +111,7 @@ class InstallTests(TmpCase):
         self.assertTrue((self.store.models_dir / "Qwen3.8-2B-Q8_0.gguf").is_file())  # texto: na raiz, como os demais
         s = self.store.get_settings()
         self.assertEqual(s["providers"]["local_hf"]["model"], "Qwen3.8-2B-Q8_0.gguf")
-        self.assertEqual((s["active"]["generation"], s["active"]["characters"]), ("local_hf", "local_hf"))
+        self.assertEqual((s["active"]["generation"], s["active"]["characters"]), ("local_hf", "auto"))  # as conversas seguem sozinhas (auto)
         self.assertEqual(self.hub.requests, [("empero-ai/Qwen3.8-2B-Distill-GGUF", "Qwen3.8-2B-Q8_0.gguf")])
 
     def test_the_default_provider_is_not_touched_without_the_library_or_if_the_user_already_chose_one(self):

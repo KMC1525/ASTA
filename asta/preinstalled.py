@@ -150,7 +150,8 @@ def apply(store: Any, e: Dict[str, Any]) -> List[str]:
     if e["kind"] == "text":
         patch: Dict[str, Any] = {"providers": {"local_hf": {"model": name}}}
         if _lib("llama_cpp"):
-            act = {r: "local_hf" for r in ("generation", "characters") if s["active"].get(r, "demo") == "demo"}
+            # as conversas (papel "characters", em "auto") já seguem o provedor de geração ou o modelo local; só a geração precisa ser trocada
+            act = {r: "local_hf" for r in ("generation",) if s["active"].get(r, "demo") == "demo"}
             if act:
                 patch["active"] = act
                 notes.append("ativado como modelo de texto padrão")

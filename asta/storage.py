@@ -36,7 +36,7 @@ from .util import asta_home, deep_merge, new_id, now_iso, read_json, safe_filena
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",  # auto | pt-BR | en
-    "active": {"generation": "demo", "characters": "demo"},
+    "active": {"generation": "demo", "characters": "auto"},  # characters "auto": IA de verdade sempre que houver (ver providers/auto.py)
     "providers": {},
     "generation": {
         "perspective": "third",  # first | third

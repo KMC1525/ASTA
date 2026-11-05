@@ -110,6 +110,9 @@ class BrowserTests(unittest.TestCase):
     def test_09_avatar_editor_generates_the_system_prompt_and_real_people_stay_sfw(self):
         self.run_script("avatar_prompt_ui.js")
 
+    def test_10_avatar_chat_tells_which_ai_answers_or_that_it_is_only_demo(self):
+        self.run_script("avatar_engine_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

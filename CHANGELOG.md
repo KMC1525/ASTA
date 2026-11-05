@@ -5,6 +5,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.16] — 2026-11-05
+
+### Corrigido
+- **Os avatares respondiam com frases genéricas pré-programadas em vez de usar IA.** Causa: o papel *Personagens (chat e voz)* vinha fixo em **Demo** (o gerador por regras, sem IA) e só mudava se você o trocasse à mão — mesmo com um provedor de IA configurado na *Geração* ou com o modelo local instalado. Agora:
+  - o padrão do papel é **Automático** (`active.characters = "auto"`): usa o provedor de **geração** se estiver usável (nuvem: com chave; local — Ollama, LM Studio, llama.cpp server, personalizado: com modelo) e, se não, o **modelo local de texto** (o escolhido em *Hugging Face GGUF* ou o pré-instalado, se o arquivo existir e o `llama-cpp-python` estiver instalado). O valor antigo `demo` desse papel passa a significar o mesmo que Automático; escolher um provedor específico continua forçando aquele provedor (e, se faltar a chave, o erro aparece, sem trocar por outro).
+  - o **Demo só entra quando não existe nenhuma IA** — e a conversa mostra uma faixa **"Modo Demo: as respostas são pré-programadas, sem IA"** com o motivo (por exemplo, *"o modelo local Qwen3.8… está instalado, mas falta a biblioteca llama-cpp-python: rode asta libs --extras local"*) e o botão **Configurar IA**. Quando há IA, uma linha informa qual modelo está respondendo ("Responde com … · modelo").
+  - a **criação de avatares** e o **pipeline de system prompt** usam a mesma regra (antes, com a Geração no Demo, criavam cartões genéricos por regras); se não houver IA, a criação segue no Demo mas devolve o aviso.
+  - os NPCs dos mundos 3D (também no papel *Personagens*) passam a seguir a mesma escolha.
+  - instalar o modelo pré-instalado não precisa mais trocar o papel *Personagens*: ele fica em Automático e já segue o modelo local (só a *Geração* é trocada, como antes).
+  - API: `GET /api/avatars/engine` (qual IA responde e, se for Demo, por quê) e o evento SSE `provider` no início de cada rodada de conversa.
+- Testes: escolha do provedor (padrão, seguir a geração, chave ou modelo faltando, escolha explícita respeitada, modelo local com e sem biblioteca, valor antigo `demo`), conversa respondida pela IA configurada (servidor simulado) e conversa em Demo avisando o motivo, criação usando a IA, e a faixa de aviso no navegador.
+
+### Observação
+- Se você **quer** o Demo de propósito (testar sem IA), basta não ter nenhum provedor usável: não há mais uma opção para forçar o Demo só nas conversas.
+- Para ter IA de graça e local: instale o modelo pré-instalado (`asta models install`) **e** a biblioteca (`asta libs --extras local`, que compila código nativo); sem a biblioteca, a faixa de aviso diz exatamente isso. Não consegui exercitar aqui um modelo local real (sem `llama-cpp-python`): a escolha do modelo foi testada, não a geração com ele.
+- Respostas de um modelo pequeno ainda dependem da qualidade dele e do system prompt do avatar (por isso o pipeline de system prompt).
+
 ## [0.2.15] — 2026-11-05
 
 ### Adicionado
@@ -298,7 +315,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.15...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.16...HEAD
+[0.2.16]: https://github.com/KMC1525/ASTA/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/KMC1525/ASTA/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/KMC1525/ASTA/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/KMC1525/ASTA/compare/v0.2.12...v0.2.13

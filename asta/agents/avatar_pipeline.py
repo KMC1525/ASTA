@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 from .. import attachments as att
 from .. import voice
 from ..avatars import MAX_CHAT_AVATARS, MIN_FIELD_AGE, RELATIONSHIPS, normalize_avatar
-from ..providers import build_provider
+from ..providers import resolve_provider
 from ..storage import Store
 from ..canvas.engine import palette_of
 from ..util import text
@@ -44,8 +44,11 @@ class AvatarPipeline(Runner):
         gen = settings["generation"]
         self.gen = {"temperature": gen.get("temperature", 0.8), "max_tokens": min(int(gen.get("max_tokens", 6000)), 6000),
                     "content": "free" if content == "nsfw" else "sfw"}
-        pid = settings["active"].get("generation", "demo")
-        self.provider = build_provider(settings, pid, st.models_dir)
+        # avatars sempre usam IA de verdade quando existe alguma (nuvem ou modelo local), mesmo com a geração ainda no Demo
+        self.provider, info = resolve_provider(settings, "generation", st.models_dir)
+        pid = info["id"]
+        if info["demo"]:
+            self.warnings.append("modo Demo (sem IA): " + info["reason"])
         self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "count": count_hint, "content": content})
 
         # ---------- anexos
