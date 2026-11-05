@@ -5,6 +5,29 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.14] — 2026-11-05
+
+### Adicionado
+- **Pipeline de geração de system prompts de avatares: Analisa → Gera → Revisa → Entrega.** No editor do avatar, o cartão **Gerar o system prompt com IA** (nome, personalidade, aparência e instruções opcionais) roda quatro etapas, com o progresso de cada uma na tela:
+  1. **Analisa** — descobre quem é o personagem (qualquer tipo: original, de uma obra, histórico, robô, criatura…; **real ou fictício**; idade; jeito de falar; relação com o usuário; limites; o que o modo SFW/NSFW permite; idioma);
+  2. **Gera** — escreve o system prompt a partir da análise, mantendo o que o criador já tinha escrito de bom;
+  3. **Revisa** — confere coerência com o card, voz, idioma, tamanho, não mencionar ser uma IA e as regras fixas; se reprovar, o redator corrige **uma vez** e a revisão roda de novo;
+  4. **Entrega** — etapa determinística: tira cercas de markdown, **aplica as regras de segurança por código** (o que o modelo disser não as contorna) e, com `apply`, grava no avatar.
+  - Resposta inválida ou vazia de um agente → fallback por regras: funciona também no modo Demo, sem IA.
+  - API: `POST /api/avatars/system-prompt` (job com SSE; `avatar_id` ou `draft`, `instructions`, `content`, `character_type`, `detail`, `apply`).
+- **Qualquer tipo de personagem, real ou fictício, em SFW e NSFW** — com uma regra fixa nova. Novo campo **tipo de personagem** (`character_type`: `fictional` | `real`) no card, no editor, na caixa de criação (*Tipo: automático*, *Personagem fictício*, *Pessoa real (sempre SFW)*) e na API de geração:
+  - **fictício** (original ou de livro/filme/jogo/anime/mito…): SFW ou NSFW, desde que adulto;
+  - **pessoa real** (viva ou histórica, famosa ou não, ou a de uma foto): dá para criar, mas **sempre SFW** — o ASTA **não cria conteúdo sexual sobre pessoas reais** (elas não consentiram). O prompt a apresenta como uma *interpretação ficcional e respeitosa*, nunca como a pessoa de verdade, sem inventar fatos privados, escândalos ou falas como se fossem reais. A regra vale até para cards importados ou editados à mão (`normalize_avatar` força SFW) e na conversa (o prompt de chat também a lembra);
+  - o analista pode marcar sozinho (foto de pessoa → real); **a escolha explícita do usuário vale mais que o palpite do modelo**;
+  - menores continuam sempre SFW e platônicos, em qualquer tipo.
+  - O Character Card V2 exportado leva o tipo (`extensions.asta.character_type`) e ele é lido na importação.
+- Testes: card real/fictício e a regra no cartão V2, prompt de chat, o pipeline completo (Demo e com provedor roteirizado: etapas em ordem, `apply`, real forçado a SFW, menor forçado a SFW mesmo se o modelo discordar, escolha do usuário vs. palpite do modelo, rodada de correção do revisor, reprovação final, respostas lixo/vazias), a API e a criação de avatars (real = SFW, fictício = NSFW), e o editor no navegador.
+
+### Observação
+- **Pessoa real + NSFW não existe**, por escolha: se você pedir NSFW para uma pessoa real, o ASTA cria o avatar em SFW e avisa. Isso complementa a regra antiga para fotos (que já ficavam em SFW); personagens fictícios adultos continuam podendo ser NSFW.
+- O ASTA não consegue confirmar sozinho que um nome digitado é de uma pessoa real: ele depende do analista (modelo), da foto ou da sua escolha em *Tipo de personagem*. Se for uma pessoa real, marque *Pessoa real*.
+- A criação de avatars (Principal → Avatar) continua usando o pipeline Analista → Designer → Revisor de antes (agora também com o tipo de personagem); o novo pipeline de system prompt é o do editor do avatar e da API.
+
 ## [0.2.13] — 2026-11-05
 
 ### Corrigido
@@ -263,7 +286,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.13...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.14...HEAD
+[0.2.14]: https://github.com/KMC1525/ASTA/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/KMC1525/ASTA/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/KMC1525/ASTA/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/KMC1525/ASTA/compare/v0.2.10...v0.2.11

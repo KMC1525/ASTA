@@ -33,6 +33,8 @@ class AvatarPipeline(Runner):
         st = self.store
         settings = st.get_settings()
         content = "nsfw" if req.get("content") == "nsfw" else "sfw"
+        ctype_hint = text(req.get("character_type"), "auto", 10).lower()
+        ctype_hint = ctype_hint if ctype_hint in ("real", "fictional") else "auto"
         relationship = text(req.get("relationship"), "auto", 12).lower()
         relationship = relationship if relationship in RELATIONSHIPS else "auto"
         count_hint = int(max(0, min(int(req.get("count") or 0), MAX_CHAT_AVATARS)))
@@ -68,7 +70,7 @@ class AvatarPipeline(Runner):
         brief, fb = self._agent(
             "analyst", "avatar_analyst", P.ANALYST,
             {"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship, "content": content,
-             "attached_images": len(images), "language_hint": text(req.get("language"), "", 12),
+             "attached_images": len(images), "language_hint": text(req.get("language"), "", 12), "character_type_hint": ctype_hint,
              "from_images": from_images, "images_mode": images_mode, "image_names": ref_names if from_images else [],
              "image_palettes": [palette_of(Path(m["path"]), 3) for m, _ in refs] if from_images else []},
             rb.analyst, images=images,
@@ -86,6 +88,8 @@ class AvatarPipeline(Runner):
         brief["avatars"] = brief_avatars[:cap]
         for a in brief["avatars"]:
             a["age"] = _age(a.get("age"))
+            # real (pessoa de verdade, inclusive a de uma foto) ou fictício: a escolha do usuário vence o palpite do analista
+            a["character_type"] = ctype_hint if ctype_hint != "auto" else ("real" if a.get("character_type") == "real" or (from_images and a.get("source_kind") == "photo") else "fictional")
             if relationship != "auto":
                 a["relationship"] = relationship
         brief["language"] = text(brief.get("language"), "pt-BR", 12)
@@ -98,7 +102,7 @@ class AvatarPipeline(Runner):
         # ---------- 2. Designer
         detail = "short" if str(req.get("detail")) == "short" else "detailed"
         # foto de pessoa real (ou origem desconhecida): nunca NSFW — só arte de personagens fictícios pode ser NSFW
-        eff_content = "sfw" if from_images and any(a.get("source_kind") != "art" for a in brief["avatars"]) else content
+        eff_content = "sfw" if any(a.get("character_type") == "real" for a in brief["avatars"]) or (from_images and any(a.get("source_kind") != "art" for a in brief["avatars"])) else content
         payload = {"brief": brief, "content": eff_content, "detail": detail,
                    "user": {"name": settings["avatars"].get("user_name", ""), "persona": settings["avatars"].get("user_persona", "")}}
         mult = max(1.0, len(brief["avatars"]) * 0.7)
@@ -140,7 +144,11 @@ class AvatarPipeline(Runner):
             card["name"] = a["name"] or card["name"]
             card["age"] = _age(card.get("age") if card.get("age") not in (None, "") else a.get("age"))
             card["content"] = content
-            if content == "nsfw" and from_images and a.get("source_kind") != "art":
+            card["character_type"] = "real" if a.get("character_type") == "real" else "fictional"
+            if content == "nsfw" and card["character_type"] == "real":
+                card["content"] = "sfw"
+                self.warnings.append(f"{a['name']}: pessoa real → apenas SFW; o ASTA não cria conteúdo sexual sobre pessoas reais (personagens fictícios podem ser NSFW)")
+            elif content == "nsfw" and from_images and a.get("source_kind") != "art":
                 card["content"] = "sfw"
                 self.warnings.append(f"{a['name']}: foto de pessoa real (ou origem não identificada) → apenas SFW; NSFW só vale para arte de personagens fictícios")
             if from_images and a.get("looks") and not card.get("looks"):

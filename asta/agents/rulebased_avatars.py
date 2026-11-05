@@ -271,6 +271,81 @@ def reviewer(inp: Dict[str, Any]) -> Dict[str, Any]:
     return {"approved": True, "score": 7, "issues": [], "summary": "Revisão automática (modo Demo)."}
 
 
+# --------------------------------------------------------------------------- pipeline de system prompts (fallbacks sem IA)
+
+
+def _split_traits(*texts: Any) -> List[str]:
+    out: List[str] = []
+    for raw in texts:
+        for part in re.split(r"[,;\n]+|\be\b|\band\b", str(raw or "")):
+            part = part.strip(" .")
+            if 2 < len(part) <= 40 and part.lower() not in [o.lower() for o in out]:
+                out.append(part)
+    return out[:6]
+
+
+def prompt_analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
+    """Etapa 1 (Demo/fallback): analisa o card sem IA."""
+    from ..avatars import declares_minor
+
+    card = inp.get("card") or {}
+    blob = " ".join(str(card.get(k) or "") for k in ("name", "description", "personality", "scenario", "looks", "system_prompt")) + " " + str(inp.get("instructions") or "")
+    lang = _lang(blob, str(card.get("language") if card.get("language") not in (None, "", "auto") else ""))
+    hint = str(inp.get("character_type_hint") or "auto")
+    ctype = hint if hint in ("real", "fictional") else "fictional"
+    age = _age(card.get("age"))
+    minor = declares_minor(blob, age=card.get("age"))
+    traits = _split_traits(card.get("personality")) or [_t(lang, "carinhoso(a)", "warm", "cariñoso(a)")]
+    risks = (["real person: strictly sfw"] if ctype == "real" else []) + (["minor: sfw and platonic only"] if minor else [])
+    return {
+        "character_type": ctype, "kind": "", "source_work": "", "identity": str(card.get("description") or card.get("looks") or "")[:300], "age": age, "is_minor": minor,
+        "gender": str(card.get("gender") or ""), "traits": traits,
+        "speech_style": {"rhythm": "", "vocabulary": "", "catchphrases": [], "pet_names": [], "quirks": []},
+        "backstory": str(card.get("scenario") or "")[:300], "goals": "", "relationship_dynamic": str(card.get("relationship") or "friend"),
+        "interests": [], "boundaries": [], "content_scope": "nsfw" if inp.get("content") == "nsfw" else "sfw",
+        "language": {"pt": "pt-BR", "en": "en", "es": "es"}[lang], "risks": risks, "notes": [],
+    }
+
+
+def prompt_writer(inp: Dict[str, Any]) -> Dict[str, Any]:
+    """Etapa 2 (Demo/fallback): monta o system prompt por regras a partir da análise e do card."""
+    an, card = inp.get("analysis") or {}, inp.get("card") or {}
+    lang = _lang("", str(an.get("language") or "en"))
+    name = str(card.get("name") or "").strip() or "Avatar"
+    gender = str(an.get("gender") or card.get("gender") or "")
+    fem = gender.lower() in ("female", "feminino", "mulher", "woman")
+    rel = str(card.get("relationship") or "friend")
+    base = {"name": name, "relationship": rel if rel in REL_LABEL else "friend", "gender": "female" if fem else "male", "age": _age(an.get("age") or card.get("age")),
+            "traits": [str(t) for t in (an.get("traits") or [])][:4], "backstory": str(an.get("backstory") or card.get("description") or "")[:300]}
+    system = _card(base, lang, "sfw", [], _rng("prompt", name, base["age"]))["system_prompt"]
+    extra = [str(an.get("identity") or "").strip()] if an.get("identity") and an.get("identity") != base["backstory"] else []
+    looks = str(card.get("looks") or "").strip()
+    if looks:
+        extra.append(_t(lang, f"Aparência: {looks}.", f"Appearance: {looks}.", f"Aspecto: {looks}."))
+    if inp.get("instructions"):
+        extra.append(str(inp["instructions"]).strip())
+    if an.get("character_type") == "real":
+        extra.append(_t(lang, "Você é uma interpretação ficcional e respeitosa de uma pessoa real, nunca a pessoa de verdade: não invente fatos privados ou falas como se fossem reais.",
+                        "You are a fictional, respectful interpretation of a real person, never the real person: do not invent private facts or quotes as if they were real.",
+                        "Eres una interpretación ficticia y respetuosa de una persona real, nunca la persona de verdad: no inventes hechos privados ni frases como si fueran reales."))
+    return {"system_prompt": " ".join([system] + [e for e in extra if e]), "notes": ""}
+
+
+def prompt_reviewer(inp: Dict[str, Any]) -> Dict[str, Any]:
+    """Etapa 3 (Demo/fallback): confere o essencial por regras."""
+    sp = str(inp.get("system_prompt") or "").strip()
+    card = inp.get("card") or {}
+    issues: List[Dict[str, str]] = []
+    if len(sp) < 60:
+        issues.append({"problem": "system prompt too short", "fix": "describe identity, voice and relationship in detail"})
+    if re.search(r"\b(as an ai|language model|modelo de linguagem|inteligência artificial)\b", sp, re.I):
+        issues.append({"problem": "mentions being an AI", "fix": "stay in character; never mention being an AI"})
+    name = str(card.get("name") or "").strip()
+    if name and name.lower() not in sp.lower():
+        issues.append({"problem": "does not mention the character's name", "fix": f"address the character as {name}"})
+    return {"approved": not issues, "score": 7 if not issues else 4, "issues": issues, "summary": "Revisão automática (modo Demo)."}
+
+
 # --------------------------------------------------------------------------- respostas de chat (Demo)
 
 _REPLIES = {

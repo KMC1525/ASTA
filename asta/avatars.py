@@ -7,6 +7,10 @@ Regra fixa (vale também no modo NSFW): conteúdo sexual envolvendo menores não
   * avatars são adultos (18+) por padrão;
   * se a idade informada ou algum texto do card descreve um menor, o avatar NUNCA é "rejuvenescido/envelhecido"
     de mentira: ele continua menor e fica estritamente SFW, platônico (vira "amigo", nunca parceiro(a)).
+
+Tipo de personagem (`character_type`): "fictional" (padrão: original ou de obra, SFW ou NSFW) ou "real" (pessoa de verdade, inclusive a de uma foto).
+Dá para criar avatars de qualquer um dos dois, mas conteúdo sexual sobre pessoa real não existe no ASTA (ela não consentiu): um avatar "real"
+fica sempre SFW, e o prompt dele o apresenta como uma interpretação ficcional, nunca como a pessoa de verdade.
 """
 from __future__ import annotations
 
@@ -20,6 +24,7 @@ AVATAR_SCHEMA = "asta.avatar.v1"
 CHAT_SCHEMA = "asta.avatar_chat.v1"
 RELATIONSHIPS = ("friend", "partner", "companion", "mentor", "custom")
 CONTENT_MODES = ("sfw", "nsfw")
+CHARACTER_TYPES = ("fictional", "real")  # real = pessoa de verdade (viva ou histórica, famosa ou não): sempre SFW
 MIN_AGE = 18  # maioridade
 MIN_FIELD_AGE = 5  # menor valor aceito no campo (o card não é "envelhecido" à força)
 MAX_CHAT_AVATARS = 8
@@ -72,6 +77,8 @@ def normalize_avatar(data: Dict[str, Any], keep_id: Optional[str] = None) -> Dic
     rel = rel if rel in RELATIONSHIPS else "friend"
     content = text(data.get("content"), "sfw", 6).lower()
     content = content if content in CONTENT_MODES else "sfw"
+    ctype = text(data.get("character_type"), "fictional", 10).lower()
+    ctype = ctype if ctype in CHARACTER_TYPES else "fictional"
     fields = {k: text(data.get(k), "", lim) for k, lim in (
         ("description", 2000), ("personality", 2000), ("scenario", 2000), ("system_prompt", 12000),
         ("greeting", 1000), ("examples", 4000), ("looks", 800))}
@@ -83,6 +90,10 @@ def normalize_avatar(data: Dict[str, Any], keep_id: Optional[str] = None) -> Dic
         content = "sfw"
         if rel in ("partner", "custom"):
             rel = "friend"
+    if ctype == "real":
+        # regra fixa: pessoa real nunca é NSFW (vale também para cards importados/editados à mão)
+        flags.append("real_person")
+        content = "sfw"
     portrait = text(data.get("portrait"), "", 130)
     source = text(data.get("source"), "manual", 10).lower()
     source = source if source in ("manual", "ai", "import") else "manual"
@@ -94,6 +105,7 @@ def normalize_avatar(data: Dict[str, Any], keep_id: Optional[str] = None) -> Dic
         "gender": text(data.get("gender"), "", 30),
         "age": int(num(data.get("age"), 24, MIN_FIELD_AGE, 120)),
         "content": content,
+        "character_type": ctype,
         "tags": _tags(data.get("tags")),
         **fields,
         "language": text(data.get("language"), "auto", 12),
@@ -130,6 +142,7 @@ def import_avatar(data: Any) -> Dict[str, Any]:
         "system_prompt": d.get("system_prompt"),
         "greeting": d.get("first_mes") or d.get("greeting"),
         "examples": d.get("mes_example"),
+        "character_type": ((d.get("extensions") or {}).get("asta") or {}).get("character_type") if isinstance(d.get("extensions"), dict) and isinstance((d.get("extensions") or {}).get("asta"), dict) else None,
         "source": "import",
     })
     card["id"] = ""
@@ -161,7 +174,7 @@ def export_card_v2(avatar: Dict[str, Any]) -> Dict[str, Any]:
             "creator": "ASTA",
             "character_version": "1",
             "extensions": {"asta": {"relationship": avatar.get("relationship"), "age": avatar.get("age"),
-                                     "content": avatar.get("content"), "looks": avatar.get("looks", ""),
+                                     "content": avatar.get("content"), "character_type": avatar.get("character_type", "fictional"), "looks": avatar.get("looks", ""),
                                      "voice": avatar.get("voice"), "appearance": avatar.get("appearance")}},
         },
     }
@@ -322,6 +335,9 @@ def build_system_prompt(av: Dict[str, Any], others: List[Dict[str, Any]], memori
         f"Optionally show your mood with [[mood: {'|'.join(MOODS)}]]. Tags are invisible to the user.",
         "- " + (POLICY_NSFW if content == "nsfw" else POLICY_SFW),
     ]
+    if "real_person" in (av.get("flags") or []) or av.get("character_type") == "real":
+        lines.append("- You are a fictional, respectful portrayal of a real person, not the real person: never claim to be them, never invent private facts, "
+                     "scandals or statements and present them as real, and never write sexual content about them.")
     if "minor_described" in (av.get("flags") or []) or av["age"] < MIN_AGE:
         lines.append("- You are a minor: no romance, flirting or sexual content of any kind; stay a supportive, age-appropriate friend.")
     return "\n".join(l for l in lines if l != "")

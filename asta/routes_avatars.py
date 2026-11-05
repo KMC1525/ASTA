@@ -5,6 +5,7 @@ import json
 from typing import Any, Dict, List
 
 from .agents.avatar_pipeline import AvatarPipeline
+from .agents.avatar_prompt import AvatarPromptPipeline
 from .avatar_chat import ChatEngine
 from .avatars import MAX_CHAT_AVATARS, avatar_from_png, export_card_v2, import_avatar
 from .jobs import HttpError, Job
@@ -39,6 +40,7 @@ class AvatarRoutes:
         a("POST", r"/api/avatars", self.r_create)
         a("POST", r"/api/avatars/import", self.r_import)
         a("POST", r"/api/avatars/generate", self.r_generate)
+        a("POST", r"/api/avatars/system-prompt", self.r_system_prompt)
         a("GET", r"/api/avatars/(?P<aid>[\w-]+)", self.r_get)
         a("PUT", r"/api/avatars/(?P<aid>[\w-]+)", self.r_update)
         a("DELETE", r"/api/avatars/(?P<aid>[\w-]+)", self.r_delete)
@@ -157,6 +159,7 @@ class AvatarRoutes:
             "from_images": bool(body.get("from_images")), "images_mode": "one" if body.get("images_mode") == "one" else "each",
             "count": body.get("count") or 0, "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),
+            "character_type": text(body.get("character_type"), "auto", 10),
             "detail": text(body.get("detail"), "detailed", 10),
         }
 
@@ -164,6 +167,29 @@ class AvatarRoutes:
             AvatarPipeline(self.store, job.emit, lambda: job.cancelled).run(pipeline_req)
 
         job = self.app.jobs.start("avatar_generate", work)
+        req.json({"job_id": job.id})
+
+    def r_system_prompt(self, req) -> None:
+        """Pipeline Analisa → Gera → Revisa → Entrega do system prompt de um avatar (existente ou rascunho do editor)."""
+        body = req.body_json()
+        if not isinstance(body, dict):
+            raise HttpError(400, "JSON inválido")
+        running = self.app.jobs.running("avatar_prompt")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+        draft = body.get("draft") if isinstance(body.get("draft"), dict) else {}
+        pipeline_req = {
+            "avatar_id": text(body.get("avatar_id"), "", 60), "draft": {k: v for k, v in draft.items() if isinstance(k, str)},
+            "instructions": text(body.get("instructions"), "", 4000), "content": "nsfw" if body.get("content") == "nsfw" else "sfw",
+            "character_type": text(body.get("character_type"), "auto", 10), "detail": text(body.get("detail"), "detailed", 10), "apply": bool(body.get("apply")),
+        }
+        if pipeline_req["avatar_id"] and not self.store.avatars.get(pipeline_req["avatar_id"]):
+            raise HttpError(404, "Avatar não encontrado")
+
+        def work(job: Job) -> None:
+            AvatarPromptPipeline(self.store, job.emit, lambda: job.cancelled).run(pipeline_req)
+
+        job = self.app.jobs.start("avatar_prompt", work)
         req.json({"job_id": job.id})
 
     # ------------------------------------------------------------------ conversas

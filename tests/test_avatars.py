@@ -460,6 +460,198 @@ class AvatarFromReferenceImageTests(ServerCase):
         self.assertTrue(status == 400 or any(e["type"] == "error" for e in ev))
 
 
+class RealOrFictionalCharacterTests(TmpCase):
+    """Qualquer personagem, real ou fictício: fictício adulto pode ser SFW/NSFW; pessoa real é sempre SFW; menor é sempre SFW e platônico."""
+
+    def test_real_person_is_always_sfw_even_when_imported_or_edited_by_hand(self):
+        c = av.normalize_avatar({"name": "Pessoa Real", "character_type": "real", "content": "nsfw", "relationship": "partner"})
+        self.assertEqual((c["character_type"], c["content"]), ("real", "sfw"))
+        self.assertIn("real_person", c["flags"])
+        f = av.normalize_avatar({"name": "Heroína de anime", "character_type": "fictional", "content": "nsfw", "age": 27})
+        self.assertEqual((f["character_type"], f["content"], f["flags"]), ("fictional", "nsfw", []))
+        self.assertEqual(av.normalize_avatar({"name": "X", "content": "nsfw"})["character_type"], "fictional")  # padrão
+        self.assertEqual(av.normalize_avatar({"name": "X", "character_type": "alien"})["character_type"], "fictional")
+        # cartão V2 exportado e importado mantém o tipo (e a regra continua valendo)
+        card = av.export_card_v2(c)
+        self.assertEqual(card["data"]["extensions"]["asta"]["character_type"], "real")
+        again = av.import_avatar(card)
+        self.assertEqual((again["character_type"], again["content"]), ("real", "sfw"))
+        tampered = json.loads(json.dumps(card))
+        tampered["data"]["extensions"]["asta"]["content"] = "nsfw"
+        self.assertEqual(av.import_avatar(tampered)["content"], "sfw")
+
+    def test_chat_prompt_of_a_real_person_portrays_a_fiction_and_forbids_sexual_content(self):
+        c = av.normalize_avatar({"name": "Pessoa Real", "character_type": "real", "content": "nsfw"})
+        prompt = av.build_system_prompt(c, [], [], "Ana", "", c["content"])
+        self.assertIn("portrayal of a real person", prompt)
+        self.assertIn("never write sexual content about them", prompt)
+        self.assertNotIn("ASTA adds no content filters", prompt)  # o modo NSFW não vale para ela
+        fic = av.normalize_avatar({"name": "Rainha Elfa", "content": "nsfw"})
+        self.assertNotIn("portrayal of a real person", av.build_system_prompt(fic, [], [], "Ana", "", fic["content"]))
+        self.assertIn("ASTA adds no content filters", av.build_system_prompt(fic, [], [], "Ana", "", fic["content"]))
+
+
+class ScriptedProvider:
+    """Provedor falso para os agentes: responde por papel ([[ASTA_AGENT:nome]]) com o que o teste mandar."""
+
+    vision = False
+    model = "scripted"
+
+    def __init__(self, script):
+        self.script, self.calls = script, []
+
+    def chat(self, messages, system="", temperature=0.8, max_tokens=1000, json_mode=False):
+        import re
+
+        agent = re.search(r"\[\[ASTA_AGENT:(\w+)\]\]", system).group(1)
+        self.calls.append((agent, messages[-1]["content"]))
+        reply = self.script[agent]
+        reply = reply.pop(0) if isinstance(reply, list) and len(reply) > 1 else (reply[0] if isinstance(reply, list) else reply)
+        return json.dumps(reply) if not isinstance(reply, str) else reply
+
+
+class SystemPromptPipelineTests(TmpCase):
+    """Pipeline Analisa → Gera → Revisa → Entrega do system prompt."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = Store(self.tmp / "home")
+        self.events = []
+
+    def run_pipeline(self, req, provider=None):
+        from unittest import mock
+
+        from asta.agents import avatar_prompt
+
+        pipe = avatar_prompt.AvatarPromptPipeline(self.store, self.events.append)
+        if provider is None:
+            return pipe.run(req)
+        with mock.patch.object(avatar_prompt, "build_provider", return_value=provider):
+            return pipe.run(req)
+
+    def steps(self):
+        return [(e["id"], e["status"]) for e in self.events if e["type"] == "step" and e["status"] != "running"]
+
+    def test_demo_runs_the_four_stages_in_order_and_delivers_a_prompt(self):
+        r = self.run_pipeline({"draft": {"name": "Luna", "personality": "carinhosa, curiosa, divertida", "relationship": "friend", "age": 26}, "instructions": "Gosta de astronomia."})
+        self.assertEqual([s[0] for s in self.steps() if s[1] in ("done", "warn")], ["analyze", "generate", "review", "deliver"])
+        self.assertEqual(self.events[0]["steps"], ["analyze", "generate", "review", "deliver"])
+        self.assertIn("Luna", r["system_prompt"])
+        self.assertIn("astronomia", r["system_prompt"])
+        self.assertEqual((r["character_type"], r["content"], r["applied"]), ("fictional", "sfw", False))
+        self.assertTrue(r["approved"])
+        self.assertEqual(self.events[-1]["type"], "done")
+
+    def test_apply_saves_the_prompt_into_the_existing_avatar(self):
+        saved = self.store.avatars.save(av.normalize_avatar({"name": "Theo", "personality": "calmo e sábio", "age": 30}))
+        r = self.run_pipeline({"avatar_id": saved["id"], "apply": True, "content": "nsfw"})
+        card = self.store.avatars.get(saved["id"])
+        self.assertTrue(r["applied"])
+        self.assertEqual(card["system_prompt"], r["system_prompt"])
+        self.assertIn("Theo", card["system_prompt"])
+        self.assertEqual(card["content"], "nsfw")  # personagem fictício adulto pode ser NSFW
+        # sem apply, o avatar não muda
+        before = card["system_prompt"]
+        self.run_pipeline({"avatar_id": saved["id"], "instructions": "mais tímido"})
+        self.assertEqual(self.store.avatars.get(saved["id"])["system_prompt"], before)
+
+    def test_real_person_is_forced_to_sfw_with_a_warning_and_a_fictional_portrayal(self):
+        r = self.run_pipeline({"draft": {"name": "Pessoa Famosa", "personality": "carismática"}, "character_type": "real", "content": "nsfw", "apply": False})
+        self.assertEqual((r["character_type"], r["content"]), ("real", "sfw"))
+        self.assertIn("real_person", r["flags"])
+        self.assertTrue(any("pessoa real" in w for w in r["warnings"]))
+        self.assertRegex(r["system_prompt"], r"interpretação ficcional|fictional, respectful interpretation")  # o prompt a apresenta como retrato ficcional, nunca como a pessoa
+
+    def test_minor_is_forced_to_sfw_by_code_even_if_the_model_says_otherwise(self):
+        script = {"avatar_prompt_analyst": {"character_type": "fictional", "is_minor": False, "age": 16, "traits": ["curiosa"], "language": "pt-BR"},
+                  "avatar_prompt_writer": {"system_prompt": "Você é Bia, uma amiga curiosa de 16 anos."},
+                  "avatar_prompt_reviewer": {"approved": True, "score": 9, "issues": []}}
+        r = self.run_pipeline({"draft": {"name": "Bia", "age": 16}, "content": "nsfw"}, ScriptedProvider(script))
+        self.assertTrue(r["is_minor"])
+        self.assertEqual(r["content"], "sfw")
+        self.assertTrue(any("menor" in w for w in r["warnings"]))
+
+    def test_fictional_adult_keeps_nsfw_and_the_user_choice_beats_the_model_guess(self):
+        script = {"avatar_prompt_analyst": {"character_type": "fictional", "is_minor": False, "age": 29, "traits": ["sedutora"], "language": "pt-BR"},
+                  "avatar_prompt_writer": {"system_prompt": "Você é Morgana, uma feiticeira sedutora."},
+                  "avatar_prompt_reviewer": {"approved": True, "score": 8, "issues": []}}
+        r = self.run_pipeline({"draft": {"name": "Morgana", "age": 29}, "content": "nsfw"}, ScriptedProvider(script))
+        self.assertEqual((r["character_type"], r["content"]), ("fictional", "nsfw"))
+        # o modelo chuta "fictional", mas o usuário disse que é pessoa real: vale o usuário (e fica SFW)
+        r2 = self.run_pipeline({"draft": {"name": "Alguém", "age": 40}, "content": "nsfw", "character_type": "real"}, ScriptedProvider(script))
+        self.assertEqual((r2["character_type"], r2["content"]), ("real", "sfw"))
+        # o modelo diz "real" sozinho: também vira SFW
+        script["avatar_prompt_analyst"]["character_type"] = "real"
+        r3 = self.run_pipeline({"draft": {"name": "Alguém", "age": 40}, "content": "nsfw"}, ScriptedProvider(script))
+        self.assertEqual((r3["character_type"], r3["content"]), ("real", "sfw"))
+
+    def test_the_reviewer_can_send_the_prompt_back_once_and_the_fix_is_delivered(self):
+        script = {"avatar_prompt_analyst": {"character_type": "fictional", "age": 25, "traits": ["tímida"], "language": "pt-BR"},
+                  "avatar_prompt_writer": [{"system_prompt": "Você é Lia."}, {"system_prompt": "```\nVocê é Lia, uma jovem tímida que fala baixinho e adora livros.\n```"}],
+                  "avatar_prompt_reviewer": [{"approved": False, "score": 3, "issues": [{"problem": "genérico", "fix": "descreva a voz"}]}, {"approved": True, "score": 8, "issues": []}]}
+        prov = ScriptedProvider(script)
+        r = self.run_pipeline({"draft": {"name": "Lia", "age": 25}}, prov)
+        self.assertTrue(r["revised"])
+        self.assertEqual(r["system_prompt"], "Você é Lia, uma jovem tímida que fala baixinho e adora livros.")  # cercas de markdown removidas
+        self.assertTrue(r["approved"])
+        self.assertEqual([c[0] for c in prov.calls], ["avatar_prompt_analyst", "avatar_prompt_writer", "avatar_prompt_reviewer", "avatar_prompt_writer", "avatar_prompt_reviewer"])
+        self.assertIn("FEEDBACK TO FIX", prov.calls[3][1])
+        self.assertIn("descreva a voz", prov.calls[3][1])
+        self.assertTrue(any(e["type"] == "revision" for e in self.events))
+
+    def test_still_not_approved_after_the_fix_is_delivered_with_a_warning(self):
+        script = {"avatar_prompt_analyst": {"character_type": "fictional", "age": 25}, "avatar_prompt_writer": {"system_prompt": "Você é Lia."},
+                  "avatar_prompt_reviewer": {"approved": False, "score": 2, "issues": [{"problem": "curto", "fix": "alongue"}]}}
+        r = self.run_pipeline({"draft": {"name": "Lia"}}, ScriptedProvider(script))
+        self.assertFalse(r["approved"])
+        self.assertTrue(any("não aprovado" in w for w in r["warnings"]))
+        self.assertEqual(r["system_prompt"], "Você é Lia.")
+
+    def test_garbage_or_empty_model_answers_fall_back_to_rules(self):
+        script = {"avatar_prompt_analyst": "isto não é JSON", "avatar_prompt_writer": {"system_prompt": "   "}, "avatar_prompt_reviewer": "nope"}
+        r = self.run_pipeline({"draft": {"name": "Nina", "personality": "animada"}}, ScriptedProvider(script))
+        self.assertIn("Nina", r["system_prompt"])
+        self.assertTrue(r["warnings"])
+        self.assertTrue(r["approved"])
+
+    def test_validation(self):
+        with self.assertRaises(ValueError):
+            self.run_pipeline({})
+        with self.assertRaises(ValueError):
+            self.run_pipeline({"avatar_id": "nao-existe"})
+
+
+class SystemPromptApiTests(ServerCase):
+    def test_api_runs_the_pipeline_as_a_job_and_validates(self):
+        status, r = self.c.json("POST", "/api/avatars/system-prompt", {"draft": {"name": "Mira", "personality": "gentil"}, "instructions": "ama jardinagem"})
+        self.assertEqual(status, 200, r)
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        self.assertEqual([e["id"] for e in ev if e["type"] == "step" and e["status"] == "done"], ["analyze", "generate", "review", "deliver"])
+        done = next(e for e in ev if e["type"] == "done")
+        self.assertIn("Mira", done["system_prompt"])
+        self.assertEqual(self.c.json("POST", "/api/avatars/system-prompt", {"avatar_id": "nao-existe"})[0], 404)
+        status, r = self.c.json("POST", "/api/avatars/system-prompt", {})
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        self.assertTrue(any(e["type"] == "error" and e.get("kind") == "validation" for e in ev))
+
+    def test_api_apply_to_a_saved_avatar_and_real_person_stays_sfw(self):
+        status, card = self.c.json("POST", "/api/avatars", {"name": "Quem", "age": 33, "content": "nsfw", "personality": "misteriosa"})
+        status, r = self.c.json("POST", "/api/avatars/system-prompt", {"avatar_id": card["id"], "apply": True, "content": "nsfw", "character_type": "real"})
+        done = next(e for e in self.c.sse(f"/api/jobs/{r['job_id']}/events") if e["type"] == "done")
+        saved = self.c.json("GET", f"/api/avatars/{card['id']}")[1]
+        self.assertEqual((saved["character_type"], saved["content"]), ("real", "sfw"))
+        self.assertEqual(saved["system_prompt"], done["system_prompt"])
+
+    def test_creating_avatars_real_person_is_sfw_and_fictional_can_be_nsfw(self):
+        for ctype, want in (("real", "sfw"), ("fictional", "nsfw")):
+            status, r = self.c.json("POST", "/api/avatars/generate", {"prompt": "Uma amiga chamada Vera, divertida", "content": "nsfw", "character_type": ctype})
+            done = next(e for e in self.c.sse(f"/api/jobs/{r['job_id']}/events") if e["type"] == "done")
+            card = self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]
+            self.assertEqual((card["character_type"], card["content"]), (ctype, want), ctype)
+            if ctype == "real":
+                self.assertTrue(any("pessoa real" in w for w in done["warnings"]))
+
+
 class HttpRangeTests(ServerCase):
     def test_range_requests_for_media(self):
         aid = self.c.json("POST", "/api/avatars", {"name": "R"})[1]["id"]

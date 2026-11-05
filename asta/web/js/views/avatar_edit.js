@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { state } from '../main.js';
 import { confirmDialog, download, field, h, icon, range, select, seg, tagsInput, toast } from '../ui.js';
@@ -7,7 +7,7 @@ import { figureSVG } from './characters.js';
 import { openChat } from './avatars.js';
 
 const blank = () => ({
-  name: '', relationship: 'friend', gender: '', age: 24, content: state.settings.avatars.content === 'nsfw' ? 'nsfw' : 'sfw', tags: [], description: '', personality: '', scenario: '',
+  name: '', relationship: 'friend', gender: '', age: 24, character_type: 'fictional', content: state.settings.avatars.content === 'nsfw' ? 'nsfw' : 'sfw', tags: [], description: '', personality: '', scenario: '',
   system_prompt: '', greeting: '', examples: '', looks: '', language: 'auto', talkativeness: 0.6, portrait: '', flags: [],
   voice: { engine: 'auto', name: '', lang: 'auto', pitch: 1, rate: 1, server_voice: '' },
   appearance: { skin: '#c68a63', hair: '#2b1b12', hair_style: 'short', top: '#3b5b7a', bottom: '#2a2a30', height: 1.72, build: 1, accessory: 'none' },
@@ -46,6 +46,43 @@ export default async function render(root, ctx, id) {
     catch (e) { toast(e.message, 'err'); }
   }
 
+  // pipeline de system prompt (Analisa → Gera → Revisa → Entrega)
+  const genOpts = { instructions: '' };
+  const genBox = { status: h('span', { class: 'dim small' }), steps: h('div', { class: 'col', style: { gap: '4px', marginTop: '10px' } }), out: h('div') };
+  const PROMPT_STEPS = [['analyze', t('Analisa'), t('Entende quem é o personagem (real ou fictício, idade, jeito de falar)')], ['generate', t('Gera'), t('Escreve o system prompt')], ['review', t('Revisa'), t('Confere coerência, voz, idioma e regras de segurança')], ['deliver', t('Entrega'), t('Limpa, aplica as regras e entrega o texto final')]];
+  const stepRows = {};
+  function paintSteps() {
+    genBox.steps.replaceChildren(...PROMPT_STEPS.map(([id, label, hint]) => { const r = h('div', { class: 'row', style: { gap: '8px' }, title: hint }, h('span', { class: 'chip' }, label), h('span', { class: 'dim small' }, '')); stepRows[id] = r; return r; }));
+  }
+  const stepText = (id, s, dt) => {
+    if (s === 'running') return dt.revision ? t('revisando…') : t('trabalhando…');
+    if (id === 'analyze') return (dt.character_type === 'real' ? t('pessoa real') : t('personagem fictício')) + (dt.is_minor ? ' · ' + t('menor de idade') : '') + ' · ' + (dt.content || '').toUpperCase();
+    if (id === 'generate') return t('{n} palavras', { n: dt.words || 0 }) + (dt.revision ? ' · ' + t('corrigido') : '');
+    if (id === 'review') return (dt.approved ? t('aprovado') : t('com ressalvas')) + (dt.score != null ? ' · ' + t('nota {n}/10', { n: dt.score }) : '');
+    return s === 'done' ? t('pronto') : '';
+  };
+  async function generatePrompt() {
+    paintSteps(); genBox.out.replaceChildren(); genBox.status.textContent = '';
+    let jid;
+    try { jid = (await api('/api/avatars/system-prompt', { method: 'POST', body: { avatar_id: d.id || '', draft: d, instructions: genOpts.instructions, content: d.content, character_type: d.character_type === 'real' ? 'real' : 'auto', detail: 'detailed' } })).job_id; }
+    catch (e) { return toast(e.message, 'err'); }
+    events('/api/jobs/' + jid + '/events', (ev) => {
+      if (ev.type === 'step' && stepRows[ev.id]) { stepRows[ev.id].lastChild.textContent = stepText(ev.id, ev.status, ev.detail || {}); stepRows[ev.id].firstChild.classList.toggle('on', ev.status === 'done' || ev.status === 'warn'); }
+      else if (ev.type === 'done') {
+        d.system_prompt = ev.system_prompt;
+        if (ev.character_type) d.character_type = ev.character_type;
+        if (ev.content) d.content = ev.content;
+        d.flags = ev.flags || d.flags;
+        const notes = (ev.warnings || []).map((w) => h('div', { class: 'errbox', style: { marginTop: '8px' } }, w));
+        toast(t('System prompt gerado: revise e salve.'), 'ok');
+        paint();
+        genBox.out.replaceChildren(h('div', { class: 'muted small', style: { marginTop: '10px' } }, t('Pronto — o texto foi para o campo System prompt (acima). Nota {n}/10.', { n: ev.score == null ? '—' : ev.score })), ...notes);
+      }
+      else if (ev.type === 'error') toast(ev.message, 'err');
+      else if (ev.type === 'cancelled') toast(t('Cancelado'));
+    });
+  }
+
   function paint() {
     const ap = d.appearance, minor = (d.flags || []).includes('minor_described') || d.age < 18;
     const fig = h('div', { class: 'fig' }, figureSVG(ap, 168)), pic = h('div', { class: 'row', style: { gap: '10px' } });
@@ -68,7 +105,9 @@ export default async function render(root, ctx, id) {
           field(t('Relação com você'), select(Object.keys(REL_LABEL).map((k) => [k, t(REL_LABEL[k])]), d.relationship, (v) => { d.relationship = v; }))),
         h('div', { class: 'grid3' }, field(t('Gênero'), h('input', { value: d.gender, list: 'genders', placeholder: t('feminino, masculino, não-binário…'), oninput: (e) => { d.gender = e.target.value; } }), null),
           field(t('Idade'), h('input', { type: 'number', min: 5, max: 120, value: d.age, oninput: (e) => { d.age = parseInt(e.target.value || '24', 10); } })),
-          field(t('Conteúdo'), seg([['sfw', 'SFW'], ['nsfw', 'NSFW']], d.content, (v) => { d.content = v; }))),
+          field(t('Conteúdo'), seg([['sfw', 'SFW'], ['nsfw', 'NSFW']], d.content, (v) => { if (v === 'nsfw' && d.character_type === 'real') { toast(t('Pessoas reais ficam sempre em SFW.'), 'err'); paint(); return; } d.content = v; }))),
+        field(t('Tipo de personagem'), seg([['fictional', t('Fictício (original ou de uma obra)')], ['real', t('Pessoa real')]], d.character_type || 'fictional', (v) => { d.character_type = v; if (v === 'real') d.content = 'sfw'; paint(); }),
+          t('Dá para criar avatares de qualquer tipo de personagem, real ou fictício. Pessoa real fica sempre SFW (o ASTA não cria conteúdo sexual sobre pessoas reais) e é retratada só como interpretação ficcional e respeitosa. Personagens fictícios adultos podem ser SFW ou NSFW.')),
         h('datalist', { id: 'genders' }, ['feminino', 'masculino', 'não-binário', 'female', 'male', 'non-binary'].map((g) => h('option', { value: g }))),
         h('div', { class: 'hint small dim' }, t('SFW: tudo para todos os públicos. NSFW: conversa adulta sem filtros do ASTA (o provedor escolhido ainda pode ter os dele). Avatares são adultos (18+); se o card descrever um menor de idade, ele fica SFW e apenas amigo.')),
         minor ? h('div', { class: 'errbox', style: { marginTop: '10px' } }, t('Este avatar descreve um menor de idade: o modo NSFW e o papel de parceiro(a) ficam desativados.')) : null,
@@ -83,6 +122,12 @@ export default async function render(root, ctx, id) {
         field(t('Primeira mensagem'), h('textarea', { rows: 2, oninput: (e) => { d.greeting = e.target.value; } }, d.greeting)),
         field(t('Exemplos de fala'), h('textarea', { rows: 4, placeholder: t('Usuário: …\nAvatar: …'), oninput: (e) => { d.examples = e.target.value; } }, d.examples), t('Mostram o estilo do avatar ao modelo.')),
         field(t('Falante em grupo'), range(0.1, 1, 0.05, d.talkativeness, (v) => { d.talkativeness = v; }, (v) => Math.round(v * 100) + '%'), t('Quanto mais alto, mais o avatar puxa a conversa nos grupos.'))),
+
+      h('div', { class: 'card sect' }, h('h3', null, t('Gerar o system prompt com IA')),
+        h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Um pipeline em 4 etapas — analisa o personagem, gera o prompt, revisa e entrega — usando o nome, a personalidade, a aparência e as instruções abaixo. O resultado vai para o campo System prompt; revise e salve.')),
+        field(t('Instruções (opcional)'), h('textarea', { rows: 3, placeholder: t('Ex.: personagem de anime, fala com gírias, é protetora e meio tsundere; ou: baseada em uma figura histórica…'), oninput: (e) => { genOpts.instructions = e.target.value; } }, genOpts.instructions)),
+        h('div', { class: 'row' }, h('button', { class: 'btn primary', onclick: generatePrompt }, icon('sparkle', 14), t('Gerar system prompt')), genBox.status),
+        genBox.steps, genBox.out),
 
       h('div', { class: 'card sect' }, h('h3', null, t('Voz')), h('datalist', { id: 'voices' }, voices.map((v) => h('option', { value: v.name }, v.lang))),
         h('div', { class: 'grid2' },

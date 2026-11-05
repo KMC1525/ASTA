@@ -107,6 +107,9 @@ class BrowserTests(unittest.TestCase):
     def test_08_a_screen_whose_files_fail_to_load_recovers_or_explains(self):
         self.run_script("resilience_ui.js")
 
+    def test_09_avatar_editor_generates_the_system_prompt_and_real_people_stay_sfw(self):
+        self.run_script("avatar_prompt_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()
