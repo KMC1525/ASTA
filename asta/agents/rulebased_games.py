@@ -71,9 +71,9 @@ def analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
     theme = settings[0][1] if settings else "fantasy"
     mood = settings[0][2] if settings else "calm"
     mode = "runner" if re.search(r"runner|corrida|correr|endless|infinit", blob, re.I) else "shooter"
-    title = re.sub(r"\s+", " ", prompt.strip().split("\n")[0])[:60].rstrip(".!?") or _t(lang, "Novo jogo", "New game")
+    title = re.sub(r"\s+", " ", prompt.strip().split("\n")[0])[:60].rstrip(".!?,;:- ") or _t(lang, "Novo jogo", "New game")
     if len(title.split()) > 8:
-        title = " ".join(title.split()[:6]).title()
+        title = " ".join(title.split()[:6]).title().rstrip(".!?,;:- ")
     return {"genre": genre, "title": title[:1].upper() + title[1:], "premise": prompt[:300] or digest[:300], "language": {"pt": "pt-BR", "en": "en"}[lang],
             "theme": theme, "mood": mood, "names": names[:6], "scenes": scenes, "mode": mode, "length": str(inp.get("length") or "medium"),
             "notes": ([digest[:240].replace("\n", " ")] if digest else [])}

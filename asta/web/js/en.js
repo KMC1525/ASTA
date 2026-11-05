@@ -471,4 +471,6 @@ export default {
   'Sem conexão com o servidor do ASTA.': 'No connection to the ASTA server.',
   'Falha no upload.': 'Upload failed.',
   'Usuário: …\nAvatar: …': 'User: …\nAvatar: …',
+  'Avatars e jogos': 'Avatars and games',
+  'Mundo 3D': '3D world', 'Jogo 2D': '2D game', 'Avatar': 'Avatar',
 };
