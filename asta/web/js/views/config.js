@@ -1,7 +1,7 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { refreshState, renderSide, saveSettings, state } from '../main.js';
-import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../quant.js';
+import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
 import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {

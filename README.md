@@ -60,6 +60,8 @@ asta
 The WebUI opens at `http://localhost:8787`. To update, run the install command again (or `asta update`).
 
 > **After updating, restart ASTA** (close it and run `asta` again) and reload the page (Ctrl+F5). A page left open across an update can show *"Could not load this screen"*: ASTA reloads it once by itself, and if that is not enough it explains what to do; the sidebar also warns when a newer version is installed than the one running.
+>
+> If a screen still fails to load, an **ad/tracker-blocking browser extension** (uBlock Origin, AdBlock, Firefox tracking protection…) may be blocking one of ASTA's files — turn it off for `localhost` and reload. (ASTA's own files no longer use names that these blockers filter, such as `quant.js`, but a strict list can still block something.)
 
 **Installing and updating covers three layers:** (1) **Python** and its tools — installed or upgraded through your system's package manager (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` or Homebrew on Linux and macOS; `winget` on Windows), which may ask for your password (`sudo`); if the new Python is a newer version, ASTA's private environment is rebuilt for it automatically; (2) **ASTA** itself; (3) **all of ASTA's libraries**, described below. Set `ASTA_PYTHON=keep` to never touch the system Python.
 

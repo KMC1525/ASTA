@@ -3,7 +3,7 @@ import { t } from '../i18n.js';
 import { go } from '../main.js';
 import { avatarPic, REL_LABEL } from '../avatar_ui.js';
 import { confirmDialog, debounce, fmtBytes, fmtDate, gradient, h, icon, modal, popover, tagsInput, toast } from '../ui.js';
-import { GGUF_KINDS } from '../quant.js';
+import { GGUF_KINDS } from '../model_labels.js';
 import { openChat } from './avatars.js';
 import { GENRE_LABEL } from './steps.js';
 

@@ -86,6 +86,7 @@ async function render() {
     main.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'errbox' },
       h('p', { style: { margin: '0 0 8px' } }, t('Não foi possível carregar esta tela. Isso costuma acontecer quando o ASTA é atualizado com a página aberta.')),
       h('p', { class: 'small', style: { margin: '0 0 12px' } }, t('Recarregue a página (Ctrl+F5). Se continuar, feche o ASTA, abra de novo com o comando asta e recarregue.')),
+      h('p', { class: 'small', style: { margin: '0 0 12px' } }, t('Também pode ser uma extensão de bloqueio de anúncios ou rastreadores barrando um arquivo do ASTA: desative-a para este endereço (localhost) e recarregue.')),
       h('p', { class: 'mono small dim', style: { margin: '0 0 12px' } }, String((e && e.message) || e)),
       h('button', { class: 'btn primary', onclick: () => reloadPage(true) }, t('Recarregar a página')))));
     return;

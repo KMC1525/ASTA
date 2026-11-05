@@ -60,6 +60,8 @@ asta
 A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de instalação de novo (ou `asta update`).
 
 > **Depois de atualizar, reinicie o ASTA** (feche e rode `asta` de novo) e recarregue a página (Ctrl+F5). Uma página deixada aberta durante uma atualização pode mostrar *"Não foi possível carregar esta tela"*: o ASTA a recarrega sozinho uma vez e, se não bastar, explica o que fazer; a barra lateral também avisa quando há uma versão mais nova instalada do que a que está rodando.
+>
+> Se uma tela ainda não carregar, uma **extensão de bloqueio de anúncios/rastreadores** do navegador (uBlock Origin, AdBlock, proteção contra rastreamento do Firefox…) pode estar barrando um arquivo do ASTA — desative-a para `localhost` e recarregue. (Os arquivos do ASTA já não usam nomes que esses bloqueadores filtram, como `quant.js`, mas uma lista rígida ainda pode barrar algo.)
 
 **Instalar e atualizar cobre três camadas:** (1) o **Python** e as ferramentas dele — instalados ou atualizados pelo gerenciador de pacotes do seu sistema (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` ou Homebrew no Linux e no macOS; `winget` no Windows), que pode pedir sua senha (`sudo`); se o novo Python for de uma versão mais nova, o ambiente privado do ASTA é recriado para ele automaticamente; (2) o próprio **ASTA**; (3) **todas as bibliotecas do ASTA**, descritas abaixo. Use `ASTA_PYTHON=keep` para nunca mexer no Python do sistema.
 

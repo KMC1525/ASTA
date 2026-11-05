@@ -5,7 +5,7 @@ run('resilience', async ({ base, api, check, browser }) => {
 
   // 1) o arquivo falha sempre: recarrega uma vez e então mostra a mensagem amigável com o botão de recarregar (sem laço de recarga)
   { const { ctx, page } = await mk(); let hits = 0;
-    await page.route('**/js/quant.js', (route) => { hits++; route.abort(); });
+    await page.route('**/js/model_labels.js', (route) => { hits++; route.abort(); });
     await page.goto(base + '/#/config'); await page.waitForSelector('.errbox', { timeout: 15000 }); await page.waitForTimeout(500);
     const txt = await page.locator('.errbox').innerText();
     check('res:mensagem-amigavel', txt.includes('could not be loaded') && txt.includes('Ctrl+F5'));
@@ -16,7 +16,7 @@ run('resilience', async ({ base, api, check, browser }) => {
 
   // 2) falha só na primeira vez: a recarga automática resolve e a Configuração abre normalmente
   { const { ctx, page } = await mk(); let n = 0;
-    await page.route('**/js/quant.js', (route) => { n++; n === 1 ? route.abort() : route.continue(); });
+    await page.route('**/js/model_labels.js', (route) => { n++; n === 1 ? route.abort() : route.continue(); });
     await page.goto(base + '/#/config'); await page.waitForSelector('.tabs', { timeout: 15000 });
     check('res:configuracao-abre-apos-recarga-automatica', (await page.locator('.tabs button').count()) >= 6 && (await page.locator('.errbox').count()) === 0);
     await ctx.close(); }

@@ -43,6 +43,16 @@ class ServerCase(unittest.TestCase):
 
 
 class ApiBasicsTests(ServerCase):
+    def test_web_files_do_not_use_names_that_ad_blockers_block(self):
+        """Bloqueadores de anúncios/rastreadores barram nomes de scripts de rastreamento conhecidos (ex.: «quant.js» da Quantcast): a tela quebrava só para quem os usa."""
+        from asta.server import WEB_DIR
+
+        risky = {"quant.js", "analytics.js", "ga.js", "gtag.js", "gtm.js", "ads.js", "adsbygoogle.js", "track.js", "tracker.js", "tracking.js", "pixel.js", "beacon.js",
+                 "metrics.js", "stats.js", "telemetry.js", "banner.js", "advert.js", "doubleclick.js", "adsense.js", "fbevents.js", "hotjar.js", "segment.js", "sentry.js"}
+        names = {p.name.lower() for p in WEB_DIR.rglob("*") if p.is_file()}
+        self.assertEqual(sorted(names & risky), [])
+        self.assertTrue((WEB_DIR / "js" / "model_labels.js").is_file())
+
     def test_state_reports_the_version_installed_on_disk(self):
         from unittest import mock
 

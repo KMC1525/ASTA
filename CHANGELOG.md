@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.13] — 2026-11-05
+
+### Corrigido
+- **Configuração continuava mostrando "error loading dynamically imported module: …/js/quant.js"**, mesmo depois de recarregar a página e reiniciar o ASTA. O arquivo `quant.js` (rótulos das quantizações dos modelos) tinha o mesmo nome de um script de rastreamento conhecido (Quantcast, `quant.js`) que **bloqueadores de anúncios e de rastreadores** — extensões como uBlock Origin/AdBlock e a proteção contra rastreamento do Firefox — barram pelo nome. O navegador recusava só esse arquivo e a tela de Configuração (que o importa) não abria; o servidor nunca teve problema. O arquivo agora se chama **`model_labels.js`** (o conteúdo é o mesmo) e passou a ser carregado normalmente, mesmo com esses bloqueadores ligados.
+- A mensagem de falha ao carregar uma tela (da 0.2.12) agora também cita que uma **extensão de bloqueio** pode estar barrando um arquivo, com o que fazer (desativar para `localhost`).
+- Testes: nenhum arquivo da WebUI pode usar nome de script de rastreamento conhecido (`quant.js`, `analytics.js`, `track.js`, `pixel.js`…), e os testes de recuperação do navegador passam a bloquear o `model_labels.js`.
+
+### Observação
+- Eu não tenho o navegador nem as extensões da sua máquina, então **não reproduzi o bloqueio**: o diagnóstico vem de o erro persistir só nesse arquivo, depois de recarregar/reiniciar, e de o nome coincidir com um item de listas de bloqueio conhecidas. Se a Configuração ainda não abrir depois de atualizar, a mensagem na tela traz o arquivo que falhou; teste com as extensões desativadas para `localhost` e me avise qual é o arquivo.
+- A explicação da 0.2.12 (página aberta durante uma atualização) era uma hipótese que não se confirmou como causa deste caso; as proteções dela continuam valendo para esse outro cenário.
+
 ## [0.2.12] — 2026-11-05
 
 ### Corrigido
@@ -252,7 +263,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.12...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.13...HEAD
+[0.2.13]: https://github.com/KMC1525/ASTA/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/KMC1525/ASTA/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/KMC1525/ASTA/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/KMC1525/ASTA/compare/v0.2.9...v0.2.10

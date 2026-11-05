@@ -562,4 +562,5 @@ export default {
   'Não foi possível carregar esta tela. Isso costuma acontecer quando o ASTA é atualizado com a página aberta.': 'This screen could not be loaded. This usually happens when ASTA is updated while the page is open.',
   'Recarregue a página (Ctrl+F5). Se continuar, feche o ASTA, abra de novo com o comando asta e recarregue.': 'Reload the page (Ctrl+F5). If it keeps failing, close ASTA, start it again with the asta command and reload.',
   'Recarregar a página': 'Reload the page',
+  'Também pode ser uma extensão de bloqueio de anúncios ou rastreadores barrando um arquivo do ASTA: desative-a para este endereço (localhost) e recarregue.': 'It can also be an ad/tracker-blocking extension blocking an ASTA file: turn it off for this address (localhost) and reload.',
 };
