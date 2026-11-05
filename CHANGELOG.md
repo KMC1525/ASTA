@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.8] — 2026-11-05
+
+### Adicionado
+- **Avatars a partir de foto ou arte.** No modo Avatar da tela Principal, a opção **Foto/arte como base** usa as imagens anexadas como base visual: dá para enviar **só a imagem** ou somar prompt de texto e outros anexos (documentos, conversas…). Escolha *um avatar por imagem* ou *uma pessoa com todas as imagens*.
+  - A imagem define o visual (`looks`, cor do cabelo, aparência) — descrito pelo modelo de visão configurado, ou pelas cores dominantes no modo Demo — e **vira o retrato** do avatar; o texto só acrescenta nome, personalidade e história. O número de avatares segue as imagens, não o palpite do modelo.
+  - O ASTA **não identifica pessoas reais pelo rosto**: o nome vem do texto ou, se não houver, do nome do arquivo (`luna_azul-01.png` → "Luna Azul").
+  - **Segurança:** foto de pessoa real, ou imagem que não dá para identificar como arte, fica **sempre SFW** (com aviso); NSFW só vale quando o modelo de visão classifica a imagem como arte de personagem fictício (`source_kind: "art"`). Uma imagem que pareça mostrar um menor segue a regra fixa dos menores (SFW e platônico, sem "envelhecer").
+  - API: `POST /api/avatars/generate` aceita `from_images` e `images_mode` (`each`|`one`).
+- **Modelos GGUF por tipo** (*Configuração → Modelos locais*): abas **Texto, Imagem, Vídeo, Som e música, Voz e Outros**, cada uma com busca própria no Hugging Face (filtrada pela tarefa do repositório), pasta própria (`models/` para texto — como sempre —, `models/image`, `models/video`, `models/sound`, `models/voice`, `models/other`), o mesmo seletor de quantização e lista de baixados própria. API: `kind` em `/api/hf/search`, `/api/hf/local` (também `all`), `/api/hf/download` e `DELETE /api/hf/local/<nome>`; sem `kind`, tudo continua valendo para texto.
+- **Provedor "GGUF local" no Canvas** (imagem e vídeo): roda GGUF quantizados (FLUX, Stable Diffusion, Wan…) pela `stable-diffusion.cpp` (`stable-diffusion-cpp-python`, agora no extra `local`/`all`). Botão *Usar no Canvas* nos arquivos baixados; opções de carregamento (VAE, codificadores…) no campo "extra" do nó (`{"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}}`).
+- Testes: avatars a partir de imagem (um por imagem, uma pessoa, texto somado, regra de SFW, validação), tipos de GGUF (busca, pastas, lista, exclusão), provedor GGUF com a biblioteca simulada e testes de navegador dos três fluxos.
+
+### Observação
+- Para **Som, Voz e Outros** o ASTA só baixa e organiza os arquivos GGUF: não há motor embutido para rodá-los. A geração de vídeo por GGUF depende de a versão instalada da `stable-diffusion-cpp-python` oferecer essa função (senão o nó explica). O provedor GGUF só foi testado com a biblioteca simulada (não há GPU nem a biblioteca real neste ambiente de desenvolvimento).
+
 ## [0.2.7] — 2026-11-05
 
 ### Alterado
@@ -169,7 +184,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.7...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.8...HEAD
+[0.2.8]: https://github.com/KMC1525/ASTA/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/KMC1525/ASTA/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/KMC1525/ASTA/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/KMC1525/ASTA/compare/v0.2.4...v0.2.5

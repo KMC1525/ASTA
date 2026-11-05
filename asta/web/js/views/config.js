@@ -1,7 +1,7 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { refreshState, renderSide, saveSettings, state } from '../main.js';
-import { PREC_HINT, QUALITY_LABEL } from '../quant.js';
+import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../quant.js';
 import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {
@@ -127,32 +127,36 @@ async function voice() {
 
 // ---------------------------------------------------------------------------------- modelos locais (Hugging Face)
 async function local() {
+  let kind = 'text';
   const ram = state.hardware.ram_gb || 8;
-  const results = h('div', { class: 'col' }), files = h('div', { class: 'col', style: { marginTop: '14px' } }), installed = h('div', { class: 'col' }), prog = h('div');
+  const kindHint = h('p', { class: 'muted small', style: { margin: '10px 0 0' } }), results = h('div', { class: 'col' }), files = h('div', { class: 'col', style: { marginTop: '14px' } }), installed = h('div', { class: 'col' }), prog = h('div');
   const tokenIn = h('input', { type: 'password', autocomplete: 'off', placeholder: state.settings.hf.token_set ? '•••••••• (' + t('salvo') + ')' : 'hf_…' });
   const q = h('input', { type: 'search', placeholder: t('Buscar modelos GGUF (ex.: qwen, llama, gemma, mistral)…'), onkeydown: (e) => { if (e.key === 'Enter') search(); } });
 
   async function paintInstalled() {
-    const { models } = await api('/api/hf/local');
+    const { models } = await api('/api/hf/local?kind=' + kind);
     installed.replaceChildren(...(models.length ? models.map((m) => h('div', { class: 'row nw', style: { padding: '10px 0', borderBottom: '1px solid var(--line)' } },
       h('div', { class: 'grow' }, h('div', { class: 'mono', style: { fontSize: '13px' } }, m.name), h('div', { class: 'dim small' }, fmtBytes(m.size) + (m.parts > 1 ? ' · ' + t('{n} partes', { n: m.parts }) : ''))),
       m.quant ? h('span', { class: 'chip solid', title: t(QUALITY_LABEL[m.quality] || '') }, m.quant) : null,
-      h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { generation: 'local_hf' } }); toast(t('Usando na geração'), 'ok'); } }, t('Usar na geração')),
-      h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { characters: 'local_hf' } }); toast(t('Usando nos personagens'), 'ok'); } }, t('Usar nos personagens')),
-      h('button', { class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog(t('Apagar o arquivo {n}?', { n: m.name }))) { await api('/api/hf/local/' + encodeURIComponent(m.name), { method: 'DELETE' }); paintInstalled(); } } }, icon('trash', 13)))) :
+      ...(kind === 'text' ? [
+        h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { generation: 'local_hf' } }); toast(t('Usando na geração'), 'ok'); } }, t('Usar na geração')),
+        h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ providers: { local_hf: { model: m.name } }, active: { characters: 'local_hf' } }); toast(t('Usando nos personagens'), 'ok'); } }, t('Usar nos personagens'))]
+        : (kind === 'image' || kind === 'video') ? [h('button', { class: 'btn sm', onclick: async () => { await saveSettings({ media: { models: { gguf_local: { [kind]: m.name } }, active: { [kind]: 'gguf_local' } } }); toast(t('Usando no Canvas'), 'ok'); } }, kind === 'image' ? t('Usar no Canvas (imagem)') : t('Usar no Canvas (vídeo)'))]
+        : []),
+      h('button', { class: 'btn sm ghost danger', onclick: async () => { if (await confirmDialog(t('Apagar o arquivo {n}?', { n: m.name }))) { await api('/api/hf/local/' + encodeURIComponent(m.name) + '?kind=' + kind, { method: 'DELETE' }); paintInstalled(); } } }, icon('trash', 13)))) :
       [h('div', { class: 'muted small' }, t('Nenhum modelo baixado ainda.'))]));
   }
   async function search() {
     results.replaceChildren(h('div', { class: 'spinner' }));
     try {
-      const r = await api('/api/hf/search?q=' + encodeURIComponent(q.value || 'gguf'));
+      const r = await api('/api/hf/search?q=' + encodeURIComponent(q.value || 'gguf') + '&kind=' + kind);
       results.replaceChildren(...r.results.map((m) => h('div', { class: 'li', onclick: () => openRepo(m.id) }, h('div', { class: 'grow', style: { minWidth: 0 } }, h('div', { class: 't' }, m.id), h('div', { class: 's' }, '⬇ ' + (m.downloads || 0).toLocaleString() + ' · ♥ ' + (m.likes || 0))), icon('chev', 15))));
     } catch (e) { results.replaceChildren(h('div', { class: 'res err' }, e.message)); }
   }
   async function openRepo(repo) {
     files.replaceChildren(h('div', { class: 'spinner' }));
     try {
-      const [r, loc] = await Promise.all([api('/api/hf/files?repo=' + encodeURIComponent(repo)), api('/api/hf/local')]);
+      const [r, loc] = await Promise.all([api('/api/hf/files?repo=' + encodeURIComponent(repo)), api('/api/hf/local?kind=' + kind)]);
       const have = new Set(loc.models.map((m) => m.name));
       if (!r.files.length) return files.replaceChildren(h('div', { class: 'res err' }, t('Nenhum arquivo GGUF utilizável neste repositório.')));
       let pick = null;  // nada vem escolhido: o usuário decide a quantização antes de qualquer download
@@ -181,7 +185,7 @@ async function local() {
     const bar = h('i'), label = h('span', { class: 'small muted' }, '0%');
     prog.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'mono small' }, file), h('span', { class: 'grow' }), label, h('button', { class: 'btn sm', id: 'dl-cancel' }, t('Cancelar'))), h('div', { class: 'bar' }, bar)));
     let jid;
-    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, files: f.files, sizes: f.sizes, quant: f.quant || 'sem-rotulo' } })).job_id; } catch (e) { return toast(e.message, 'err'); }
+    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, files: f.files, sizes: f.sizes, quant: f.quant || 'sem-rotulo', kind } })).job_id; } catch (e) { return toast(e.message, 'err'); }
     prog.querySelector('#dl-cancel').onclick = () => api('/api/jobs/' + jid + '/cancel', { method: 'POST' });
     events('/api/jobs/' + jid + '/events', (ev) => {
       if (ev.type === 'progress' && ev.total) { const p = ev.done / ev.total; bar.style.width = Math.round(p * 100) + '%'; label.textContent = Math.round(p * 100) + '% · ' + fmtBytes(ev.done) + ' / ' + fmtBytes(ev.total); }
@@ -190,10 +194,17 @@ async function local() {
       else if (ev.type === 'cancelled') { toast(t('Download cancelado')); prog.replaceChildren(); }
     });
   }
+  const kindSeg = h('div', { class: 'seg', style: { marginBottom: '14px', flexWrap: 'wrap' } });
+  const paintKind = () => {
+    kindSeg.replaceChildren(...GGUF_KINDS.map(([k, l]) => h('button', { type: 'button', class: kind === k ? 'on' : '', onclick: () => { kind = k; results.replaceChildren(); files.replaceChildren(); paintKind(); paintInstalled(); } }, t(l))));
+    kindHint.textContent = t(GGUF_HINT[kind]);
+    q.placeholder = kind === 'text' ? t('Buscar modelos GGUF (ex.: qwen, llama, gemma, mistral)…') : t('Buscar modelos GGUF de {k} (ex.: flux, wan, outetts, qwen-vl)…', { k: t(GGUF_KINDS.find(([x]) => x === kind)[1]).toLowerCase() });
+  };
+  paintKind();
   await paintInstalled();
   return h('div', null,
-    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Modelos locais do Hugging Face')),
-      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Baixe modelos GGUF direto do Hugging Face e rode-os no seu computador. Requer o extra opcional:'), ' ', h('span', { class: 'kbd' }, 'pip install "asta[local]"'), ' ', t('Alternativa sem instalar nada: use Ollama ou LM Studio (aba Provedores).')),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Modelos locais do Hugging Face')), kindSeg,
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Baixe modelos GGUF direto do Hugging Face e rode-os no seu computador. Requer o extra opcional:'), ' ', h('span', { class: 'kbd' }, 'pip install "asta[local]"'), ' ', t('Alternativa sem instalar nada: use Ollama ou LM Studio (aba Provedores).')), kindHint,
       h('div', { class: 'row nw' }, h('div', { class: 'search', style: { maxWidth: 'none' } }, icon('search', 17), q), h('button', { class: 'btn', onclick: search }, t('Buscar'))),
       h('div', { style: { marginTop: '12px' } }, results), files),
     prog,

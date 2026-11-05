@@ -150,8 +150,11 @@ class AvatarRoutes:
             raise HttpError(409, json.dumps({"job_id": self.app.jobs.running("avatar_generate").id}))
         if not (text(body.get("prompt"), "") or body.get("attachment_ids")):
             raise HttpError(400, "Descreva o avatar ou anexe algo (imagem, texto, documento…) para criá-lo.")
+        if body.get("from_images") and not body.get("attachment_ids"):
+            raise HttpError(400, "Anexe pelo menos uma imagem (foto ou arte) para usá-la como base do avatar.")
         pipeline_req = {
             "prompt": text(body.get("prompt"), "", 12000), "attachment_ids": list(body.get("attachment_ids") or [])[:40],
+            "from_images": bool(body.get("from_images")), "images_mode": "one" if body.get("images_mode") == "one" else "each",
             "count": body.get("count") or 0, "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),
             "detail": text(body.get("detail"), "detailed", 10),

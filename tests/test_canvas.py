@@ -688,6 +688,78 @@ class LocalModelPrecisionTests(TmpCase):
             self.assertIn("cancelado", str(cm.exception))
 
 
+class GGUFMediaTests(TmpCase):
+    """Modelos GGUF de imagem/vídeo pela stable-diffusion.cpp (aqui substituída por um módulo falso)."""
+
+    def fake_sdcpp(self):
+        loads, runs = [], []
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class SD:
+            def __init__(self, **kw):
+                loads.append(kw)
+
+            def txt2img(self, **kw):
+                runs.append(kw)
+                return [Img()]
+
+        return mock.MagicMock(StableDiffusion=SD), loads, runs
+
+    def setUp(self):
+        super().setUp()
+        (self.tmp / "image").mkdir()
+        (self.tmp / "image" / "flux-Q4_K_S.gguf").write_bytes(b"gguf")
+        (self.tmp / "image" / "ae.safetensors").write_bytes(b"vae")
+        M._LOCAL_CACHE.clear()
+
+    def prov(self, **models):
+        return M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(self.tmp), "models": models, "needs_key": False})
+
+    def test_image_from_a_quantized_gguf_file(self):
+        mod, loads, runs = self.fake_sdcpp()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            out = self.prov(image="flux-Q4_K_S.gguf").image("um gato", size="1024x768", seed=5, negative="feio")
+        self.assertEqual(out[0].mime, "image/png")
+        self.assertEqual(loads[0], {"model_path": str(self.tmp / "image" / "flux-Q4_K_S.gguf")})
+        self.assertEqual((runs[0]["width"], runs[0]["height"], runs[0]["seed"], runs[0]["negative_prompt"]), (1024, 768, 5, "feio"))
+
+    def test_load_options_resolve_the_model_and_companion_files(self):
+        mod, loads, runs = self.fake_sdcpp()
+        extra = {"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors", "keep_clip_on_cpu": True}, "sample_steps": 4}
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            self.prov(image="flux-Q4_K_S.gguf").image("x", extra=extra)
+        self.assertEqual(loads[0], {"diffusion_model_path": str(self.tmp / "image" / "flux-Q4_K_S.gguf"), "vae_path": str(self.tmp / "image" / "ae.safetensors"), "keep_clip_on_cpu": True})
+        self.assertEqual(runs[0]["sample_steps"], 4)  # o que está fora de "load" vai para a geração
+
+    def test_missing_model_or_library_or_video_support_explain_what_to_do(self):
+        mod, _, _ = self.fake_sdcpp()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            for models, call, needle in ((dict(), lambda p: p.image("x"), "Escolha um modelo GGUF"), (dict(image="nao.gguf"), lambda p: p.image("x"), "não encontrado"),
+                                         (dict(), lambda p: p.video("x"), "Escolha um modelo GGUF")):
+                with self.assertRaises(ProviderError) as cm:
+                    call(self.prov(**models))
+                self.assertIn(needle, str(cm.exception))
+            (self.tmp / "video").mkdir()
+            (self.tmp / "video" / "wan-Q4_0.gguf").write_bytes(b"g")
+            with self.assertRaises(ProviderError) as cm:
+                self.prov(video="wan-Q4_0.gguf").video("x")  # esta versão da biblioteca não gera vídeo
+            self.assertIn("não gera vídeo", str(cm.exception))
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": None}):
+            with self.assertRaises(ProviderError) as cm:
+                self.prov(image="flux-Q4_K_S.gguf").image("x")
+            self.assertIn('pip install "asta[local]"', str(cm.exception))
+
+    def test_registry_lists_the_provider_for_image_and_video_only(self):
+        d = {p["id"]: p for p in M.describe_media_presets({"media": {}})}
+        self.assertEqual(d["gguf_local"]["caps"], ["image", "video"])
+        self.assertEqual(M.pick_provider({"media": {}}, "image", "gguf_local"), "gguf_local")
+        with self.assertRaises(ProviderError):
+            M.pick_provider({"media": {}}, "voice", "gguf_local")
+
+
 class LocalHFTests(unittest.TestCase):
     """Os modelos locais precisam de torch/diffusers: aqui eles são substituídos por módulos falsos só para exercitar o caminho de código."""
 

@@ -455,7 +455,7 @@ class App:
     def r_hf_search(self, req: "Request") -> None:
         q = (req.query.get("q", [""])[0] or "gguf").strip()
         try:
-            req.json({"results": hf.search(q, self._hf_token())})
+            req.json({"results": hf.search(q, self._hf_token(), kind=hf.check_kind(req.query.get("kind", ["text"])[0] or "text"))})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
 
@@ -466,14 +466,22 @@ class App:
             raise HttpError(502, str(exc))
 
     def r_hf_local(self, req: "Request") -> None:
-        req.json({"models": hf.local_models(self.store.models_dir)})
+        kind = req.query.get("kind", ["text"])[0] or "text"  # sem `kind`: só os de texto (o que o provedor de IA lista)
+        try:
+            req.json({"models": hf.local_models(self.store.models_dir, kind if kind == "all" else hf.check_kind(kind)), "kinds": {k: v["label"] for k, v in hf.GGUF_KINDS.items()}})
+        except ProviderError as exc:
+            raise HttpError(400, str(exc))
 
     def r_hf_delete(self, req: "Request", name: str) -> None:
         name = urllib.parse.unquote(name)
-        path = self.store.models_dir / safe_filename(name)
+        try:
+            folder = hf.kind_dir(self.store.models_dir, req.query.get("kind", ["text"])[0] or "text")
+        except ProviderError as exc:
+            raise HttpError(400, str(exc))
+        path = folder / safe_filename(name)
         if not path.exists() or path.suffix != ".gguf":
             raise HttpError(404, "Modelo não encontrado")
-        for p in hf.shard_files(self.store.models_dir, path.name):  # modelo dividido: apaga todas as partes
+        for p in hf.shard_files(folder, path.name):  # modelo dividido: apaga todas as partes
             p.unlink(missing_ok=True)
         path.unlink(missing_ok=True)
         req.json({"ok": True})
@@ -487,6 +495,10 @@ class App:
         names = [n for n in names if n]
         if not names:
             raise HttpError(400, "Escolha uma quantização para baixar.")
+        try:
+            dest = hf.kind_dir(self.store.models_dir, text(body.get("kind"), "text", 8) or "text", create=True)
+        except ProviderError as exc:
+            raise HttpError(400, str(exc))
         sizes = {n: int(body["sizes"].get(n, 0)) for n in names} if isinstance(body.get("sizes"), dict) and all(isinstance(v, (int, float)) for v in body["sizes"].values()) else {}
 
         def work(job: Job) -> None:
@@ -498,7 +510,7 @@ class App:
                     last[0] = time.time()
                     job.emit({"type": "progress", "done": done, "total": total})
 
-            path = hf.download_many(repo, names, self.store.models_dir, self._hf_token(), sizes, progress, lambda: job.cancelled)
+            path = hf.download_many(repo, names, dest, self._hf_token(), sizes, progress, lambda: job.cancelled)
             job.emit({"type": "done", "name": path.name})
 
         job = self.jobs.start("download", work)

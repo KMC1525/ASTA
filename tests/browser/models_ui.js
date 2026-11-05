@@ -34,4 +34,23 @@ run('models', async ({ open, check }) => {
   await until(page, () => [...document.querySelectorAll('.row .mono')].some((e) => e.textContent.startsWith('huge-Q4_K_M-00001')));
   check('baixados:modelo-dividido-uma-linha', (await page.locator('.row .mono:has-text("huge-Q4_K_M")').count()) === 1);
   check('baixados:marca-3-partes', (await page.locator('.row:has(.mono:has-text("huge")) .dim').first().innerText()).includes('3'));
+  // GGUF de imagem: aba própria, pasta própria e "usar no Canvas"
+  await page.locator('.seg button:text-is("Image")').click(); await page.waitForTimeout(300);
+  check('tipos:aba-imagem-comeca-vazia', (await page.locator('.row:has(.mono:has-text("gguf"))').count()) === 0);
+  await page.locator('input[type=search]').fill('flux'); await page.keyboard.press('Enter');
+  await page.waitForSelector('.li'); await page.locator('.li').first().click(); await page.waitForSelector('.quant');
+  await page.locator('.quant:has(b:text-is("Q4_K_M")):not(:has(.chip:has-text("parts")))').first().click();
+  await page.locator('.btn.primary:has-text("Q4_K_M")').click();
+  await page.waitForSelector('.modal'); await page.locator('.modal .foot .btn.primary').click();
+  const useBtn = page.locator('.row:has(.mono:text-is("tiny-Q4_K_M.gguf")) .btn:has-text("Use in the Canvas (image)")');
+  await useBtn.waitFor({ timeout: 15000 });
+  check('tipos:imagem-oferece-usar-no-canvas', true);
+  await useBtn.click(); await page.waitForTimeout(600);
+  const st = await page.evaluate(() => fetch('/api/settings').then((r) => r.json()));
+  check('tipos:canvas-passa-a-usar-o-gguf', st.media.active.image === 'gguf_local' && st.media.models.gguf_local.image === 'tiny-Q4_K_M.gguf');
+  await page.locator('.seg button:text-is("Text")').click(); await page.waitForTimeout(400);
+  check('tipos:texto-nao-mistura-com-imagem', (await page.locator('.row .mono:text-is("tiny-Q4_K_M.gguf")').count()) === 0);
+  await page.locator('.seg button:text-is("Voice")').click(); await page.waitForTimeout(300);
+  check('tipos:voz-so-baixa-e-organiza', (await page.locator('.muted.small:has-text("only downloads and organizes")').count()) === 1);
+  await page.evaluate(() => fetch('/api/settings', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ media: { active: { image: 'demo' } } }) }));  // não deixa o estado para outros testes
 });

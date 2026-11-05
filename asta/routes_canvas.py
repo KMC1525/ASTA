@@ -234,7 +234,7 @@ class CanvasRoutes:
         body = req.body_json()
         pid = text(body.get("provider"), "", 40)
         try:
-            prov = build_media(self.store.get_settings(), pid)
+            prov = build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir)
             req.json({"ok": True, "message": prov.test()})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
@@ -243,7 +243,7 @@ class CanvasRoutes:
         pid = text(req.query.get("provider", [""])[0], "", 40)
         cap = text(req.query.get("cap", ["image"])[0], "image", 12)
         try:
-            req.json({"models": build_media(self.store.get_settings(), pid).list_models(cap)})
+            req.json({"models": build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
 

@@ -70,7 +70,7 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 |---|---|
 | `ASTA_EXTRAS=all` (padrão) | instala/atualiza **todas** as bibliotecas: `docs` + `media` + `local` |
 | `ASTA_EXTRAS=none` | instala só o ASTA (nenhuma dependência) |
-| `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos de linguagem GGUF embutidos (`llama-cpp-python`) |
+| `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos GGUF embutidos: texto, imagem e vídeo (`llama-cpp-python`, `stable-diffusion-cpp-python`) |
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
@@ -128,6 +128,7 @@ Companheiros no espírito do Janitor e do SillyTavern, embutidos no ASTA.
 - **Texto e voz**: respostas em *streaming*, respostas faladas em voz alta, ditado pelo microfone ou **conversa por voz** com as mãos livres — voz do navegador, de graça, ou qualquer servidor STT/TTS compatível com a API da OpenAI (nuvem ou local).
 - **Memória**: histórico de curto prazo mais memórias de longo prazo que o próprio avatar anota (você pode lê-las e apagá-las).
 - **SFW ou NSFW por avatar.** Uma regra fixa que nenhuma configuração muda: avatars são adultos. Se um card disser (no campo de idade ou em qualquer texto) que o personagem é menor de idade, o ASTA nunca o "envelhece": ele fica estritamente SFW e platônico — amigo, nunca parceiro(a).
+- **Crie a partir de uma foto ou arte**: ligue *Foto/arte como base*, anexe uma ou mais imagens e envie — só a imagem, ou somando um prompt de texto e outros anexos (documentos, conversas…). Escolha *um avatar por imagem* ou *uma pessoa com todas as imagens*. A imagem define o visual (cabelo, olhos, roupas, estilo da arte — descritos pelo seu modelo de visão, ou pelas cores dominantes offline) e vira o retrato; o texto só acrescenta nome, personalidade e história. O ASTA nunca identifica uma pessoa real pelo rosto: só usa um nome se você der um (ou se o nome do arquivo sugerir). **Fotos de pessoas reais — e imagens que não dá para identificar como arte — ficam sempre em SFW; NSFW só vale para arte de personagens fictícios**, e uma imagem que pareça mostrar um menor segue a regra dos menores acima.
 - **Importa e exporta** Character Card V2 (JSON e PNG), então seus cards funcionam em outras ferramentas.
 
 ### 🎮 Jogos 2D
@@ -223,7 +224,10 @@ Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personag
 | Hugging Face Inference | ✅ | | ✅ | ✅ | ✅ | mesmo token do provedor de texto |
 | **Stable Diffusion WebUI** (local) | ✅ | | | | | AUTOMATIC1111 ou Forge iniciado com `--api` |
 | **Hugging Face local** (embutido) | ✅ | ✅ | ✅ | ✅ | ✅ | diffusers + transformers dentro do ASTA (`pip install "asta[media]"`); vídeo exige GPU |
+| **GGUF local** (embutido) | ✅ | ✅ | | | | modelos GGUF quantizados de imagem/vídeo pela stable-diffusion.cpp (`pip install "asta[local]"`); o vídeo depende da versão da biblioteca |
 | **Demo** (offline) | ✅ | ✅ | ✅ | ✅ | | imagens procedurais, som sintetizado, "voz" de balbucio, vídeo Ken Burns (precisa do `ffmpeg`) |
+
+**Modelos GGUF por tipo.** A aba *Modelos locais* é dividida em **Texto, Imagem, Vídeo, Som e música, Voz e Outros**. Cada tipo tem a sua busca no Hugging Face (filtrada pela tarefa do repositório), a sua pasta (`models/`, `models/image`, `models/video`, …), o mesmo seletor de quantização e a sua lista de *Baixados*. Os modelos de texto rodam o próprio ASTA (`llama.cpp`); **os GGUF de Imagem e Vídeo (FLUX, Stable Diffusion, Wan…) rodam no Canvas pela `stable-diffusion.cpp`** (provedor *GGUF local*, `pip install "asta[local]"`): use *Usar no Canvas* num arquivo baixado. Opções extras de carregamento (VAE, codificadores de texto…) vão em *Avançado → parâmetros extras* do nó (`{"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}}`). Para **Som, Voz e Outros** o ASTA por enquanto só baixa e organiza os arquivos — ainda não há motor embutido para rodá-los.
 
 **Os modelos locais do Canvas também perguntam antes.** O provedor embutido do Hugging Face nunca baixa nada em silêncio: em *Configuração → Mídia* você escolhe o modelo de cada tipo e depois a **precisão (quantização)** — fp32 (original, funciona em CPU), fp16 ou bf16 (metade do tamanho, pensados para placa de vídeo) —, vendo o tamanho do download de cada uma antes de qualquer coisa ser baixada. Só os arquivos da precisão escolhida são baixados, e só modelos que você baixou são carregados.
 

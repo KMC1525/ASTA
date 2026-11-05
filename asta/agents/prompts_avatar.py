@@ -12,12 +12,18 @@ Read the user's request, the attachments digest (and any attached images) in INP
 - AGE: avatars are adults (18+) by default; when the request only suggests a youthful look, make them an adult. If the request clearly describes
   a minor (an explicit age under 18, a child or a teenager) keep the true age (NEVER age them up) and make them a strictly platonic, all-ages (sfw)
   friend, mentor or companion. Romantic or sexual content with a minor is never allowed.
+REFERENCE IMAGES: when `from_images` is true the attached images are the VISUAL BASE of the avatars. `images_mode` "each": exactly one avatar per
+  image, in order (`image_index` = its position); "one": a single avatar built from all the images (`image_index` 0). Describe the look faithfully in `looks`
+  (hair, eyes, skin, clothes, accessories, art style) and `hair_color`; the text request and other attachments only add name, personality and
+  backstory and must never contradict the image. Do not name a real person from their face: use a name only when the user gives one (otherwise invent one).
+  Set `source_kind`: "photo" (a photograph of a real person), "art" (a drawing, illustration, anime/cartoon/game character or render of a FICTIONAL
+  character) or "unknown". If the image appears to show a minor, set `age` below 18 (never age up).
 Documents may hold a character sheet or lore (extract it); audio transcripts and video frames may describe the person's voice or look.
 If several avatars are requested decide whether they know each other (`group`: true) and how.
 Output JSON:
 {{"language": "pt-BR|en|...", "count": int, "group": bool, "tone": str,
  "avatars": [{{"name": str, "relationship": str, "gender": str, "age": int, "traits": [str], "talkativeness": 0.1-1,
-   "hair_color": "#hex or empty", "looks": str, "backstory": str, "image_index": int or null}}],
+   "hair_color": "#hex or empty", "looks": str, "backstory": str, "image_index": int or null, "source_kind": "photo|art|unknown"}}],
  "notes": [str]}}"""
 
 DESIGNER = f"""ROLE: Avatar Designer.
@@ -29,7 +35,7 @@ Create ONE complete avatar card for each entry in `brief.avatars` (keep their na
   other avatars (by name) and how.
 - `greeting`: the first message they send (1-2 sentences, in character; brief *actions* between asterisks are welcome).
 - `examples`: 2-3 short example exchanges as "User: ...\\nName: ...", showing their voice.
-- `looks`: visual description (for image generators). `appearance`: colors for a simple 2D figure that match the looks.
+- `looks`: visual description (for image generators); when the brief already has `looks` from a reference image, keep it faithful. `appearance`: colors for a simple 2D figure that match the looks.
 - `voice`: pitch 0.5-2 (feminine voices ~1.1-1.3, masculine ~0.8-0.95) and rate 0.5-2.
 - `talkativeness` 0.1-1: how much they speak in group chats.
 - Content mode `content`: "nsfw" means the user opted into adult role-play (flirty, sensual and sexual themes may be part of the persona) while

@@ -45,17 +45,46 @@ def parse_quant(name: str) -> Dict[str, Any]:
     return {"quant": q, "bits": bits, "quality": QUALITY.get(bits, "good")}
 
 
+# Tipos de modelo GGUF (separados por pasta e por busca): chave → (rótulo, filtros "pipeline_tag" do Hugging Face)
+GGUF_KINDS: Dict[str, Dict[str, Any]] = {
+    "text": {"label": "Texto", "tags": ["text-generation"]},
+    "image": {"label": "Imagem", "tags": ["text-to-image", "image-to-image"]},
+    "video": {"label": "Vídeo", "tags": ["text-to-video", "image-to-video"]},
+    "sound": {"label": "Som e música", "tags": ["text-to-audio"]},
+    "voice": {"label": "Voz", "tags": ["text-to-speech", "automatic-speech-recognition"]},
+    "other": {"label": "Outros", "tags": ["feature-extraction", "image-text-to-text", "image-to-text", "sentence-similarity"]},
+}
+
+
+def check_kind(kind: str) -> str:
+    if kind not in GGUF_KINDS:
+        raise ProviderError("Tipo de modelo inválido.")
+    return kind
+
+
+def kind_dir(models_dir: Path, kind: str, create: bool = False) -> Path:
+    """Pasta dos modelos de um tipo: os de texto ficam na raiz (como sempre), os demais em `image/`, `video/`, `sound/`, `voice/`, `other/`."""
+    d = models_dir if check_kind(kind) == "text" else models_dir / kind
+    if create:
+        d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
 def _headers(token: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
-def search(query: str, token: str = "", limit: int = 20) -> List[Dict[str, Any]]:
-    params = {"search": query, "filter": "gguf", "sort": "downloads", "direction": "-1", "limit": str(limit)}
-    data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
-    return [
-        {"id": m.get("id") or m.get("modelId"), "downloads": m.get("downloads", 0), "likes": m.get("likes", 0)}
-        for m in data if isinstance(m, dict)
-    ]
+def search(query: str, token: str = "", limit: int = 20, kind: str = "text") -> List[Dict[str, Any]]:
+    """Busca repositórios GGUF do tipo pedido (texto, imagem, vídeo, som, voz, outros), do mais baixado para o menos."""
+    found: Dict[str, Dict[str, Any]] = {}
+    for tag in GGUF_KINDS[check_kind(kind)]["tags"]:
+        params = {"search": query, "filter": "gguf", "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(limit)}
+        data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
+        for m in data if isinstance(data, list) else []:
+            if isinstance(m, dict) and (m.get("id") or m.get("modelId")):
+                mid = m.get("id") or m.get("modelId")
+                found.setdefault(mid, {"id": mid, "downloads": m.get("downloads", 0), "likes": m.get("likes", 0), "kind": kind})
+    return sorted(found.values(), key=lambda m: -m["downloads"])[:limit]
 
 
 def group_files(raw: List[Dict[str, Any]], ram_gb: float = 0) -> List[Dict[str, Any]]:
@@ -117,19 +146,22 @@ def shard_files(models_dir: Path, name: str) -> List[Path]:
     return [models_dir / f"{m.group('base')}-{k:05d}-of-{total:05d}.gguf" for k in range(1, total + 1)]
 
 
-def local_models(models_dir: Path) -> List[Dict[str, Any]]:
-    """Modelos baixados. Um modelo dividido em partes aparece uma vez (pela primeira parte), com o tamanho total."""
+def local_models(models_dir: Path, kind: str = "text") -> List[Dict[str, Any]]:
+    """Modelos baixados do tipo pedido ("all" = todos, cada um com o seu `kind`). Um modelo dividido em partes aparece uma vez, com o tamanho total."""
+    if kind == "all":
+        return [m for k in GGUF_KINDS for m in local_models(models_dir, k)]
+    folder = kind_dir(models_dir, kind)
     out = []
-    for p in sorted(models_dir.glob("*.gguf")):
+    for p in sorted(folder.glob("*.gguf")):
         m = SHARD_RE.match(p.name)
         if m and int(m.group("n")) != 1:
             continue
-        parts = [x for x in shard_files(models_dir, p.name)]
+        parts = [x for x in shard_files(folder, p.name)]
         if not all(x.exists() for x in parts):
             continue  # partes faltando: o modelo não carrega
         if "mmproj" in p.name.lower():
             continue
-        out.append({"name": p.name, "size": sum(x.stat().st_size for x in parts), "parts": len(parts), **parse_quant(p.name)})
+        out.append({"name": p.name, "kind": kind, "size": sum(x.stat().st_size for x in parts), "parts": len(parts), **parse_quant(p.name)})
     return out
 
 

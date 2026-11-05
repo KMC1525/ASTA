@@ -13,6 +13,7 @@ from .. import voice
 from ..avatars import MAX_CHAT_AVATARS, MIN_FIELD_AGE, RELATIONSHIPS, normalize_avatar
 from ..providers import build_provider
 from ..storage import Store
+from ..canvas.engine import palette_of
 from ..util import text
 from . import prompts_avatar as P
 from . import rulebased_avatars as rb
@@ -36,6 +37,8 @@ class AvatarPipeline(Runner):
         relationship = relationship if relationship in RELATIONSHIPS else "auto"
         count_hint = int(max(0, min(int(req.get("count") or 0), MAX_CHAT_AVATARS)))
         prompt = str(req.get("prompt") or "").strip()
+        from_images = bool(req.get("from_images"))  # foto/arte como base: a imagem define o visual (e vira o retrato); o texto só complementa
+        images_mode = "one" if req.get("images_mode") == "one" else "each"
         gen = settings["generation"]
         self.gen = {"temperature": gen.get("temperature", 0.8), "max_tokens": min(int(gen.get("max_tokens", 6000)), 6000),
                     "content": "free" if content == "nsfw" else "sfw"}
@@ -54,6 +57,10 @@ class AvatarPipeline(Runner):
         digest = att.build_digest(analyzed)
         images = att.collect_images(analyzed)
         self._step("attachments", "done" if uploads else "skipped", count=len(uploads), images=len(images))
+        refs = [(m, a) for m, a in zip(uploads, analyzed) if a["kind"] == "image" and a["ext"] in IMAGE_EXTS]
+        if from_images and not refs:
+            raise ValueError("Anexe pelo menos uma imagem (foto ou arte) para usá-la como base do avatar.")
+        ref_names = [_pretty_name(m["name"]) for m, _ in refs]
         if not prompt and not digest and not uploads:
             raise ValueError("Descreva o avatar ou anexe algo (imagem, texto, documento…) para criá-lo.")
 
@@ -61,14 +68,21 @@ class AvatarPipeline(Runner):
         brief, fb = self._agent(
             "analyst", "avatar_analyst", P.ANALYST,
             {"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship, "content": content,
-             "attached_images": len(images), "language_hint": text(req.get("language"), "", 12)},
+             "attached_images": len(images), "language_hint": text(req.get("language"), "", 12),
+             "from_images": from_images, "images_mode": images_mode, "image_names": ref_names if from_images else [],
+             "image_palettes": [palette_of(Path(m["path"]), 3) for m, _ in refs] if from_images else []},
             rb.analyst, images=images,
         )
         brief_avatars = [a for a in (brief.get("avatars") or []) if isinstance(a, dict) and text(a.get("name"), "")]
         if not brief_avatars:  # modelo omitiu a lista → regras
-            brief = rb.analyst({"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship})
+            brief = rb.analyst({"prompt": prompt, "attachments_digest": digest, "count_hint": count_hint, "relationship": relationship,
+                                "from_images": from_images, "images_mode": images_mode, "image_names": ref_names if from_images else [],
+                                "image_palettes": [palette_of(Path(m["path"]), 3) for m, _ in refs] if from_images else []})
             brief_avatars = brief["avatars"]
         cap = count_hint or MAX_CHAT_AVATARS
+        if from_images:  # a estrutura vem das imagens, não do palpite do modelo: 1 por imagem ("each") ou 1 só ("one")
+            brief_avatars = _fit_to_images(brief_avatars, ref_names, images_mode, self.warnings)
+            cap = len(brief_avatars)
         brief["avatars"] = brief_avatars[:cap]
         for a in brief["avatars"]:
             a["age"] = _age(a.get("age"))
@@ -83,11 +97,13 @@ class AvatarPipeline(Runner):
 
         # ---------- 2. Designer
         detail = "short" if str(req.get("detail")) == "short" else "detailed"
-        payload = {"brief": brief, "content": content, "detail": detail,
+        # foto de pessoa real (ou origem desconhecida): nunca NSFW — só arte de personagens fictícios pode ser NSFW
+        eff_content = "sfw" if from_images and any(a.get("source_kind") != "art" for a in brief["avatars"]) else content
+        payload = {"brief": brief, "content": eff_content, "detail": detail,
                    "user": {"name": settings["avatars"].get("user_name", ""), "persona": settings["avatars"].get("user_persona", "")}}
         mult = max(1.0, len(brief["avatars"]) * 0.7)
         cards_raw, fb = self._agent("designer", "avatar_designer", P.DESIGNER, payload, rb.designer, tokens_mult=mult)
-        cards = self._finish_cards(cards_raw, brief, content, relationship)
+        cards = self._finish_cards(cards_raw, brief, content, relationship, from_images)
         self._step("designer", "warn" if fb else "done", count=len(cards))
 
         # ---------- 3. Revisor (+ uma rodada de correção)
@@ -97,7 +113,7 @@ class AvatarPipeline(Runner):
             self.emit({"type": "revision", "round": 1, "issues": len(review["issues"])})
             redo, _ = self._agent("designer", "avatar_designer", P.DESIGNER + "\n\nFEEDBACK TO FIX:\n" + fb_text, payload, rb.designer,
                                   tokens_mult=mult, feedback=True)
-            fixed = self._finish_cards(redo, brief, content, relationship)
+            fixed = self._finish_cards(redo, brief, content, relationship, from_images)
             if fixed:
                 cards = fixed
             self._step("designer", "done", count=len(cards), revision=True)
@@ -109,7 +125,7 @@ class AvatarPipeline(Runner):
         return self._save(cards, brief, uploads, analyzed, review)
 
     # ------------------------------------------------------------------ etapas
-    def _finish_cards(self, raw: Dict[str, Any], brief: Dict[str, Any], content: str, relationship: str) -> List[Dict[str, Any]]:
+    def _finish_cards(self, raw: Dict[str, Any], brief: Dict[str, Any], content: str, relationship: str, from_images: bool = False) -> List[Dict[str, Any]]:
         items = [c for c in (raw.get("avatars") or []) if isinstance(c, dict)]
         by_name = {text(c.get("name"), "").lower(): c for c in items}
         out: List[Dict[str, Any]] = []
@@ -124,6 +140,11 @@ class AvatarPipeline(Runner):
             card["name"] = a["name"] or card["name"]
             card["age"] = _age(card.get("age") if card.get("age") not in (None, "") else a.get("age"))
             card["content"] = content
+            if content == "nsfw" and from_images and a.get("source_kind") != "art":
+                card["content"] = "sfw"
+                self.warnings.append(f"{a['name']}: foto de pessoa real (ou origem não identificada) → apenas SFW; NSFW só vale para arte de personagens fictícios")
+            if from_images and a.get("looks") and not card.get("looks"):
+                card["looks"] = a["looks"]
             if relationship != "auto":
                 card["relationship"] = relationship
             elif card.get("relationship") not in RELATIONSHIPS:
@@ -176,6 +197,33 @@ class AvatarPipeline(Runner):
         }
         self.emit(result)
         return result
+
+
+def _pretty_name(filename: str) -> str:
+    """Nome sugerido a partir do arquivo ("luna_azul-01.png" → "Luna Azul"); vazio se não sobrar nada útil."""
+    import re
+
+    stem = re.sub(r"\.[A-Za-z0-9]{2,5}$", "", filename)
+    stem = re.sub(r"[\d_\-.()]+", " ", stem)
+    stem = " ".join(w for w in stem.split() if w.lower() not in ("img", "image", "imagem", "foto", "photo", "screenshot", "captura", "dsc", "pxl", "whatsapp", "untitled"))
+    words = [w for w in stem.split() if w.isalpha()][:3]
+    return " ".join(w.capitalize() for w in words)
+
+
+def _fit_to_images(avatars: List[Dict[str, Any]], names: List[str], mode: str, warnings: List[str]) -> List[Dict[str, Any]]:
+    """Garante a estrutura pedida: "each" = um avatar por imagem (na ordem); "one" = um avatar só (com a 1ª imagem)."""
+    want = min(len(names), MAX_CHAT_AVATARS) if mode == "each" else 1
+    if mode == "each" and len(names) > MAX_CHAT_AVATARS:
+        warnings.append(f"só os {MAX_CHAT_AVATARS} primeiros avatares serão criados (limite por conversa)")
+    out = []
+    for i in range(want):
+        a = dict(avatars[i]) if i < len(avatars) else {"name": names[i] if mode == "each" and i < len(names) and names[i] else f"Avatar {i + 1}", "relationship": "friend",
+                                                       "gender": "", "age": 24, "traits": [], "talkativeness": 0.6, "hair_color": "", "looks": "", "backstory": ""}
+        a["image_index"] = i if mode == "each" else 0
+        if a.get("source_kind") not in ("photo", "art"):
+            a["source_kind"] = "unknown"
+        out.append(a)
+    return out
 
 
 def _age(value: Any, default: int = 24) -> int:

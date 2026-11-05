@@ -62,7 +62,7 @@ def _run(args: argparse.Namespace) -> int:
 LIBS = {
     "docs": "extração de PDFs mais precisa",
     "media": "modelos locais de imagem, vídeo, som e voz do Canvas (PyTorch, diffusers, transformers — vários GB)",
-    "local": "modelos de linguagem GGUF embutidos (llama-cpp-python; compila código nativo)",
+    "local": "modelos GGUF embutidos: texto, imagem e vídeo (llama-cpp-python e stable-diffusion-cpp-python; compilam código nativo)",
 }
 
 

@@ -392,7 +392,7 @@ class CanvasEngine:
     # ------------------------------------------------------------------ geradores de mídia
     def _provider(self, node: Dict[str, Any]) -> Tuple[Any, str, str]:
         pid, model = self.provider_for(node)
-        return build_media(self.settings, pid, self.ctl), pid, model
+        return build_media(self.settings, pid, self.ctl, self.store.models_dir), pid, model
 
     @staticmethod
     def _title(node: Dict[str, Any], fallback: str) -> str:

@@ -391,6 +391,75 @@ class AvatarApiTests(ServerCase):
                 self.c.json("PUT", "/api/settings", {"active": {"characters": "demo"}, "providers": {"custom": {"api_key": None}}})
 
 
+class AvatarFromReferenceImageTests(ServerCase):
+    """Avatars criados a partir de foto/arte: a imagem é a base (e o retrato); texto e anexos só complementam."""
+
+    def upload(self, name, color=(180, 90, 60)):
+        status, up = self.c.json("POST", "/api/uploads", raw=tiny_png(color), headers={"X-Filename": name, "Content-Type": "image/png"})
+        self.assertEqual(status, 200)
+        return up["id"]
+
+    def generate(self, **body):
+        status, r = self.c.json("POST", "/api/avatars/generate", body)
+        self.assertEqual(status, 200, r)
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        done = [e for e in ev if e["type"] == "done"]
+        self.assertTrue(done, [e for e in ev if e["type"] == "error"])
+        return done[0], ev
+
+    def test_only_the_image_is_enough_and_it_becomes_the_portrait(self):
+        done, _ = self.generate(attachment_ids=[self.upload("luna_azul-01.png")], from_images=True)
+        self.assertEqual(len(done["avatar_ids"]), 1)
+        card = self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]
+        self.assertEqual(card["name"], "Luna Azul")  # nome sugerido pelo arquivo (a imagem não é usada para "reconhecer" ninguém)
+        self.assertTrue(card["portrait"])
+        self.assertTrue(card["looks"] or card["appearance"])
+        status, headers, body = self.c.req("GET", f"/api/avatars/{card['id']}/portrait")
+        self.assertEqual((status, body[:4]), (200, b"\x89PNG"))
+
+    def test_one_avatar_per_image_or_a_single_person_from_all_images(self):
+        ids = [self.upload("theo.png", (20, 40, 200)), self.upload("mia.png", (200, 40, 120)), self.upload("caio.png", (30, 160, 60))]
+        done, _ = self.generate(attachment_ids=ids, from_images=True, images_mode="each")
+        names = [self.c.json("GET", f"/api/avatars/{i}")[1] for i in done["avatar_ids"]]
+        self.assertEqual([c["name"] for c in names], ["Theo", "Mia", "Caio"])
+        self.assertTrue(all(c["portrait"] for c in names))
+        self.assertEqual(len({c["portrait"] for c in names}), 3)  # cada um com a própria imagem
+        ids = [self.upload("a.png"), self.upload("b.png", (1, 2, 3))]
+        done, _ = self.generate(attachment_ids=ids, prompt="Uma amiga chamada Nina, tímida e curiosa", from_images=True, images_mode="one")
+        self.assertEqual(len(done["avatar_ids"]), 1)
+        self.assertEqual(self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]["name"], "Nina")  # o texto complementa a imagem
+
+    def test_extra_prompt_and_attachments_complement_the_image(self):
+        status, doc = self.c.json("POST", "/api/uploads", raw="Ela adora astronomia e cresceu num farol.".encode(), headers={"X-Filename": "historia.txt", "Content-Type": "text/plain"})
+        done, _ = self.generate(attachment_ids=[self.upload("ref.png"), doc["id"]], prompt="Uma amiga chamada Luna, divertida", from_images=True, relationship="friend")
+        card = self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]
+        self.assertEqual((card["name"], card["relationship"]), ("Luna", "friend"))
+        self.assertTrue(card["portrait"])
+
+    def test_photos_and_unidentified_images_are_never_nsfw(self):
+        done, _ = self.generate(attachment_ids=[self.upload("ela.png")], prompt="Uma namorada chamada Aurora", from_images=True, relationship="partner", content="nsfw")
+        self.assertEqual(self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]["content"], "sfw")
+        self.assertTrue(any("apenas SFW" in w for w in done["warnings"]))
+        # sem a opção "foto como base", o comportamento anterior continua: NSFW é escolha do usuário
+        done, _ = self.generate(prompt="Uma namorada carinhosa chamada Aurora", relationship="partner", content="nsfw")
+        self.assertEqual(self.c.json("GET", f"/api/avatars/{done['avatar_ids'][0]}")[1]["content"], "nsfw")
+
+    def test_vision_model_can_mark_art_and_the_structure_is_enforced(self):
+        from asta.agents import avatar_pipeline as ap
+
+        fitted = ap._fit_to_images([{"name": "X", "source_kind": "art"}, {"name": "Y", "source_kind": "????"}], ["A", "B", "C"], "each", [])
+        self.assertEqual([(a["name"], a["image_index"], a["source_kind"]) for a in fitted], [("X", 0, "art"), ("Y", 1, "unknown"), ("C", 2, "unknown")])
+        self.assertEqual(len(ap._fit_to_images([{"name": "X"}, {"name": "Y"}], ["A", "B"], "one", [])), 1)
+        self.assertEqual(ap._pretty_name("IMG_2031.JPG"), "")
+        self.assertEqual(ap._pretty_name("maria-souza_foto.webp"), "Maria Souza")
+
+    def test_validation(self):
+        self.assertEqual(self.c.json("POST", "/api/avatars/generate", {"prompt": "Luna", "from_images": True})[0], 400)  # sem imagem
+        status, r = self.c.json("POST", "/api/avatars/generate", {"from_images": True, "prompt": "Luna", "attachment_ids": [self.upload("x.png")][:0] or ["nao_existe"]})
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events") if status == 200 else []
+        self.assertTrue(status == 400 or any(e["type"] == "error" for e in ev))
+
+
 class HttpRangeTests(ServerCase):
     def test_range_requests_for_media(self):
         aid = self.c.json("POST", "/api/avatars", {"name": "R"})[1]["id"]

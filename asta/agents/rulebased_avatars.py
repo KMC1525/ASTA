@@ -131,6 +131,12 @@ def analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
                     count = n
                     break
     count = max(1, min(int(count or 1), 8))
+    ref = bool(inp.get("from_images"))
+    ref_names = [str(n) for n in (inp.get("image_names") or [])]
+    palettes = list(inp.get("image_palettes") or [])
+    each = ref and inp.get("images_mode") != "one"
+    if ref and ref_names:  # imagem(ns) como base: um avatar por imagem ("each") ou uma pessoa só ("one")
+        count = max(1, min(len(ref_names), 8)) if each else 1
 
     rel_pref = str(inp.get("relationship") or "auto")
     rel = rel_pref if rel_pref in REL_LABEL else ""
@@ -147,7 +153,7 @@ def analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
     avatars = []
     used = set(names)
     for i in range(count):
-        name = names[i] if i < len(names) else ""
+        name = names[i] if i < len(names) else (ref_names[i] if each and i < len(ref_names) else "")
         gender = _gender_for(name, i, genders, strong)
         pool = FEMALE if gender == "female" else MALE
         if not name:
@@ -157,11 +163,18 @@ def analyst(inp: Dict[str, Any]) -> Dict[str, Any]:
         tr = traits_found if traits_found else [(None, list(TRAITS.values())[rng.randrange(len(TRAITS))])]
         chosen = [t[1] for t in tr][i % len(tr):] + [t[1] for t in tr][:i % len(tr)]
         hair = next((hexv for pat, hexv in HAIR_WORDS if re.search(pat, prompt, re.I)), "")
+        img_i = (i if each else 0) if ref and ref_names else None
+        pal = palettes[img_i] if img_i is not None and img_i < len(palettes) else []
+        if ref and not hair and pal:
+            hair = min(pal, key=lambda c: sum(int(c[k:k + 2], 16) for k in (1, 3, 5)))  # a cor mais escura da imagem
+        looks = (_t(lang, "Visual baseado na imagem anexada", "Look based on the attached image", "Aspecto basado en la imagen adjunta")
+                 + (f" ({', '.join(pal[:3])})" if pal else "")) if img_i is not None else ""
         avatars.append({
             "name": name, "relationship": rel, "gender": gender, "age": max(MIN_FIELD_AGE, ages[i] if i < len(ages) else (ages[0] if ages else 22 + rng.randrange(9))),
             "traits": [c[{"en": 0, "pt": 1, "es": 2}[lang]] for c in chosen[:3]],
             "talkativeness": round(sum(c[3] for c in chosen[:2]) / len(chosen[:2]), 2),
-            "hair_color": hair, "looks": "", "backstory": digest[:280].replace("\n", " ").strip() if digest else "", "image_index": None,
+            "hair_color": hair, "looks": looks, "backstory": digest[:280].replace("\n", " ").strip() if digest else "", "image_index": img_i,
+            "source_kind": "unknown",
         })
     return {"language": {"pt": "pt-BR", "en": "en", "es": "es"}[lang], "count": count, "group": count > 1, "tone": rel,
             "avatars": avatars, "notes": []}

@@ -872,11 +872,11 @@ _LOCAL_LOCK = threading.Lock()
 _LOCAL_CACHE: Dict[Tuple[str, str], Any] = {}
 
 
-def _local_import(*names: str) -> List[Any]:
+def _local_import(*names: str, extra: str = "media") -> List[Any]:
     try:
         return [__import__(n, fromlist=["_"]) for n in names]
     except ImportError as exc:
-        raise ProviderError(f'Modelos locais precisam das bibliotecas opcionais ({exc.name}). Instale com:  pip install "asta[media]"') from None
+        raise ProviderError(f'Modelos locais precisam das bibliotecas opcionais ({exc.name}). Instale com:  pip install "asta[' + extra + ']"  (ou rode: asta libs)') from None
 
 
 def _device() -> Tuple[str, Any]:
@@ -1037,15 +1037,7 @@ class LocalHFMedia(MediaProvider):
         kw.update(extra or {})
         self.ctl.note("Gerando vídeo localmente (pode demorar)…")
         frames = pipe(**kw).frames[0]
-        with tempfile.TemporaryDirectory() as tmp:
-            for i, fr in enumerate(frames):
-                fr.save(Path(tmp) / f"f{i:05d}.png")
-            dst = Path(tmp) / "o.mp4"
-            r = subprocess.run([ff, "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(Path(tmp) / "f%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)],
-                               capture_output=True, timeout=600)
-            if r.returncode != 0 or not dst.exists():
-                raise ProviderError("ffmpeg falhou ao montar o vídeo: " + r.stderr.decode("utf-8", "replace")[-200:])
-            return Media(dst.read_bytes(), "video/mp4")
+        return _frames_to_mp4(frames, fps)
 
     def test(self) -> str:
         _local_import("torch")
@@ -1063,6 +1055,95 @@ def _has(mod: str) -> bool:
 
 
 # --------------------------------------------------------------------------- Voz da Configuração (STT/TTS por servidor)
+
+
+def _frames_to_mp4(frames: Any, fps: int) -> Media:
+    """Quadros (imagens PIL) → MP4 pelo ffmpeg."""
+    ff = proc.ffmpeg_path()
+    if not ff:
+        raise ProviderError("Montar o vídeo precisa do ffmpeg (instale-o).")
+    with tempfile.TemporaryDirectory() as tmp:
+        for i, fr in enumerate(frames):
+            fr.save(Path(tmp) / f"f{i:05d}.png")
+        dst = Path(tmp) / "o.mp4"
+        r = subprocess.run([ff, "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(Path(tmp) / "f%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)],
+                           capture_output=True, timeout=600)
+        if r.returncode != 0 or not dst.exists():
+            raise ProviderError("ffmpeg falhou ao montar o vídeo: " + r.stderr.decode("utf-8", "replace")[-200:])
+        return Media(dst.read_bytes(), "video/mp4")
+
+
+class GGUFMedia(MediaProvider):
+    """Modelos GGUF de imagem e vídeo (FLUX, Stable Diffusion, Wan…) rodando dentro do ASTA pela stable-diffusion.cpp (`pip install "asta[local]"`).
+
+    Os arquivos são baixados em Configuração → Modelos locais (aba Imagem ou Vídeo, com a quantização à sua escolha) e ficam em
+    `<dados>/models/image` e `<dados>/models/video`. O campo "extra" do nó aceita `{"load": {...}}` (argumentos do modelo; o texto "@model" vira o arquivo
+    escolhido e nomes de arquivo viram caminhos na mesma pasta, ex.: {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}) e, fora de "load",
+    argumentos da geração (steps, cfg_scale…).
+    """
+
+    id, label = "gguf_local", "GGUF local (stable-diffusion.cpp)"
+    caps = ("image", "video")
+    supports_refs = False
+
+    def _path(self, cap: str, model: str) -> Path:
+        name = Path(self.model_for(cap, model)).name
+        if not name:
+            raise ProviderError(f"Escolha um modelo GGUF de {CAP_LABELS[cap]} em Configuração → Modelos locais ({'Imagem' if cap == 'image' else 'Vídeo'}).")
+        path = Path(self.cfg.get("models_dir") or ".") / cap / name
+        if not path.is_file():
+            raise ProviderError(f"Modelo GGUF não encontrado: {path}. Baixe-o em Configuração → Modelos locais.")
+        return path
+
+    def _engine(self, cap: str, path: Path, load: Dict[str, Any]) -> Any:
+        (sdc,) = _local_import("stable_diffusion_cpp", extra="local")
+        kw: Dict[str, Any] = {}
+        for k, v in load.items():
+            if isinstance(v, str) and v == "@model":
+                kw[k] = str(path)
+            elif isinstance(v, str) and k.endswith("_path") and (path.parent / Path(v).name).is_file():
+                kw[k] = str(path.parent / Path(v).name)
+            else:
+                kw[k] = v
+        if not kw:
+            kw["model_path"] = str(path)
+        return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", lambda: sdc.StableDiffusion(**kw))
+
+    def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
+        extra = dict(extra or {})
+        path = self._path("image", model)
+        sd = self._engine("image", path, extra.pop("load", None) or {})
+        w, h = parse_wh(size)
+        w, h = max(256, min(w, 1024) // 8 * 8), max(256, min(h, 1024) // 8 * 8)
+        out = []
+        for i in range(max(1, count)):
+            self.ctl.check()
+            self.ctl.note("Gerando imagem com o modelo GGUF…")
+            kw = {"prompt": prompt, "width": w, "height": h, "seed": int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i, **extra}
+            if negative:
+                kw.setdefault("negative_prompt", negative)
+            for img in sd.txt2img(**kw)[:1]:
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                out.append(Media(buf.getvalue(), "image/png"))
+        return out
+
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+        extra = dict(extra or {})
+        path = self._path("video", model)
+        sd = self._engine("video", path, extra.pop("load", None) or {})
+        fn = getattr(sd, "txt2vid", None) or getattr(sd, "generate_video", None)
+        if fn is None:
+            raise ProviderError("A versão instalada da stable-diffusion-cpp-python não gera vídeo. Atualize-a (asta libs) ou use outro provedor de vídeo.")
+        w, h = size_of_aspect(aspect, 640)
+        self.ctl.note("Gerando vídeo com o modelo GGUF (pode demorar)…")
+        frames = fn(prompt=prompt, width=w // 8 * 8, height=h // 8 * 8, seed=int(seed) if seed else -1, **extra)
+        return _frames_to_mp4(frames, 16)
+
+    def test(self) -> str:
+        _local_import("stable_diffusion_cpp", extra="local")
+        have = {k: len(list((Path(self.cfg.get("models_dir") or ".") / k).glob("*.gguf"))) for k in ("image", "video")}
+        return f"stable-diffusion-cpp-python ok · modelos GGUF: {have['image']} de imagem, {have['video']} de vídeo"
 
 
 class VoiceSettingsMedia(MediaProvider):
@@ -1155,6 +1236,10 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
                     "sound": ["facebook/musicgen-small"], "voice": ["suno/bark-small", "facebook/mms-tts-por"], "stt": ["openai/whisper-small", "openai/whisper-large-v3-turbo"]},
         "hint": 'Roda modelos do Hugging Face dentro do ASTA. Requer:  pip install "asta[media]". Antes de usar, escolha a precisão (quantização) e baixe cada modelo aqui mesmo — nada é baixado em silêncio. Vídeo exige GPU.',
     },
+    "gguf_local": {
+        "label": "GGUF local (stable-diffusion.cpp)", "kind": "gguf_local", "caps": ["image", "video"], "needs_key": False, "local": True,
+        "hint": 'Modelos GGUF de imagem e vídeo (FLUX, Stable Diffusion, Wan…) quantizados, rodando no ASTA. Requer:  pip install "asta[local]". Baixe-os em Configuração → Modelos locais (abas Imagem e Vídeo) escolhendo a quantização.',
+    },
     "voice_settings": {
         "label": "Voz da Configuração", "kind": "voice_settings", "caps": ["voice", "stt"], "needs_key": False, "local": True,
         "hint": "Usa o servidor de voz já configurado em Configuração → Voz (Whisper, Kokoro, OpenAI…).",
@@ -1166,7 +1251,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
 }
 
 _KINDS = {"demo": DemoMedia, "openai": OpenAIMedia, "elevenlabs": ElevenLabsMedia, "google": GoogleMedia, "stability": StabilityMedia, "replicate": ReplicateMedia,
-          "huggingface": HFInferenceMedia, "a1111": A1111Media, "local_hf": LocalHFMedia, "voice_settings": VoiceSettingsMedia}
+          "huggingface": HFInferenceMedia, "a1111": A1111Media, "local_hf": LocalHFMedia, "gguf_local": GGUFMedia, "voice_settings": VoiceSettingsMedia}
 
 
 def media_config(settings: Dict[str, Any], pid: str) -> Dict[str, Any]:
@@ -1191,8 +1276,10 @@ def media_config(settings: Dict[str, Any], pid: str) -> Dict[str, Any]:
     return cfg
 
 
-def build_media(settings: Dict[str, Any], pid: str, ctl: Optional[Ctl] = None) -> MediaProvider:
+def build_media(settings: Dict[str, Any], pid: str, ctl: Optional[Ctl] = None, models_dir: Optional[Path] = None) -> MediaProvider:
     cfg = media_config(settings, pid)
+    if models_dir:
+        cfg["models_dir"] = str(models_dir)
     return _KINDS.get(cfg["kind"], OpenAIMedia)(cfg, ctl)
 
 

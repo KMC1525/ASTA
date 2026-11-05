@@ -154,6 +154,39 @@ class DownloadTests(TmpCase):
         self.assertIn("espaço", str(cm.exception))
 
 
+class GgufKindsTests(ServerCase):
+    """Modelos GGUF separados por tipo: texto, imagem, vídeo, som, voz e outros (busca, pasta e lista próprias)."""
+
+    def test_search_download_list_and_delete_per_kind(self):
+        fake = FakeHF()
+        try:
+            with mock.patch.object(hf, "HF", fake.url):
+                for kind in hf.GGUF_KINDS:
+                    status, r = self.c.json("GET", f"/api/hf/search?q=flux&kind={kind}")
+                    self.assertEqual((status, [m["id"] for m in r["results"]]), (200, ["dono/modelo"]), kind)
+                    self.assertEqual(r["results"][0]["kind"], kind)
+                self.assertEqual(self.c.json("GET", "/api/hf/search?q=x&kind=nada")[0], 502)
+                for kind in ("image", "voice", "text"):
+                    job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "file": "tiny-Q4_K_M.gguf", "quant": "Q4_K_M", "kind": kind})[1]
+                    self.assertTrue([e for e in self.c.sse(f"/api/jobs/{job['job_id']}/events") if e["type"] == "done"], kind)
+                md = self.store.models_dir
+                self.assertTrue((md / "image" / "tiny-Q4_K_M.gguf").exists() and (md / "voice" / "tiny-Q4_K_M.gguf").exists() and (md / "tiny-Q4_K_M.gguf").exists())
+                names = lambda k: [(m["name"], m["kind"]) for m in self.c.json("GET", f"/api/hf/local?kind={k}")[1]["models"]]  # noqa: E731
+                self.assertEqual(names("image"), [("tiny-Q4_K_M.gguf", "image")])
+                self.assertEqual(names("video"), [])
+                self.assertEqual(names(""), [("tiny-Q4_K_M.gguf", "text")])  # sem `kind`: só os de texto, como antes
+                self.assertEqual(sorted(k for _, k in names("all")), ["image", "text", "voice"])
+                self.assertEqual(self.c.json("GET", "/api/hf/local?kind=nada")[0], 400)
+                self.assertEqual(self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "file": "tiny-Q4_K_M.gguf", "quant": "Q4_K_M", "kind": "../x"})[0], 400)
+                self.assertEqual(self.c.json("DELETE", "/api/hf/local/tiny-Q4_K_M.gguf?kind=image")[0], 200)
+                self.assertFalse((md / "image" / "tiny-Q4_K_M.gguf").exists())
+                self.assertTrue((md / "voice" / "tiny-Q4_K_M.gguf").exists())  # cada tipo tem a sua pasta
+                self.c.json("DELETE", "/api/hf/local/tiny-Q4_K_M.gguf?kind=voice")
+                self.c.json("DELETE", "/api/hf/local/tiny-Q4_K_M.gguf")
+        finally:
+            fake.close()
+
+
 class HfApiTests(ServerCase):
     def test_choose_a_quantization_download_use_and_delete(self):
         fake = FakeHF()

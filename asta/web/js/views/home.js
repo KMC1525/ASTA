@@ -104,21 +104,33 @@ async function worldComposer(root, project, carry) {
 
 // ------------------------------------------------------------------ modo: Avatar
 async function avatarComposer(root, project, carry) {
-  const m = { count: 0, rel: 'auto', content: state.settings.avatars && state.settings.avatars.content === 'nsfw' ? 'nsfw' : 'sfw' };
+  const m = { count: 0, rel: 'auto', base: false, imgMode: 'each', content: state.settings.avatars && state.settings.avatars.content === 'nsfw' ? 'nsfw' : 'sfw' };
   const countEl = h('span', { class: 'tool nopad' }), relSel = select([['auto', t('Relação: automática')], ...Object.keys(REL_LABEL).filter((k) => k !== 'custom').map((k) => [k, t(REL_LABEL[k])])], m.rel, (v) => { m.rel = v; });
   const paintCount = () => countEl.replaceChildren(icon('characters', 15), h('button', { type: 'button', class: 'step-b', title: t('Menos'), onclick: () => { m.count = Math.max(0, m.count - 1); paintCount(); } }, '−'),
     h('span', { class: 'cnt' }, m.count ? t('{n} avatar(es)', { n: m.count }) : t('Quantidade: auto')), h('button', { type: 'button', class: 'step-b', title: t('Mais'), onclick: () => { m.count = Math.min(8, m.count + 1); paintCount(); } }, '+'));
   const contentSeg = seg([['sfw', 'SFW'], ['nsfw', 'NSFW']], m.content, (v) => { m.content = v; });
   contentSeg.style.transform = 'scale(.92)'; contentSeg.style.transformOrigin = 'left center';
+  // foto/arte como base: a imagem anexada define o visual do avatar (e vira o retrato); o texto e os outros anexos só complementam
+  const baseBtn = h('button', { class: 'tool', type: 'button', title: t('Usa as imagens anexadas (foto ou arte) como base visual do avatar. Dá para enviar só a imagem ou somar texto e outros anexos.'), onclick: () => { m.base = !m.base; paintBase(); } });
+  const modeSeg = h('div', { class: 'seg', style: { transform: 'scale(.92)', transformOrigin: 'left center' } });
+  const baseNote = h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '10px' } });
+  const paintBase = () => {
+    baseBtn.replaceChildren(icon('image', 15), t('Foto/arte como base')); baseBtn.classList.toggle('on', m.base);
+    modeSeg.classList.toggle('hidden', !m.base);
+    modeSeg.replaceChildren(...[['each', t('Um avatar por imagem')], ['one', t('Uma pessoa com todas as imagens')]].map(([v, l]) => h('button', { type: 'button', class: m.imgMode === v ? 'on' : '', onclick: () => { m.imgMode = v; paintBase(); } }, l)));
+    baseNote.textContent = m.base ? t('Anexe a foto ou arte (clipe ou arrastar). O texto é opcional: nome, personalidade, história… Fotos de pessoas reais ficam sempre em SFW; NSFW só vale para arte de personagens fictícios.') : '';
+    composer.ta.placeholder = m.base ? t('Opcional: nome, personalidade, história… (a imagem anexada é a base do visual)') : t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…');
+    composer.refresh();
+  };
   const composer = createComposer({
-    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), value: carry, tools: [countEl, h('span', { class: 'tool' }, relSel), contentSeg],
+    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), value: carry, tools: [baseBtn, modeSeg, countEl, h('span', { class: 'tool' }, relSel), contentSeg],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
-      try { await startJob(root, '/api/avatars/generate', { prompt: text, attachment_ids: ids, count: m.count, relationship: m.rel, content: m.content }, 'avatar', { prompt: text }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/avatars/generate', { prompt: text, attachment_ids: ids, count: m.count, relationship: m.rel, content: m.content, from_images: m.base, images_mode: m.imgMode }, 'avatar', { prompt: text }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   });
-  paintCount();
-  return { el: composer.el, composer };
+  paintCount(); paintBase();
+  return { el: h('div', null, composer.el, baseNote), composer };
 }
 
 // ------------------------------------------------------------------ modo: Jogo 2D
