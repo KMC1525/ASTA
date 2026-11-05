@@ -49,7 +49,7 @@ curl -fsSL https://raw.githubusercontent.com/KMC1525/ASTA/main/install.sh | sh
 irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 ```
 
-The Windows installer works on the Windows PowerShell 5.1 that ships with Windows as well as on PowerShell 7. If it ever stops with an error, re-run the same command and open an issue with the text it printed.
+The Windows installer works on the Windows PowerShell 5.1 that ships with Windows as well as on PowerShell 7. The `asta` command is added to your `PATH` and works right away in the same terminal when you use the command above (other already-open terminals need to be reopened); if it is still not recognized, run it by its full path, which the installer prints (`%LOCALAPPDATA%\ASTA\app\venv\Scripts\asta.exe`). If it ever stops with an error, re-run the same command and open an issue with the text it printed.
 
 Then, in any terminal:
 

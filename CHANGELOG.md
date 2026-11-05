@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.6] — 2026-11-05
+
+### Corrigido
+- **Windows:** depois de instalar, digitar `asta` dava *"O termo 'asta' não é reconhecido como nome de cmdlet…"*. Duas causas no `install.ps1`:
+  - o instalador só gravava o PATH do usuário e pedia para abrir um novo terminal; agora o comando também vale **já no terminal atual** (quando se usa `irm … | iex`);
+  - numa conta com o PATH do usuário vazio, `$userPath.TrimEnd(';')` falhava e, desde a 0.2.5 (`$ErrorActionPreference = 'Continue'`), essa falha passava em silêncio — o PATH nunca era configurado. O código agora aceita PATH vazio e compara as pastas sem diferenciar maiúsculas/minúsculas nem barra final.
+- O PATH agora é configurado **antes** da instalação das bibliotecas (que é demorada), então o comando existe mesmo que o instalador seja interrompido nessa etapa.
+- Se `asta` ainda não for reconhecido no terminal atual, o instalador mostra o comando com o caminho completo (`& '…\asta.exe'`) e explica o que fazer. O `install.sh` (Linux e macOS) também mostra o caminho completo quando a pasta do comando não está no PATH.
+
 ## [0.2.5] — 2026-11-05
 
 ### Corrigido
@@ -145,7 +154,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.5...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.6...HEAD
+[0.2.6]: https://github.com/KMC1525/ASTA/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/KMC1525/ASTA/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/KMC1525/ASTA/compare/v0.2.3...v0.2.4
 [0.2.3]: https://github.com/KMC1525/ASTA/compare/v0.2.2...v0.2.3

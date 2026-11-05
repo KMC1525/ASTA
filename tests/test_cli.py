@@ -252,6 +252,11 @@ class InstallerTests(unittest.TestCase):
         # PowerShell 5.1: com ErrorActionPreference=Stop, o stderr de programas externos (mesmo com 2>$null) vira NativeCommandError
         self.assertNotRegex(ps, r"(?m)^\$ErrorActionPreference\s*=\s*'Stop'")
         self.assertIn("$ErrorActionPreference = 'Continue'", ps)
+        # o comando `asta` precisa funcionar logo após instalar: PATH do usuário (aceitando Path vazio) e PATH deste terminal, antes das bibliotecas
+        self.assertIn("if ($userPath)", ps)
+        self.assertIn("$env:Path = $env:Path.TrimEnd(';')", ps)
+        self.assertLess(ps.index("$env:Path = $env:Path.TrimEnd(';')"), ps.index("& $asta libs"))
+        self.assertNotIn("$userPath.TrimEnd", ps)  # com Path vazio (null) isso falha em silêncio e o PATH nunca era configurado
         for needle in ("winget install --id Python.Python.3.12", "winget upgrade", "ASTA_PYTHON", "pip setuptools wheel", "Recriando o ambiente"):
             self.assertIn(needle, ps)  # Windows: instala/atualiza o Python pelo winget e as ferramentas dele
         for needle in ("apt-get", "dnf", "pacman", "brew", "ASTA_PYTHON", "pip setuptools wheel", "Recriando o ambiente"):

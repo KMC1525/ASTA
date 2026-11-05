@@ -153,7 +153,8 @@ fi
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
   *) note "Adicione ao seu PATH para usar o comando 'asta':"
-     note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile   (e abra um novo terminal)" ;;
+     note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile   (e abra um novo terminal)"
+     note "Até lá, abra a WebUI com o caminho completo:  $BIN_DIR/asta" ;;
 esac
 echo
 note "Para abrir a WebUI:   asta"

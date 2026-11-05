@@ -107,9 +107,19 @@ $new = & $venvPy -I -c "import asta; print(asta.__version__)"
 # 4) comando `asta`
 $shim = Join-Path $BinDir 'asta.cmd'
 Set-Content -ErrorAction Stop -Path $shim -Value "@echo off`r`n`"$venv\Scripts\asta.exe`" %*" -Encoding ASCII
-$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
-# 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa); a lista vem da versão recém-instalada
+
+# 4b) o comando `asta` no PATH — do usuário (para novos terminais) e deste terminal (para usar já). Feito ANTES das bibliotecas, que demoram.
 $asta = Join-Path $venv 'Scripts\asta.exe'
+function Same-Dir($a, $b) { return ($a.TrimEnd('\') -ieq $b.TrimEnd('\')) }
+$userPath = [Environment]::GetEnvironmentVariable('Path', 'User')
+$userParts = @(if ($userPath) { $userPath -split ';' | Where-Object { $_ } })   # o Path do usuário pode ser vazio (null) numa conta nova
+if (-not ($userParts | Where-Object { Same-Dir $_ $BinDir })) {
+  [Environment]::SetEnvironmentVariable('Path', (($userParts + $BinDir) -join ';'), 'User')
+  Note 'Adicionei o comando ao seu PATH.'
+}
+if (-not (($env:Path -split ';') | Where-Object { $_ -and (Same-Dir $_ $BinDir) })) { $env:Path = $env:Path.TrimEnd(';') + ';' + $BinDir }   # vale já neste terminal (com `irm | iex`)
+
+# 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa); a lista vem da versão recém-instalada
 $libsFailed = $false
 if ($Extras -in @('none', 'core')) { Note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$Extras)." }
 else {
@@ -119,15 +129,15 @@ else {
   if ($LASTEXITCODE -ne 0) { $libsFailed = $true }
   $ErrorActionPreference = $prevEap
 }
-if (($userPath -split ';') -notcontains $BinDir) {
-  [Environment]::SetEnvironmentVariable('Path', ($userPath.TrimEnd(';') + ';' + $BinDir), 'User')
-  Note 'Adicionei o comando ao seu PATH — abra um NOVO terminal para usá-lo.'
-}
 
 if (-not $old) { Say "✓ ASTA $new instalado." }
 elseif ($old -eq $new) { Say "✓ ASTA $new já estava atualizado (arquivos reinstalados)." }
 else { Say "✓ ASTA atualizado: $old → $new." }
 if ($libsFailed) { Note '⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs' }
 Write-Host ''
-Note 'Para abrir a WebUI:   asta'
+if (Get-Command asta -ErrorAction SilentlyContinue) { Note 'Para abrir a WebUI:   asta' }
+else {
+  Note "Para abrir a WebUI:   & '$asta'"
+  Note "O comando 'asta' só será reconhecido em terminais NOVOS (feche e abra o PowerShell) ou, neste, depois de rodar o instalador com:  irm <endereço> | iex"
+}
 Note 'Para atualizar:       rode este mesmo comando de novo (ou: asta update) — atualiza o ASTA e as bibliotecas dele'
