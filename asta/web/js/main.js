@@ -8,13 +8,13 @@ import { h, icon, toast } from './ui.js';
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'],
+  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['rebuild', 'Rebuild', 'refresh'], ['canvas', 'Canvas', 'canvas'],
   ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
   main: () => import('./views/chat.js'), worlds: () => import('./views/worlds.js'),
   library: () => import('./views/library.js'), config: () => import('./views/config.js'),
-  avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), canvas: () => import('./views/canvas.js'),
+  avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), rebuild: () => import('./views/rebuild.js'), canvas: () => import('./views/canvas.js'),
 };
 
 // Recarrega a página (uma vez por falha: sem laço se o problema continuar). Devolve true se recarregou.

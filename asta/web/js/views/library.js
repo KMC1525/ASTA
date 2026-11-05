@@ -23,7 +23,7 @@ export async function renderLibrary(root, ctx, opts) {
     kinds.includes('model') ? api('/api/library/models').then((r) => r.models).catch(() => []) : []]);
   let items = [];
   const rebuild = ([pr, av, cv, md]) => {
-    items = pr.filter((p) => kinds.includes(p.kind)).map((p) => Object.assign({ itemKind: p.kind, tags: p.tags }, p))
+    items = pr.filter((p) => kinds.includes(p.kind) && (!opts.filter || opts.filter(p))).map((p) => Object.assign({ itemKind: p.kind, tags: p.tags }, p))
       .concat(av.map((a) => ({ itemKind: 'avatar', id: a.id, name: a.name, description: a.personality || a.description || '', tags: { auto: a.tags, custom: [] }, updated: a.updated, raw: a })))
       .concat(cv.map((c) => ({ itemKind: 'canvas', id: c.id, name: c.name === 'Novo canvas' ? t('Novo canvas') : c.name, description: c.description || '', tags: { auto: [], custom: [] }, updated: c.updated, raw: c })));
     items.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));

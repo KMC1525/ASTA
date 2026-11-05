@@ -351,7 +351,7 @@ async function appearance() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
   const card = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, title), ...kids);
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['rebuild', 'Rebuild'], ['canvas', 'Canvas'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const importInput = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: async (e) => {
     const f = e.target.files[0]; e.target.value = ''; if (!f) return;
