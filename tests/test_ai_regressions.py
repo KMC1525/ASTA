@@ -1,4 +1,5 @@
 """Regressões de provedores de IA (nuvem e local) e dos avatars: cada teste aqui cobre um bug que existiu."""
+import base64
 import contextlib
 import io
 import json
@@ -451,6 +452,148 @@ class DeleteAvatarTests(TmpCase):
         self.assertEqual((t["avatar_ids"], t["mode"]), ([b, c], "multi"))
         self.assertNotIn(a, [m.get("avatar_id") for m in t["messages"]])  # as falas do avatar apagado saem do histórico
         self.assertIsNotNone(st.avatar_chats.get(other["id"]))
+
+
+GIF = base64.b64decode("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7")
+STRICT_ERR = "'url' field must be a base64 encoded image."
+
+
+def strict_server(mode="strict"):
+    """LM Studio/Ollama exigente: aceita só PNG/JPEG em data URL (mode "strict") ou recusa qualquer imagem (mode "none"), com o erro real."""
+    seen = []
+
+    def post(h, body):
+        seen.append(body)
+        for m in body.get("messages", []):
+            if isinstance(m.get("content"), list):
+                for part in m["content"]:
+                    if part.get("type") != "image_url":
+                        continue
+                    url = part["image_url"]["url"]
+                    head, _, data = url.partition(",")
+                    raw = base64.b64decode(data) if data else b""
+                    ok = head in ("data:image/png;base64", "data:image/jpeg;base64") and (raw[:8] == b"\x89PNG\r\n\x1a\n" or raw[:3] == b"\xff\xd8\xff")
+                    if mode == "none" or not ok:
+                        return send_json(h, {"error": {"message": STRICT_ERR}}, 400)
+        send_json(h, {"choices": [{"message": {"content": "ok"}}]})
+
+    return post, seen
+
+
+def img(data, media="image/png"):
+    return {"type": "image", "media_type": media, "data": base64.b64encode(data).decode()}
+
+
+def vision_msg(*images):
+    return [{"role": "user", "content": [{"type": "text", "text": "descreva"}, *images]}]
+
+
+class VisionImageTests(unittest.TestCase):
+    """Foto no avatar via LM Studio dava «'url' field must be a base64 encoded image» e derrubava a criação."""
+
+    def lm(self, url, **user):
+        return provider("lmstudio", base_url=url + "/v1", model="vlm-x", vision=True, **user)
+
+    def test_gif_is_converted_to_png_for_strict_local_servers(self):
+        from asta.providers import images as imgs
+
+        if not imgs.shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg ausente")
+        post, seen = strict_server()
+        with serve(post) as url:
+            p = self.lm(url)
+            self.assertEqual(p.chat(vision_msg(img(GIF, "image/gif"))), "ok")
+        part = [x for x in seen[-1]["messages"][-1]["content"] if x.get("type") == "image_url"][0]
+        self.assertTrue(part["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertEqual(p.images_dropped, 0)
+
+    def test_declared_type_is_replaced_by_the_real_one(self):
+        from tests.test_avatars import tiny_png
+
+        post, seen = strict_server()
+        with serve(post) as url:
+            self.lm(url).chat(vision_msg(img(tiny_png(), "image/jpeg")))  # PNG de verdade, declarado como JPEG
+        self.assertTrue([x for x in seen[-1]["messages"][-1]["content"] if x.get("type") == "image_url"][0]["image_url"]["url"].startswith("data:image/png;base64,"))
+
+    def test_unconvertible_image_is_left_out_with_a_note_instead_of_failing(self):
+        post, seen = strict_server()
+        with serve(post) as url:
+            with mock.patch("asta.providers.images.to_png", return_value=None):
+                p = self.lm(url)
+                self.assertEqual(p.chat(vision_msg(img(GIF, "image/gif"))), "ok")
+        content = seen[-1]["messages"][-1]["content"]
+        self.assertIsInstance(content, str)
+        self.assertIn("não pôde", content)
+        self.assertEqual(p.images_dropped, 1)
+
+    def test_server_that_refuses_images_gets_a_text_only_retry(self):
+        from tests.test_avatars import tiny_png
+
+        post, seen = strict_server("none")
+        with serve(post) as url:
+            p = self.lm(url)
+            self.assertEqual(p.chat(vision_msg(img(tiny_png()))), "ok")
+            self.assertEqual(len(seen), 2)
+            self.assertIsInstance(seen[1]["messages"][-1]["content"], str)  # sem imagens
+            self.assertIn("descreva", seen[1]["messages"][-1]["content"])
+            self.assertEqual(p.images_dropped, 1)
+            seen.clear()
+            self.assertEqual("".join(self.lm(url).chat(vision_msg(img(tiny_png())), stream=True)), "")  # o stream também recua (a resposta de teste não é SSE)
+        self.assertEqual(len(seen), 2)
+
+    def test_cloud_providers_keep_every_format(self):
+        seen = []
+
+        def post(h, body):
+            seen.append(body)
+            send_json(h, {"choices": [{"message": {"content": "ok"}}]})
+
+        with serve(post) as url:
+            p = provider("custom", base_url=url + "/v1", model="m", vision=True)
+            p.allowed_images = None  # como um provedor de nuvem: sem restrição de formato
+            p.chat(vision_msg(img(GIF, "image/gif")))
+        part = [x for x in seen[-1]["messages"][-1]["content"] if x.get("type") == "image_url"][0]
+        self.assertTrue(part["image_url"]["url"].startswith("data:image/gif;base64,"))
+
+    def test_anthropic_gets_the_real_media_type(self):
+        from tests.test_avatars import tiny_png
+
+        seen = []
+
+        def post(h, body):
+            seen.append(body)
+            send_json(h, {"content": [{"type": "text", "text": "ok"}]})
+
+        with serve(post) as url:
+            provider("anthropic", base_url=url, api_key="k", model="c").chat(vision_msg(img(tiny_png(), "image/jpeg")))
+        self.assertEqual(seen[0]["messages"][0]["content"][0]["source"]["media_type"], "image/png")
+
+    def test_normalize_unit(self):
+        from asta.providers import images as imgs
+
+        self.assertEqual(imgs.sniff(GIF), "image/gif")
+        self.assertIsNone(imgs.normalize({"media_type": "image/png", "data": ""}))
+        self.assertEqual(imgs.normalize({"media_type": "image/png", "data": base64.b64encode(b"\xff\xd8\xffxyz").decode()})["media_type"], "image/jpeg")
+
+
+class AvatarFromPhotoTests(ServerCase):
+    def test_a_server_that_rejects_images_does_not_kill_the_avatar_creation(self):
+        """O erro «'url' field must be a base64 encoded image» aparecia no Analista e a criação parava."""
+        from tests.test_avatars import tiny_png
+
+        post, seen = strict_server("none")
+        with serve(post) as url:
+            self.c.json("PUT", "/api/settings", {"providers": {"lmstudio": {"base_url": url + "/v1", "model": "vlm-x", "vision": True}}, "active": {"generation": "lmstudio"}})
+            try:
+                st, up = self.c.json("POST", "/api/uploads", raw=tiny_png(), headers={"X-Filename": "foto.png", "Content-Type": "image/png"})
+                st, r = self.c.json("POST", "/api/avatars/generate", {"prompt": "Uma amiga chamada Luna", "attachment_ids": [up["id"]], "from_images": True, "prompt_pipeline": False})
+                ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+            finally:
+                self.c.json("PUT", "/api/settings", {"active": {"generation": "demo"}, "providers": {"lmstudio": {"base_url": "", "model": ""}}})
+        self.assertFalse([e for e in ev if e["type"] == "error"], [e for e in ev if e["type"] == "error"])
+        done = next(e for e in ev if e["type"] == "done")
+        self.assertTrue(done["avatar_ids"])
+        self.assertTrue(any("imagem" in w and "não puderam" in w for w in done["warnings"]), done["warnings"])
 
 
 class ChatRoutesTests(ServerCase):

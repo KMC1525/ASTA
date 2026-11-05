@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from typing import Any, Dict, Iterator, List
 
-from . import http
+from . import http, images
 from .base import Provider, ProviderError, content_images, content_text, split_system
 
 API_VERSION = "2023-06-01"
@@ -34,16 +34,10 @@ class AnthropicProvider(Provider):
             imgs = content_images(content)
             if imgs and self.vision:
                 for img in imgs:
-                    blocks.append(
-                        {
-                            "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": img.get("media_type", "image/png"),
-                                "data": img.get("data", ""),
-                            },
-                        }
-                    )
+                    ok = images.normalize(img)  # o tipo vem dos bytes (a API recusa quando o tipo declarado não bate com a imagem)
+                    if not ok:
+                        continue
+                    blocks.append({"type": "image", "source": {"type": "base64", "media_type": ok["media_type"], "data": ok["data"]}})
             txt = content_text(content)
             if txt.strip():
                 blocks.append({"type": "text", "text": txt})

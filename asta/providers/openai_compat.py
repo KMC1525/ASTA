@@ -6,10 +6,11 @@ Hugging Face Inference, Ollama, LM Studio, llama.cpp server, vLLM e outros.
 from __future__ import annotations
 
 import json
+import re
 import urllib.parse
 from typing import Any, Dict, Iterator, List
 
-from . import http
+from . import http, images
 from .base import Provider, ProviderError, content_images, content_text, split_system
 
 
@@ -26,6 +27,9 @@ def normalize_base(base: str, add_v1: bool = False) -> str:
     return b
 
 
+_IMAGE_ERR = re.compile(r"image|base64|'url'|\"url\"|vision|multimodal|modalit", re.I)
+
+
 def _text(content: Any) -> str:
     """O texto da resposta: alguns servidores devolvem uma lista de partes em vez de uma string."""
     if isinstance(content, list):
@@ -36,12 +40,16 @@ def _text(content: Any) -> str:
 class OpenAICompatProvider(Provider):
     #: provedores em que o usuário digita o endereço do servidor (e costuma esquecer o /v1)
     LOCAL_IDS = ("ollama", "llamacpp", "custom", "lmstudio")
+    #: servidores locais só aceitam PNG/JPEG de forma confiável: o resto é convertido (ffmpeg) ou fica de fora
+    STRICT_IMAGE_IDS = ("ollama", "llamacpp", "custom", "lmstudio")
 
     def __init__(self, cfg: Dict[str, Any]):
         super().__init__(cfg)
         self.base = normalize_base(cfg.get("base_url") or "", add_v1=cfg.get("id") in self.LOCAL_IDS)
         self.key = cfg.get("api_key") or ""
         self.use_json_mode = bool(cfg.get("json"))
+        self.allowed_images = images.STRICT_TYPES if cfg.get("id") in self.STRICT_IMAGE_IDS else None
+        self.images_dropped = 0  # imagens que não foram enviadas (formato não aceito ou recusadas pelo servidor): o Runner avisa
         self.label = cfg.get("label", "OpenAI-compatível")
 
     # ------------------------------------------------------------ helpers
@@ -60,14 +68,20 @@ class OpenAICompatProvider(Provider):
             content = m.get("content")
             imgs = content_images(content)
             if imgs and self.vision:
-                parts: List[dict] = []
                 txt = content_text(content)
-                if txt:
-                    parts.append({"type": "text", "text": txt})
+                img_parts: List[dict] = []
                 for img in imgs:
-                    url = f"data:{img.get('media_type', 'image/png')};base64,{img.get('data', '')}"
-                    parts.append({"type": "image_url", "image_url": {"url": url}})
-                out.append({"role": m["role"], "content": parts})
+                    ok = images.normalize(img, self.allowed_images)
+                    if not ok:
+                        self.images_dropped += 1
+                        continue
+                    img_parts.append({"type": "image_url", "image_url": {"url": f"data:{ok['media_type']};base64,{ok['data']}"}})
+                if len(img_parts) < len(imgs):
+                    txt += f"\n[{len(imgs) - len(img_parts)} imagem(ns) anexada(s) não pôde(ram) ser enviada(s) a este provedor]"
+                if not img_parts:
+                    out.append({"role": m["role"], "content": txt})
+                else:
+                    out.append({"role": m["role"], "content": ([{"type": "text", "text": txt}] if txt else []) + img_parts})
             else:
                 txt = content_text(content)
                 if imgs and not self.vision:
@@ -92,8 +106,10 @@ class OpenAICompatProvider(Provider):
     def _adapt(self, body: dict, err: ProviderError) -> bool:
         """Ajusta parâmetros que o modelo rejeita (modelos de raciocínio, etc.). True = tentar de novo."""
         msg = str(err).lower()
-        if err.status not in (400, 422):
+        if err.status not in (400, 415, 422):
             return False
+        if _IMAGE_ERR.search(msg) and self._strip_images(body):  # o servidor recusou as imagens (formato, modelo sem visão…): segue só com o texto
+            return True
         if "max_completion_tokens" in msg and "max_tokens" in body:
             body["max_completion_tokens"] = body.pop("max_tokens")
             return True
@@ -104,6 +120,20 @@ class OpenAICompatProvider(Provider):
             body.pop("response_format")
             return True
         return False
+
+    def _strip_images(self, body: dict) -> bool:
+        """Troca as imagens das mensagens por uma nota de texto. True se havia imagens."""
+        found = 0
+        for m in body.get("messages", []):
+            c = m.get("content")
+            if isinstance(c, list):
+                n = sum(1 for p in c if isinstance(p, dict) and p.get("type") == "image_url")
+                if n:
+                    found += n
+                    txt = "\n".join(str(p.get("text", "")) for p in c if isinstance(p, dict) and p.get("type") == "text")
+                    m["content"] = txt + f"\n[{n} imagem(ns) anexada(s) não pôde(ram) ser enviada(s): o provedor recusou o formato ou o modelo não tem visão]"
+        self.images_dropped += found
+        return found > 0
 
     def _url(self) -> str:
         if not self.base:

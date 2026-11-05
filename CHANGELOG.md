@@ -5,6 +5,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.3.2] — 2026-11-05
+
+### Corrigido
+- **Criar um avatar a partir de uma foto/arte parava no Analista com «'url' field must be a base64 encoded image»** (visto com o LM Studio). Servidores locais de visão (LM Studio, Ollama, llama.cpp) só aceitam PNG e JPEG de forma confiável e recusam o resto — GIF, WebP… — com esse erro; antes o ASTA mandava a imagem como estava e qualquer recusa derrubava a criação inteira. Agora:
+  - **o tipo da imagem vem dos bytes**, não do nome: um PNG declarado como JPEG (ou o contrário) é enviado com o tipo certo — vale também para o Claude, que recusa quando o tipo declarado não bate;
+  - **nos servidores locais, imagens que não são PNG/JPEG são convertidas para PNG** (primeiro quadro, com o `ffmpeg` quando ele existe); sem como converter, a imagem fica de fora com uma nota no texto em vez de causar erro;
+  - **se o servidor recusar as imagens mesmo assim** (formato, modelo sem visão, mensagem de erro sobre imagem/`url`/base64…), o ASTA **repete a chamada só com o texto** — no chat e na criação (também com streaming);
+  - nos pipelines, isso vira um **aviso** no resultado (*"avatar_analyst: 1 imagem(ns) não puderam ser enviadas ao provedor (formato não aceito ou modelo sem visão); seguiu só com o texto"*) e a criação segue (o visual vem do texto e das cores dominantes da imagem), em vez de falhar. Os provedores de nuvem continuam recebendo todos os formatos.
+- Testes: um servidor local "exigente" simulado (aceita só PNG/JPEG em data URL e responde com o erro real) cobre a conversão de GIF, o tipo real dos bytes, a imagem sem conversão possível, a recusa total com nova tentativa só com texto (chamada normal e streaming), provedor de nuvem intacto, Claude com o tipo certo e a criação de avatar a partir de foto concluindo com aviso.
+
+### Observação
+- Não tenho um LM Studio real aqui: a causa foi inferida pela mensagem de erro e pelo que esses servidores aceitam, e o conserto cobre os caminhos prováveis (formato, tipo declarado errado e recusa geral). Se aparecer o aviso de imagem não enviada, o modelo carregado provavelmente **não tem visão** (precisa ser um modelo "VLM", como Qwen-VL, Gemma 3 ou LLaVA) — a criação continua, só sem enxergar a foto.
+
 ## [0.3.1] — 2026-11-05
 
 ### Adicionado
@@ -416,7 +429,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.2...HEAD
+[0.3.2]: https://github.com/KMC1525/ASTA/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/KMC1525/ASTA/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/KMC1525/ASTA/compare/v0.2.18...v0.3.0
 [0.2.18]: https://github.com/KMC1525/ASTA/compare/v0.2.17...v0.2.18

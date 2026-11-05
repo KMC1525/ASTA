@@ -54,6 +54,13 @@ class Runner:
         )
         self.logs.append((f"{self._log_n:02d}-{agent}.md", body))
 
+    def _note_dropped_images(self, agent: str) -> None:
+        """O provedor não conseguiu enviar imagens (formato não aceito ou recusadas): a etapa seguiu só com o texto — avisa em vez de falhar."""
+        n = int(getattr(self.provider, "images_dropped", 0) or 0)
+        if n:
+            self.provider.images_dropped = 0
+            self.warnings.append(f"{agent}: {n} imagem(ns) não puderam ser enviadas ao provedor (formato não aceito ou modelo sem visão); seguiu só com o texto")
+
     def _agent(
         self, step: str, agent: str, instruction: str, payload: Dict[str, Any], fallback: Callable[[Dict[str, Any]], Dict[str, Any]],
         *, images: Optional[List[dict]] = None, tokens_mult: float = 1.0, feedback: bool = False,
@@ -72,6 +79,7 @@ class Runner:
                     cancelled=self.cancelled,
                 )
                 self._log(agent, system, instruction, payload, raw)
+                self._note_dropped_images(agent)
                 return obj, False
             except ProviderError as exc:
                 if str(exc) == "cancelado":
@@ -86,6 +94,7 @@ class Runner:
             except ValueError as exc:  # JSON inválido mesmo após reparo
                 last = exc
                 break
+        self._note_dropped_images(agent)
         self.warnings.append(f"{agent}: fallback ({last})")
         out = fallback(payload)
         self._log(agent, system, instruction, payload, "// FALLBACK determinístico: " + str(last) + "\n" + json.dumps(out, ensure_ascii=False, indent=2))
