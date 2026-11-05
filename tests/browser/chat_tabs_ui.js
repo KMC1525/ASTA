@@ -22,6 +22,9 @@ run('chat_tabs', async ({ open, api, check }) => {
   await page.keyboard.press('Alt+n'); await page.waitForTimeout(300);
   check('alt-n:nao-duplica-aba-em-branco', (await tabs()) === 2);
 
+  // ---- Ctrl+J também abre uma aba nova
+  await page.keyboard.press('Control+j'); await page.waitForTimeout(300);
+  check('ctrl-j:abre-aba-nova', (await page.locator('.chx.empty').count()) === 1 && (await tabs()) === 2);
   // ---- rascunho por aba
   await ta.fill('rascunho da aba 2');
   await page.locator('.chx-tab').first().click(); await page.waitForTimeout(400);

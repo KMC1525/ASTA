@@ -32,6 +32,7 @@ SYSTEM = (
     "How to answer:\n"
     "- Reply in the language the user writes in. Get to the point first and add detail only when it helps: match the length to the question "
     "(a short question gets a short answer).\n"
+    "- Never use emojis or emoticon pictograms (they waste tokens): plain words and punctuation only, even if the user uses emojis.\n"
     "- Use Markdown sparingly: short paragraphs, lists for steps or options, **bold** for key terms, tables only to compare things, and fenced code blocks "
     "(with the language) for code and commands.\n"
     "- Be concrete: recipes and study plans with quantities, times and order; math and logic with the key steps and a check of the result; code that works, "
@@ -48,6 +49,27 @@ SYSTEM = (
 
 
 # --------------------------------------------------------------------------- texto visível durante o streaming
+
+# Emojis das respostas do Chat são tirados (gastam tokens e poluem o texto): pictogramas, bandeiras, teclas (1️⃣), sequências com ZWJ e seletores de variação.
+_EMOJI = re.compile(
+    "[0-9#*]\ufe0f?\u20e3|[\U0001F1E6-\U0001F1FF]{2}|(?:[\U0001F000-\U0001FAFF\u231a\u231b\u23e9-\u23f3\u25fd\u25fe\u2614\u2615\u2648-\u2653\u267f\u2693\u26a1\u26aa\u26ab\u26bd\u26be"
+    "\u26c4\u26c5\u26ce\u26d4\u26ea\u26f2\u26f3\u26f5\u26fa\u26fd\u2705\u270a\u270b\u2728\u274c\u274e\u2753-\u2755\u2757\u2764\u2795-\u2797\u27b0\u27bf\u2b1b\u2b1c\u2b50\u2b55]"
+    "[\ufe0f\U0001F3FB-\U0001F3FF]*(?:\u200d[\U0001F000-\U0001FAFF\u2640\u2642\u2764\u2695\u2696\u2708][\ufe0f]?)*)|[^\x00-\x7f]\ufe0f")
+
+
+def strip_emoji(s: str) -> str:
+    """Tira os emojis do texto (não mexe em símbolos comuns como ✓, →, ©, nem em letras acentuadas)."""
+    if not s:
+        return s
+    out, last = [], 0
+    for m in _EMOJI.finditer(s):
+        out.append(s[last:m.start()])
+        last = m.end()
+        if (not out[-1] or out[-1].endswith(" ")) and s[last:last + 1] == " ":  # «Oi 😀 tudo» → «Oi tudo» (sem espaço duplo)
+            last += 1
+    out.append(s[last:])
+    return "".join(out)
+
 
 _HOLD = ("<think>", "<thinking>", "</think>", "</thinking>")
 
@@ -74,7 +96,7 @@ class Visible:
         self.pending = False  # há uma tag incompleta no fim ou um <think> ainda aberto: o próximo pedaço pode mudar o que já era visível
 
     def feed(self, chunk: str):
-        chunk = chunk if isinstance(chunk, str) else str(chunk or "")
+        chunk = strip_emoji(chunk if isinstance(chunk, str) else str(chunk or ""))
         self.raw += chunk
         if not self.pending and "<" not in chunk:  # caminho rápido: nada que mude as tags — só acrescenta
             piece = chunk if self.sent else chunk.lstrip()
@@ -329,7 +351,7 @@ class AssistantChat:
             return
         for note in getattr(provider, "notes", []):
             emit({"type": "notice", "message": note})
-        final = av.strip_reasoning(raw).strip()
+        final = strip_emoji(av.strip_reasoning(raw)).strip()
         if not final:
             emit({"type": "error", "kind": "empty", "message": ("O modelo gastou todo o limite de resposta «pensando» e não respondeu. Aumente o tamanho da resposta em Configuração → Chat, baixe o tempo de pensamento ou use outro modelo."
                                                                if raw.strip() else "O modelo não devolveu nenhum texto. Confira se ele está carregado (botão de modelo).")})

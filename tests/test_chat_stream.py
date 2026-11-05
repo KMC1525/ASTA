@@ -122,6 +122,29 @@ class EngineStreamTests(TmpCase):
         self.assertEqual([m["text"] for m in self.store.chats.get(chat["id"])["messages"]], ["me conte algo", "Agora foi."])
         self.assertEqual([e for e in self.events if e["type"] == "removed"][0]["ids"], [])
 
+class EmojiTests(unittest.TestCase):
+    def test_emojis_are_stripped_but_normal_text_symbols_stay(self):
+        e = ac.strip_emoji
+        self.assertEqual(e("Oi 😀! Bolo 🎂 pronto 👍🏽 e ❤️ e 1️⃣ passo 🏳️‍🌈 🇧🇷 👨‍👩‍👧"), "Oi ! Bolo pronto e e passo ")
+        for keep in ("✓ feito → próximo © 2026 ™ ação ñ 日本語 ★ ✦ · — “aspas” é ü", "1. um 2) dois # tag * item", "Ω ≈ ∞ ± ½ ¿?"):
+            self.assertEqual(e(keep), keep)
+
+    def test_streaming_drops_them_too(self):
+        shown, _ = play(["Olá ", "😀", " tudo ", "bem 🎉", "!"])
+        self.assertEqual(shown, "Olá  tudo bem !")
+
+    def test_the_saved_answer_has_no_emojis_and_the_prompt_says_so(self):
+        from unittest import mock as m
+
+        store = Store(__import__("pathlib").Path(__import__("tempfile").mkdtemp()) / "h")
+        eng = ac.AssistantChat(store)
+        ev = []
+        chat = eng.create()
+        with m.patch.object(ac, "resolve_provider", return_value=(Prov(["Claro! 😊 Aqui vai ", "o bolo 🍰."]), INFO)):
+            eng.send(chat["id"], "receita de bolo", [], ev.append)
+        self.assertEqual(store.chats.get(chat["id"])["messages"][-1]["text"], "Claro! Aqui vai o bolo .")
+        self.assertIn("Never use emojis", ac.SYSTEM)
+
 
 if __name__ == "__main__":
     unittest.main()

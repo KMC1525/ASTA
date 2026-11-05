@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.4.5] — 2026-11-05
+
+### Adicionado
+- **Ctrl+J (⌘+J no Mac) abre uma nova aba na seção Chat**, de qualquer tela (de fora do Chat leva ao Chat já com a aba nova); vale junto com Alt+N, `/nova` e a paleta. Segue a opção de atalhos ligados/desligados. Aparece na ajuda (`?`) e na paleta.
+
+### Alterado
+- **O Chat não usa mais emojis nas respostas, para economizar tokens.** O prompt do Chat proíbe emojis (mesmo que o usuário use) e, como garantia, o ASTA **tira os emojis** da resposta — ao vivo e no texto salvo (pictogramas, bandeiras, teclas como 1️⃣, sequências com ZWJ, tons de pele). Símbolos comuns (✓, →, ©, ™, ★), acentos e outros alfabetos ficam. Vale só para o Chat (avatares e criações não mudam). Ao vivo, um espaço duplo pode aparecer onde o emoji estava, até a resposta terminar; o texto final sai sem ele.
+
+### Testes
+- Remoção de emojis (e o que não pode sumir), streaming, texto salvo e regra no prompt; Ctrl+J no navegador.
+
 ## [0.4.4] — 2026-11-05
 
 ### Alterado
@@ -587,7 +598,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.4...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.5...HEAD
+[0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/KMC1525/ASTA/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/KMC1525/ASTA/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/KMC1525/ASTA/compare/v0.4.1...v0.4.2
