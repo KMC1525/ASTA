@@ -204,6 +204,42 @@ class BrowserTests(unittest.TestCase):
 
             lmstudio.forget()
 
+    def test_18_chat_streaming_send_bugs_and_the_sources_panel_on_the_right(self):
+        import time
+
+        from tests.test_lmstudio import FakeLMStudio
+
+        def reply(n, body):
+            c = body["messages"][-1]["content"]
+            last = c if isinstance(c, str) else " ".join(p.get("text", "") for p in c)
+            if "[stream]" in last:
+                return ["palavra "] * 34
+            if "[think]" in last:
+                return ["<th", "ink>", "6*7 ", "é 42", "</think>", "Resposta ", "limpa."]
+            if "[md]" in last:
+                return ["## Lista\n\n- a\n  - sub a1\n  - sub a2\n- b\n- c\n- d\n\nVeja https://example.org/x. e [1] sem fonte."]
+            if "[lento]" in last:
+                return ["parte "] * 30
+            if "[web]" in last:
+                return ["Segundo [1] e também [2, 3]."]
+            return [f"Resposta {n}"]
+
+        srcs = [{"n": i + 1, "title": f"Fonte {'ABCDE'[i]}", "url": f"https://site{i + 1}.org/p", "host": f"site{i + 1}.org", "snippet": f"Trecho da fonte {i + 1}.", "text": "página lida" if i < 2 else ""} for i in range(5)]
+
+        def gather(query, settings, ui_lang="auto"):
+            time.sleep(1.0)
+            return {"engine": "duckduckgo", "query": query, "text": "[1] Fonte A", "sources": srcs}
+
+        fake = FakeLMStudio(reply=reply, delay=0.1)
+        try:
+            with mock.patch("asta.websearch.gather", side_effect=gather):
+                self.run_script("chat_stream_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
 
 if __name__ == "__main__":
     unittest.main()

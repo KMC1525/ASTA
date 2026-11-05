@@ -6,7 +6,7 @@ export function applyUi(next) { const merged = Object.assign({}, DEFAULT_UI, nex
 
 // Enter envia ou quebra a linha conforme a preferência. Sempre ignora Enter durante a composição de texto (IME) e Shift+Enter quebra a linha.
 export function isSendKey(e) {
-  if (e.key !== 'Enter' || e.isComposing) return false;
+  if (e.key !== 'Enter' || e.isComposing || e.keyCode === 229) return false;   // Enter que confirma uma palavra no teclado japonês/chinês/coreano (IME) não envia
   if (ui().send_key === 'ctrl_enter') return e.ctrlKey || e.metaKey;
   return !e.shiftKey && !e.ctrlKey && !e.metaKey;
 }

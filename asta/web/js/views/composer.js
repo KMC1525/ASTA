@@ -74,7 +74,7 @@ export function createComposer(opts) {
     setText: (v) => { ta.value = v; ta.dispatchEvent(new Event('input')); },
     configure: (next) => { o = Object.assign({}, o, next); ta.placeholder = o.placeholder || ''; paintTools(); paintSend(); refresh(); },
     setBusy: (on, stop) => { busy = on ? { stop: stop || (() => {}) } : null; paintSend(); refresh(); },
-    clearFiles: () => { m.files = []; paintFiles(); },
+    clearFiles: (ids) => { m.files = Array.isArray(ids) ? m.files.filter((f) => !ids.includes(f.id)) : []; paintFiles(); },   // sem argumento: todos; com ids: só os enviados
     hasUploading: uploading,
   };
 }

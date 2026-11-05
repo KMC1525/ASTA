@@ -5,6 +5,42 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.4.2] — 2026-11-05
+
+Revisão do **modo Chat** — principalmente o envio dos prompts e a resposta do modelo em streaming — e o **painel das fontes pesquisadas**, no canto direito. Cada bug foi reproduzido (em teste ou no navegador) antes de corrigir.
+
+### Corrigido
+- **Texto embaralhado durante o streaming com modelos que «pensam»** (`<think>…</think>`: Qwen3, DeepSeek R1, gpt-oss…). Reproduzido: com os pedaços `<thi` · `nk>pensando</think>` · `Olá, tudo bem?` a tela mostrava `<thi tudo bem?`; e com o `</think>` sem abertura (o modelo já começa pensando) o raciocínio aparecia e a resposta vinha **cortada no meio**. Agora o ASTA segura no fim o começo de uma tag incompleta e, quando o texto visível muda, manda um evento `reset` que troca o texto inteiro (a resposta salva sempre foi a correta; só a tela errava).
+- **Respostas longas deixavam o servidor cada vez mais lento:** a cada pedaço o texto inteiro era limpo de novo (custo quadrático). Agora é incremental (40 mil pedaços em menos de 2 s nos testes).
+- **Textos colados com mais de 12.000 caracteres eram cortados em silêncio.** O limite passou a 60.000; o que cabe ao modelo é decidido pela janela de contexto.
+- **O texto digitado perdia o foco ao enviar a primeira mensagem** (a caixa muda da tela inicial para o rodapé) — era preciso clicar de novo para continuar escrevendo. O foco e o cursor voltam.
+- **A primeira pergunta ficava invisível até o servidor responder** (a tela só mudava no primeiro evento) e, com a busca na web ou um modelo carregando, nada indicava que algo acontecia. O balão «digitando» aparece na hora.
+- **Trocar de conversa (ou criar um chat novo) no meio de uma resposta jogava o balão e o texto na outra conversa**, e a corrida entre «parar» e «sincronizar» podia reabrir a conversa antiga. Agora a resposta em andamento é encerrada antes da troca e nada vaza.
+- **Depois de Parar (ou de uma falha do modelo) a pergunta ficava sem resposta e sem como pedir de novo** — só digitando tudo outra vez. Aparece o aviso **Responder**; ele também aparece ao reabrir uma conversa cuja última pergunta ficou sem resposta. **Esc** também para a resposta.
+- **Falha no envio** (servidor recusou, conexão caiu antes de aceitar): o balão da pergunta ficava na tela. Agora ele some, o texto volta para a caixa e o erro aparece; os anexos só saem da caixa quando o servidor aceita a mensagem.
+- **Conversa apagada em outra aba:** todo envio seguinte falhava com «Conversa não encontrada». Agora o Chat abre uma conversa nova e envia de novo.
+- **Enter que confirma uma palavra no teclado japonês/chinês/coreano (IME) enviava a mensagem pela metade** em alguns navegadores (`keyCode 229`).
+- **Desenho da resposta a cada pedaço:** o Markdown era refeito inteiro a cada pedaço recebido (travava respostas rápidas e fazia o texto selecionado piscar); agora é no máximo um desenho por quadro.
+- **Markdown:** sub-listas (a indentação era perdida), endereços soltos (`https://…`) que viram link sem levar o ponto final, e `[1]`/`[1, 2]` que viram botões quando há fonte correspondente.
+
+### Adicionado
+- **Painel de fontes no canto direito do Chat:** lista **todas** as fontes pesquisadas, **na ordem em que a busca as devolveu**, agrupadas por pesquisa (Pesquisa 1, 2… com a consulta usada), cada uma com número, título (link que abre em nova aba), site, trecho e o selo **lida** quando a página foi lida por inteiro.
+  - Abre sozinho quando chega uma pesquisa (em telas largas; em telas estreitas vira uma gaveta à direita), mostra «Pesquisando…» enquanto a busca roda e enche em tempo real. Botão **Fontes (n)** no topo para abrir/fechar; a escolha de fechar é lembrada.
+  - Os botões `[n]` do texto da resposta e o botão **Fontes** sob a resposta levam à fonte no painel e a destacam; clicar no título de uma pesquisa leva à resposta correspondente. As fontes (com trecho e selo) ficam salvas no histórico.
+- Atalho: **Esc** para a resposta.
+
+### Alterado
+- A tela do Chat agora é um painel de conversa + o painel de fontes lado a lado (`.chx-main` / `.chx-side`); os menus de modelo, ferramentas e pensamento rolam menos.
+- `public_sources` (busca) devolve também `snippet` e `read`; as mensagens do Chat guardam `snippet`/`read` nas fontes. Novo evento SSE `reset` ao lado de `delta`.
+
+### Testes
+- `tests/test_chat_stream.py`: tags `<think>` cortadas de qualquer jeito (equivale a limpar o texto inteiro), `</think>` sem abertura, `<`/`<th…` que não são tags, linearidade em respostas longas, texto colado grande, falha no meio da resposta (a pergunta fica, nada pela metade, Responder funciona).
+- `tests/browser/chat_stream_ui.js`: streaming em tempo real (o texto cresce), balão imediato, foco, `<think>`, Markdown, Parar/Esc → Responder, troca de conversa no meio, conversa apagada, falha de envio, IME e o painel de fontes (ordem, números, selo, citações, segunda pesquisa, fechar/lembrar, tela estreita).
+
+### Observação
+- Os testes de streaming usam um servidor simulado do LM Studio: não testei com um modelo real nem com a rede de saída (a busca na web segue testada só com respostas simuladas, como na 0.4.1).
+- O painel lista as fontes **que o ASTA pesquisou para a resposta** (a busca é única por mensagem; as páginas lidas por inteiro levam o selo *lida*). O modelo não faz buscas por conta própria.
+
 ## [0.4.1] — 2026-11-05
 
 **Chat com busca na web nativa e uma aba de configurações própria** (tamanho da resposta, janela de contexto, tempo de pensamento).
@@ -510,7 +546,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.2...HEAD
+[0.4.2]: https://github.com/KMC1525/ASTA/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/KMC1525/ASTA/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/KMC1525/ASTA/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/KMC1525/ASTA/compare/v0.3.2...v0.3.3

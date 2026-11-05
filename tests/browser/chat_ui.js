@@ -7,6 +7,7 @@ run('chat', async ({ open, api, check }) => {
   const page = await open({ width: 1300, height: 860 });
   await page.waitForSelector('.chx', { timeout: 10000 });
   const ta = page.locator('.composer textarea'), runBtn = page.locator('.composer .send');
+  const idle = async () => { await page.waitForFunction(() => /^Run$/.test((document.querySelector('.composer .send') || { innerText: '' }).innerText.trim()), null, { timeout: 30000 }); };
   const projects = async () => (await api('/api/projects')).length;
   const p0 = await projects();
 
@@ -25,7 +26,7 @@ run('chat', async ({ open, api, check }) => {
   // ---- conversa de uso geral (nada de pipeline)
   await ta.fill('Como faço um bolo de cenoura?'); check('chat:run-liga-com-texto', !(await runBtn.isDisabled()));
   await runBtn.click();
-  await page.waitForSelector('.cmsg.ai .md strong', { timeout: 15000 });
+  await page.waitForSelector('.cmsg.ai .md strong', { timeout: 15000 }); await idle();   // a resposta chega aos poucos: espera terminar antes de mandar a próxima
   check('chat:resposta-em-markdown', (await page.locator('.cmsg.ai .md li').count()) === 2 && (await page.locator('.cmsg.ai .md code').count()) >= 1 && (await page.locator('.cmsg.ai .md script').count()) === 0);
   check('chat:balao-do-usuario', (await page.locator('.cmsg.user .bubble').innerText()).includes('bolo de cenoura'));
   check('chat:composer-desce-e-limpa', (await page.locator('.chx:not(.empty)').count()) === 1 && (await ta.inputValue()) === '' && (await page.locator('.chx-dock .composer').count()) === 1);
@@ -34,7 +35,7 @@ run('chat', async ({ open, api, check }) => {
 
   // ---- pedido de criação no chat: só SUGERE, não roda
   await ta.fill('crie um jogo 2D de plataforma com um gato'); await runBtn.click();
-  await page.waitForSelector('.csuggest', { timeout: 15000 });
+  await page.waitForSelector('.csuggest', { timeout: 15000 }); await idle();
   await page.waitForTimeout(400);
   check('ativador:sugere-mas-nao-roda', (await projects()) === p0 && (await page.locator('.result, .runview').count()) === 0 && (await page.locator('.cmsg.ai').count()) >= 2);
   check('ativador:sugestao-oferece-ligar-jogo', (await page.locator('.csuggest .btn.primary').innerText()).includes('2D game'));

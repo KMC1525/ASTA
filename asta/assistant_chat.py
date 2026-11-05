@@ -22,7 +22,7 @@ from .util import new_id, now_iso, num, text
 
 CHAT_SCHEMA = "asta.chat.v1"
 MAX_MESSAGES = 400
-MAX_USER_CHARS = 12000
+MAX_USER_CHARS = 60000  # um texto colado grande não é cortado em silêncio (a janela de contexto decide o que vai ao modelo)
 TOOLS = ("world", "avatar", "game", "canvas")
 
 SYSTEM = (
@@ -34,6 +34,54 @@ SYSTEM = (
     "(the ✦ button). You never create those yourself and must never claim you did: if the user asks for one, tell them briefly to turn on the matching tool "
     "(you can help write the prompt for it).\n"
 )
+
+
+# --------------------------------------------------------------------------- texto visível durante o streaming
+
+_HOLD = ("<think>", "<thinking>", "</think>", "</thinking>")
+
+
+def _hold(vis: str) -> str:
+    """Segura no fim o começo de uma tag de raciocínio ainda incompleta («<thi»): ela some quando a tag fecha, e o que já foi mostrado ficaria errado."""
+    i = vis.rfind("<")
+    if i >= 0 and ">" not in vis[i:]:
+        tail = vis[i:].lower()
+        if any(w.startswith(tail) for w in _HOLD):
+            return vis[:i]
+    return vis
+
+
+class Visible:
+    """Transforma os pedaços do modelo no texto que o usuário vê (sem o raciocínio `<think>…</think>`), em eventos `delta` (acrescenta) ou `reset` (troca tudo).
+
+    Antes, a cada pedaço o ASTA refazia a limpeza do texto inteiro (custo quadrático em respostas longas) e mandava `vis[sent:]` — o que corrompia a
+    tela quando o texto visível encolhia (uma tag `<think>` chegando aos poucos, ou o `</think>` sem abertura que modelos como o Qwen3 emitem)."""
+
+    def __init__(self) -> None:
+        self.raw = ""
+        self.sent = ""
+        self.pending = False  # há uma tag incompleta no fim ou um <think> ainda aberto: o próximo pedaço pode mudar o que já era visível
+
+    def feed(self, chunk: str):
+        chunk = chunk if isinstance(chunk, str) else str(chunk or "")
+        self.raw += chunk
+        if not self.pending and "<" not in chunk:  # caminho rápido: nada que mude as tags — só acrescenta
+            piece = chunk if self.sent else chunk.lstrip()
+            if not piece:
+                return None
+            self.sent += piece
+            return ("delta", piece)
+        stripped = av.strip_reasoning(self.raw)
+        vis = _hold(stripped).lstrip()
+        self.pending = len(vis) != len(stripped.lstrip()) or "<think" in av._THINK_RE.sub("", self.raw).lower()
+        if vis == self.sent:
+            return None
+        if vis.startswith(self.sent):
+            piece = vis[len(self.sent):]
+            self.sent = vis
+            return ("delta", piece)
+        self.sent = vis
+        return ("reset", vis)
 
 
 # --------------------------------------------------------------------------- documento da conversa
@@ -52,7 +100,8 @@ def normalize_message(m: Any) -> Optional[Dict[str, Any]]:
         out["context"] = str(m.get("context") or "")[:20000]  # texto dos anexos (as próximas mensagens ainda enxergam os documentos)
     else:
         out["model"] = text(m.get("model"), "", 120)
-        srcs = [{"n": int(num(s.get("n"), i + 1, 1, 99)), "title": text(s.get("title"), "", 140), "url": text(s.get("url"), "", 500), "host": text(s.get("host"), "", 80)}
+        srcs = [{"n": int(num(s.get("n"), i + 1, 1, 99)), "title": text(s.get("title"), "", 140), "url": text(s.get("url"), "", 500), "host": text(s.get("host"), "", 80),
+                 "snippet": text(s.get("snippet"), "", 300), "read": bool(s.get("read"))}
                 for i, s in enumerate(m.get("sources") or []) if isinstance(s, dict) and str(s.get("url") or "").startswith(("http://", "https://"))][:10]
         if srcs:
             out["sources"] = srcs
@@ -256,15 +305,14 @@ class AssistantChat:
         if images and not getattr(provider, "vision", False):
             emit({"type": "notice", "message": "O modelo escolhido não enxerga imagens: respondi só com o texto. Escolha um modelo com visão no seletor de modelo."})
         emit({"type": "typing"})
-        raw, sent = "", 0
+        stream = Visible()  # o raciocínio (<think>…</think>) de alguns modelos não aparece
         for chunk in provider.chat(messages, system=system, temperature=cfg["temperature"], max_tokens=cfg["max_tokens"], stream=True):  # type: ignore[union-attr]
             if cancelled():
                 break
-            raw += chunk
-            vis = av.strip_reasoning(raw).lstrip()  # o raciocínio (<think>…</think>) de alguns modelos não aparece
-            if len(vis) > sent:
-                emit({"type": "delta", "text": vis[sent:]})
-                sent = len(vis)
+            ev = stream.feed(chunk)
+            if ev:
+                emit({"type": ev[0], "text": ev[1]})
+        raw = stream.raw
         if cancelled():
             emit({"type": "end", "reason": "cancelled"})
             return

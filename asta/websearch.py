@@ -325,7 +325,8 @@ def context_block(sources: List[Dict[str, Any]], limit: int = CONTEXT_CHARS) -> 
 
 
 def public_sources(sources: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    return [{"n": s["n"], "title": s["title"][:140], "url": s["url"][:500], "host": s["host"][:80]} for s in sources]
+    """Fontes para a interface (na ordem em que a busca devolveu): título, link, host, trecho e se a página foi lida por inteiro."""
+    return [{"n": s["n"], "title": s["title"][:140], "url": s["url"][:500], "host": s["host"][:80], "snippet": (s.get("snippet") or "")[:300], "read": bool(s.get("text"))} for s in sources]
 
 
 def heuristic_query(text: str) -> str:

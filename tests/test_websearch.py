@@ -100,13 +100,13 @@ class WebSearchUnit(unittest.TestCase):
         self.assertIn("Texto da página https://site1.org/p", got["text"])
         self.assertIn("trecho 3", got["text"])
         self.assertLessEqual(len(got["text"]), ws.CONTEXT_CHARS)
-        self.assertEqual(set(ws.public_sources(got["sources"])[0]), {"n", "title", "url", "host"})
+        self.assertEqual(set(ws.public_sources(got["sources"])[0]), {"n", "title", "url", "host", "snippet", "read"})
+        self.assertEqual([x["read"] for x in ws.public_sources(got["sources"])], [True, True, False, False])
 
     def test_language_guess_and_query_cleanup(self):
         self.assertEqual(ws.guess_lang("qual é a capital da França?"), "pt")
         self.assertEqual(ws.guess_lang("what is the capital of France"), "en")
         self.assertEqual(ws.guess_lang("qual", "en"), "en")
-        self.assertEqual(ws.heuristic_query("Por favor, pesquise o preço do dólar hoje"), "pesquise o preço do dólar hoje" if False else ws.heuristic_query("Por favor, pesquise o preço do dólar hoje"))
         self.assertNotIn("favor", ws.heuristic_query("Por favor, preço do dólar hoje"))
 
 

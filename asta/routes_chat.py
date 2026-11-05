@@ -5,7 +5,7 @@ import traceback
 from typing import Any
 
 from . import websearch
-from .assistant_chat import AssistantChat, title_from
+from .assistant_chat import MAX_USER_CHARS, AssistantChat, title_from
 from .jobs import HttpError
 from .providers import PRESETS, ProviderError, provider_config, resolve_provider
 from .providers import auto
@@ -86,7 +86,7 @@ class ChatRoutes:
         body = req.body_json()
         if not isinstance(body, dict):
             raise HttpError(400, "JSON inválido")
-        message = text(body.get("text"), "", 12000)
+        message = text(body.get("text"), "", MAX_USER_CHARS)
         ids = [text(i, "", 60) for i in body.get("attachment_ids")][:20] if isinstance(body.get("attachment_ids"), list) else []
         if not message and not ids:
             raise HttpError(400, "Escreva uma mensagem.")

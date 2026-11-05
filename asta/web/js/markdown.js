@@ -3,9 +3,12 @@
 import { t } from './i18n.js';
 import { h } from './ui.js';
 
-const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\s][^*\n]*\*|(?<![\w])_[^_\s][^_\n]*_(?![\w])|\[[^\]\n]+\]\([^)\s]+\))/g;
+// `CITE` (definido por renderMarkdown quando a tela pede): {has(n), open(n), title(n)} — os [1], [2]… das respostas com busca na web viram botões que levam à fonte
+let CITE = null;
+const INLINE = /(`[^`\n]+`|\*\*[^*\n]+\*\*|__[^_\n]+__|~~[^~\n]+~~|\*[^*\s][^*\n]*\*|(?<![\w])_[^_\s][^_\n]*_(?![\w])|\[[^\]\n]+\]\([^)\s]+\)|\[\d{1,2}(?:\s*,\s*\d{1,2})*\](?!\()|https?:\/\/[^\s<>()\[\]`]+[^\s<>()\[\]`.,;:!?'"])/g;
 
 export function inline(parent, src) {
+  const cite = CITE;   // os botões de citação usam o objeto da hora do desenho (o CITE global volta ao valor anterior quando renderMarkdown termina)
   String(src || '').split(INLINE).forEach((part) => {
     if (!part) return;
     let m;
@@ -16,13 +19,49 @@ export function inline(parent, src) {
     else if ((m = /^\[([^\]\n]+)\]\(([^)\s]+)\)$/.exec(part))) {
       if (/^(https?:\/\/|mailto:)/i.test(m[2])) parent.appendChild(h('a', { href: m[2], target: '_blank', rel: 'noopener noreferrer' }, m[1]));
       else parent.appendChild(document.createTextNode(part));  // javascript:, data: etc. nunca viram link
-    } else parent.appendChild(document.createTextNode(part));
+    } else if (/^\[\d{1,2}(?:\s*,\s*\d{1,2})*\]$/.test(part)) {   // citação [1] ou [1, 2]
+      const nums = part.slice(1, -1).split(',').map((x) => parseInt(x, 10));
+      if (cite && nums.every((n) => cite.has(n))) nums.forEach((n) => parent.appendChild(h('button', { class: 'cite', type: 'button', title: cite.title(n), onclick: () => cite.open(n) }, String(n))));
+      else parent.appendChild(document.createTextNode(part));
+    } else if (/^https?:\/\//i.test(part)) parent.appendChild(h('a', { href: part, target: '_blank', rel: 'noopener noreferrer' }, part));   // endereço solto no texto
+    else parent.appendChild(document.createTextNode(part));
   });
 }
 
 const cells = (line) => line.trim().replace(/^\||\|$/g, '').split('|').map((c) => c.trim());
 
-export function renderMarkdown(el, src) {
+export function renderMarkdown(el, src, opts) {
+  const prev = CITE;
+  if (opts && 'cite' in opts) CITE = opts.cite || null;
+  try { return draw(el, src); } finally { CITE = prev; }
+}
+
+const LI = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/;
+const indentOf = (s) => s.replace(/\t/g, '    ').length;
+
+// lista (com sub-listas pela indentação): devolve o elemento e a próxima linha
+function listBlock(lines, i, indent) {
+  const first = LI.exec(lines[i]), ordered = /\d/.test(first[2]), ul = h(ordered ? 'ol' : 'ul');
+  if (ordered && parseInt(first[2], 10) > 1) ul.setAttribute('start', parseInt(first[2], 10));
+  while (i < lines.length) {
+    const m = LI.exec(lines[i]);
+    if (!m) break;
+    const ind = indentOf(m[1]);
+    if (ind < indent) break;
+    if (ind > indent) {   // item mais recuado: sub-lista do item anterior
+      const parent = ul.lastElementChild;
+      if (!parent) break;
+      const r = listBlock(lines, i, ind); parent.appendChild(r.el); i = r.i; continue;
+    }
+    if (/\d/.test(m[2]) !== ordered) break;   // trocou de tipo no mesmo nível: começa outra lista
+    const li = h('li'); inline(li, m[3]); i++;
+    while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !LI.test(lines[i])) { li.appendChild(document.createElement('br')); inline(li, lines[i++].trim()); }
+    ul.appendChild(li);
+  }
+  return { el: ul, i };
+}
+
+function draw(el, src) {
   el.replaceChildren();
   const lines = String(src || '').replace(/\r\n/g, '\n').split('\n');
   let i = 0;
@@ -44,7 +83,7 @@ export function renderMarkdown(el, src) {
     if (!trimmed) { flush(); i++; continue; }
     if ((m = /^(#{1,4})\s+(.*)$/.exec(trimmed))) { flush(); const hd = h('h' + (m[1].length + 2)); inline(hd, m[2]); el.appendChild(hd); i++; continue; }
     if (/^(-{3,}|\*{3,}|_{3,})$/.test(trimmed)) { flush(); el.appendChild(h('hr')); i++; continue; }
-    if (/^>\s?/.test(trimmed)) { flush(); const q = []; while (i < lines.length && /^>\s?/.test(lines[i].trim())) q.push(lines[i++].trim().replace(/^>\s?/, '')); const bq = h('blockquote'); renderMarkdown(bq, q.join('\n')); el.appendChild(bq); continue; }
+    if (/^>\s?/.test(trimmed)) { flush(); const q = []; while (i < lines.length && /^>\s?/.test(lines[i].trim())) q.push(lines[i++].trim().replace(/^>\s?/, '')); const bq = h('blockquote'); draw(bq, q.join('\n')); el.appendChild(bq); continue; }
     if (/^\|.*\|\s*$/.test(trimmed) && i + 1 < lines.length && /^\|?\s*:?-{2,}:?\s*(\|\s*:?-{2,}:?\s*)*\|?\s*$/.test(lines[i + 1].trim())) {  // tabela
       flush();
       const head = cells(trimmed); i += 2;
@@ -55,18 +94,7 @@ export function renderMarkdown(el, src) {
       el.appendChild(h('div', { class: 'tablewrap' }, tb));
       continue;
     }
-    if ((m = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(line))) {
-      flush();
-      const ordered = /\d/.test(m[2]), list = h(ordered ? 'ol' : 'ul');
-      if (ordered && parseInt(m[2], 10) > 1) list.setAttribute('start', parseInt(m[2], 10));
-      while (i < lines.length && (m = /^(\s*)([-*+]|\d+[.)])\s+(.*)$/.exec(lines[i]))) {
-        const li = h('li'); inline(li, m[3]); i++;
-        while (i < lines.length && /^\s{2,}\S/.test(lines[i]) && !/^\s*([-*+]|\d+[.)])\s+/.test(lines[i])) { li.appendChild(document.createElement('br')); inline(li, lines[i++].trim()); }
-        list.appendChild(li);
-      }
-      el.appendChild(list);
-      continue;
-    }
+    if (LI.test(line)) { flush(); const r = listBlock(lines, i, indentOf(LI.exec(line)[1])); el.appendChild(r.el); i = r.i; continue; }
     para.push(line); i++;
   }
   flush();
