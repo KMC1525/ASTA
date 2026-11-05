@@ -385,6 +385,61 @@ class InstallerTests(unittest.TestCase):
         self.assertIn("models install --ask", sh)  # pergunta sim/não antes de baixar os modelos pré-instalados
         self.assertIn("models install --ask", ps)
 
+class AutoUpdateOnLaunchTests(unittest.TestCase):
+    """`asta` (abrir) atualiza/instala tudo como o comando de instalação — só no ASTA instalado pelo instalador, com internet, e sem repetir a toda hora."""
+
+    def go(self, tmp, remote, managed=True, env=None, args=None, installer=0):
+        ns = cli.argparse.Namespace(**{"no_update": False, "home": str(tmp), **(args or {})})
+        with mock.patch.object(cli, "_managed_app_dir", return_value=Path("/x") if managed else None), mock.patch.object(cli, "_remote_version", return_value=remote), \
+                mock.patch.object(cli, "_update_with_installer", return_value=installer) as inst, mock.patch.object(cli.os, "execve") as ex, mock.patch.dict(os.environ, env or {}, clear=False):
+            for k in ("ASTA_NO_UPDATE", "ASTA_UPDATE_EVERY"):
+                if k not in (env or {}):
+                    os.environ.pop(k, None)
+            with contextlib.redirect_stdout(io.StringIO()):
+                res = cli._auto_update(ns, ["--no-browser"])
+        return res, inst, ex
+
+    def test_a_newer_published_version_updates_everything_then_reopens(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as t:
+            res, inst, ex = self.go(Path(t), "99.0.0")
+            self.assertTrue(inst.called)
+            args = ex.call_args[0]
+            self.assertEqual(args[1][1:], ["-m", "asta", "--no-browser"])
+            self.assertEqual(args[2]["ASTA_NO_UPDATE"], "1")  # sem laço de atualização
+            self.assertTrue((Path(t) / ".last-update").exists())
+
+    def test_up_to_date_and_recently_checked_just_opens(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as t:
+            (Path(t) / ".last-update").write_text("x")
+            res, inst, ex = self.go(Path(t), cli.__version__)
+            self.assertEqual((res, inst.called, ex.called), (None, False, False))
+            res, inst, ex = self.go(Path(t), cli.__version__, env={"ASTA_UPDATE_EVERY": "0"})  # 0 = a cada abertura
+            self.assertTrue(inst.called)
+
+    def test_never_touches_manual_installs_or_when_turned_off_or_offline_or_on_failure(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as t:
+            for kw in ({"managed": False}, {"env": {"ASTA_NO_UPDATE": "1"}}, {"args": {"no_update": True}}):
+                res, inst, ex = self.go(Path(t), "99.0.0", **kw)
+                self.assertEqual((res, inst.called), (None, False), kw)
+            res, inst, ex = self.go(Path(t), None)   # sem internet
+            self.assertEqual((res, inst.called), (None, False))
+            res, inst, ex = self.go(Path(t), "99.0.0", installer=1)   # falhou: abre como está
+            self.assertEqual((res, ex.called), (None, False))
+            self.assertFalse((Path(t) / ".last-update").exists())
+
+    def test_windows_closes_so_the_installer_can_replace_files(self):
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as t, mock.patch.object(cli, "_windows", return_value=True):
+            res, inst, ex = self.go(Path(t), "99.0.0")
+            self.assertEqual((res, ex.called), (0, False))
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -20,6 +20,54 @@ BANNER = r"""
 """
 
 
+def _windows() -> bool:
+    return os.name == "nt"
+
+
+def _auto_update(args: argparse.Namespace, argv) -> object:
+    """Ao abrir o ASTA pelo comando `asta`: atualiza/instala tudo como o comando de instalação (Python, ASTA, bibliotecas, modelos pré-instalados).
+    Roda quando há versão nova publicada e, mesmo sem ela, a cada ASTA_UPDATE_EVERY horas (padrão 24; 0 = a cada abertura) — o instalador pula o que já está em dia.
+    Só vale para o ASTA instalado pelo instalador oficial (instalação manual/editável nunca é mexida); sem internet, abre normalmente.
+    Devolve None para seguir abrindo; um número para encerrar com esse código (Windows: o instalador continua numa janela nova)."""
+    import time
+    from pathlib import Path
+
+    if getattr(args, "no_update", False) or os.environ.get("ASTA_NO_UPDATE", "") not in ("", "0") or _managed_app_dir() is None:
+        return None
+    home = Path(args.home or os.environ.get("ASTA_HOME") or Path.home() / ".asta").expanduser()
+    stamp = home / ".last-update"
+    try:
+        hours = float(os.environ.get("ASTA_UPDATE_EVERY", "24"))
+    except ValueError:
+        hours = 24.0
+    remote = _remote_version(timeout=6.0)
+    if remote is None:  # sem internet (ou GitHub fora do ar): abre do jeito que está
+        return None
+    newer = _version_tuple(remote) > _version_tuple(__version__)
+    try:
+        due = time.time() - stamp.stat().st_mtime >= hours * 3600
+    except OSError:
+        due = True
+    if not newer and not due:
+        return None
+    print(f"ASTA {__version__}: " + (f"há uma versão nova ({remote}). " if newer else "verificando atualizações. ") + "Atualizando o Python, o ASTA e as bibliotecas (para pular: asta --no-update)…")
+    code = _update_with_installer(argparse.Namespace(force=False, core=False, extras="", no_python=False))
+    if code != 0:
+        print("Não foi possível atualizar agora; abrindo o ASTA como está.")
+        return None
+    try:
+        home.mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(time.time()), encoding="utf-8")
+    except OSError:
+        pass
+    if _windows():
+        return 0  # o instalador segue numa janela nova e o ASTA precisa estar fechado para ele trocar os arquivos
+    print("\nAbrindo o ASTA atualizado…\n")
+    sys.stdout.flush()
+    os.execve(sys.executable, [sys.executable, "-m", "asta", *list(argv)], dict(os.environ, ASTA_NO_UPDATE="1"))
+    return None  # pragma: no cover
+
+
 def _run(args: argparse.Namespace) -> int:
     if args.home:
         os.environ["ASTA_HOME"] = args.home
@@ -363,6 +411,7 @@ def main(argv=None) -> int:
         p.add_argument("--port", type=int, default=8787, help="porta (padrão 8787)")
         p.add_argument("--no-browser", action="store_true", help="não abrir o navegador")
         p.add_argument("--home", help="pasta de dados (padrão ~/.asta)")
+        p.add_argument("--no-update", action="store_true", help="não atualiza/instala nada ao abrir (também ASTA_NO_UPDATE=1)")
     upd = sub.add_parser("update", help="atualiza o Python, o ASTA e todas as bibliotecas dele para a versão mais recente")
     upd.add_argument("--core", action="store_true", help="atualiza só o ASTA (e pip/setuptools/wheel), sem o Python do sistema nem as bibliotecas opcionais")
     upd.add_argument("--no-python", action="store_true", help="não atualiza o Python do sistema (atualiza o ASTA, o pip e as bibliotecas)")
@@ -389,6 +438,9 @@ def main(argv=None) -> int:
     if args.cmd == "version":
         print(__version__)
         return 0
+    done = _auto_update(args, list(argv) if argv is not None else sys.argv[1:])
+    if done is not None:
+        return done
     return _run(args)
 
 

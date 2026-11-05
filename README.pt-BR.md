@@ -51,7 +51,7 @@ irm https://raw.githubusercontent.com/KMC1525/ASTA/main/install.ps1 | iex
 
 O instalador do Windows funciona tanto no Windows PowerShell 5.1, que já vem com o Windows, quanto no PowerShell 7. O comando `asta` é adicionado ao seu `PATH` e já funciona no mesmo terminal quando você usa o comando acima (terminais que já estavam abertos precisam ser reabertos); se ainda assim não for reconhecido, rode-o pelo caminho completo, que o instalador mostra (`%LOCALAPPDATA%\ASTA\app\venv\Scripts\asta.exe`). Se ele parar com algum erro, rode o mesmo comando de novo e abra uma issue com o texto que apareceu.
 
-Depois, em qualquer terminal:
+Depois, em qualquer terminal (**rodar `asta` também atualiza/instala tudo antes** — Python, ASTA, bibliotecas e modelos pré-instalados — como o comando de instalação: quando há versão nova e, fora isso, no máximo a cada 24 h; sem internet, só abre; para pular: `asta --no-update` ou `ASTA_NO_UPDATE=1`; `ASTA_UPDATE_EVERY=<horas>` muda o intervalo):
 
 ```bash
 asta

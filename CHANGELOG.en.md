@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.4.4] — 2026-11-05
+
+### Changed
+- **Running `asta` (the run command) now also updates/installs everything**, like the Windows, macOS and Linux install command: before opening, it runs the official installer (Python, ASTA, libraries and the pre-installed-models question — it skips what is already up to date). It happens **when a new version is published** and, even without one, **at most once every 24 h** (`ASTA_UPDATE_EVERY=<hours>`; `0` = every launch). After updating, ASTA reopens itself on the new version (on Windows the installer continues in a new window and ASTA closes, so it can replace the files).
+  - **Everyday safety:** it only applies to ASTA installed by the official installer (manual/`pip`/editable installs are never touched); **offline it opens normally**; if the update fails, it opens as is; `asta --no-update` or `ASTA_NO_UPDATE=1` turn it off; no update loop.
+- `asta update` still exists to update right away (`--force`, `--core`, `--extras`…).
+
+### Tests
+- `tests/test_cli.py`: a new version updates and reopens (no loop), up to date and recently checked just opens, `ASTA_UPDATE_EVERY=0`, never touches manual install / turned off / offline / failure, and the Windows case.
+
 ## [0.4.3] — 2026-11-05
 
 **Audit** release: I went through every section (Chat, Worlds, Avatars, 2D games, Canvas, Library, Configuration) like someone opening ASTA for the first time — in the browser (desktop and phone, dark and light theme) and through the API —, reviewed the internal prompts and added **Chat tabs**. Worlds, the five game genres, avatars and Canvas were generated and opened (no console errors).
@@ -579,7 +589,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.4.3...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.4.4...HEAD
+[0.4.4]: https://github.com/KMC1525/ASTA/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/KMC1525/ASTA/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/KMC1525/ASTA/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/KMC1525/ASTA/compare/v0.4.0...v0.4.1
