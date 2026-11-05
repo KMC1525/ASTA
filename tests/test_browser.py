@@ -104,6 +104,9 @@ class BrowserTests(unittest.TestCase):
             self.assertFalse((models / "image" / name).exists(), name)  # o Z-Image levou o VAE e o codificador de texto junto
         (models / "Qwen3.8-2B-Q8_0.gguf").unlink()
 
+    def test_08_a_screen_whose_files_fail_to_load_recovers_or_explains(self):
+        self.run_script("resilience_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -43,6 +43,15 @@ MIME = {
 }
 
 
+def _disk_version() -> str:
+    """Versão que está instalada em disco agora (lida de asta/__init__.py). Difere de `__version__` quando o ASTA foi atualizado e este processo ainda é o antigo."""
+    try:
+        m = re.search(r"__version__\s*=\s*[\"']([^\"']+)[\"']", (Path(__file__).parent / "__init__.py").read_text(encoding="utf-8"))
+        return m.group(1) if m else __version__
+    except OSError:
+        return __version__
+
+
 def guess_mime(path: str) -> str:
     ext = Path(path).suffix.lower()
     return MIME.get(ext) or mimetypes.guess_type(path)[0] or "application/octet-stream"
@@ -171,7 +180,7 @@ class App:
     def r_state(self, req: "Request") -> None:
         s = self.store.get_settings()
         req.json({
-            "version": __version__, "hardware": hardware_info(), "home": str(self.store.home),
+            "version": __version__, "disk_version": _disk_version(), "hardware": hardware_info(), "home": str(self.store.home),
             "presets": describe_presets(), "settings": self.store.public_settings(),
             "configured": [pid for pid in s["providers"] if s["providers"][pid].get("api_key") or s["providers"][pid].get("model") or s["providers"][pid].get("base_url")],
         })

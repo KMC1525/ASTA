@@ -558,4 +558,8 @@ export default {
   'Apagar selecionados': 'Delete selected',
   '{n} item(ns)': '{n} item(s)',
   'Tudo que você criou e os modelos de IA locais instalados.': 'Everything you created, plus the local AI models you installed.',
+  'Versão {v} instalada: feche o ASTA e abra de novo.': 'Version {v} is installed: close ASTA and open it again.',
+  'Não foi possível carregar esta tela. Isso costuma acontecer quando o ASTA é atualizado com a página aberta.': 'This screen could not be loaded. This usually happens when ASTA is updated while the page is open.',
+  'Recarregue a página (Ctrl+F5). Se continuar, feche o ASTA, abra de novo com o comando asta e recarregue.': 'Reload the page (Ctrl+F5). If it keeps failing, close ASTA, start it again with the asta command and reload.',
+  'Recarregar a página': 'Reload the page',
 };

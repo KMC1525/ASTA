@@ -59,6 +59,8 @@ asta
 
 The WebUI opens at `http://localhost:8787`. To update, run the install command again (or `asta update`).
 
+> **After updating, restart ASTA** (close it and run `asta` again) and reload the page (Ctrl+F5). A page left open across an update can show *"Could not load this screen"*: ASTA reloads it once by itself, and if that is not enough it explains what to do; the sidebar also warns when a newer version is installed than the one running.
+
 **Installing and updating covers three layers:** (1) **Python** and its tools — installed or upgraded through your system's package manager (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` or Homebrew on Linux and macOS; `winget` on Windows), which may ask for your password (`sudo`); if the new Python is a newer version, ASTA's private environment is rebuilt for it automatically; (2) **ASTA** itself; (3) **all of ASTA's libraries**, described below. Set `ASTA_PYTHON=keep` to never touch the system Python.
 
 **Nothing already installed is installed again.** The installer, `asta update` and `asta libs` detect what is already there and only update it when needed: Python is only upgraded if the package manager has a newer version; the private environment is reused; ASTA itself is **not downloaded again** when the installed version already matches the published one (`ASTA_FORCE=1` or `asta update --force` reinstalls anyway); libraries already installed are only checked and upgraded if a newer version exists (only missing ones are installed); already-downloaded models are skipped.

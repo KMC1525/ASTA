@@ -59,6 +59,8 @@ asta
 
 A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de instalação de novo (ou `asta update`).
 
+> **Depois de atualizar, reinicie o ASTA** (feche e rode `asta` de novo) e recarregue a página (Ctrl+F5). Uma página deixada aberta durante uma atualização pode mostrar *"Não foi possível carregar esta tela"*: o ASTA a recarrega sozinho uma vez e, se não bastar, explica o que fazer; a barra lateral também avisa quando há uma versão mais nova instalada do que a que está rodando.
+
 **Instalar e atualizar cobre três camadas:** (1) o **Python** e as ferramentas dele — instalados ou atualizados pelo gerenciador de pacotes do seu sistema (`apt`, `dnf`/`yum`, `pacman`, `zypper`, `apk` ou Homebrew no Linux e no macOS; `winget` no Windows), que pode pedir sua senha (`sudo`); se o novo Python for de uma versão mais nova, o ambiente privado do ASTA é recriado para ele automaticamente; (2) o próprio **ASTA**; (3) **todas as bibliotecas do ASTA**, descritas abaixo. Use `ASTA_PYTHON=keep` para nunca mexer no Python do sistema.
 
 **Nada que já está instalado é instalado de novo.** O instalador, o `asta update` e o `asta libs` descobrem o que já existe e só atualizam se precisar: o Python só é atualizado se o gerenciador de pacotes tiver versão mais nova; o ambiente privado é reaproveitado; o próprio ASTA **não é baixado de novo** quando a versão instalada já é a publicada (`ASTA_FORCE=1` ou `asta update --force` reinstala mesmo assim); as bibliotecas já instaladas só são verificadas e atualizadas se houver versão mais nova (só as que faltam são instaladas); modelos já baixados são pulados.

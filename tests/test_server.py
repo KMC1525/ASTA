@@ -43,6 +43,17 @@ class ServerCase(unittest.TestCase):
 
 
 class ApiBasicsTests(ServerCase):
+    def test_state_reports_the_version_installed_on_disk(self):
+        from unittest import mock
+
+        from asta import __version__, server
+
+        self.assertEqual(self.c.json("GET", "/api/state")[1]["disk_version"], __version__)
+        # o ASTA foi atualizado e este processo ainda é o antigo: a WebUI avisa para reiniciar
+        with mock.patch.object(server, "_disk_version", return_value="99.0.0"):
+            s = self.c.json("GET", "/api/state")[1]
+        self.assertEqual((s["version"], s["disk_version"]), (__version__, "99.0.0"))
+
     def test_state_and_webui(self):
         status, s = self.c.json("GET", "/api/state")
         self.assertEqual(status, 200)

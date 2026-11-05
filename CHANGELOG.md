@@ -5,6 +5,19 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.12] — 2026-11-05
+
+### Corrigido
+- **Configuração mostrava "Algo deu errado: error loading dynamically imported module: …/js/quant.js"** em vez de abrir. O erro acontece quando o navegador não consegue carregar um dos arquivos da tela — tipicamente porque o ASTA foi atualizado (ou reiniciado numa versão nova) com a página já aberta, e a página ficou com arquivos de uma versão diferente dos do servidor. Agora:
+  - se uma tela não carrega, a página **recarrega sozinha uma vez** (sem laço) e a tela abre normalmente;
+  - se continuar falhando, aparece uma mensagem clara (*"Não foi possível carregar esta tela. Isso costuma acontecer quando o ASTA é atualizado com a página aberta"*) com o botão **Recarregar a página**, a dica de Ctrl+F5 / reiniciar o `asta` e o detalhe técnico, em vez de só o erro cru;
+  - se o servidor for reiniciado numa versão nova com a página aberta, a página se recarrega sozinha;
+  - se o ASTA foi atualizado em disco mas o processo em execução ainda é o antigo, a barra lateral avisa **"Versão X instalada: feche o ASTA e abra de novo"** (`/api/state` agora informa `disk_version`).
+- Testes: no navegador, o arquivo `quant.js` é bloqueado (sempre, e só na primeira vez) e a Configuração tem de se recuperar ou explicar; e a versão em disco no `/api/state`.
+
+### Observação
+- **Não consegui reproduzir a falha original** (aqui o `quant.js` é servido normalmente, inclusive em 500 requisições paralelas, e o pacote instalável inclui todos os arquivos), então a causa exata na sua máquina não está confirmada. A correção cobre o cenário mais provável (página aberta com arquivos de outra versão) e torna qualquer falha de carregamento recuperável e explicada. Se ainda aparecer a mensagem nova depois de recarregar e reiniciar o `asta`, o detalhe técnico mostrado nela (e o console do navegador, F12) dizem qual arquivo falhou e por quê.
+
 ## [0.2.11] — 2026-11-05
 
 ### Adicionado
@@ -239,7 +252,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.11...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.12...HEAD
+[0.2.12]: https://github.com/KMC1525/ASTA/compare/v0.2.11...v0.2.12
 [0.2.11]: https://github.com/KMC1525/ASTA/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/KMC1525/ASTA/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/KMC1525/ASTA/compare/v0.2.8...v0.2.9
