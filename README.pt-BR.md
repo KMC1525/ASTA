@@ -73,7 +73,7 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_EXTRAS=all` (padrão) | instala/atualiza **todas** as bibliotecas: `docs` + `media` + `local` |
 | `ASTA_EXTRAS=none` | instala só o ASTA (nenhuma dependência) |
 | `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos GGUF embutidos: texto, imagem e vídeo (`llama-cpp-python`, `stable-diffusion-cpp-python`) |
-| `ASTA_MODELS=all` (padrão) | baixa os **modelos locais pré-instalados** (veja abaixo): `none` pula, `text` ou `image` escolhe um |
+| `ASTA_MODELS` (vazio) | o instalador **pergunta no terminal (sim/não)** antes de baixar os **modelos locais pré-instalados** (veja abaixo); `all`, `text` ou `image` baixa sem perguntar, `none` pula |
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_FORCE=1` | reinstala o ASTA mesmo que a versão instalada já seja a última publicada |
@@ -182,7 +182,7 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós. |
-| **Biblioteca** | Tudo o que você criou como projetos atualizáveis, com busca e tags automáticas + personalizadas. |
+| **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
 | **Configuração** | Provedores, provedores de mídia, geração, avatars e jogos, voz, modelos locais do Hugging Face e sistema. |
 
 ## Como funciona a geração
@@ -231,14 +231,14 @@ Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personag
 | **GGUF local** (embutido) | ✅ | ✅ | | | | modelos GGUF quantizados de imagem/vídeo pela stable-diffusion.cpp (`pip install "asta[local]"`); o vídeo depende da versão da biblioteca |
 | **Demo** (offline) | ✅ | ✅ | ✅ | ✅ | | imagens procedurais, som sintetizado, "voz" de balbucio, vídeo Ken Burns (precisa do `ffmpeg`) |
 
-**Modelos pré-instalados.** O ASTA já vem com dois modelos locais prontos para rodar no seu computador, baixados pelo instalador (e pelo `asta update`) com a quantização já definida:
+**Modelos pré-instalados.** O ASTA já vem com dois modelos locais prontos para rodar no seu computador, oferecidos pelo instalador (e pelo `asta update`) com a quantização já definida:
 
 | Tipo | Modelo | Quantização | Download |
 |---|---|---|---|
 | Texto | [`empero-ai/Qwen3.8-2B-Distill`](https://huggingface.co/empero-ai/Qwen3.8-2B-Distill) (GGUF: `Qwen3.8-2B-Distill-GGUF`) | **Q8_0** | ~1,9 GB |
 | Imagem | [`Tongyi-MAI/Z-Image`](https://huggingface.co/Tongyi-MAI/Z-Image) (GGUF: `unsloth/Z-Image-GGUF`) | **Q4_K_M** | ~6,2 GB (modelo + VAE + codificador de texto Qwen3-4B) |
 
-São só esses dois por enquanto. Instale-os em *Configuração → Modelos locais → Modelos pré-instalados* com um clique, ou com `asta models install` (`asta models list` mostra o estado); `ASTA_MODELS=none` pula no instalador. Quando a biblioteca do modelo está instalada (`asta[local]`) e você ainda usa o provedor Demo, o ASTA os torna o modelo de texto padrão / o provedor de imagem do Canvas; se você já escolheu outro provedor, a sua escolha é mantida. Arquivos já baixados nunca são baixados de novo.
+São só esses dois por enquanto. Instale-os em *Configuração → Modelos locais → Modelos pré-instalados* com um clique, ou com `asta models install` (`asta models list` mostra o estado); o instalador e o `asta update` **perguntam no terminal (sim/não)** antes de baixá-los (responder *não* fica guardado e não é perguntado de novo; `asta models install` baixa quando você quiser; `ASTA_MODELS=all|text|image` responde antecipadamente e `ASTA_MODELS=none` pula; sem terminal para perguntar, nada é baixado). Quando a biblioteca do modelo está instalada (`asta[local]`) e você ainda usa o provedor Demo, o ASTA os torna o modelo de texto padrão / o provedor de imagem do Canvas; se você já escolheu outro provedor, a sua escolha é mantida. Arquivos já baixados nunca são baixados de novo.
 
 **Janela de contexto.** O modelo de texto pré-instalado começa com uma janela de contexto de **32K tokens (32.768)**. Você pode mudar quando quiser em *Configuração → Provedores → Hugging Face GGUF (embutido) → Janela de contexto (tokens)* (deixe vazio ou use *Usar o automático* para voltar ao padrão). Os outros modelos de texto locais usam 2K/4K/8K conforme o hardware, a menos que você defina um valor. Janelas maiores usam mais RAM; mudar o valor recarrega o modelo.
 

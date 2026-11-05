@@ -92,6 +92,18 @@ class BrowserTests(unittest.TestCase):
             hub.close()
             (self.store_dir / "models" / "Qwen3.8-2B-Q8_0.gguf").unlink(missing_ok=True)
 
+    def test_07_library_lists_local_models_and_deletes_several_at_once(self):
+        models = self.store_dir / "models"
+        (models / "image").mkdir(parents=True, exist_ok=True)
+        for rel in ("Qwen3.8-2B-Q8_0.gguf", "outro-Q4_K_M.gguf", "image/z-image-Q4_K_M.gguf", "image/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "image/ae.safetensors"):
+            (models / rel).write_bytes(b"x" * 2048)
+        self.run_script("library_ui.js")
+        self.assertTrue((models / "Qwen3.8-2B-Q8_0.gguf").exists())
+        self.assertFalse((models / "outro-Q4_K_M.gguf").exists())
+        for name in ("z-image-Q4_K_M.gguf", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "ae.safetensors"):
+            self.assertFalse((models / "image" / name).exists(), name)  # o Z-Image levou o VAE e o codificador de texto junto
+        (models / "Qwen3.8-2B-Q8_0.gguf").unlink()
+
 
 if __name__ == "__main__":
     unittest.main()

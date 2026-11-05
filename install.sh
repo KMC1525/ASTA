@@ -11,8 +11,9 @@
 #   ASTA_SOURCE=<url|pasta|requisito>   instala de outra origem (padrão: GitHub, branch main)
 #   ASTA_APP_DIR=<pasta>                onde fica o programa (padrão: ~/.asta/app)
 #   ASTA_BIN_DIR=<pasta>                onde fica o comando `asta` (padrão: ~/.local/bin)
-#   ASTA_MODELS=all|none|text|image     modelos locais pré-instalados (padrão: all): Qwen3.8 2B Distill (texto, Q8_0, ~2 GB) e Z-Image
-#                                       (imagem, Q4_K_M, ~6 GB com o VAE e o codificador de texto). "none" pula o download.
+#   ASTA_MODELS=all|none|text|image     modelos locais pré-instalados: Qwen3.8 2B Distill (texto, Q8_0, ~2 GB) e Z-Image (imagem, Q4_K_M, ~6 GB
+#                                       com o VAE e o codificador de texto). Sem esta variável o instalador PERGUNTA no terminal (sim/não) antes de
+#                                       baixar; "all"/"text"/"image" baixa sem perguntar e "none" pula.
 #   ASTA_PYTHON=auto|keep               auto (padrão): instala o Python se faltar e o atualiza (com pip, venv, setuptools e wheel)
 #                                       pelo gerenciador de pacotes do sistema (apt, dnf, yum, pacman, zypper, apk, Homebrew).
 #                                       keep: nunca mexe no Python do sistema.
@@ -179,11 +180,12 @@ case "$EXTRAS" in
 esac
 
 if [ -z "$OLD" ]; then say "✓ ASTA $NEW instalado."; elif [ "$OLD" = "$NEW" ]; then say "✓ ASTA $NEW já estava atualizado."; else say "✓ ASTA atualizado: $OLD → $NEW."; fi
-# 6) modelos locais pré-instalados (texto e imagem); o que já foi baixado é pulado
+# 6) modelos locais pré-instalados (texto e imagem). Sem ASTA_MODELS, o ASTA PERGUNTA no terminal (sim/não) antes de baixar; o que já está na pasta é pulado
 MODELS_FAILED=0
-case "${ASTA_MODELS:-all}" in
+case "${ASTA_MODELS:-ask}" in
   none|no|0) note "Modelos pré-instalados: pulados (ASTA_MODELS=${ASTA_MODELS})." ;;
-  *) say "Modelos locais pré-instalados (texto e imagem): baixo só o que ainda não está na pasta (vários GB na primeira vez) …"
+  ask) "$APP_DIR/venv/bin/asta" models install --ask || MODELS_FAILED=1 ;;
+  *) say "Modelos locais pré-instalados: baixo só o que ainda não está na pasta (vários GB na primeira vez) …"
      "$APP_DIR/venv/bin/asta" models install || MODELS_FAILED=1 ;;
 esac
 

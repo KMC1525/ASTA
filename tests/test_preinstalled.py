@@ -7,6 +7,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.parse
@@ -275,6 +276,215 @@ class ContextWindowTests(TmpCase):
                 p._llm()
         self.assertEqual(loaded, [32768, 8192])  # 32K por padrão; mudar o valor recarrega; o mesmo valor reaproveita o modelo em memória
         local_llama._CACHE.clear()
+
+
+class LibraryModelsTests(ServerCase):
+    """Os modelos locais instalados aparecem na Biblioteca e podem ser apagados um a um ou em lote."""
+
+    def put(self, rel, size=4096):
+        f = self.store.models_dir / rel
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_bytes(b"x" * size)
+        return f
+
+    def test_lists_every_kind_hides_support_files_and_labels_preinstalled(self):
+        self.put("Qwen3.8-2B-Q8_0.gguf", 1000)
+        self.put("outro-Q4_K_M.gguf", 500)
+        self.put("modelo-grande-00001-of-00002.gguf", 300)
+        self.put("modelo-grande-00002-of-00002.gguf", 200)
+        self.put("image/z-image-Q4_K_M.gguf", 100)
+        self.put("image/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", 50)  # apoio do Z-Image
+        self.put("image/ae.safetensors", 20)
+        self.put("video/wan-Q8_0.gguf", 10)
+        status, r = self.c.json("GET", "/api/library/models")
+        self.assertEqual(status, 200)
+        by = {m["id"]: m for m in r["models"]}
+        self.assertEqual(sorted(by), ["image/z-image-Q4_K_M.gguf", "text/Qwen3.8-2B-Q8_0.gguf", "text/modelo-grande-00001-of-00002.gguf", "text/outro-Q4_K_M.gguf", "video/wan-Q8_0.gguf"])
+        z = by["image/z-image-Q4_K_M.gguf"]
+        self.assertEqual((z["label"], z["preinstalled"], z["kind"]), ("Z-Image", "image-z-image", "image"))
+        self.assertEqual(z["extra_files"], ["ae.safetensors", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"])
+        self.assertEqual(z["size"], 170)  # o modelo + o VAE + o codificador de texto
+        self.assertEqual(by["text/modelo-grande-00001-of-00002.gguf"]["size"], 500)  # partes somadas, listado uma vez
+        self.assertEqual(by["text/outro-Q4_K_M.gguf"]["preinstalled"], "")
+        # sem o modelo principal, o codificador de texto vira um item como os demais (dá para apagá-lo)
+        (self.store.models_dir / "image" / "z-image-Q4_K_M.gguf").unlink()
+        self.assertIn("image/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", [m["id"] for m in self.c.json("GET", "/api/library/models")[1]["models"]])
+
+    def test_delete_one_or_several_models(self):
+        a, b, c = self.put("a-Q4_K_M.gguf"), self.put("b-Q4_K_M.gguf"), self.put("video/c-Q8_0.gguf")
+        s1, r1 = self.c.json("POST", "/api/library/models/delete", {"items": [{"kind": "text", "name": "a-Q4_K_M.gguf"}]})
+        self.assertEqual((s1, r1["deleted"], r1["missing"], r1["freed"]), (200, ["text/a-Q4_K_M.gguf"], [], 4096))
+        self.assertFalse(a.exists())
+        s2, r2 = self.c.json("POST", "/api/library/models/delete", {"items": [{"kind": "text", "name": "b-Q4_K_M.gguf"}, {"kind": "video", "name": "c-Q8_0.gguf"}, {"kind": "text", "name": "nao-existe.gguf"}]})
+        self.assertEqual((s2, sorted(r2["deleted"]), r2["missing"], r2["freed"]), (200, ["text/b-Q4_K_M.gguf", "video/c-Q8_0.gguf"], ["text/nao-existe.gguf"], 8192))
+        self.assertFalse(b.exists() or c.exists())
+
+    def test_delete_removes_every_shard_and_the_support_files_of_a_preinstalled_model(self):
+        p1, p2 = self.put("grande-00001-of-00002.gguf"), self.put("grande-00002-of-00002.gguf")
+        z, enc, vae = self.put("image/z-image-Q4_K_M.gguf", 100), self.put("image/Qwen3-4B-Instruct-2507-Q4_K_M.gguf", 50), self.put("image/ae.safetensors", 20)
+        self.c.json("POST", "/api/library/models/delete", {"items": [{"kind": "text", "name": "grande-00001-of-00002.gguf"}, {"kind": "image", "name": "z-image-Q4_K_M.gguf"}]})
+        self.assertFalse(any(f.exists() for f in (p1, p2, z, enc, vae)))
+        self.assertEqual(self.c.json("GET", "/api/library/models")[1]["models"], [])
+
+    def test_delete_validates_input_and_never_leaves_the_models_folder(self):
+        outside = self.store.home / "segredo.gguf"
+        outside.write_bytes(b"x")
+        self.assertEqual(self.c.json("POST", "/api/library/models/delete", {"items": []})[0], 400)
+        self.assertEqual(self.c.json("POST", "/api/library/models/delete", {})[0], 400)
+        self.assertEqual(self.c.json("POST", "/api/library/models/delete", {"items": [{"kind": "inexistente", "name": "x.gguf"}]})[0], 400)
+        status, r = self.c.json("POST", "/api/library/models/delete", {"items": [{"kind": "text", "name": "../segredo.gguf"}, {"kind": "text", "name": "..\\segredo.gguf"}, {"kind": "text", "name": "x.txt"}]})
+        self.assertEqual(status, 200)
+        self.assertEqual(r["deleted"], [])
+        self.assertTrue(outside.exists())
+
+
+class AskBeforeInstallingTests(TmpCase):
+    """O terminal pergunta (sim/não) antes de baixar os modelos pré-instalados."""
+
+    def setUp(self):
+        super().setUp()
+        self.hub = FakeHub()
+        self.addCleanup(self.hub.close)
+        for p in (mock.patch.object(hf, "HF", self.hub.url), mock.patch("asta.hf.shutil.disk_usage", return_value=mock.Mock(free=10 ** 13)), mock.patch.object(pre, "_lib", return_value=False)):
+            p.start()
+            self.addCleanup(p.stop)
+        self.store = Store(self.tmp / "home")
+        self.log = []
+
+    def go(self, answer, which="all", expect_calls=1):
+        asked = []
+
+        def ask(q):
+            asked.append(q)
+            return answer
+
+        code = pre.install_selected(self.store, which, ask=ask, log=self.log.append)
+        self.assertEqual(len(asked), expect_calls)
+        return code, asked
+
+    def test_yes_downloads_everything_missing(self):
+        code, asked = self.go(True)
+        self.assertEqual(code, 0)
+        self.assertIn("Qwen3.8 2B Distill", asked[0])
+        self.assertIn("Z-Image", asked[0])
+        self.assertIn("GB", asked[0])
+        self.assertTrue(all(m["installed"] for m in pre.status(self.store.models_dir)))
+        self.assertEqual(pre.declined(self.store.home), [])
+
+    def test_no_downloads_nothing_and_is_remembered_so_updates_do_not_nag(self):
+        code, _ = self.go(False)
+        self.assertEqual(code, 0)
+        self.assertFalse(any(m["installed"] for m in pre.status(self.store.models_dir)))
+        self.assertEqual(self.hub.requests, [])
+        self.assertEqual(sorted(pre.declined(self.store.home)), ["image-z-image", "text-qwen3.8-2b-distill"])
+        self.assertTrue(any("asta models install" in m for m in self.log))
+        self.go(True, expect_calls=0)  # recusado antes: não pergunta de novo (e não baixa)
+        self.assertEqual(self.hub.requests, [])
+        # `asta models install` sem --ask baixa quando o usuário quiser
+        self.assertEqual(pre.install_selected(self.store, "text", log=self.log.append), 0)
+        self.assertTrue(next(m for m in pre.status(self.store.models_dir) if m["kind"] == "text")["installed"])
+
+    def test_no_terminal_means_no_download(self):
+        code, _ = self.go(None)
+        self.assertEqual(code, 0)
+        self.assertEqual(self.hub.requests, [])
+        self.assertTrue(any("não há um terminal" in m for m in self.log))
+        self.assertEqual(pre.declined(self.store.home), [])  # sem resposta não vira recusa: pergunta na próxima vez
+
+    def test_nothing_to_ask_when_everything_is_installed_and_only_missing_ones_are_listed(self):
+        pre.install(self.store, "text-qwen3.8-2b-distill")
+        code, asked = self.go(True)
+        self.assertNotIn("Qwen3.8", asked[0])  # o de texto já está instalado: a pergunta só lista o que falta
+        self.assertIn("Z-Image", asked[0])
+        self.go(True, expect_calls=0)  # tudo instalado: não pergunta
+
+    def test_choosing_one_kind_only_asks_about_that_kind(self):
+        code, asked = self.go(True, which="text")
+        self.assertNotIn("Z-Image", asked[0])
+        self.assertEqual([m["installed"] for m in pre.status(self.store.models_dir)], [True, False])
+
+
+class TerminalQuestionTests(unittest.TestCase):
+    """cli._ask_terminal: lê a resposta do terminal (também quando o stdin é o script do `curl | sh`)."""
+
+    def ask(self, text, tty=True):
+        fake = io.StringIO(text)
+        fake.isatty = lambda: tty  # type: ignore[method-assign]
+        out = io.StringIO()
+        with mock.patch.object(sys, "stdin", fake), contextlib.redirect_stdout(out):
+            return cli._ask_terminal("Baixar agora?"), out.getvalue()
+
+    def test_answers(self):
+        for text, want in (("s\n", True), ("Sim\n", True), ("y\n", True), ("YES\n", True), ("n\n", False), ("não\n", False), ("\n", False)):
+            self.assertIs(self.ask(text)[0], want, text)
+        got, out = self.ask("talvez\nsim\n")
+        self.assertTrue(got)
+        self.assertIn("Responda s (sim) ou n (não)", out)
+        self.assertIs(self.ask("a\nb\nc\nd\n")[0], False)  # insistiu em resposta inválida: não
+        self.assertIsNone(self.ask("")[0])  # fim da entrada, ninguém para responder
+        self.assertIn("[s/N]", self.ask("s\n")[1])
+
+    def test_without_a_terminal_it_cannot_ask(self):
+        with mock.patch.object(sys, "stdin", None), mock.patch("builtins.open", side_effect=OSError("sem tty")):
+            self.assertIsNone(cli._ask_terminal("?"))
+
+    def test_models_install_ask_flag_and_explicit_choice(self):
+        seen = []
+        with mock.patch.object(pre, "install_selected", side_effect=lambda store, which, token="", log=print, ask=None: seen.append((which, ask)) or 0), \
+                mock.patch.dict(os.environ, {"ASTA_HOME": str(Path(tempfile.mkdtemp()))}):
+            os.environ.pop("ASTA_MODELS", None)
+            cli.main(["models", "install", "--ask"])
+            cli.main(["models", "install"])
+            cli.main(["models", "install", "--ask", "--which", "text"])  # escolha explícita: já respondeu, não pergunta
+            os.environ["ASTA_MODELS"] = "image"
+            cli.main(["models", "install", "--ask"])
+        self.assertEqual(seen, [("all", cli._ask_terminal), ("all", None), ("text", None), ("image", None)])
+
+    @unittest.skipUnless(sys.platform.startswith("linux"), "pty só em Linux")
+    def test_real_terminal_answer_through_a_pty(self):
+        """Roda `asta models install --ask` com um terminal de verdade (pty), com o stdin ocupado por um pipe como no `curl | sh`."""
+        import pty
+        import select
+        import time
+
+        home = Path(tempfile.mkdtemp(prefix="asta-pty-"))
+        self.addCleanup(shutil.rmtree, home, True)
+        for answer, want_declined in ((b"n\n", True), (b"\n", True)):
+            master, slave = pty.openpty()
+            r_pipe, w_pipe = os.pipe()  # stdin = pipe (como o script do `curl | sh`); o terminal vem de /dev/tty
+            code = (
+                "import sys, fcntl, termios; fcntl.ioctl(1, termios.TIOCSCTTY, 0); sys.argv = ['asta', 'models', 'install', '--ask'];"  # o pty vira o terminal de controle
+                "from asta import cli; sys.exit(cli.main())"
+            )
+            proc = subprocess.Popen([sys.executable, "-c", code], stdin=r_pipe, stdout=slave, stderr=slave, start_new_session=True, env={**os.environ, "ASTA_HOME": str(home), "ASTA_MODELS": ""}, cwd=str(Path(__file__).resolve().parent.parent))
+            os.close(slave)
+            os.close(r_pipe)
+            buf, deadline, sent = b"", time.time() + 30, False
+            while time.time() < deadline:
+                ready, _, _ = select.select([master], [], [], 0.5)
+                if ready:
+                    try:
+                        chunk = os.read(master, 4096)
+                    except OSError:
+                        break
+                    if not chunk:
+                        break
+                    buf += chunk
+                    if b"[s/N]" in buf and not sent:
+                        os.write(master, answer)
+                        sent = True
+                elif proc.poll() is not None:
+                    break
+            proc.wait(timeout=20)
+            os.close(master)
+            os.close(w_pipe)
+            text = buf.decode("utf-8", "replace")
+            self.assertIn("[s/N]", text)
+            self.assertIn("Z-Image", text)
+            self.assertEqual(proc.returncode, 0, text)
+            self.assertIn("não vou baixar", text)
+            self.assertTrue(want_declined and (home / "preinstalled.json").exists())
+            (home / "preinstalled.json").unlink()
 
 
 if __name__ == "__main__":

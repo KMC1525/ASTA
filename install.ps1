@@ -5,8 +5,8 @@
 # O MESMO comando instala e atualiza. Seus dados (%USERPROFILE%\.asta) nunca são tocados.
 # Variáveis opcionais: $env:ASTA_EXTRAS = "all" (padrão: instala/atualiza TODAS as bibliotecas do ASTA) | "none" (só o ASTA)
 #                                         | lista: "docs,media,local". Uma biblioteca que falhe não aborta a instalação.
-#                      $env:ASTA_MODELS = "all" (padrão: baixa os modelos locais pré-instalados: Qwen3.8 2B Distill Q8_0 (texto) e Z-Image Q4_K_M (imagem))
-#                                         | "none" | "text" | "image"
+#                      $env:ASTA_MODELS = (vazio: PERGUNTA no terminal, sim/não, antes de baixar os modelos locais pré-instalados: Qwen3.8 2B Distill Q8_0 (texto)
+#                                         e Z-Image Q4_K_M (imagem)) | "all" | "text" | "image" (baixam sem perguntar) | "none" (pula)
 #                      $env:ASTA_PYTHON = "auto" (padrão: instala o Python se faltar e o atualiza pelo winget, com pip/setuptools/wheel)
 #                                         | "keep" (nunca mexe no Python do sistema)
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
@@ -158,11 +158,15 @@ else {
   $ErrorActionPreference = $prevEap
 }
 
-# 6) modelos locais pré-instalados (texto e imagem); o que já foi baixado é pulado
+# 6) modelos locais pré-instalados (texto e imagem). Sem $env:ASTA_MODELS, o ASTA PERGUNTA no terminal (sim/não) antes de baixar; o que já está na pasta é pulado
 $modelsFailed = $false
 if ($env:ASTA_MODELS -in @('none', 'no', '0')) { Note "Modelos pré-instalados: pulados (ASTA_MODELS=$($env:ASTA_MODELS))." }
+elseif (-not $env:ASTA_MODELS) {
+  & $asta models install --ask
+  if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
+}
 else {
-  Say 'Modelos locais pré-instalados (texto e imagem): baixo só o que ainda não está na pasta (vários GB na primeira vez) …'
+  Say 'Modelos locais pré-instalados: baixo só o que ainda não está na pasta (vários GB na primeira vez) …'
   & $asta models install
   if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
 }

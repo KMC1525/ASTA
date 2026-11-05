@@ -83,6 +83,59 @@ def defaults_for(kind: str, filename: str) -> Dict[str, Any]:
     return {}
 
 
+def _companion_names(e: Dict[str, Any]) -> List[str]:
+    return [Path(c["file"]).name for c in e.get("companions", [])]
+
+
+def _catalog_entry(kind: str, filename: str) -> Optional[Dict[str, Any]]:
+    return next((e for e in CATALOG if e["kind"] == kind and Path(e["file"]).name == filename), None)
+
+
+def library(models_dir: Path) -> List[Dict[str, Any]]:
+    """Os modelos locais instalados, para a Biblioteca: todos os tipos, com o rótulo do catálogo nos pré-instalados.
+    Os arquivos de apoio de um pré-instalado (VAE, codificador de texto) aparecem junto do modelo principal, não como modelos soltos."""
+    models = hf.local_models(models_dir, "all")
+    hidden = set()
+    for e in CATALOG:
+        if installed(models_dir, e):
+            hidden.update((e["kind"], n) for n in _companion_names(e))
+    out = []
+    for m in models:
+        if (m["kind"], m["name"]) in hidden:
+            continue
+        e = _catalog_entry(m["kind"], m["name"])
+        folder = hf.kind_dir(models_dir, m["kind"])
+        extra = [n for n in _companion_names(e) if (folder / n).is_file()] if e else []
+        size = m["size"] + sum((folder / n).stat().st_size for n in extra)
+        out.append({**m, "id": f"{m['kind']}/{m['name']}", "size": size, "label": e["label"] if e else "", "source": e["source"] if e else "", "preinstalled": e["id"] if e else "", "extra_files": extra})
+    return out
+
+
+def remove(models_dir: Path, items: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Apaga modelos locais ({kind, name}), um ou vários. Num pré-instalado, apaga também os arquivos de apoio dele (VAE, codificador de texto).
+    Um modelo dividido em partes é apagado inteiro. Devolve {deleted: [...], missing: [...], freed: bytes}."""
+    from .util import safe_filename
+
+    deleted, missing, freed = [], [], 0
+    for it in items:
+        kind, name = str(it.get("kind") or "text"), safe_filename(it.get("name"), "")
+        folder = hf.kind_dir(models_dir, kind)  # tipo inválido → ProviderError
+        path = folder / name
+        if not name or path.suffix != ".gguf" or not path.is_file():
+            missing.append(f"{kind}/{name}")
+            continue
+        victims = list(hf.shard_files(folder, name))
+        e = _catalog_entry(kind, name)
+        if e:
+            victims += [folder / n for n in _companion_names(e)]
+        for v in victims:
+            if v.is_file():
+                freed += v.stat().st_size
+                v.unlink(missing_ok=True)
+        deleted.append(f"{kind}/{name}")
+    return {"deleted": deleted, "missing": missing, "freed": freed}
+
+
 def _lib(mod: str) -> bool:
     try:
         return importlib.util.find_spec(mod) is not None
@@ -137,8 +190,28 @@ def install(store: Any, entry_id: str, token: str = "", progress: Optional[Calla
     return {"id": e["id"], "downloaded": [Path(f["file"]).name for f in todo], "notes": notes}
 
 
-def install_selected(store: Any, which: str = "all", token: str = "", log: Callable[[str], None] = print) -> int:
-    """`asta models install`: `which` = all | none | text | image | lista. Devolve 0 se tudo certo, 1 se algum falhou."""
+def _declined_file(home: Path) -> Path:
+    return Path(home) / "preinstalled.json"
+
+
+def declined(home: Path) -> List[str]:
+    """Ids dos modelos pré-instalados que o usuário recusou no terminal (o instalador não pergunta de novo por eles)."""
+    from .util import read_json
+
+    data = read_json(_declined_file(home), {}) or {}
+    return [x for x in data.get("declined", []) if isinstance(x, str)]
+
+
+def set_declined(home: Path, ids: List[str]) -> None:
+    from .util import write_json
+
+    write_json(_declined_file(home), {"declined": sorted(set(ids))})
+
+
+def install_selected(store: Any, which: str = "all", token: str = "", log: Callable[[str], None] = print, ask: Optional[Callable[[str], Optional[bool]]] = None) -> int:
+    """`asta models install`: `which` = all | none | text | image | lista. Devolve 0 se tudo certo, 1 se algum falhou.
+    Com `ask` (função que pergunta sim/não no terminal e devolve True, False ou None se não dá para perguntar), o que ainda não está instalado só é
+    baixado se o usuário disser que sim; a recusa fica guardada e o ASTA não pergunta de novo (`asta models install` sem `--ask` baixa quando quiser)."""
     which = (which or "all").strip().lower()
     if which in ("none", "no", "0"):
         log("Modelos pré-instalados: nada a baixar (ASTA_MODELS=none).")
@@ -148,6 +221,25 @@ def install_selected(store: Any, which: str = "all", token: str = "", log: Calla
     if not chosen:
         log("Modelos desconhecidos: use all, none, text, image ou os ids do catálogo.")
         return 2
+    if ask is not None:
+        missing = [e for e in chosen if not installed(store.models_dir, e)]
+        refused = declined(store.home)
+        pending = [e for e in missing if e["id"] not in refused]
+        approved = False
+        if missing and not pending:
+            log("Modelos pré-instalados: você preferiu não baixar (para baixar quando quiser: asta models install).")
+        if pending:
+            lines = "\n".join(f"  • {e['label']} ({hf.GGUF_KINDS[e['kind']]['label'].lower()}, {e['quant']}) — {sum(f['size'] for f in _files(e)) / 1024 ** 3:.1f} GB" for e in pending)
+            answer = ask(f"O ASTA pode baixar agora os modelos de IA pré-instalados (precisam de espaço em disco e de internet):\n{lines}\nBaixar agora?")
+            if answer is None:
+                log("Modelos pré-instalados: não há um terminal para perguntar, então não baixei nada. Para baixar: asta models install   (ou ASTA_MODELS=all no instalador).")
+            elif answer:
+                approved = True
+                set_declined(store.home, [x for x in refused if x not in {e["id"] for e in pending}])
+            else:
+                set_declined(store.home, refused + [e["id"] for e in pending])
+                log("Ok, não vou baixar os modelos pré-instalados. Quando quiser: asta models install")
+        chosen = [e for e in chosen if installed(store.models_dir, e) or (approved and e in pending)]  # o que já existe só é conferido/configurado
     failed = 0
     for e in chosen:
         try:

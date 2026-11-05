@@ -5,6 +5,25 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.11] — 2026-11-05
+
+### Adicionado
+- **Biblioteca — selecionar vários e apagar.** O botão **Selecionar** (ou *Selecionar vários* no menu ⋯ de um item) liga o modo de seleção: cada cartão ganha uma caixa de marcação, a barra mostra quantos itens estão marcados e oferece **Selecionar os exibidos** (respeita a busca e os filtros), **Apagar selecionados** (com confirmação) e **Cancelar**. Funciona com mundos, jogos 2D, avatars, canvases e modelos. Depois de apagar, o ASTA sai do modo de seleção e informa quantos itens foram apagados (e quanto espaço foi liberado).
+- **Modelos de IA locais na Biblioteca.** Os modelos GGUF instalados (texto, imagem, vídeo, som e música, voz e outros — incluindo os pré-instalados) aparecem como cartões, com o tipo, a quantização, o tamanho e a marca *pré-instalado*; há o filtro **Modelos de IA locais**. Os pré-instalados mostram o nome do catálogo (ex.: *Z-Image*), e os arquivos de apoio (VAE, codificador de texto) aparecem junto do modelo principal, não como modelos soltos.
+- **Apagar modelos locais**, um de cada vez (botão *Apagar* do cartão) ou vários (modo de seleção). Um modelo dividido em partes é apagado inteiro; ao apagar um pré-instalado, os arquivos de apoio dele vão junto. Se um modelo apagado ainda estiver escolhido nas configurações, o ASTA apenas deixa de achá-lo — basta escolher outro ou baixá-lo de novo.
+- API: `GET /api/library/models` (lista) e `POST /api/library/models/delete` (`{"items": [{"kind", "name"}]}`; só apaga `.gguf` dentro da pasta de modelos).
+- **Terminal — o ASTA pergunta antes de baixar os modelos pré-instalados.** O instalador (`install.sh`/`install.ps1`) e o `asta update` listam o que falta (com o tamanho) e perguntam **sim ou não** (`[s/N]`, Enter = não) antes de baixar. A pergunta funciona também com `curl … | sh` (lê do terminal de verdade). Responder *não* fica guardado em `~/.asta/preinstalled.json` e não é perguntado de novo; `asta models install` (sem `--ask`) baixa quando você quiser. Sem terminal para perguntar (CI, scripts), nada é baixado e o ASTA avisa como baixar depois.
+  - `ASTA_MODELS=all|text|image` responde antecipadamente (baixa sem perguntar) e `ASTA_MODELS=none` pula; antes, o padrão era baixar tudo sem perguntar.
+  - Novo `asta models install --ask`; o que já está instalado continua sendo pulado e só o que falta é listado na pergunta.
+- Testes: listagem/exclusão de modelos (todos os tipos, partes divididas, arquivos de apoio, proteção contra caminhos fora da pasta), a pergunta (sim, não, lembrar a recusa, sem terminal, só o que falta), a leitura da resposta com um **terminal de verdade (pty)** com o stdin ocupado por um pipe, o `install.sh` real chamando (ou não) `--ask`, e a Biblioteca no navegador (modelos, seleção, apagar em lote e um a um).
+
+### Alterado
+- O subtítulo da Biblioteca e o contador (agora "item(ns)") passam a incluir os modelos locais.
+
+### Observação
+- O `install.ps1` (Windows) e a leitura de `CONIN$` não puderam ser executados aqui; o caminho Linux/macOS (`/dev/tty`) está testado com um pty.
+- Apagar um modelo pré-instalado libera o espaço, mas o instalador só volta a oferecê-lo se você não tiver recusado antes; para baixar de novo: `asta models install` ou o botão em *Configuração → Modelos locais*.
+
 ## [0.2.10] — 2026-11-05
 
 ### Alterado
@@ -220,7 +239,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.10...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.11...HEAD
+[0.2.11]: https://github.com/KMC1525/ASTA/compare/v0.2.10...v0.2.11
 [0.2.10]: https://github.com/KMC1525/ASTA/compare/v0.2.9...v0.2.10
 [0.2.9]: https://github.com/KMC1525/ASTA/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/KMC1525/ASTA/compare/v0.2.7...v0.2.8

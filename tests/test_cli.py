@@ -115,7 +115,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(calls[1][-1], cli.REPO_ZIP)
         self.assertIn("--upgrade", calls[1])
         self.assertEqual(calls[2][1:4], ["-m", "asta", "libs"])  # processo novo: lê as bibliotecas da versão recém-instalada
-        self.assertEqual(calls[3][1:5], ["-m", "asta", "models", "install"])
+        self.assertEqual(calls[3][1:], ["-m", "asta", "models", "install", "--ask"])  # pergunta antes de baixar os modelos
         self.assertIn("Pronto", out)
         self.assertIn("gerenciador de pacotes", out)  # explica que o Python do sistema não é gerenciado nesse caso
 
@@ -294,15 +294,18 @@ class PythonInstallerTests(unittest.TestCase):
         (site / "asta").mkdir()
         (site / "asta" / "__init__.py").write_text(f'__version__ = "{version}"\n')
         stub = venv / "bin" / "asta"
-        stub.write_text("#!/bin/sh\nexit 0\n")
+        self.stub_log = self.tmp / "asta-calls.log"
+        stub.write_text(f'#!/bin/sh\necho "$@" >> {self.stub_log}\nexit 0\n')
         stub.chmod(0o755)
 
-    def run_full(self, remote, **env):
+    def run_full(self, remote, models="none", **env):
         remote_file = self.tmp / "remote_init.py"
         remote_file.unlink(missing_ok=True)
         if remote is not None:
             remote_file.write_text(f'"""x"""\n__version__ = "{remote}"\n')
-        return self.install(ASTA_STEP="", ASTA_PYTHON="keep", ASTA_EXTRAS="none", ASTA_MODELS="none", ASTA_VERSION_URL=remote_file.as_uri(), **env)
+        if models is not None:
+            env["ASTA_MODELS"] = models
+        return self.install(ASTA_STEP="", ASTA_PYTHON="keep", ASTA_EXTRAS="none", ASTA_VERSION_URL=remote_file.as_uri(), **env)
 
     def test_asta_already_at_the_latest_version_is_not_downloaded_again(self):
         self.with_python()
@@ -323,6 +326,24 @@ class PythonInstallerTests(unittest.TestCase):
             code, out = self.run_full(remote, **env)
             self.assertIn("Baixando e instalando ASTA", out, (remote, env))  # PIP_NO_INDEX=1: o pip de verdade falha, o que basta para provar a tentativa
             self.assertNotIn("nada a baixar", out)
+
+    def test_the_installer_asks_before_downloading_the_preinstalled_models(self):
+        self.with_python()
+        self.fake_installed_asta("0.2.9")
+
+        def asta_calls():
+            return self.stub_log.read_text().splitlines() if self.stub_log.exists() else []
+
+        code, out = self.run_full("0.2.9", models=None)  # sem ASTA_MODELS: o ASTA pergunta (sim/não) no terminal
+        self.assertEqual(code, 0, out)
+        self.assertEqual(asta_calls(), ["models install --ask"])
+        self.stub_log.unlink()
+        self.run_full("0.2.9", models="all")  # escolha explícita: baixa sem perguntar
+        self.assertEqual(asta_calls(), ["models install"])
+        self.stub_log.unlink()
+        code, out = self.run_full("0.2.9", models="none")
+        self.assertEqual(asta_calls(), [])
+        self.assertIn("pulados", out)
 
     def test_python_only_flag_stops_before_installing_asta(self):
         import subprocess
@@ -361,6 +382,8 @@ class InstallerTests(unittest.TestCase):
         for needle in ("apt-get", "dnf", "pacman", "brew", "ASTA_PYTHON", "pip setuptools wheel", "Recriando o ambiente"):
             self.assertIn(needle, sh)
         self.assertNotIn('SPEC="asta[$EXTRAS]"', sh)
+        self.assertIn("models install --ask", sh)  # pergunta sim/não antes de baixar os modelos pré-instalados
+        self.assertIn("models install --ask", ps)
 
 
 if __name__ == "__main__":

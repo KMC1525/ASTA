@@ -229,8 +229,43 @@ def _update_with_installer(args: argparse.Namespace) -> int:
             pass
 
 
+YES = ("s", "sim", "y", "yes")
+NO = ("", "n", "nao", "não", "no")
+
+
+def _ask_terminal(question: str):
+    """Pergunta sim/não no terminal e devolve True/False; None se não há um terminal para perguntar. Funciona também com `curl … | sh`,
+    em que o stdin é o próprio script: nesse caso lê do terminal de verdade (/dev/tty, ou CONIN$ no Windows). Enter = não."""
+    stream, opened = None, None
+    try:
+        if sys.stdin is not None and sys.stdin.isatty():
+            stream = sys.stdin
+        else:
+            opened = stream = open("CONIN$" if os.name == "nt" else "/dev/tty", "r", encoding="utf-8", errors="replace")
+    except (OSError, ValueError):
+        return None
+    try:
+        print(f"\n{question} [s/N] ", end="", flush=True)
+        for _ in range(3):
+            line = stream.readline()
+            if not line:  # fim da entrada: ninguém para responder
+                print()
+                return None
+            answer = line.strip().lower()
+            if answer in YES:
+                return True
+            if answer in NO:
+                return False
+            print("Responda s (sim) ou n (não): ", end="", flush=True)
+        return False
+    finally:
+        if opened is not None:
+            opened.close()
+
+
 def _models(args: argparse.Namespace) -> int:
-    """`asta models list|install`: os modelos locais pré-instalados (texto e imagem)."""
+    """`asta models list|install`: os modelos locais pré-instalados (texto e imagem). `install --ask` pergunta (sim/não) antes de baixar;
+    com ASTA_MODELS definido (all, text, image…) a resposta já foi dada e não pergunta."""
     if getattr(args, "home", None):
         os.environ["ASTA_HOME"] = args.home
     from . import preinstalled
@@ -242,7 +277,9 @@ def _models(args: argparse.Namespace) -> int:
             print(f"{'✓' if m['installed'] else '·'} {m['id']:<26} {m['kind']:<6} {m['label']} ({m['quant']}) · {m['size'] / 1024 ** 3:.1f} GB · {m['repo']}")
         return 0
     token = (store.get_settings().get("hf") or {}).get("token", "")
-    return preinstalled.install_selected(store, args.which or os.environ.get("ASTA_MODELS") or "all", token)
+    explicit = args.which or os.environ.get("ASTA_MODELS") or ""
+    ask = _ask_terminal if getattr(args, "ask", False) and not explicit else None
+    return preinstalled.install_selected(store, explicit or "all", token, ask=ask)
 
 
 def _update(args: argparse.Namespace) -> int:
@@ -266,7 +303,7 @@ def _update(args: argparse.Namespace) -> int:
         # processo novo: lê os metadados da versão recém-instalada (ela pode ter bibliotecas novas)
         lib_cmd = [sys.executable, "-m", "asta", "libs"] + (["--extras", args.extras] if getattr(args, "extras", "") else [])
         subprocess.run(lib_cmd)  # falhas de bibliotecas opcionais viram aviso; o ASTA já está atualizado
-        subprocess.run([sys.executable, "-m", "asta", "models", "install"])  # modelos pré-instalados (pula o que já existe)
+        subprocess.run([sys.executable, "-m", "asta", "models", "install", "--ask"])  # modelos pré-instalados: pergunta antes de baixar (pula o que já existe)
     print("\nPronto! Reinicie o ASTA para usar a nova versão.")
     return 0
 
@@ -324,6 +361,7 @@ def main(argv=None) -> int:
     mod = sub.add_parser("models", help="modelos locais pré-instalados (texto e imagem): list | install")
     mod.add_argument("action", choices=("list", "install"), nargs="?", default="list")
     mod.add_argument("--which", default="", help="all (padrão), none, text, image ou ids (também ASTA_MODELS)")
+    mod.add_argument("--ask", action="store_true", help="pergunta no terminal (sim/não) antes de baixar o que falta; sem efeito se --which ou ASTA_MODELS já disseram o que fazer")
     mod.add_argument("--home", help="pasta de dados (padrão ~/.asta)")
     libs = sub.add_parser("libs", help="instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)")
     libs.add_argument("--extras", default="", help="all (padrão), none ou lista separada por vírgula (docs,media,local)")

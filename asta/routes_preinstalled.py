@@ -19,9 +19,26 @@ class PreinstalledRoutes:
     def register(self) -> None:
         self.app.add("GET", r"/api/preinstalled", self.r_list)
         self.app.add("POST", r"/api/preinstalled/install", self.r_install)
+        self.app.add("GET", r"/api/library/models", self.r_models)
+        self.app.add("POST", r"/api/library/models/delete", self.r_models_delete)
 
     def r_list(self, req) -> None:
         req.json({"models": preinstalled.status(self.store.models_dir)})
+
+    def r_models(self, req) -> None:
+        """Modelos de IA locais instalados (todos os tipos), para aparecerem na Biblioteca."""
+        req.json({"models": preinstalled.library(self.store.models_dir)})
+
+    def r_models_delete(self, req) -> None:
+        """Apaga um ou vários modelos locais: {"items": [{"kind": "text", "name": "x.gguf"}, ...]}."""
+        body = req.body_json()
+        items = [{"kind": text(i.get("kind"), "text", 20), "name": text(i.get("name"), "", 260)} for i in body.get("items", []) if isinstance(i, dict)][:200] if isinstance(body.get("items"), list) else []
+        if not items:
+            raise HttpError(400, "Escolha ao menos um modelo.")
+        try:
+            req.json(preinstalled.remove(self.store.models_dir, items))
+        except ProviderError as exc:
+            raise HttpError(400, str(exc))
 
     def r_install(self, req) -> None:
         body = req.body_json()
