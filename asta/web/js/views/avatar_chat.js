@@ -11,6 +11,7 @@ const SPEAK_KEY = 'asta.avatars.speak';
 export default async function render(root, ctx, chatId) {
   let chat, chats;
   try { [chat, chats] = await Promise.all([api('/api/avatar-chats/' + chatId), api('/api/avatar-chats')]); } catch (e) { location.hash = '#/avatars'; return; }
+  if (!chat.avatars || !chat.avatars.length) { location.hash = '#/avatars'; return; }   // os avatares desta conversa foram apagados
   const cfg = state.settings.avatars || {};
   const people = {};
   const reindex = () => { Object.keys(people).forEach((k) => delete people[k]); chat.avatars.forEach((a) => (people[a.id] = a)); };

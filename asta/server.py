@@ -107,8 +107,8 @@ class App:
         cfg = body.get("config") or {}
         override = settings["providers"].setdefault(pid, {})
         for k in ("base_url", "model"):
-            if cfg.get(k):
-                override[k] = cfg[k]
+            if k in cfg and isinstance(cfg[k], str):  # campo vazio vale: testar sem modelo escolhido (ex.: LM Studio em automático) não pode herdar o salvo
+                override[k] = cfg[k].strip()
         if cfg.get("api_key"):
             override["api_key"] = cfg["api_key"]
         if "vision" in cfg:

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import threading
 from pathlib import Path
-from typing import Any, Dict, Iterator, List
+from typing import Any, Callable, Dict, Iterator, List, Tuple
 
 from ..util import hardware_info
 from .base import Provider, ProviderError, content_text, split_system
@@ -35,6 +35,33 @@ def context_size(configured: Any, model_name: str, tier: str) -> int:
     from .. import preinstalled  # import tardio: evita ciclo (preinstalled → hf → providers)
 
     return preinstalled.default_n_ctx(model_name) or _n_ctx(tier)
+
+
+class ContextTooLong(ValueError):
+    """A conversa não cabe na janela de contexto. É um ValueError de propósito: os pipelines tratam como "resposta inválida" (caem nas regras)
+    e o chat mostra a mensagem com o que fazer, em vez de derrubar a geração inteira."""
+
+
+def fit_messages(msgs: List[dict], count: Callable[[str], int], ctx: int, max_tokens: int) -> Tuple[List[dict], int]:
+    """Cabe a conversa na janela de contexto: mantém a mensagem de sistema e a última, e descarta as mais antigas até sobrar espaço para a resposta.
+    Devolve (mensagens, max_tokens ajustado). Sem isto, uma conversa longa estoura o contexto (ValueError do llama.cpp) e o avatar para de responder."""
+    max_tokens = max(64, min(int(max_tokens), ctx // 2))
+    budget = ctx - max_tokens - 16
+    sizes = [count(str(m.get("content") or "")) + 8 for m in msgs]
+    system = [i for i, m in enumerate(msgs) if m.get("role") == "system"][:1]
+    keep = set(system)
+    used = sum(sizes[i] for i in keep)
+    for i in range(len(msgs) - 1, -1, -1):  # das mais novas para as mais antigas
+        if i in keep:
+            continue
+        if used + sizes[i] > budget and i != len(msgs) - 1:
+            break  # a última (a pergunta atual) entra sempre
+        keep.add(i)
+        used += sizes[i]
+    out = [m for i, m in enumerate(msgs) if i in keep]
+    while len(out) > 1 and out[1 if out[0].get("role") == "system" else 0].get("role") == "assistant":
+        out.pop(1 if out[0].get("role") == "system" else 0)  # modelos com template estrito exigem começar pelo usuário
+    return out, max_tokens
 
 
 class LocalLlamaProvider(Provider):
@@ -88,23 +115,55 @@ class LocalLlamaProvider(Provider):
         out += [{"role": m["role"], "content": content_text(m.get("content"))} for m in rest]
         return out
 
+    def _prepare(self, llm: Any, messages: List[dict], system: str, max_tokens: int) -> Tuple[List[dict], int]:
+        ctx = int(llm.n_ctx()) if callable(getattr(llm, "n_ctx", None)) else 2048
+        count = lambda t: len(llm.tokenize(t.encode("utf-8"), add_bos=False)) if hasattr(llm, "tokenize") else len(t) // 3 + 1  # noqa: E731
+        return fit_messages(self._messages(messages, system), count, ctx, max_tokens)
+
+    @staticmethod
+    def _wrap(exc: Exception) -> Exception:
+        msg = str(exc)
+        if "context" in msg.lower() or "exceed" in msg.lower():
+            return ContextTooLong("A conversa não cabe na janela de contexto do modelo local. Aumente a janela em Configuração → Provedores → "
+                                 "Hugging Face GGUF → Janela de contexto, ou reinicie a conversa.")
+        return ProviderError(f"O modelo local falhou: {msg[:300]}")
+
     def _chat(self, messages, system, temperature, max_tokens, json_mode) -> str:
         llm, path = self._llm()
+        msgs, max_tokens = self._prepare(llm, messages, system, max_tokens)
         with _LOCK:
-            res = llm.create_chat_completion(
-                messages=self._messages(messages, system), temperature=temperature, max_tokens=max_tokens
-            )
+            try:
+                try:
+                    res = llm.create_chat_completion(messages=msgs, temperature=temperature, max_tokens=max_tokens,
+                                                     **({"response_format": {"type": "json_object"}} if json_mode else {}))
+                except (TypeError, KeyError):  # versão do llama-cpp-python sem response_format: segue sem a gramática JSON
+                    if not json_mode:
+                        raise
+                    res = llm.create_chat_completion(messages=msgs, temperature=temperature, max_tokens=max_tokens)
+            except ProviderError:
+                raise
+            except Exception as exc:  # noqa: BLE001  (ValueError de contexto, RuntimeError do llama.cpp…)
+                raise self._wrap(exc) from None
         return (res["choices"][0]["message"].get("content") or "").strip()
 
     def _stream(self, messages, system, temperature, max_tokens) -> Iterator[str]:
         llm, _ = self._llm()
+        msgs, max_tokens = self._prepare(llm, messages, system, max_tokens)
         with _LOCK:
-            for chunk in llm.create_chat_completion(
-                messages=self._messages(messages, system), temperature=temperature, max_tokens=max_tokens, stream=True
-            ):
-                delta = chunk["choices"][0].get("delta", {}).get("content")
-                if delta:
-                    yield delta
+            try:
+                for chunk in llm.create_chat_completion(messages=msgs, temperature=temperature, max_tokens=max_tokens, stream=True):
+                    delta = chunk["choices"][0].get("delta", {}).get("content")
+                    if delta:
+                        yield delta
+            except GeneratorExit:
+                raise
+            except ProviderError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                raise self._wrap(exc) from None
 
     def list_models(self) -> List[str]:
-        return sorted(p.name for p in self.models_dir.glob("*.gguf"))
+        """Os GGUF de texto baixados (um modelo dividido em partes aparece uma vez; arquivos de visão/mmproj ficam de fora)."""
+        from .. import hf
+
+        return sorted(m["name"] for m in hf.local_models(self.models_dir, "text"))

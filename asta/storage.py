@@ -440,6 +440,17 @@ class Store:
         self.clear_portrait(avatar_id)
         self.clear_memories(avatar_id)
         self.avatars.delete(avatar_id)
+        # conversas: a dois, somem; em grupo, o avatar sai e a conversa segue (com 1 só, vira conversa a dois). Antes ficavam conversas fantasma que travavam a tela.
+        for chat in self.avatar_chats.list():
+            if avatar_id not in chat.get("avatar_ids", []):
+                continue
+            left = [i for i in chat["avatar_ids"] if i != avatar_id]
+            if not left:
+                self.avatar_chats.delete(chat["id"])
+                continue
+            chat["avatar_ids"] = left
+            chat["messages"] = [m for m in chat.get("messages", []) if m.get("avatar_id") != avatar_id]
+            self.avatar_chats.save(chat, chat["id"])
         return True
 
     # ------------------------------------------------------------------ uploads

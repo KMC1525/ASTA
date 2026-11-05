@@ -10,7 +10,7 @@ from .avatar_chat import ChatEngine
 from .avatars import MAX_CHAT_AVATARS, avatar_from_png, export_card_v2, import_avatar
 from .jobs import HttpError, Job
 from .providers import ProviderError, resolve_provider
-from .util import text
+from .util import num, text
 
 IMAGE_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
 
@@ -158,7 +158,7 @@ class AvatarRoutes:
         pipeline_req = {
             "prompt": text(body.get("prompt"), "", 12000), "attachment_ids": list(body.get("attachment_ids") or [])[:40],
             "from_images": bool(body.get("from_images")), "images_mode": "one" if body.get("images_mode") == "one" else "each",
-            "count": body.get("count") or 0, "relationship": text(body.get("relationship"), "auto", 12),
+            "count": int(num(body.get("count"), 0, 0, MAX_CHAT_AVATARS)), "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),
             "character_type": text(body.get("character_type"), "auto", 10), "prompt_pipeline": body.get("prompt_pipeline") is not False,
             "detail": text(body.get("detail"), "detailed", 10),
@@ -219,6 +219,8 @@ class AvatarRoutes:
 
     def r_chat_create(self, req) -> None:
         body = req.body_json()
+        if not isinstance(body, dict):
+            raise HttpError(400, "JSON inválido")
         ids: List[str] = [text(i, "", 60) for i in (body.get("avatar_ids") or [])][:MAX_CHAT_AVATARS]
         if not ids:
             raise HttpError(400, "Escolha pelo menos um avatar.")
@@ -243,6 +245,8 @@ class AvatarRoutes:
     def r_chat_update(self, req, cid: str) -> None:
         chat = self._chat(cid)
         body = req.body_json()
+        if not isinstance(body, dict):
+            raise HttpError(400, "JSON inválido")
         for key in ("title", "content", "user_name", "user_persona", "auto_talk"):
             if key in body:
                 chat[key] = body[key]
@@ -267,16 +271,24 @@ class AvatarRoutes:
             req.sse_send({"type": "error", "message": str(exc), "kind": "provider"})
         except ValueError as exc:
             req.sse_send({"type": "error", "message": str(exc), "kind": "validation"})
+        except (BrokenPipeError, ConnectionResetError):  # o navegador fechou a conexão (nova mensagem, troca de tela): nada a avisar
+            raise
+        except Exception as exc:  # noqa: BLE001  (erro inesperado do provedor/modelo: vira aviso na conversa em vez de cortar a resposta)
+            import traceback
+
+            traceback.print_exc()
+            req.sse_send({"type": "error", "message": f"Erro inesperado: {str(exc) or exc.__class__.__name__}", "kind": "internal"})
 
     def r_chat_send(self, req, cid: str) -> None:
         self._chat(cid)
         body = req.body_json()
-        message = text(body.get("text"), "", 6000)
+        message = text(body.get("text"), "", 6000) if isinstance(body, dict) else ""
         if not message:
             raise HttpError(400, "Escreva uma mensagem.")
         self._stream(req, lambda emit: self.engine.send(cid, message, emit))
 
     def r_chat_tick(self, req, cid: str) -> None:
         self._chat(cid)
-        more = bool(req.body_json().get("more"))
+        body = req.body_json()
+        more = bool(body.get("more")) if isinstance(body, dict) else False
         self._stream(req, lambda emit: self.engine.tick(cid, emit, more=more))

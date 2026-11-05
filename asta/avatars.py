@@ -15,6 +15,7 @@ fica sempre SFW, e o prompt dele o apresenta como uma interpretação ficcional,
 from __future__ import annotations
 
 import re
+import unicodedata
 from typing import Any, Dict, List, Optional
 
 from .cards import _tags, normalize_appearance, normalize_voice, png_card_data
@@ -35,16 +36,29 @@ _PORTRAIT_RE = re.compile(r"^[\w][\w.-]{0,120}$")
 
 # --------------------------------------------------------------------------- regra do menor de idade
 
+_PERSON = (r"menina|menino|garota|garoto|moça|moca|rapaz|jovem|crian[cç]a|criancinha|adolescente|aluna|aluno|estudante|colegial|princesa|pr[ií]ncipe|"
+           r"personagem|mulher|homem|pessoa|girl|boy|kid|child|teen|student|schoolgirl|schoolboy|chica|chico|ni[ñn]a|ni[ñn]o|muchacha|muchacho|joven")
 _MINOR_AGE_RES = [
     re.compile(r"\b(\d{1,2})[\s-]*(?:years?|yrs?)[\s-]*old\b", re.I),
     re.compile(r"\b(\d{1,2})\s*y/?o\b", re.I),
     re.compile(r"\b(?:age|aged|idade|edad)\s*[:=]?\s*(\d{1,2})\b", re.I),
     re.compile(r"\b(?:tem|tinha|has|had|tiene|tenía)\s+(\d{1,2})\s+(?:anos|años)\b(?!\s+de\s+(?!idade|edad))", re.I),
     re.compile(r"\b(\d{1,2})\s*(?:anos|años)\s+de\s+(?:idade|edad)\b", re.I),
+    re.compile(r"\b(\d{1,2})\s*(?:aninhos|añitos)\b", re.I),
+    # "uma garota de 15 anos", "jovem com 17 anos", "chica de 15 años": a pessoa vem antes da idade (evita "um casamento de 12 anos")
+    re.compile(r"\b(?:" + _PERSON + r")s?\s+(?:[\wÀ-ÿ'-]+\s+){0,2}?(?:de|com|con)\s+(\d{1,2})\s+(?:anos|años)\b", re.I),
 ]
 _MINOR_WORDS = re.compile(
-    r"\b(?:underage|under-age|a minor|menor de idade|menor de edad|loli(?:con)?|shota(?:con)?|pre-?teen|pré-?adolescente)\b", re.I
+    r"\b(?:underage|under-age|a minor|menor de idade|menor de edad|loli(?:con)?|shota(?:con)?|pre-?teen|pré-?adolescente|adolescente|teen(?:age[dr]?|ager|s)?|"
+    r"crian[cç]a|criancinha|menininha|menininho|garotinha|garotinho|colegial|schoolgirl|schoolboy|high school student|middle school student|"
+    r"estudante do ensino (?:fundamental|médio|medio)|under\s*(?:the age of\s*)?18|menos de 18 anos|abaixo de 18)\b", re.I
 )
+# idades que descrevem OUTRA pessoa ("tem 2 filhos de 12 anos", "her 12-year-old son") não tornam o personagem menor
+_OTHER_PERSON = re.compile(r"(?:filh[oa]s?|sobrinh[oa]s?|net[oa]s?|entead[oa]s?|alun[oa]s?|\bsons?\b|daughters?|nephews?|nieces?|grandsons?|granddaughters?|hij[oa]s?)\b", re.I)
+
+
+def _about_someone_else(s: str, m: "re.Match[str]") -> bool:
+    return bool(_OTHER_PERSON.search(s[max(0, m.start() - 22):m.start()]) or _OTHER_PERSON.match(s[m.end():].lstrip(" -")[:14]))
 
 
 def declares_minor(*texts: Any, age: Any = None) -> bool:
@@ -62,7 +76,7 @@ def declares_minor(*texts: Any, age: Any = None) -> bool:
             return True
         for rx in _MINOR_AGE_RES:
             for m in rx.finditer(s):
-                if int(m.group(1)) < MIN_AGE:
+                if int(m.group(1)) < MIN_AGE and not _about_someone_else(s, m):
                     return True
     return False
 
@@ -260,6 +274,13 @@ STYLE_HINT = {
 }
 
 
+def fill_macros(body: str, char: str, user: str) -> str:
+    """Cards do SillyTavern/Janitor/Chub vêm cheios de {{char}}, {{user}}, <BOT>, <USER> e <START>: troca pelo nome do avatar e do usuário."""
+    body = re.sub(r"\{\{\s*(?:char|bot)\s*\}\}|<(?:BOT|CHAR)>", lambda m: char, body or "", flags=re.I)
+    body = re.sub(r"\{\{\s*user\s*\}\}|<USER>", lambda m: user, body, flags=re.I)
+    return re.sub(r"^[ \t]*<START>[ \t]*$", "---", body, flags=re.M | re.I)
+
+
 def default_user_name(lang_hint: str = "") -> str:
     return "Você" if (lang_hint or "").lower().startswith("pt") else "You"
 
@@ -340,7 +361,7 @@ def build_system_prompt(av: Dict[str, Any], others: List[Dict[str, Any]], memori
                      "scandals or statements and present them as real, and never write sexual content about them.")
     if "minor_described" in (av.get("flags") or []) or av["age"] < MIN_AGE:
         lines.append("- You are a minor: no romance, flirting or sexual content of any kind; stay a supportive, age-appropriate friend.")
-    return "\n".join(l for l in lines if l != "")
+    return fill_macros("\n".join(l for l in lines if l != ""), av["name"], user_name)
 
 
 def transcript(messages: List[Dict[str, Any]], user_name: str, limit: int = 40) -> str:
@@ -354,15 +375,20 @@ def transcript(messages: List[Dict[str, Any]], user_name: str, limit: int = 40) 
 # --------------------------------------------------------------------------- menções (para o diretor de turnos)
 
 
+def _fold(s: str) -> str:
+    """Minúsculas e sem acentos: "Júlia" e "julia" são o mesmo nome (quem digita no celular quase nunca acentua)."""
+    return "".join(c for c in unicodedata.normalize("NFD", str(s).lower()) if unicodedata.category(c) != "Mn")
+
+
 def name_tokens(av: Dict[str, Any]) -> List[str]:
     full = av["name"].strip()
     toks = [full] + [t for t in re.split(r"[\s,.\-]+", full) if len(t) >= 3]
-    return list(dict.fromkeys(t.lower() for t in toks))
+    return list(dict.fromkeys(_fold(t) for t in toks))
 
 
 def find_mentions(body: str, avatars: List[Dict[str, Any]]) -> List[str]:
-    """ids dos avatars citados pelo nome no texto, na ordem em que aparecem."""
-    low = " " + re.sub(r"[^\w\s]", " ", body.lower(), flags=re.U) + " "
+    """ids dos avatars citados pelo nome no texto, na ordem em que aparecem (sem diferenciar maiúsculas nem acentos)."""
+    low = " " + re.sub(r"[^\w\s]", " ", _fold(body), flags=re.U) + " "
     hits = []
     for av in avatars:
         pos = [low.find(" " + re.sub(r"[^\w\s]", " ", t) + " ") for t in name_tokens(av)]
@@ -419,7 +445,8 @@ def clean_group_text(body: str, name: str, others: List[str]) -> str:
     """Remove o prefixo "Nome:" e corta se o modelo começar a escrever falas de outros participantes."""
     s = body.strip()
     if name:
-        s = re.sub(r"^\s*\**" + re.escape(name) + r"\**\s*:\s*", "", s, flags=re.I)
+        # "Aya: oi", "**Aya:** oi", "**Aya**: oi", "[Aya]: oi"
+        s = re.sub(r"^\s*[\[(]?(\**)" + re.escape(name) + r"\**[\])]?\s*:\s*(?:\*+\s*)?", lambda m: "", s, count=1, flags=re.I)
     for other in others:
         m = re.search(r"(?:^|\n)\s*\**" + re.escape(other) + r"\**\s*:", s, flags=re.I)
         if m:

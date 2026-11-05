@@ -29,7 +29,9 @@ CARD_FIELDS = ("name", "relationship", "gender", "age", "description", "personal
 
 def clean_prompt(raw: Any, limit: int = 12000) -> str:
     """Tira cercas de markdown e rótulos que o modelo costuma colocar em volta do texto."""
-    s = str(raw or "").strip()
+    if not isinstance(raw, str):  # o modelo devolveu lista/objeto em vez de texto: não serve
+        return ""
+    s = raw.strip()
     s = re.sub(r"^```[a-zA-Z]*\s*\n?|\n?```\s*$", "", s).strip()
     s = re.sub(r"^(?:system[_ ]prompt|prompt)\s*:\s*", "", s, flags=re.I).strip()
     return s[:limit].strip()

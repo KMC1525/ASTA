@@ -65,7 +65,7 @@ class AnthropicProvider(Provider):
             "model": self.model,
             "max_tokens": int(max_tokens),
             "messages": msgs,
-            "temperature": temperature,
+            "temperature": max(0.0, min(float(temperature), 1.0)),  # a API da Anthropic só aceita 0 a 1 (a interface deixa até 1,5)
             "stream": stream,
         }
         if sys_text:
@@ -76,7 +76,7 @@ class AnthropicProvider(Provider):
         body = self._body(messages, system, temperature, max_tokens, False)
         for _ in range(2):
             try:
-                data = http.post_json(self.base + "/v1/messages", body, self._headers(), timeout=300)
+                data = http.post_json(self.base + "/v1/messages", body, self._headers(), timeout=300, retries=2)
                 break
             except ProviderError as err:
                 if err.status == 400 and "temperature" in str(err).lower() and "temperature" in body:
@@ -93,10 +93,15 @@ class AnthropicProvider(Provider):
         for _ in range(2):
             started = False
             try:
-                for evt, data in http.stream_sse(self.base + "/v1/messages", body, self._headers(), timeout=300):
+                for evt, data in http.stream_sse(self.base + "/v1/messages", body, self._headers(), timeout=300, retries=2):
                     started = True
                     if evt == "error":
-                        raise ProviderError(data[:300])
+                        try:
+                            err = json.loads(data).get("error", {})
+                            msg = err.get("message") if isinstance(err, dict) else str(err)
+                        except (json.JSONDecodeError, AttributeError):
+                            msg = data
+                        raise ProviderError(str(msg or data)[:300])
                     if evt != "content_block_delta":
                         continue
                     try:

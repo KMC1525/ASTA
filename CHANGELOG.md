@@ -5,6 +5,37 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.18] — 2026-11-05
+
+Revisão de bugs em tudo que envolve **avatares** e **provedores de IA** (nuvem e local). Cada item abaixo foi reproduzido antes de corrigir e tem teste de regressão (`tests/test_ai_regressions.py`).
+
+### Corrigido — provedores de IA
+- **Servidores locais não respondiam com proxy no sistema.** Com `HTTP_PROXY` definido (rede corporativa/VPN), as chamadas ao Ollama, LM Studio e llama.cpp em `127.0.0.1` passavam pelo proxy, que não enxerga a máquina de quem pede. Agora `localhost`, `127.x`, `::1`, redes privadas (192.168.x, 10.x, 172.16–31.x) e nomes `.local` são acessados direto.
+- **Endereço digitado do jeito comum quebrava:** `localhost:11434` (sem `http://`) dava o erro incompreensível *"Não foi possível conectar a completions: unknown url type"*; `http://localhost:11434` (Ollama sem `/v1`) dava 404. Agora o ASTA completa o `http://` e, nos servidores locais, o `/v1`; endereço realmente inválido mostra *"Endereço inválido…"*; e a mensagem de falha de conexão cita o servidor certo.
+- **Erro no meio do streaming era engolido** (a resposta simplesmente vinha vazia). Agora o erro do provedor (limite de taxa, modelo que caiu…) aparece; no Claude, o erro de streaming mostra a mensagem em vez do JSON cru.
+- **Resposta em lista de partes** (alguns servidores compatíveis com a OpenAI) quebrava com erro interno; agora é lida normalmente.
+- **Claude (Anthropic) com "criatividade" acima de 1** (a interface vai até 1,5) recebia erro 400 em toda mensagem — a API aceita só 0–1. O valor agora é limitado.
+- **Servidor sobrecarregado derrubava a mensagem do avatar.** Respostas 429/502/503/529 agora são repetidas até 2 vezes, respeitando o `Retry-After` (até 8 s). Cota ou crédito esgotado (que também vem como 429) **não** é repetido, nem erros de chave.
+- **Modelo local (GGUF embutido):** (1) conversas longas estouravam a janela de contexto e o avatar parava de responder — agora o histórico é aparado (o prompt do avatar e a pergunta atual ficam; o resto entra do mais novo para o mais antigo) e o `max_tokens` é limitado à metade do contexto; (2) um estouro mesmo assim vira uma mensagem com o que fazer (aumentar a janela de contexto) e, nos pipelines, o agente cai nas regras em vez de derrubar a geração; (3) erros do llama.cpp viram erro de provedor, não exceção solta; (4) o modo JSON agora usa a gramática JSON do llama.cpp (respostas dos agentes mais confiáveis em modelos pequenos), com fallback para versões antigas; (5) a lista de modelos mostrava partes de modelos divididos e arquivos de visão (`mmproj`).
+- **Botão Testar com o campo Modelo vazio** testava, escondido, o modelo que estava salvo (impossível testar o modo automático do LM Studio). Campo vazio agora vale vazio.
+
+### Corrigido — avatares
+- **Resposta vazia sumia sem aviso.** Quando o modelo devolvia nada, ou gastava todo o limite de tokens «pensando» (`<think>…</think>`, comum no LM Studio/Ollama), o avatar só parava de digitar. Numa conversa a dois agora aparece o aviso com a causa e o que fazer (*"…gastou todo o limite de resposta pensando… aumente o Máximo de tokens por resposta"* ou *"o provedor não devolveu nenhum texto…"*); num grupo o avatar fica quieto.
+- **Histórico começando pela saudação do avatar** quebrava modelos com template estrito (Gemma, Mistral…: *"roles must alternate user/assistant"*). Agora a conversa sempre começa pelo usuário.
+- **Fala interrompida era salva cortada no histórico** (quando você escrevia no meio da conversa livre). Agora é descartada.
+- **Prefixo em negrito** (`**Aya:** oi`) deixava `**` solto na mensagem.
+- **Menções sem acento** não eram reconhecidas ("julia" não chamava a "Júlia"; "theo" não chamava o "Théo"): o diretor de turnos agora ignora acentos e maiúsculas.
+- **Regra do menor de idade — detecção mais completa.** Só pegava "15 years old", "tem 15 anos" e "idade: 15"; passava "uma garota de 15 anos", "jovem com 17 anos", "chica de 15 años", "15 aninhos", "criança", "adolescente", "colegial", "high school student", "menos de 18 anos"… Agora todos viram SFW e só amigo. Idades de **outras** pessoas ("tem 2 filhos de 12 anos", "her 12-year-old son") e durações ("casados há 12 anos", "10 anos de experiência", "um casamento de 12 anos") não geram falso positivo.
+- **Cards importados do SillyTavern/Janitor/Chub** vêm com `{{char}}`, `{{user}}`, `<BOT>`, `<USER>` e `<START>`, que iam literalmente para o modelo. Agora são trocados pelo nome do avatar e do usuário (no prompt e na saudação); o card guardado mantém as macros, então a exportação continua compatível.
+- **Apagar um avatar deixava conversas fantasma** que, ao abrir, quebravam a tela do chat. Agora conversas a dois somem, e em grupo o avatar sai (com as falas dele) e a conversa continua; a tela também volta para a lista se abrir uma conversa assim.
+- **Configurações inválidas** (`history_turns`, `max_tokens`, `temperature`… com texto ou fora da faixa, por API ou edição manual) quebravam toda mensagem; agora são limitadas. Idem para `count` inválido na geração de avatares.
+- **Erro inesperado do modelo cortava a resposta** no meio do streaming; agora vira um aviso na conversa. Corpos malformados nas rotas de conversa davam erro 500; agora 400.
+- O pipeline de system prompt ignora um `system_prompt` que não seja texto (lista/objeto), em vez de gravar `['a', 'b']`.
+
+### Observação
+- Nos casos que exercitei, não encontrei problemas em: renderização do chat (não há XSS: o texto do modelo é inserido como texto), importação de cards PNG, memória de longo prazo e criação de avatares com respostas malformadas do modelo — esses fluxos foram exercitados e se comportaram bem.
+- O modelo local real (`llama-cpp-python`) e um LM Studio/Claude reais não estão neste ambiente: os testes usam um `Llama` simulado (com o mesmo erro de contexto do original) e servidores HTTP simulados.
+
 ## [0.2.17] — 2026-11-05
 
 ### Adicionado
@@ -332,7 +363,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.17...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.18...HEAD
+[0.2.18]: https://github.com/KMC1525/ASTA/compare/v0.2.17...v0.2.18
 [0.2.17]: https://github.com/KMC1525/ASTA/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/KMC1525/ASTA/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/KMC1525/ASTA/compare/v0.2.14...v0.2.15

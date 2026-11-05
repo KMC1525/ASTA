@@ -16,7 +16,7 @@ from . import avatars as av
 from .agents import rulebased
 from .providers import resolve_provider
 from .storage import Store
-from .util import new_id, now_iso
+from .util import new_id, now_iso, num
 
 
 # --------------------------------------------------------------------------- diretor de turnos
@@ -128,9 +128,11 @@ class ChatEngine:
         chat = {"avatar_ids": [a["id"] for a in avatars], "title": opts.get("title") or ", ".join(a["name"] for a in avatars)[:80],
                 "content": opts.get("content", "auto"), "user_name": opts.get("user_name", ""), "user_persona": opts.get("user_persona", ""),
                 "auto_talk": opts.get("auto_talk", self._settings()["avatars"].get("auto_talk", True)), "messages": []}
-        for a in avatars[:4]:  # saudações (cada avatar abre com a própria fala)
+        uname = self.user_name(chat, self._settings())
+        for a in avatars[:4]:  # saudações (cada avatar abre com a própria fala; {{user}}/{{char}} dos cards importados são preenchidos)
             if a.get("greeting"):
-                chat["messages"].append({"id": new_id("m_"), "role": "avatar", "avatar_id": a["id"], "name": a["name"], "text": a["greeting"], "ts": now_iso()})
+                chat["messages"].append({"id": new_id("m_"), "role": "avatar", "avatar_id": a["id"], "name": a["name"],
+                                         "text": av.fill_macros(a["greeting"], a["name"], uname), "ts": now_iso()})
         return self.store.avatar_chats.save(chat)
 
     # ----- envio do usuário
@@ -194,7 +196,7 @@ class ChatEngine:
         if not chat.get("auto_talk", True) or not settings["avatars"].get("auto_talk", True):
             emit({"type": "end", "reason": "disabled"})
             return
-        if chat.get("autonomous_turns", 0) >= int(settings["avatars"].get("auto_talk_max", 10)):
+        if chat.get("autonomous_turns", 0) >= int(num(settings["avatars"].get("auto_talk_max"), 10, 0, 1000)):
             emit({"type": "end", "reason": "limit"})
             return
         speaker = autonomous_speaker(chat, avatars, self.rng)
@@ -208,7 +210,7 @@ class ChatEngine:
 
     # ----- uma fala
     def _prompt_messages(self, chat, avatars, speaker, uname, settings, autonomous: bool) -> List[Dict[str, Any]]:
-        turns = int(settings["avatars"].get("history_turns", 24)) * 2
+        turns = int(num(settings["avatars"].get("history_turns"), 24, 1, 200)) * 2
         msgs = chat["messages"][-turns:]
         group = len(avatars) > 1
         if group:
@@ -227,6 +229,8 @@ class ChatEngine:
                 out.append({"role": role, "content": m["text"]})
         if not out or out[-1]["role"] != "user":
             out.append({"role": "user", "content": "(…)"})
+        if out[0]["role"] == "assistant":  # a conversa começa com a saudação do avatar: modelos com template estrito exigem começar pelo usuário
+            out.insert(0, {"role": "user", "content": "(…)"})
         return out
 
     def _speak(self, chat, avatars, speaker, provider, settings, uname, emit, cancelled, autonomous: bool) -> Optional[Dict[str, Any]]:
@@ -241,8 +245,8 @@ class ChatEngine:
         other_names = [o["name"] for o in others] + [uname]
         raw, sent = "", 0
         hold = max([len(n) for n in other_names] + [10]) + 4  # segura o fim do texto (pode ser o início de "Outro: …" ou de uma tag)
-        stream = provider.chat(messages, system=system, temperature=float(settings["avatars"].get("temperature", 0.9)),
-                               max_tokens=int(settings["avatars"].get("max_tokens", 500)), stream=True)
+        stream = provider.chat(messages, system=system, temperature=num(settings["avatars"].get("temperature"), 0.9, 0, 2),
+                               max_tokens=int(num(settings["avatars"].get("max_tokens"), 500, 16, 8000)), stream=True)
         for chunk in stream:  # type: ignore[union-attr]
             if cancelled():
                 break
@@ -252,11 +256,18 @@ class ChatEngine:
             if len(safe) > sent:
                 emit({"type": "delta", "avatar_id": speaker["id"], "text": safe[sent:]})
                 sent = len(safe)
+        if cancelled():  # o usuário falou (ou pediu para parar) no meio da fala: não guarda uma frase cortada no histórico
+            emit({"type": "silence", "avatar_id": speaker["id"]})
+            return None
         parsed = av.parse_reply(raw, speaker["name"], other_names)
         if parsed["silence"] and not parsed["say"]:
             emit({"type": "silence", "avatar_id": speaker["id"]})
             return None
         if not parsed["say"]:
+            if group:  # num grupo, um avatar sem nada a dizer simplesmente fica quieto
+                emit({"type": "silence", "avatar_id": speaker["id"]})
+            else:  # numa conversa a dois, ficar mudo é um problema do modelo/provedor: avisa em vez de não fazer nada
+                emit({"type": "error", "kind": "empty", "avatar_id": speaker["id"], "message": _empty_reason(raw)})
             return None
         if len(parsed["say"]) > sent:
             emit({"type": "delta", "avatar_id": speaker["id"], "text": parsed["say"][sent:]})
@@ -265,9 +276,16 @@ class ChatEngine:
         chat["messages"].append(message)
         self._save(chat)
         if parsed["remember"]:
-            self.store.add_memories(speaker["id"], parsed["remember"], int(settings["avatars"].get("memory_limit", 40)))
+            self.store.add_memories(speaker["id"], parsed["remember"], int(num(settings["avatars"].get("memory_limit"), 40, 5, 500)))
         emit({"type": "message", "message": message, "remembered": parsed["remember"]})
         return message
+
+
+def _empty_reason(raw: str) -> str:
+    if raw.strip():  # veio texto, mas era só raciocínio (<think>…</think>) ou só tags
+        return ("O modelo gastou todo o limite de resposta «pensando» (raciocínio) e não chegou a responder. Aumente o «Máximo de tokens por resposta» em "
+                "Configuração → Avatars e jogos, ou use um modelo sem raciocínio.")
+    return "O provedor não devolveu nenhum texto. Confira se o modelo está carregado e funcionando (Configuração → Provedores → Testar)."
 
 
 def _visible(raw: str) -> str:
