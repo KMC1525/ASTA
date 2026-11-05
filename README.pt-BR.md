@@ -2,7 +2,7 @@
 
 # ASTA
 
-**A central open source de criação com IA: mundos 3D cujos NPCs são agentes de IA, avatars com quem conversar, jogos 2D e um Canvas de mídia — tudo gerado por IA, tudo no seu computador.**
+**O primeiro super app open source: um só lugar para conversar com qualquer modelo de IA, pesquisar na web, criar mundos 3D cujos NPCs são agentes de IA, conversar com avatars, fazer jogos 2D e produzir imagens, vídeo, som e voz — tudo no seu computador.**
 
 Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
@@ -16,7 +16,7 @@ Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto
 
 ## O que é
 
-O ASTA é um projeto **open source e o mais livre possível**: roda no seu computador, não exige conta nem nuvem, aceita conteúdo **SFW e NSFW** (o ASTA não adiciona filtros próprios) e funciona com os modelos que você quiser — Claude, ChatGPT, Grok, Gemini, OpenRouter, Hugging Face ou modelos 100% locais.
+O ASTA é o **primeiro super app open source**: um único app para conversar, pesquisar, criar e jogar, com todos os modelos de IA que você quiser num só lugar. É **open source e o mais livre possível**: roda no seu computador, não exige conta nem nuvem, aceita conteúdo **SFW e NSFW** (o ASTA não adiciona filtros próprios) e funciona com os modelos que você quiser — Claude, ChatGPT, Grok, Gemini, OpenRouter, Hugging Face ou modelos 100% locais.
 
 Desde a **v0.2** ele é uma central universal de criação com quatro modos, todos na mesma caixa de prompt:
 

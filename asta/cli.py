@@ -403,7 +403,7 @@ def _doctor(_args: argparse.Namespace) -> int:
 
 
 def main(argv=None) -> int:
-    parser = argparse.ArgumentParser(prog="asta", description="ASTA — central open source de criação com IA: mundos 3D, avatars, jogos 2D e Canvas de mídia")
+    parser = argparse.ArgumentParser(prog="asta", description="ASTA — o primeiro super app open source: chat com IA, busca na web, mundos 3D, avatars, jogos 2D e Canvas de mídia")
     sub = parser.add_subparsers(dest="cmd")
     run = sub.add_parser("run", help="inicia a WebUI (padrão)")
     for p in (parser, run):

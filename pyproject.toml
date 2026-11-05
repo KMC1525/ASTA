@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "asta"
 dynamic = ["version"]
-description = "Central open source de criação com IA: mundos 3D com NPCs-agentes, avatars de chat e voz, jogos 2D e um Canvas de imagens, vídeos, sons e vozes."
+description = "O primeiro super app open source: chat com qualquer modelo de IA, busca na web, mundos 3D com NPCs-agentes, avatars de chat e voz, jogos 2D e um Canvas de imagens, vídeos, sons e vozes."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
