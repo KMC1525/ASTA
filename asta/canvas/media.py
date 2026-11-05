@@ -928,19 +928,37 @@ def _wav_from_array(arr: Any, rate: int) -> bytes:
 
 
 class LocalHFMedia(MediaProvider):
-    """Modelos do Hugging Face dentro do próprio ASTA (diffusers/transformers). Os pesos são baixados na primeira vez."""
+    """Modelos do Hugging Face dentro do próprio ASTA (diffusers/transformers).
+
+    Nada é baixado em silêncio: o usuário escolhe a precisão (quantização) e baixa o modelo em Configuração → Mídia (veja `localmodels.py`);
+    aqui só são carregados modelos já baixados, na precisão escolhida.
+    """
 
     id, label = "local_hf", "Hugging Face local (embutido)"
     caps = ("image", "video", "sound", "voice", "stt")
     supports_refs = False
 
+    def _ready(self, model: str) -> Dict[str, Any]:
+        """Argumentos de carregamento do modelo (precisão escolhida, só arquivos locais). Recusa modelos que ainda não foram baixados."""
+        from . import localmodels as lm
+
+        prec = lm.downloaded_precision(model)
+        if not prec:
+            raise ProviderError(f'O modelo local "{model}" ainda não foi baixado. Em Configuração → Mídia, escolha a precisão (quantização) e baixe-o antes de usar.')
+        low = prec in ("fp16", "bf16")
+        self.ctl.note(f"Modelo local {model} ({prec})")
+        return {"precision": prec, "dtype": lm.torch_dtype(prec), "variant": "fp16" if low and lm.has_fp16_variant(model) else None}
+
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
         model = self.model_for("image", model) or "stabilityai/sd-turbo"
         (diffusers,) = _local_import("diffusers")
-        dev, dtype = _device()
+        dev, _ = _device()
+        ready = self._ready(model)
 
         def load() -> Any:
-            kw: Dict[str, Any] = {"torch_dtype": dtype}
+            kw: Dict[str, Any] = {"torch_dtype": ready["dtype"], "local_files_only": True}
+            if ready["variant"]:
+                kw["variant"] = ready["variant"]
             pipe = diffusers.AutoPipelineForText2Image.from_pretrained(model, **kw)
             return pipe.to(dev)
 
@@ -968,7 +986,8 @@ class LocalHFMedia(MediaProvider):
     def sound(self, prompt, *, kind="sfx", duration=5, model="", extra=None, seed=0):
         model = self.model_for("sound", model) or "facebook/musicgen-small"
         (tf,) = _local_import("transformers")
-        pipe = _local_load("sound", model, lambda: tf.pipeline("text-to-audio", model=model))
+        ready = self._ready(model)
+        pipe = _local_load("sound", model, lambda: tf.pipeline("text-to-audio", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
         self.ctl.note("Gerando som localmente…")
         res = pipe(prompt, forward_params={"do_sample": True, "max_new_tokens": int(max(1, min(30, duration)) * 50), **(extra or {})})
         return Media(_wav_from_array(res["audio"], res["sampling_rate"]), "audio/wav")
@@ -976,7 +995,8 @@ class LocalHFMedia(MediaProvider):
     def voice(self, text, *, voice="", speed=1.0, model="", extra=None, instructions=""):
         model = self.model_for("voice", model) or "suno/bark-small"
         (tf,) = _local_import("transformers")
-        pipe = _local_load("voice", model, lambda: tf.pipeline("text-to-speech", model=model))
+        ready = self._ready(model)
+        pipe = _local_load("voice", model, lambda: tf.pipeline("text-to-speech", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
         self.ctl.note("Sintetizando voz localmente…")
         res = pipe(text, **(extra or {}))
         return Media(_wav_from_array(res["audio"], res["sampling_rate"]), "audio/wav")
@@ -984,7 +1004,8 @@ class LocalHFMedia(MediaProvider):
     def transcribe(self, data, filename, mime, *, language="", model=""):
         model = self.model_for("stt", model) or "openai/whisper-small"
         (tf,) = _local_import("transformers")
-        pipe = _local_load("stt", model, lambda: tf.pipeline("automatic-speech-recognition", model=model))
+        ready = self._ready(model)
+        pipe = _local_load("stt", model, lambda: tf.pipeline("automatic-speech-recognition", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
         with tempfile.TemporaryDirectory() as tmp:
             p = Path(tmp) / ("audio." + (MIME_EXT.get(mime, "") or (filename.rsplit(".", 1)[-1] if "." in filename else "wav")))
             p.write_bytes(data)
@@ -1001,8 +1022,10 @@ class LocalHFMedia(MediaProvider):
         ff = proc.ffmpeg_path()
         if not ff:
             raise ProviderError("O vídeo local precisa do ffmpeg para montar o arquivo (instale-o).")
-        dev, dtype = _device()
-        pipe = _local_load("video", model, lambda: diffusers.DiffusionPipeline.from_pretrained(model, torch_dtype=dtype).to(dev))
+        dev, _ = _device()
+        ready = self._ready(model)
+        vkw = {"torch_dtype": ready["dtype"], "local_files_only": True, **({"variant": ready["variant"]} if ready["variant"] else {})}
+        pipe = _local_load("video", model, lambda: diffusers.DiffusionPipeline.from_pretrained(model, **vkw).to(dev))
         w, h = size_of_aspect(aspect, 704 if dev != "cpu" else 384)
         w, h = w // 32 * 32 or 32, h // 32 * 32 or 32
         fps = 24
@@ -1130,7 +1153,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "models": {"image": "stabilityai/sd-turbo", "video": "Lightricks/LTX-Video", "sound": "facebook/musicgen-small", "voice": "suno/bark-small", "stt": "openai/whisper-small"},
         "suggest": {"image": ["stabilityai/sd-turbo", "stabilityai/sdxl-turbo", "black-forest-labs/FLUX.1-schnell"], "video": ["Lightricks/LTX-Video"],
                     "sound": ["facebook/musicgen-small"], "voice": ["suno/bark-small", "facebook/mms-tts-por"], "stt": ["openai/whisper-small", "openai/whisper-large-v3-turbo"]},
-        "hint": 'Roda modelos do Hugging Face dentro do ASTA. Requer:  pip install "asta[media]"  (os pesos são baixados no primeiro uso; vídeo exige GPU).',
+        "hint": 'Roda modelos do Hugging Face dentro do ASTA. Requer:  pip install "asta[media]". Antes de usar, escolha a precisão (quantização) e baixe cada modelo aqui mesmo — nada é baixado em silêncio. Vídeo exige GPU.',
     },
     "voice_settings": {
         "label": "Voz da Configuração", "kind": "voice_settings", "caps": ["voice", "stt"], "needs_key": False, "local": True,

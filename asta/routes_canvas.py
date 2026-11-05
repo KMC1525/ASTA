@@ -14,7 +14,8 @@ from .canvas.media import MIME_EXT, build_media, describe_media_presets, sniff_m
 from .canvas.schema import ASPECTS, CAPS, NODE_TYPES, SIZES, TEMPLATES, describe_types, normalize_params, normalize_result
 from .jobs import HttpError, Job
 from .providers import ProviderError
-from .util import new_id, safe_filename, text
+from .hf import REPO_RE
+from .util import hardware_info, new_id, safe_filename, text
 
 
 class CanvasRoutes:
@@ -43,6 +44,9 @@ class CanvasRoutes:
         a("GET", r"/api/media/providers", self.r_media_providers)
         a("POST", r"/api/media/test", self.r_media_test)
         a("GET", r"/api/media/models", self.r_media_models)
+        a("GET", r"/api/media/local/state", self.r_local_state)
+        a("GET", r"/api/media/local/options", self.r_local_options)
+        a("POST", r"/api/media/local/download", self.r_local_download)
 
     # ------------------------------------------------------------------ documentos
     def _canvas(self, cid: str) -> Dict[str, Any]:
@@ -242,3 +246,65 @@ class CanvasRoutes:
             req.json({"models": build_media(self.store.get_settings(), pid).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
+
+    # ------------------------------------------------------------------ modelos locais do Canvas: a precisão é escolhida antes do download
+    def _hf_token(self) -> str:
+        return (self.store.get_settings().get("hf") or {}).get("token", "")
+
+    def r_local_state(self, req) -> None:
+        from .canvas import localmodels as lm
+        from .canvas.media import media_config
+
+        cfg = media_config(self.store.get_settings(), "local_hf")
+        try:
+            lm._hub()
+            libs = True
+        except ProviderError:
+            libs = False
+        out = {}
+        for cap, model in cfg["models"].items():
+            out[cap] = {"model": model, "precision": lm.downloaded_precision(model) if libs and model else ""}
+        req.json({"libs": libs, "models": out})
+
+    def r_local_options(self, req) -> None:
+        from .canvas import localmodels as lm
+
+        model = text(req.query.get("model", [""])[0], "", 200)
+        if not REPO_RE.match(model):
+            raise HttpError(400, "Informe o modelo no formato dono/nome.")
+        try:
+            req.json(lm.options(model, self._hf_token(), bool(hardware_info().get("gpu"))))
+        except ProviderError as exc:
+            raise HttpError(502, str(exc))
+        except Exception as exc:  # noqa: BLE001 — erros da biblioteca do Hugging Face (repositório inexistente, sem rede…)
+            raise HttpError(502, f"Não foi possível consultar o modelo: {exc}")
+
+    def r_local_download(self, req) -> None:
+        from .canvas import localmodels as lm
+
+        body = req.body_json()
+        model, precision = text(body.get("model"), "", 200), text(body.get("precision"), "", 8)
+        if not REPO_RE.match(model):
+            raise HttpError(400, "Informe o modelo no formato dono/nome.")
+        if precision not in lm.PRECISIONS:
+            raise HttpError(400, "Escolha a precisão (quantização) do modelo antes de baixar.")
+        running = self.app.jobs.running("local_model")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+
+        def work(job: Job) -> None:
+            import time
+
+            job.emit({"type": "start", "model": model, "precision": precision})
+            last = [0.0]
+
+            def progress(done: int, total: int) -> None:
+                if time.time() - last[0] > 0.4:
+                    last[0] = time.time()
+                    job.emit({"type": "progress", "done": done, "total": total})
+
+            lm.download(model, precision, self._hf_token(), progress, lambda: job.cancelled)
+            job.emit({"type": "done", "model": model, "precision": precision})
+
+        job = self.app.jobs.start("local_model", work)
+        req.json({"job_id": job.id})

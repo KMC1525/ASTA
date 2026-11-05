@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.7] — 2026-11-05
+
+### Alterado
+- **O ASTA sempre pergunta qual quantização você quer antes de baixar qualquer modelo local.**
+  - **Modelos GGUF** (*Configuração → Modelos locais*): nenhuma quantização vem pré-selecionada (a recomendada só aparece destacada); o botão fica desativado até você escolher e, ao clicar, uma confirmação mostra a quantização, o tamanho e se cabe na sua RAM. A API `POST /api/hf/download` agora **exige o campo `quant`** (ex.: `"Q4_K_M"`) e responde 400 sem ele — nada é baixado sem uma escolha explícita.
+  - **Modelos locais do Canvas** (*Configuração → Mídia → Hugging Face local*): antes, o primeiro uso baixava o modelo padrão em silêncio. Agora você escolhe o modelo de cada tipo e a **precisão (quantização): fp32, fp16 ou bf16**, vendo o tamanho do download de cada uma (com a recomendada para o seu computador: fp16 com placa de vídeo, fp32 sem). Só os arquivos da precisão escolhida são baixados (variantes `.fp16`, sem pesos duplicados em outros formatos), com progresso e cancelamento entre arquivos.
+  - O provedor local do Canvas **só carrega modelos que você baixou** (sempre com `local_files_only` e na precisão escolhida); para um modelo não baixado, o erro do nó explica como baixá-lo.
+
+### Adicionado
+- Rotas `GET /api/media/local/state`, `GET /api/media/local/options?model=` e `POST /api/media/local/download` (exige `precision`).
+- Testes: escolha obrigatória no GGUF e na API, seleção de arquivos por precisão, recusa de modelo não baixado e testes de navegador dos dois fluxos.
+
+### Observação
+- Quem já usava o provedor local do Canvas precisa baixar o modelo uma vez pelo novo fluxo (a escolha da precisão é registrada junto ao download).
+
 ## [0.2.6] — 2026-11-05
 
 ### Corrigido
@@ -154,7 +169,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.6...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.7...HEAD
+[0.2.7]: https://github.com/KMC1525/ASTA/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/KMC1525/ASTA/compare/v0.2.5...v0.2.6
 [0.2.5]: https://github.com/KMC1525/ASTA/compare/v0.2.4...v0.2.5
 [0.2.4]: https://github.com/KMC1525/ASTA/compare/v0.2.3...v0.2.4

@@ -164,7 +164,7 @@ class HfApiTests(ServerCase):
                 files = r["files"]
                 self.assertTrue(all("quant" in f and "recommended" in f and "fits" in f for f in files))
                 q5 = next(f for f in files if f["quant"] == "Q5_K_M")
-                status, job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "files": q5["files"], "sizes": q5["sizes"]})
+                status, job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "files": q5["files"], "sizes": q5["sizes"], "quant": "Q5_K_M"})
                 self.assertEqual(status, 200)
                 ev = self.c.sse(f"/api/jobs/{job['job_id']}/events")
                 self.assertEqual([e for e in ev if e["type"] == "done"][0]["name"], "tiny-Q5_K_M.gguf")
@@ -172,7 +172,7 @@ class HfApiTests(ServerCase):
                 self.assertIn(("tiny-Q5_K_M.gguf", "Q5_K_M"), [(m["name"], m["quant"]) for m in local])
                 # modelo dividido: baixa as 3 partes, aparece uma vez e apaga tudo de uma vez
                 big = next(f for f in files if f["parts"] == 3)
-                job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "files": big["files"], "sizes": big["sizes"]})[1]
+                job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "files": big["files"], "sizes": big["sizes"], "quant": "Q4_K_M"})[1]
                 self.c.sse(f"/api/jobs/{job['job_id']}/events")
                 local = self.c.json("GET", "/api/hf/local")[1]["models"]
                 self.assertEqual([m["parts"] for m in local if m["name"].startswith("huge")], [3])
@@ -181,10 +181,15 @@ class HfApiTests(ServerCase):
                 self.assertEqual(len(list(self.store.models_dir.glob("huge*"))), 0)
                 self.c.json("DELETE", "/api/hf/local/tiny-Q5_K_M.gguf")
                 # compatibilidade: o campo antigo `file` continua funcionando
-                job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "file": "tiny-Q2_K.gguf"})[1]
+                job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "file": "tiny-Q2_K.gguf", "quant": "Q2_K"})[1]
                 self.assertTrue([e for e in self.c.sse(f"/api/jobs/{job['job_id']}/events") if e["type"] == "done"])
                 self.c.json("DELETE", "/api/hf/local/tiny-Q2_K.gguf")
                 self.assertEqual(self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo"})[0], 400)
+                # sem escolher a quantização o ASTA não baixa nada, nem com a lista de arquivos pronta
+                status, err = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "files": ["tiny-Q2_K.gguf"]})
+                self.assertEqual(status, 400)
+                self.assertIn("quantização", err["error"])
+                self.assertFalse((self.store.models_dir / "tiny-Q2_K.gguf").exists())
         finally:
             fake.close()
 

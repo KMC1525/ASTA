@@ -1,7 +1,7 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { refreshState, renderSide, saveSettings, state } from '../main.js';
-import { QUALITY_LABEL } from '../quant.js';
+import { PREC_HINT, QUALITY_LABEL } from '../quant.js';
 import { checkbox, confirmDialog, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {
@@ -155,7 +155,7 @@ async function local() {
       const [r, loc] = await Promise.all([api('/api/hf/files?repo=' + encodeURIComponent(repo)), api('/api/hf/local')]);
       const have = new Set(loc.models.map((m) => m.name));
       if (!r.files.length) return files.replaceChildren(h('div', { class: 'res err' }, t('Nenhum arquivo GGUF utilizável neste repositório.')));
-      let pick = r.files.find((f) => f.recommended) || r.files[0];
+      let pick = null;  // nada vem escolhido: o usuário decide a quantização antes de qualquer download
       const list = h('div', { class: 'col', style: { gap: '6px' } }), btn = h('button', { class: 'btn primary' });
       const paint = () => {
         list.replaceChildren(...r.files.map((f) => h('label', { class: 'quant' + (f === pick ? ' on' : ''), onclick: () => { pick = f; paint(); } },
@@ -165,20 +165,23 @@ async function local() {
               f.recommended ? h('span', { class: 'chip on' }, t('Recomendada')) : null, have.has(f.name) ? h('span', { class: 'chip' }, t('Já baixado')) : null, f.parts > 1 ? h('span', { class: 'chip' }, t('{n} partes', { n: f.parts })) : null),
             h('div', { class: 'mono dim', style: { fontSize: '11px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' } }, f.name)),
           h('span', { class: 'chip ' + (f.fits ? 'solid' : '') }, fmtBytes(f.size) + (f.fits ? ' ✓' : ' ⚠')))));
-        btn.replaceChildren(icon('download', 14), t('Baixar {q} ({s})', { q: pick.quant || pick.name, s: fmtBytes(pick.size) }));
+        btn.disabled = !pick;
+        btn.replaceChildren(icon('download', 14), pick ? t('Baixar {q} ({s})', { q: pick.quant || pick.name, s: fmtBytes(pick.size) }) : t('Escolha uma quantização para baixar'));
       };
-      btn.onclick = () => dl(repo, pick);
+      btn.onclick = () => pick && dl(repo, pick);
       paint();
       files.replaceChildren(h('div', { class: 'small muted' }, repo + ' — ' + t('Escolha a quantização: menos bits = arquivo menor e mais rápido, mas com menos qualidade. Sua RAM: {n} GB; ✓ = cabe (até ~60% da RAM).', { n: ram })), list, h('div', { style: { marginTop: '10px' } }, btn));
     } catch (e) { files.replaceChildren(h('div', { class: 'res err' }, e.message)); }
   }
   async function dl(repo, f) {
     const file = f.name, size = f.size;
+    const fitNote = f.fits ? t('Cabe na sua RAM.') : t('Pode não caber na sua RAM ({n} GB).', { n: ram });
+    if (!(await confirmDialog(t('Baixar {q} de {r}? Tamanho: {s}. {f}', { q: f.quant || f.name, r: repo, s: fmtBytes(size), f: fitNote }), false, t('Baixar')))) return;
     if (size / 1024 ** 3 > ram * 0.9 && !(await confirmDialog(t('Este modelo é maior que a sua RAM e provavelmente ficará muito lento. Baixar mesmo assim?'), false, t('Baixar')))) return;
     const bar = h('i'), label = h('span', { class: 'small muted' }, '0%');
     prog.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'mono small' }, file), h('span', { class: 'grow' }), label, h('button', { class: 'btn sm', id: 'dl-cancel' }, t('Cancelar'))), h('div', { class: 'bar' }, bar)));
     let jid;
-    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, files: f.files, sizes: f.sizes } })).job_id; } catch (e) { return toast(e.message, 'err'); }
+    try { jid = (await api('/api/hf/download', { method: 'POST', body: { repo, files: f.files, sizes: f.sizes, quant: f.quant || 'sem-rotulo' } })).job_id; } catch (e) { return toast(e.message, 'err'); }
     prog.querySelector('#dl-cancel').onclick = () => api('/api/jobs/' + jid + '/cancel', { method: 'POST' });
     events('/api/jobs/' + jid + '/events', (ev) => {
       if (ev.type === 'progress' && ev.total) { const p = ev.done / ev.total; bar.style.width = Math.round(p * 100) + '%'; label.textContent = Math.round(p * 100) + '% · ' + fmtBytes(ev.done) + ' / ' + fmtBytes(ev.total); }
@@ -254,7 +257,8 @@ async function media() {
     const listId = 'mm-' + p.id;
     inputs.push(h('datalist', { id: listId }));
     const modelCaps = CAPS.filter(([cap]) => p.caps.includes(cap) && p.id !== 'voice_settings' && p.id !== 'a1111');
-    if (modelCaps.length) inputs.push(h('div', { class: 'grid2' }, modelCaps.map(([cap, label]) => {
+    if (p.id === 'local_hf') inputs.push(localModels(p, draft));
+    else if (modelCaps.length) inputs.push(h('div', { class: 'grid2' }, modelCaps.map(([cap, label]) => {
       const dl = h('datalist', { id: listId + cap }, ((p.suggest || {})[cap] || []).map((m) => h('option', { value: m })));
       return field(t('Modelo') + ' · ' + t(label), h('div', null, h('input', { list: listId + cap, value: draft.models[cap] || '', placeholder: t('padrão do provedor'), oninput: (e) => { draft.models[cap] = e.target.value.trim(); } }), dl));
     })));
@@ -282,6 +286,67 @@ async function media() {
   }
   paint();
   return container;
+}
+
+// Modelos locais do Canvas (diffusers/transformers): a precisão (quantização) é escolhida ANTES de qualquer download; nada baixa sozinho.
+function localModels(p, draft) {
+  const box = h('div', { class: 'col', style: { gap: '10px' } });
+  const rows = {}, chips = {};
+  const caps = CAPS.filter(([cap]) => p.caps.includes(cap));
+  const modelOf = (cap) => draft.models[cap] || p.models[cap] || '';
+  const setChip = (cap, prec) => { chips[cap].className = 'chip ' + (prec ? 'on' : ''); chips[cap].textContent = prec ? t('baixado · {p}', { p: prec }) : t('não baixado'); };
+  async function refresh() {
+    try {
+      const st = await api('/api/media/local/state');
+      if (!st.libs) { hint.textContent = t('Instale as bibliotecas dos modelos locais para baixá-los:') + ' pip install "asta[media]"  (' + t('ou rode') + ' asta libs)'; }
+      for (const [cap] of caps) setChip(cap, (st.models[cap] && st.models[cap].model === modelOf(cap) && st.models[cap].precision) || '');
+    } catch (e) { /* sem estado: os chips ficam como "não baixado" */ }
+  }
+  const hint = h('p', { class: 'muted small', style: { margin: 0 } }, t('Escolha o modelo de cada tipo e, antes de usá-lo, a precisão (quantização) do download: o ASTA só baixa depois da sua escolha e só carrega o que você baixou.'));
+  function panel(cap) {
+    const model = modelOf(cap), area = rows[cap].area;
+    if (!/^[\w.-]+\/[\w.-]+$/.test(model)) return toast(t('Informe o modelo no formato dono/nome (ex.: stabilityai/sd-turbo).'), 'err');
+    area.replaceChildren(h('div', { class: 'spinner' }));
+    api('/api/media/local/options?model=' + encodeURIComponent(model)).then((r) => {
+      let pick = null;
+      const list = h('div', { class: 'col', style: { gap: '6px' } }), btn = h('button', { class: 'btn primary' });
+      const paint = () => {
+        list.replaceChildren(...r.options.map((o) => h('label', { class: 'quant' + (o === pick ? ' on' : ''), onclick: () => { pick = o; paint(); } },
+          h('input', { type: 'radio', name: 'prec-' + cap, checked: o === pick }),
+          h('div', { class: 'grow' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, o.id), o.recommended ? h('span', { class: 'chip on' }, t('Recomendada')) : null),
+            h('div', { class: 'dim small' }, t(PREC_HINT[o.id]))),
+          h('span', { class: 'chip solid' }, o.size ? fmtBytes(o.size) : '?'))));
+        btn.disabled = !pick;
+        btn.replaceChildren(icon('download', 14), pick ? t('Baixar {q} ({s})', { q: model + ' · ' + pick.id, s: pick.size ? fmtBytes(pick.size) : '?' }) : t('Escolha uma precisão para baixar'));
+      };
+      btn.onclick = async () => {
+        if (!pick) return;
+        const bar = h('i'), label = h('span', { class: 'small muted' }, '0%');
+        area.replaceChildren(h('div', { class: 'card' }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'mono small' }, model + ' · ' + pick.id), h('span', { class: 'grow' }), label, h('button', { class: 'btn sm', id: 'lm-cancel-' + cap }, t('Cancelar'))), h('div', { class: 'bar' }, bar)));
+        let jid;
+        try { await saveSettings({ media: { models: { local_hf: { [cap]: model } } } }); jid = (await api('/api/media/local/download', { method: 'POST', body: { model, precision: pick.id } })).job_id; }
+        catch (e) { area.replaceChildren(); return toast(e.message, 'err'); }
+        area.querySelector('#lm-cancel-' + cap).onclick = () => api('/api/jobs/' + jid + '/cancel', { method: 'POST' });
+        events('/api/jobs/' + jid + '/events', (ev) => {
+          if (ev.type === 'progress' && ev.total) { const pc = Math.min(1, ev.done / ev.total); bar.style.width = Math.round(pc * 100) + '%'; label.textContent = Math.round(pc * 100) + '% · ' + fmtBytes(ev.done) + ' / ' + fmtBytes(ev.total); }
+          else if (ev.type === 'done') { toast(t('Download concluído'), 'ok'); area.replaceChildren(); refresh(); }
+          else if (ev.type === 'error') { toast(ev.message, 'err'); area.replaceChildren(); }
+          else if (ev.type === 'cancelled') { toast(t('Download cancelado')); area.replaceChildren(); }
+        });
+      };
+      paint();
+      area.replaceChildren(h('div', { class: 'small muted' }, t('Escolha a precisão: menos bits = download menor e mais rápido, com um pequeno custo de qualidade; o fp16 pede placa de vídeo.')), list, h('div', { style: { marginTop: '8px' } }, btn));
+    }).catch((e) => { area.replaceChildren(h('div', { class: 'res err' }, e.message)); });
+  }
+  for (const [cap, label] of caps) {
+    const dl = h('datalist', { id: 'lm-' + cap }, ((p.suggest || {})[cap] || []).map((m) => h('option', { value: m })));
+    const input = h('input', { list: 'lm-' + cap, value: draft.models[cap] || '', placeholder: p.models[cap] || '', oninput: (e) => { draft.models[cap] = e.target.value.trim(); setChip(cap, ''); } });
+    chips[cap] = h('span', { class: 'chip' }, t('não baixado'));
+    rows[cap] = { area: h('div') };
+    box.append(h('div', null, h('label', { class: 'f' }, t('Modelo') + ' · ' + t(label)), h('div', { class: 'row nw' }, input, dl, chips[cap], h('button', { class: 'btn sm', onclick: () => panel(cap) }, icon('download', 13), t('Precisão e download'))), rows[cap].area));
+  }
+  refresh();
+  return h('div', { class: 'col', style: { gap: '10px', marginBottom: '8px' } }, hint, box);
 }
 
 // ---------------------------------------------------------------------------------- avatars e jogos 2D

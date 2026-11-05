@@ -207,7 +207,7 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 
 You choose one model **to generate** (the most capable) and another **for the characters and avatars** (a fast, cheap one is enough).
 
-**Local models and quantization.** *Configuration → Local models* searches Hugging Face for GGUF models. Each repository offers the same model in several **quantizations** (Q2_K … Q8_0, F16): fewer bits mean a smaller, faster file that needs less RAM, but lower quality. ASTA reads the quantization of every file, labels its quality, marks which ones fit your RAM, **recommends** a balanced one (usually Q4_K_M) and lets you **pick the one to download**, with progress, resume and a disk-space check. Models split into several parts (`-00001-of-00003.gguf`) are downloaded together and shown as one entry, and the quantization of each downloaded model is shown in the *Downloaded* list.
+**Local models and quantization.** *Configuration → Local models* searches Hugging Face for GGUF models. Each repository offers the same model in several **quantizations** (Q2_K … Q8_0, F16): fewer bits mean a smaller, faster file that needs less RAM, but lower quality. ASTA reads the quantization of every file, labels its quality, marks which ones fit your RAM, **recommends** a balanced one (usually Q4_K_M) and makes you **pick the one to download**: nothing is preselected and the download only starts after you choose and confirm, with progress, resume and a disk-space check. Models split into several parts (`-00001-of-00003.gguf`) are downloaded together and shown as one entry, and the quantization of each downloaded model is shown in the *Downloaded* list.
 
 **Media models** (Canvas), configured per type in *Configuration → Media* and overridable on every node:
 
@@ -223,6 +223,8 @@ You choose one model **to generate** (the most capable) and another **for the ch
 | **Stable Diffusion WebUI** (local) | ✅ | | | | | AUTOMATIC1111 or Forge started with `--api` |
 | **Hugging Face local** (embedded) | ✅ | ✅ | ✅ | ✅ | ✅ | diffusers + transformers inside ASTA (`pip install "asta[media]"`); video needs a GPU |
 | **Demo** (offline) | ✅ | ✅ | ✅ | ✅ | | procedural images, synthesized sound, babble "voice", Ken Burns video (needs `ffmpeg`) |
+
+**Local Canvas models also ask first.** The embedded Hugging Face provider never downloads anything silently: in *Configuration → Media* you pick the model for each type and then its **precision (quantization)** — fp32 (original, works on CPU), fp16 or bf16 (half the size, meant for a graphics card) — seeing the download size of each before anything is fetched. Only the files of the chosen precision are downloaded, and only models you downloaded are loaded.
 
 A node's *Advanced* section takes a free **JSON of extra parameters** merged into the provider request, so any model-specific option is reachable.
 

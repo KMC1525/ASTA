@@ -208,7 +208,7 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 
 Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personagens e avatars** (um rápido e barato basta).
 
-**Modelos locais e quantização.** Em *Configuração → Modelos locais* você busca modelos GGUF no Hugging Face. Cada repositório traz o mesmo modelo em várias **quantizações** (Q2_K … Q8_0, F16): menos bits significam um arquivo menor e mais rápido, que precisa de menos RAM, porém com menos qualidade. O ASTA lê a quantização de cada arquivo, indica a qualidade, marca quais cabem na sua RAM, **recomenda** uma equilibrada (em geral a Q4_K_M) e deixa você **escolher qual baixar**, com progresso, retomada e checagem de espaço em disco. Modelos divididos em várias partes (`-00001-of-00003.gguf`) são baixados juntos e aparecem como uma só opção, e a quantização de cada modelo baixado aparece na lista *Baixados*.
+**Modelos locais e quantização.** Em *Configuração → Modelos locais* você busca modelos GGUF no Hugging Face. Cada repositório traz o mesmo modelo em várias **quantizações** (Q2_K … Q8_0, F16): menos bits significam um arquivo menor e mais rápido, que precisa de menos RAM, porém com menos qualidade. O ASTA lê a quantização de cada arquivo, indica a qualidade, marca quais cabem na sua RAM, **recomenda** uma equilibrada (em geral a Q4_K_M) e faz você **escolher qual baixar**: nada vem pré-selecionado e o download só começa depois que você escolhe e confirma, com progresso, retomada e checagem de espaço em disco. Modelos divididos em várias partes (`-00001-of-00003.gguf`) são baixados juntos e aparecem como uma só opção, e a quantização de cada modelo baixado aparece na lista *Baixados*.
 
 **Modelos de mídia** (Canvas), configurados por tipo em *Configuração → Mídia* e substituíveis em cada nó:
 
@@ -224,6 +224,8 @@ Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personag
 | **Stable Diffusion WebUI** (local) | ✅ | | | | | AUTOMATIC1111 ou Forge iniciado com `--api` |
 | **Hugging Face local** (embutido) | ✅ | ✅ | ✅ | ✅ | ✅ | diffusers + transformers dentro do ASTA (`pip install "asta[media]"`); vídeo exige GPU |
 | **Demo** (offline) | ✅ | ✅ | ✅ | ✅ | | imagens procedurais, som sintetizado, "voz" de balbucio, vídeo Ken Burns (precisa do `ffmpeg`) |
+
+**Os modelos locais do Canvas também perguntam antes.** O provedor embutido do Hugging Face nunca baixa nada em silêncio: em *Configuração → Mídia* você escolhe o modelo de cada tipo e depois a **precisão (quantização)** — fp32 (original, funciona em CPU), fp16 ou bf16 (metade do tamanho, pensados para placa de vídeo) —, vendo o tamanho do download de cada uma antes de qualquer coisa ser baixada. Só os arquivos da precisão escolhida são baixados, e só modelos que você baixou são carregados.
 
 A seção *Avançado* de cada nó aceita um **JSON de parâmetros extras** mesclado ao pedido do provedor, então qualquer opção específica de um modelo fica ao alcance.
 

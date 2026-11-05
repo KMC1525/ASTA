@@ -68,6 +68,15 @@ class BrowserTests(unittest.TestCase):
         finally:
             fake.close()
 
+    def test_05_local_canvas_models_ask_for_the_precision_first(self):
+        import sys
+        from unittest import mock
+
+        from tests.test_canvas import FakeHub
+
+        with mock.patch.dict(sys.modules, {"huggingface_hub": FakeHub(self.tmp).module}):
+            self.run_script("local_models_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

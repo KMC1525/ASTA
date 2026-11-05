@@ -605,6 +605,89 @@ class AdapterTests(unittest.TestCase):
         self.assertEqual(M.aspect_of("1280x720"), "16:9")
 
 
+class FakeHub:
+    """Imita o `huggingface_hub` (lista de arquivos, download arquivo a arquivo e cache em disco)."""
+
+    FILES = {"model_index.json": 1, "README.md": 9, "sd_turbo.safetensors": 5000, "unet/config.json": 2, "unet/diffusion_pytorch_model.safetensors": 3400, "unet/diffusion_pytorch_model.fp16.safetensors": 1700,
+             "unet/diffusion_pytorch_model.bin": 3400, "vae/config.json": 2, "vae/diffusion_pytorch_model.safetensors": 330, "vae/diffusion_pytorch_model.fp16.safetensors": 165,
+             "text_encoder/model.safetensors": 1400, "text_encoder/model.fp16.safetensors": 700, "tokenizer/vocab.json": 3}
+
+    def __init__(self, root):
+        self.root, self.downloaded, self.calls = Path(root), [], 0
+        outer = self
+
+        class Api:
+            def model_info(self, model, files_metadata=False, token=None):
+                return mock.Mock(siblings=[mock.Mock(rfilename=n, size=sz) for n, sz in outer.FILES.items()])
+
+        def snapshot_download(model, local_files_only=False, **kw):
+            snap = outer.root / ("models--" + model.replace("/", "--")) / "snapshots" / "abc"
+            if not snap.exists():
+                raise FileNotFoundError("não está no cache")
+            return str(snap)
+
+        def hf_hub_download(model, filename, token=None, **kw):
+            outer.downloaded.append(filename)
+            path = outer.root / ("models--" + model.replace("/", "--")) / "snapshots" / "abc" / filename
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_bytes(b"x")
+            return str(path)
+
+        self.module = mock.MagicMock(HfApi=Api, snapshot_download=snapshot_download, hf_hub_download=hf_hub_download)
+        self.module.constants.HF_HUB_CACHE = str(self.root)
+
+
+class LocalModelPrecisionTests(TmpCase):
+    def test_files_are_chosen_per_precision_without_duplicated_weights(self):
+        from asta.canvas import localmodels as lm
+
+        files = [{"name": n, "size": sz} for n, sz in FakeHub.FILES.items()]
+        fp32 = {f["name"] for f in lm.select_files(files, "fp32")}
+        fp16 = {f["name"] for f in lm.select_files(files, "fp16")}
+        self.assertIn("unet/diffusion_pytorch_model.safetensors", fp32)
+        self.assertNotIn("unet/diffusion_pytorch_model.fp16.safetensors", fp32)
+        self.assertIn("unet/diffusion_pytorch_model.fp16.safetensors", fp16)
+        self.assertNotIn("unet/diffusion_pytorch_model.safetensors", fp16)
+        for never in ("sd_turbo.safetensors", "unet/diffusion_pytorch_model.bin", "README.md"):  # checkpoint duplicado na raiz, formato .bin, documentação
+            self.assertNotIn(never, fp32 | fp16)
+        self.assertTrue({"model_index.json", "unet/config.json", "tokenizer/vocab.json"} <= fp16 & fp32)
+        self.assertEqual(lm.select_files(files, "bf16"), lm.select_files(files, "fp16"))  # bf16 usa os mesmos arquivos do fp16
+
+    def test_options_show_the_download_size_of_each_precision(self):
+        from asta.canvas import localmodels as lm
+
+        with mock.patch.dict(sys.modules, {"huggingface_hub": FakeHub(self.tmp).module}):
+            on_gpu = lm.options("stabilityai/sd-turbo", "", True)
+            on_cpu = lm.options("stabilityai/sd-turbo", "", False)
+        sizes = {o["id"]: o["size"] for o in on_gpu["options"]}
+        self.assertEqual((sizes["fp32"], sizes["fp16"], sizes["bf16"]), (3400 + 330 + 1400 + 8, 1700 + 165 + 700 + 8, 1700 + 165 + 700 + 8))
+        self.assertLess(sizes["fp16"], sizes["fp32"])
+        self.assertEqual((on_gpu["recommended"], on_cpu["recommended"]), ("fp16", "fp32"))
+        self.assertEqual(sum(o["recommended"] for o in on_gpu["options"]), 1)
+
+    def test_download_requires_a_choice_and_records_it(self):
+        from asta.canvas import localmodels as lm
+
+        hub = FakeHub(self.tmp)
+        with mock.patch.dict(sys.modules, {"huggingface_hub": hub.module}):
+            with self.assertRaises(ProviderError):
+                lm.download("stabilityai/sd-turbo", "")
+            self.assertEqual(hub.downloaded, [])  # sem escolha, nada é baixado
+            self.assertEqual(lm.downloaded_precision("stabilityai/sd-turbo"), "")
+            seen = []
+            lm.download("stabilityai/sd-turbo", "fp16", "", lambda d, t: seen.append((d, t)))
+            from asta.canvas import localmodels as lm2
+
+            self.assertEqual(sorted(hub.downloaded), sorted(f["name"] for f in lm2.select_files([{"name": n, "size": z} for n, z in FakeHub.FILES.items()], "fp16")))
+            self.assertNotIn("unet/diffusion_pytorch_model.safetensors", hub.downloaded)
+            self.assertEqual(lm.downloaded_precision("stabilityai/sd-turbo"), "fp16")
+            self.assertTrue(lm.has_fp16_variant("stabilityai/sd-turbo"))
+            self.assertEqual(seen[-1][0], seen[-1][1])
+            with self.assertRaises(ProviderError) as cm:
+                lm.download("outro/modelo", "fp32", "", None, lambda: True)  # cancelado antes do 1º arquivo
+            self.assertIn("cancelado", str(cm.exception))
+
+
 class LocalHFTests(unittest.TestCase):
     """Os modelos locais precisam de torch/diffusers: aqui eles são substituídos por módulos falsos só para exercitar o caminho de código."""
 
@@ -633,9 +716,11 @@ class LocalHFTests(unittest.TestCase):
         diffusers.AutoPipelineForText2Image.from_pretrained.side_effect = lambda model, **kw: (calls.setdefault("model", model), Pipe())[1]
         return {"torch": torch, "diffusers": diffusers}, calls
 
-    def test_image_pipeline_with_fake_libraries(self):
+    def test_image_pipeline_uses_the_downloaded_precision_and_only_local_files(self):
+        from asta.canvas import localmodels as lm
+
         mods, calls = self.fake_modules()
-        with mock.patch.dict(sys.modules, mods):
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value="fp16"), mock.patch.object(lm, "has_fp16_variant", return_value=True):
             M._LOCAL_CACHE.clear()
             p = provider("local_hf", "", {"image": "stabilityai/sd-turbo"}, key="", needs_key=False)
             out = p.image("um gato", size="1024x1024", count=1, seed=3)
@@ -643,6 +728,23 @@ class LocalHFTests(unittest.TestCase):
         self.assertEqual(calls["model"], "stabilityai/sd-turbo")
         self.assertEqual(calls["device"], "cpu")
         self.assertEqual((calls["kw"]["num_inference_steps"], calls["kw"]["guidance_scale"], calls["kw"]["width"]), (2, 0.0, 768))  # turbo e CPU: leve
+        load = mods["diffusers"].AutoPipelineForText2Image.from_pretrained.call_args.kwargs
+        self.assertEqual((load["local_files_only"], load["variant"], load["torch_dtype"]), (True, "fp16", mods["torch"].float16))  # nunca baixa sozinho
+
+    def test_a_model_that_was_not_downloaded_is_refused_instead_of_downloaded_silently(self):
+        from asta.canvas import localmodels as lm
+
+        mods, calls = self.fake_modules()
+        mods["transformers"] = mock.MagicMock()
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value=""):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "stabilityai/sd-turbo", "sound": "facebook/musicgen-small"}, key="", needs_key=False)
+            for call in (lambda: p.image("x"), lambda: p.sound("x"), lambda: p.voice("x"), lambda: p.transcribe(WAV, "a.wav", "audio/wav")):
+                with self.assertRaises(ProviderError) as cm:
+                    call()
+                self.assertIn("ainda não foi baixado", str(cm.exception))
+                self.assertIn("precisão (quantização)", str(cm.exception))
+        self.assertNotIn("model", calls)  # o modelo nem chegou a ser carregado
 
     def test_missing_libraries_explain_how_to_install(self):
         with mock.patch.dict(sys.modules, {"torch": None, "diffusers": None, "transformers": None}):
@@ -1026,6 +1128,24 @@ class CanvasApiTests(ServerCase):
         self.assertEqual(by_type["text"]["title"], "roteiro.txt")
         self.assertEqual([a["kind"] for a in c["assets"]], ["image"])
         self.c.json("DELETE", f"/api/canvases/{c['id']}")
+
+    def test_local_models_need_a_precision_choice_before_any_download(self):
+        hub = FakeHub(self.tmp)
+        with mock.patch.dict(sys.modules, {"huggingface_hub": hub.module}):
+            self.assertEqual(self.c.json("POST", "/api/media/local/download", {"model": "stabilityai/sd-turbo"})[0], 400)  # sem precisão: nada baixa
+            self.assertEqual(self.c.json("POST", "/api/media/local/download", {"model": "../x", "precision": "fp16"})[0], 400)
+            self.assertEqual(hub.downloaded, [])
+            status, opts = self.c.json("GET", "/api/media/local/options?model=stabilityai/sd-turbo")
+            self.assertEqual(status, 200)
+            self.assertEqual({o["id"] for o in opts["options"]}, {"fp32", "fp16", "bf16"})
+            self.assertEqual(self.c.json("GET", "/api/media/local/options?model=nada")[0], 400)
+            state = self.c.json("GET", "/api/media/local/state")[1]
+            self.assertTrue(state["libs"])
+            self.assertEqual(state["models"]["image"]["precision"], "")
+            job = self.c.json("POST", "/api/media/local/download", {"model": "stabilityai/sd-turbo", "precision": "fp16"})[1]
+            ev = self.c.sse(f"/api/jobs/{job['job_id']}/events")
+            self.assertEqual([e["precision"] for e in ev if e["type"] == "done"], ["fp16"])
+            self.assertEqual(self.c.json("GET", "/api/media/local/state")[1]["models"]["image"]["precision"], "fp16")
 
     @unittest.skipUnless(HAVE_FFMPEG, "ffmpeg não instalado")
     def test_editor_autofill_endpoint(self):

@@ -481,6 +481,8 @@ class App:
     def r_hf_download(self, req: "Request") -> None:
         body = req.body_json()
         repo = text(body.get("repo"), "", 200)
+        if not text(body.get("quant"), "", 40):  # o ASTA nunca escolhe a quantização pelo usuário
+            raise HttpError(400, "Escolha a quantização antes de baixar (campo quant, ex.: Q4_K_M).")
         names = [text(f, "", 260) for f in body.get("files")][:99] if isinstance(body.get("files"), list) else [text(body.get("file"), "", 260)]
         names = [n for n in names if n]
         if not names:
