@@ -25,7 +25,7 @@ export async function renderLibrary(root, ctx, opts) {
   const rebuild = ([pr, av, cv, md]) => {
     items = pr.filter((p) => kinds.includes(p.kind)).map((p) => Object.assign({ itemKind: p.kind, tags: p.tags }, p))
       .concat(av.map((a) => ({ itemKind: 'avatar', id: a.id, name: a.name, description: a.personality || a.description || '', tags: { auto: a.tags, custom: [] }, updated: a.updated, raw: a })))
-      .concat(cv.map((c) => ({ itemKind: 'canvas', id: c.id, name: c.name, description: c.description || '', tags: { auto: [], custom: [] }, updated: c.updated, raw: c })));
+      .concat(cv.map((c) => ({ itemKind: 'canvas', id: c.id, name: c.name === 'Novo canvas' ? t('Novo canvas') : c.name, description: c.description || '', tags: { auto: [], custom: [] }, updated: c.updated, raw: c })));
     items.sort((a, b) => String(b.updated).localeCompare(String(a.updated)));
     // modelos locais ficam depois do que você criou, em ordem alfabética
     items = items.concat(md.slice().sort((a, b) => (a.label || a.name).localeCompare(b.label || b.name)).map((m) => ({ itemKind: 'model', id: m.id, name: m.label || m.name, description: m.label ? m.name : '', updated: '', raw: m,

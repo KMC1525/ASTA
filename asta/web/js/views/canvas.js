@@ -61,7 +61,7 @@ async function renderList(root) {
     fill(grid, list.map((c) => h('div', { class: 'cv-card', onclick: () => openCanvas(c.id) },
       h('div', { class: 'th', style: c.thumb ? { backgroundImage: `url("${c.thumb}")` } : {} }, c.thumb ? null : icon('canvas', 34)),
       h('button', { class: 'btn icon sm mn', title: t('Mais'), onclick: (e) => { e.stopPropagation(); menu(e.currentTarget, c); } }, icon('more', 15)),
-      h('div', { class: 'inf' }, h('div', { class: 'nm', title: c.name }, c.name),
+      h('div', { class: 'inf' }, h('div', { class: 'nm', title: c.name }, c.name === 'Novo canvas' ? t('Novo canvas') : c.name),
         h('div', { class: 'mt' }, t('{n} nós · {m} arquivos', { n: c.nodes, m: c.assets }) + ' · ' + fmtDate(c.updated))))));
     body.classList.toggle('hidden', !list.length);
     empty.classList.toggle('hidden', !!list.length);

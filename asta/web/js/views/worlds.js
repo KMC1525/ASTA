@@ -25,7 +25,7 @@ export default async function render(root, ctx) {
 }
 
 async function renderWorlds(root, ctx) {
-  const projects = await api('/api/projects');
+  const projects = await api('/api/projects?kind=world');
   const libChars = await api('/api/characters');
   let sel = ctx.select || (projects[0] && projects[0].id) || null, proj = null, w = null, swaps = {};
   const listEl = h('div', { class: 'list' }), editor = h('div');
@@ -52,13 +52,13 @@ async function renderWorlds(root, ctx) {
     try {
       await api('/api/projects/' + proj.id + '/edit', { method: 'POST', body: patch });
       toast(t('Nova versão salva'), 'ok');
-      const list = await api('/api/projects'); projects.splice(0, projects.length, ...list);
+      const list = await api('/api/projects?kind=world'); projects.splice(0, projects.length, ...list);
       await load(proj.id);
     } catch (e) { toast(e.message, 'err'); }
   }
 
   function paintEditor() {
-    if (!proj || !w) { editor.replaceChildren(h('div', { class: 'empty' }, h('h3', null, t('Nenhum mundo para configurar')), h('p', null, t('Gere um mundo na tela principal; depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.')), h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true }) }, icon('sparkle', 15), t('Criar um mundo')))); return; }
+    if (!proj || !w) { editor.replaceChildren(h('div', { class: 'empty' }, h('h3', null, t('Nenhum mundo para configurar')), h('p', null, t('Gere um mundo no Chat (ferramenta Mundo 3D); depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.')), h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true }) }, icon('sparkle', 15), t('Criar um mundo')))); return; }
     const env = w.environment, au = w.audio, mu = au.music, ux = w.ux, hud = ux.hud;
     const tier = w.quality.target === 'auto' ? (state.hardware.tier || 'medium') : w.quality.target;
     const maxSize = (w.quality.tiers[tier] || {}).max_size || 800;

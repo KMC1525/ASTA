@@ -99,6 +99,32 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "hf": {"token": ""},
 }
 
+def conform(defaults: Any, value: Any) -> Any:
+    """Força `value` a ter a «forma» de `defaults`: onde o padrão é um objeto, o valor precisa ser um objeto (senão volta ao padrão); onde o padrão é um número/texto/booleano,
+    um valor de outro tipo é descartado. Um settings.json editado à mão (ou uma chamada de API errada) não derruba mais a tela inteira."""
+    if not isinstance(defaults, dict):
+        return value
+    out = dict(value) if isinstance(value, dict) else {}
+    for key, dv in defaults.items():
+        if key not in out:
+            out[key] = copy.deepcopy(dv)
+        elif isinstance(dv, dict):
+            out[key] = conform(dv, out[key]) if isinstance(out[key], dict) else copy.deepcopy(dv)
+        elif isinstance(dv, bool):
+            if not isinstance(out[key], bool):
+                out[key] = bool(out[key]) if isinstance(out[key], (int, float)) else dv
+        elif isinstance(dv, (int, float)):
+            if isinstance(out[key], bool) or not isinstance(out[key], (int, float)):
+                out[key] = dv
+        elif isinstance(dv, str):
+            if not isinstance(out[key], str):
+                out[key] = dv
+    providers = out.get("providers")
+    if isinstance(providers, dict):
+        out["providers"] = {k: v for k, v in providers.items() if isinstance(v, dict)}
+    return out
+
+
 # Caminhos (dentro de settings) que contêm segredos e nunca são enviados ao navegador.
 SECRET_PATHS = [
     ("hf", "token"),
@@ -201,7 +227,7 @@ class Store:
     # ------------------------------------------------------------------ settings
     def get_settings(self) -> dict:
         saved = read_json(self.settings_path, {}) or {}
-        merged = deep_merge(copy.deepcopy(DEFAULT_SETTINGS), saved)
+        merged = conform(DEFAULT_SETTINGS, deep_merge(copy.deepcopy(DEFAULT_SETTINGS), saved if isinstance(saved, dict) else {}))
         merged["ui"] = normalize_ui(merged.get("ui"))  # valor inválido (API/edição manual) volta ao padrão em vez de quebrar a interface
         return merged
 
@@ -240,7 +266,7 @@ class Store:
                 elif isinstance(val, str) and val.strip():
                     _set_path(current, path, val.strip())
             _strip_flags(patch)
-            merged = deep_merge(current, patch)
+            merged = conform(DEFAULT_SETTINGS, deep_merge(current, patch))  # valor do tipo errado (API/edição manual) nunca chega ao disco
             merged["ui"] = normalize_ui(merged.get("ui"))
             write_json(self.settings_path, merged, private=True)
             return merged

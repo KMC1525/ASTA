@@ -23,10 +23,15 @@ export function installShell(app) {
   }
 
   function shortcutsHelp() {
-    const rows = [['Ctrl/⌘ + K', t('Abrir a paleta de comandos')], ['Alt + 1 … 7', t('Ir para cada tela da barra lateral')], ['Alt + B', t('Recolher/expandir a barra lateral')], ['Alt + T', t('Alternar tema claro/escuro')],
+    const rows = [['Ctrl/⌘ + K', t('Abrir a paleta de comandos')], ['Alt + 1 … 7', t('Ir para cada tela da barra lateral')], ['Alt + B', t('Recolher/expandir a barra lateral')], ['Alt + T', t('Alternar tema claro/escuro')], ['Alt + N', t('Nova aba de chat (no Chat; também: digite /nova na caixa)')], ['Alt + W', t('Fechar a aba de chat atual')],
       ['?', t('Mostrar esta ajuda')], [t('Enter / Ctrl+Enter'), t('Enviar mensagem (você escolhe em Configuração → Aparência)')], ['Shift + Enter', t('Quebrar a linha ao escrever')], ['Esc', t('Fechar janelas e a paleta')]];
     return modal(t('Atalhos de teclado'), h('dl', { class: 'shortcuts' }, rows.flatMap(([k, d]) => [h('dt', null, h('span', { class: 'kbd' }, k)), h('dd', null, d)])), [{ label: t('Fechar'), value: null, cls: 'primary' }]);
   }
+
+  // abas do Chat: com o Chat aberto, o comando age nele; de outra tela, leva ao Chat já com uma aba nova
+  const chatAlive = () => !!(window.ASTA_CHAT && window.ASTA_CHAT.alive());
+  const newChatTab = () => { if (chatAlive()) window.ASTA_CHAT.newTab(); else { state.ctx = {}; go('main', { newtab: true }); } };
+  const closeChatTab = () => { if (chatAlive()) window.ASTA_CHAT.closeTab(); };
 
   const host = {
     items() {
@@ -34,7 +39,8 @@ export function installShell(app) {
       const tabs = CONFIG_TABS.map(([id, label]) => ({ group: t('Configuração'), label: t('Configuração') + ' → ' + t(label), icon: 'config', run: () => go('config', { tab: id }) }));
       const actions = [
         { group: t('Ações'), label: t('Novo avatar'), icon: 'plus', run: () => { location.hash = '#/avatars/edit/new'; } },
-        { group: t('Ações'), label: t('Novo chat'), icon: 'plus', run: () => go('main', { fresh: true }) },
+        { group: t('Ações'), label: t('Nova aba de chat'), icon: 'plus', keys: 'Alt+N', run: newChatTab },
+        { group: t('Ações'), label: t('Fechar a aba de chat atual'), icon: 'x', keys: 'Alt+W', run: closeChatTab },
         { group: t('Ações'), label: t('Nova criação (tela Chat)'), icon: 'sparkle', run: () => go('main', { fresh: true }) },
         { group: t('Ações'), label: t('Alternar tema claro/escuro'), icon: 'panel', keys: 'Alt+T', run: toggleTheme },
         { group: t('Ações'), label: t('Recolher/expandir a barra lateral'), icon: 'panel', keys: 'Alt+B', run: toggleSidebar },
@@ -65,6 +71,8 @@ export function installShell(app) {
       if (m && NAV[Number(m[1]) - 1]) { e.preventDefault(); state.ctx = {}; location.hash = '#/' + NAV[Number(m[1]) - 1][0]; }
       else if (e.code === 'KeyB') { e.preventDefault(); toggleSidebar(); }
       else if (e.code === 'KeyT') { e.preventDefault(); toggleTheme(); }
+      else if (e.code === 'KeyN') { e.preventDefault(); newChatTab(); }
+      else if (e.code === 'KeyW' && chatAlive()) { e.preventDefault(); closeChatTab(); }
       return;
     }
     if (e.key === '?' && !typing(e) && !e.ctrlKey && !e.metaKey) { e.preventDefault(); shortcutsHelp(); }

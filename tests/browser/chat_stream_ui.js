@@ -56,23 +56,36 @@ run('chat_stream', async ({ open, api, check, expectError }) => {
   check('parar:esc-funciona', (await label()) === 'Run');
   await page.locator('#chat-retry').click(); await idle();
 
-  // ---- 6. trocar de conversa no meio da resposta: nada vaza para a outra conversa
+  // ---- 6. abas: nova aba no meio de uma resposta — a resposta segue chegando em segundo plano e nada vaza para a outra aba
   await page.locator('#chat-new').click(); await page.waitForTimeout(300);
   await ta.fill('[lento] pergunta da conversa A'); await ta.press('Enter');
   await page.waitForFunction(() => /Stop/.test(document.querySelector('.composer .send').innerText), null, { timeout: 5000 });
   await page.waitForTimeout(400);
-  await page.locator('#chat-new').click(); await page.waitForTimeout(1500);
-  check('troca:chat-novo-fica-vazio', (await page.locator('.chx.empty').count()) === 1 && (await page.locator('.cmsg').count()) === 0 && (await label()) === 'Run');
-  await page.locator('#chat-history').click(); await page.waitForSelector('.mp-prov.hist', { timeout: 5000 });
-  await page.locator('.mp-prov.hist', { hasText: 'conversa A' }).first().click(); await page.waitForTimeout(700);
-  check('troca:conversa-a-guardou-so-a-pergunta', (await page.locator('.cmsg.user').count()) === 1 && (await page.locator('.cmsg.ai').count()) === 0 && (await page.locator('#chat-retry').count()) === 1);
+  await page.locator('#chat-new').click(); await page.waitForTimeout(500);
+  check('abas:nova-aba-fica-vazia-e-livre-para-enviar', (await page.locator('.chx.empty').count()) === 1 && (await page.locator('.cmsg').count()) === 0 && (await label()) === 'Run' && (await page.locator('.chx-tab').count()) >= 2);
+  check('abas:aba-da-resposta-mostra-que-esta-ocupada', (await page.locator('.chx-tab.busy').count()) === 1);
+  await page.waitForFunction(() => document.querySelectorAll('.chx-tab.busy').length === 0, null, { timeout: 30000 });
+  check('abas:resposta-terminou-em-segundo-plano', (await page.locator('.chx-tab.busy').count()) === 0 && (await page.locator('.cmsg').count()) === 0);
+  await page.locator('.chx-tab', { hasText: 'conversa A' }).first().click(); await page.waitForTimeout(500);
+  check('abas:conversa-a-recebeu-a-resposta-inteira', (await page.locator('.cmsg.user').count()) === 1 && (await page.locator('.cmsg.ai').count()) === 1 && (await page.locator('.cmsg.ai .md').innerText()).includes('parte parte'));
+  // a mesma resposta pode ser interrompida na aba da frente: sobra a pergunta com «Responder»
+  await ta.fill('[lento] outra na aba A'); await ta.press('Enter');
+  await page.waitForFunction(() => /Stop/.test(document.querySelector('.composer .send').innerText), null, { timeout: 5000 });
+  await page.waitForTimeout(400); await ta.press('Escape'); await idle(); await page.waitForTimeout(500);
+  check('abas:parar-na-aba-da-frente', (await page.locator('#chat-retry').count()) === 1);
   await page.locator('#chat-retry').click(); await idle();
-  check('troca:responder-na-conversa-a', (await page.locator('.cmsg.ai').count()) === 1);
+  // fechar aba
+  const tabsBefore = await page.locator('.chx-tab').count();
+  await page.locator('.chx-tab.on .x').click(); await page.waitForTimeout(500);
+  check('abas:fechar-aba', (await page.locator('.chx-tab').count()) === tabsBefore - 1 || (tabsBefore === 2 && (await page.locator('.chx-tab').count()) === 0));
 
   // ---- 7. conversa apagada em outra aba: o próximo envio abre uma nova e funciona
+  await page.locator('#chat-new').click(); await page.waitForTimeout(300);
+  await ta.fill('conversa que vai ser apagada'); await ta.press('Enter'); await idle();
   const oldId = await page.evaluate(() => localStorage.getItem('asta.chat'));
   await api('/api/chats/' + oldId, { method: 'DELETE' });
-  await ta.fill('depois de apagada'); await ta.press('Enter'); await idle();
+  await ta.fill('depois de apagada'); await ta.press('Enter');
+  await page.waitForFunction((o) => localStorage.getItem('asta.chat') !== o, oldId, { timeout: 10000 }); await page.waitForSelector('.cmsg.ai', { timeout: 10000 }); await idle();
   const newId = await page.evaluate(() => localStorage.getItem('asta.chat'));
   check('apagada:abre-nova-e-responde', newId && newId !== oldId && (await page.locator('.cmsg.ai').count()) === 1 && (await page.locator('.chx-note.err').count()) === 0);
 

@@ -278,3 +278,7 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .swatches input[type=color].on{border:2px solid var(--strong)}
 .swatches input[type=color]::-webkit-color-swatch-wrapper{padding:0}.swatches input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
 .swatches input[type=color]::-moz-color-swatch{border:0;border-radius:50%}
+
+/* a Configuração tem nove abas: página um pouco mais larga e as abas quebram de linha em vez de esconder as últimas */
+.page.narrow.cfg{max-width:940px}
+.page.cfg .tabs{flex-wrap:wrap;overflow-x:visible}

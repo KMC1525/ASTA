@@ -8,6 +8,8 @@ import { clearJob, renderRun, saveJob, savedJob } from './run.js';
 import { GENRE_LABEL } from './steps.js';
 
 const toast0 = (msg) => toast(msg, 'err');
+// avisos vindos do servidor (em português): «modo Demo (sem IA): <motivo>» etc.
+const trWarn = (w) => { const m = /^(modo Demo \(sem IA\): )(.*)$/.exec(String(w)); return m ? t(m[1]) + t(m[2]) : t(String(w)); };
 export const MODES = [['world', 'Mundo 3D', 'worlds'], ['avatar', 'Avatar', 'avatars'], ['game', 'Jogo 2D', 'games'], ['canvas', 'Canvas', 'canvas']];
 export const TITLES = { world: ['O que vamos criar?', 'O que vamos mudar?'], avatar: ['Quem vamos criar?', ''], game: ['Que jogo vamos criar?', 'O que vamos mudar neste jogo?'], canvas: ['O que vamos produzir?', ''] };
 export const HINTS = () => {
@@ -193,7 +195,7 @@ async function avatarDone(ev) {
   const cards = await Promise.all(ev.avatar_ids.map((id) => api('/api/avatars/' + id).catch(() => null)));
   const list = cards.filter(Boolean);
   return h('div', { class: 'result' }, h('div', { class: 'body' }, h('h3', null, list.length > 1 ? t('{n} avatares criados', { n: list.length }) : t('Avatar criado')),
-    ev.warnings && ev.warnings.length ? h('div', { class: 'muted small', style: { marginBottom: '12px' } }, '⚠ ' + ev.warnings.slice(0, 3).join(' · ')) : null,
+    ev.warnings && ev.warnings.length ? h('div', { class: 'muted small', style: { marginBottom: '12px' } }, '⚠ ' + ev.warnings.slice(0, 3).map(trWarn).join(' · ')) : null,
     h('div', { class: 'av-grid', style: { gridTemplateColumns: 'repeat(auto-fill,minmax(190px,1fr))', marginBottom: '16px' } }, list.map((a) => h('div', { class: 'av-card' },
       h('div', { class: 'av-pic', onclick: () => openChat([a.id]) }, avatarPic(a, 72)),
       h('div', { class: 'av-info' }, h('div', { class: 'av-name' }, a.name), h('div', { class: 'row', style: { gap: '5px', justifyContent: 'center' } }, h('span', { class: 'chip' }, t(REL_LABEL[a.relationship] || REL_LABEL.custom)), h('span', { class: 'chip ' + (a.content === 'nsfw' ? 'nsfw' : 'solid') }, a.content === 'nsfw' ? 'NSFW' : 'SFW')),

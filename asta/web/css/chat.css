@@ -7,7 +7,7 @@
 .chx-title{font-size:13px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:46vw}
 .chx.empty .chx-title{visibility:hidden}
 .chx-hero{flex:1;min-height:0;display:flex;flex-direction:column;justify-content:center;max-width:780px;width:100%;margin:0 auto;padding:0 24px 60px;overflow:auto}
-.chx-hero h1{font-size:clamp(28px,4.2vw,42px);font-weight:600;letter-spacing:-.03em;margin:0 0 26px;text-align:center}
+.chx-hero h1{color:var(--strong);font-size:clamp(28px,4.2vw,42px);font-weight:600;letter-spacing:-.03em;margin:0 0 26px;text-align:center}
 .chx-scroll{flex:1;min-height:0;overflow:auto;scroll-behavior:auto}
 .chx-col{max-width:780px;width:100%;margin:0 auto;padding:0 24px}
 .chx-list{padding-top:20px;padding-bottom:20px;display:flex;flex-direction:column;gap:20px}
@@ -133,3 +133,16 @@ button.cite:hover{background:var(--accent);color:var(--on-accent);border-color:v
 @media (max-width:1080px){
   .chx-side{position:absolute;top:0;right:0;bottom:0;z-index:30;width:min(92vw,360px);box-shadow:-20px 0 60px var(--shadow)}
 }
+
+/* v0.4.3: abas do Chat */
+.chx-tabs{display:flex;align-items:center;gap:4px;padding:6px 14px 0;border-bottom:1px solid var(--line);overflow-x:auto;flex:none}
+.chx-tabs.hidden{display:none}
+.chx-tab{display:flex;align-items:center;gap:7px;max-width:220px;min-width:90px;padding:7px 8px 7px 12px;border:1px solid transparent;border-bottom:0;border-radius:12px 12px 0 0;color:var(--muted);font-size:13px;cursor:pointer;position:relative;top:1px;white-space:nowrap}
+.chx-tab:hover{background:var(--bg2);color:var(--text)}
+.chx-tab.on{background:var(--bg);border-color:var(--line);color:var(--strong)}
+.chx-tab .tt{overflow:hidden;text-overflow:ellipsis;flex:1;min-width:0}
+.chx-tab .x{border:0;background:transparent;color:inherit;width:20px;height:20px;border-radius:999px;cursor:pointer;opacity:.6;line-height:1;font-size:15px;flex:none}
+.chx-tab .x:hover{background:var(--bg3);opacity:1}
+.chx-tab .spinner{width:11px;height:11px;border-width:2px}
+.chx-tab-new{border:0;background:transparent;color:var(--muted);width:28px;height:28px;border-radius:999px;cursor:pointer;display:grid;place-items:center;flex:none;margin-bottom:3px}
+.chx-tab-new:hover{background:var(--bg2);color:var(--text)}

@@ -5,6 +5,37 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.4.3] — 2026-11-05
+
+Versão de **auditoria**: percorri todas as seções (Chat, Mundos, Avatars, Jogos 2D, Canvas, Biblioteca, Configuração) como alguém que abre o ASTA pela primeira vez — pelo navegador (desktop e celular, tema escuro e claro) e pela API —, revisei os prompts internos e acrescentei as **abas do Chat**. Os mundos, os cinco gêneros de jogo, os avatares e o Canvas foram gerados e abertos (sem erros no console).
+
+### Adicionado
+- **Abas no Chat e o comando «Nova aba de chat».** Cada aba é uma conversa; dá para ter várias abertas e **uma resposta continua chegando em segundo plano** enquanto você usa outra aba (a aba ocupada mostra um indicador). Formas de abrir uma aba nova: **Alt+N**, a **paleta de comandos** (Ctrl+K → *Nova aba de chat*, que também funciona de outras telas e leva ao Chat), o botão **Nova aba**, o **+** da barra de abas, ou digitar **`/nova`** (ou `/new`) na caixa de texto. **Alt+W** fecha a aba da frente (a última nunca some; fechar uma aba não apaga a conversa, que continua no Histórico).
+  - Cada aba guarda o seu rascunho; as abas abertas **voltam depois de recarregar a página** (na mesma ordem, com a mesma na frente); abrir pelo Histórico uma conversa que já tem aba só traz a aba para a frente; uma aba em branco é reaproveitada (nunca duas em branco). A barra de abas só aparece com duas ou mais abas (a tela continua limpa).
+  - Quem sai da tela do Chat no meio de uma resposta e volta vê «Respondendo em segundo plano…» e a resposta aparece quando termina (antes parecia que a pergunta ficou sem resposta).
+- **Prompt do Chat revisado:** responde no idioma do usuário, na medida certa; Markdown com moderação; receitas/planos concretos, matemática com os passos, código que funciona; admite quando não sabe em vez de inventar; sabe que **não navega na internet** sozinho e sugere o botão **Web** quando o assunto pede informação atual; lê os anexos pelo nome; mantém a regra do ativador das ferramentas de criação.
+- **Regras de JSON nos agentes:** o preâmbulo de todos os agentes (mundo, avatar, jogo) agora pede aspas duplas, sem comentários, sem vírgula sobrando, **sem placeholders como «...»** e, se o modelo raciocina antes, que seja breve e termine com o JSON completo (menos respostas inválidas em modelos pequenos).
+
+### Corrigido
+- **A tela Mundos listava os jogos 2D como se fossem mundos** (e abria um deles — «Nenhum mundo para configurar» — em vez do mundo de verdade). Agora só aparecem mundos 3D.
+- **Atualizar um jogo (Demo) trocava o nome dele pelo texto do pedido de mudança** («Adicione um final secreto»). O jogo mantém o nome.
+- **Títulos do gerador offline terminavam no meio da frase** («Uma vila medieval à beira de um», «Um Jogo Curto De Aventura Com»): o título agora é a primeira frase, sem terminar numa preposição/artigo e só com a primeira letra maiúscula.
+- **Um `settings.json` com um valor do tipo errado (editado à mão, ou uma chamada de API errada) derrubava a tela inteira**: `/api/state` passava a responder 500 e o ASTA não abria mais. As configurações agora são sempre normalizadas (na leitura e antes de gravar): objeto onde deveria haver objeto, número/texto/booleano no tipo certo.
+- **Corpos de requisição que não são objetos JSON** (lista, texto, número) e listas com tipo trocado (`character_ids: 3`) causavam erro 500 em dezenas de rotas; agora respondem 400 com mensagem clara (ou são ignorados, no caso das listas).
+- **Respostas dos agentes com «raciocínio» (`<think>…</think>`) contendo chaves** podiam ser lidas como o objeto JSON; trechos entre chaves que não são JSON («{exemplo}») eram o primeiro candidato. O extrator ignora o raciocínio e segue para o próximo objeto válido; resposta cortada continua sendo reportada.
+- **Textos que apareciam em português na interface em inglês:** filtro «Mundos 3D» da Biblioteca, nome «Novo canvas», nome do modelo na resposta do Chat («Demo (offline, sem IA)»), avisos do modo Demo no resultado de avatares, e provedores do Canvas («Servidor compatível com OpenAI»). Textos antigos que ainda mandavam «gerar na tela principal» agora apontam para o Chat.
+- **Configuração:** as nove abas escondiam as duas últimas (Aparência e Sistema) atrás de uma rolagem invisível; a página ficou mais larga e as abas quebram de linha. O título «Como posso ajudar?» do Chat estava cinza-claro demais.
+
+### Alterado
+- «Novo chat» virou **«Nova aba»** (o botão do topo, o comando da paleta e a ajuda de atalhos). `go('main', {fresh|newtab})` abre/reaproveita uma aba em branco em vez de substituir a conversa.
+
+### Testes
+- `tests/test_audit.py`: títulos do gerador offline, extrator de JSON, configurações corrompidas (e arquivo editado à mão), corpos inválidos, mundos × jogos, nome do jogo na atualização, **fuzz de todas as rotas `/api`** (nenhuma pode devolver 500 para corpos de tipo errado), prompts e textos antigos.
+- `tests/browser/chat_tabs_ui.js` (Alt+N, `/nova`, paleta, Alt+W, rascunho por aba, respostas em paralelo e em segundo plano, abas que voltam, sair e voltar no meio da resposta), `tests/browser/audit_ui.js` (Mundos só com mundos, traduções, abas da Configuração, título do Chat, Demo honesto) e o teste de envio/streaming reescrito para as abas.
+
+### Observação
+- Continuam valendo os limites das versões anteriores: modelos de IA reais, a busca na internet e o 3D em GPU de verdade não foram testados aqui (servidores simulados e Chromium sem GPU). Nos jogos e mundos gerados pelo **Demo**, a história/fala é de regras, não de IA.
+
 ## [0.4.2] — 2026-11-05
 
 Revisão do **modo Chat** — principalmente o envio dos prompts e a resposta do modelo em streaming — e o **painel das fontes pesquisadas**, no canto direito. Cada bug foi reproduzido (em teste ou no navegador) antes de corrigir.
@@ -546,7 +577,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.2...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.3...HEAD
+[0.4.3]: https://github.com/KMC1525/ASTA/compare/v0.4.2...v0.4.3
 [0.4.2]: https://github.com/KMC1525/ASTA/compare/v0.4.1...v0.4.2
 [0.4.1]: https://github.com/KMC1525/ASTA/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/KMC1525/ASTA/compare/v0.3.3...v0.4.0

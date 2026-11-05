@@ -9,41 +9,53 @@ from ..providers.base import Provider, ProviderError
 
 
 def extract_json(raw: str) -> Any:
-    """Extrai o primeiro objeto JSON de um texto (tolera cercas ```json e texto em volta)."""
+    """Extrai o primeiro objeto JSON de um texto. Tolera cercas ```json, texto em volta, vírgulas sobrando e o «raciocínio» `<think>…</think>` que modelos
+    como Qwen3/DeepSeek R1 escrevem antes da resposta (as chaves dentro dele não viram o objeto). Um trecho entre chaves que não é JSON (ex.: «{exemplo}» numa frase)
+    é pulado; uma resposta cortada no meio levanta ValueError (o chamador pede de novo)."""
     if raw is None:
         raise ValueError("resposta vazia")
-    text = raw.strip()
+    from ..avatars import strip_reasoning
+
+    text = strip_reasoning(str(raw)).strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S | re.I)
     if fence and "{" in fence.group(1):
         text = fence.group(1).strip()
-    start = text.find("{")
-    if start < 0:
-        raise ValueError("nenhum objeto JSON na resposta")
-    depth, in_str, esc = 0, False, False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if in_str:
-            if esc:
-                esc = False
-            elif ch == "\\":
-                esc = True
-            elif ch == '"':
-                in_str = False
-            continue
-        if ch == '"':
-            in_str = True
-        elif ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                chunk = text[start:i + 1]
-                try:
-                    return json.loads(chunk)
-                except json.JSONDecodeError:
-                    repaired = re.sub(r",\s*([}\]])", r"\1", chunk)
-                    return json.loads(repaired)
-    raise ValueError("objeto JSON incompleto (resposta cortada?)")
+    pos, last_err = 0, ""
+    while True:
+        start = text.find("{", pos)
+        if start < 0:
+            raise ValueError(last_err or "nenhum objeto JSON na resposta")
+        depth, in_str, esc, end = 0, False, False, -1
+        for i in range(start, len(text)):
+            ch = text[i]
+            if in_str:
+                if esc:
+                    esc = False
+                elif ch == "\\":
+                    esc = True
+                elif ch == '"':
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch == "{":
+                depth += 1
+            elif ch == "}":
+                depth -= 1
+                if depth == 0:
+                    end = i
+                    break
+        if end < 0:
+            raise ValueError("objeto JSON incompleto (resposta cortada?)")
+        chunk = text[start:end + 1]
+        try:
+            return json.loads(chunk)
+        except json.JSONDecodeError as exc:
+            try:
+                return json.loads(re.sub(r",\s*([}\]])", r"\1", chunk))
+            except json.JSONDecodeError:
+                last_err = f"JSON inválido: {exc.msg}"
+                pos = end + 1  # tenta o próximo objeto depois deste trecho
 
 
 def build_user_message(instruction: str, payload: Dict[str, Any], images: Optional[List[dict]], vision: bool):

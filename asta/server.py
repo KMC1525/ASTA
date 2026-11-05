@@ -391,8 +391,8 @@ class App:
         if not (text(body.get("prompt"), "") or body.get("attachment_ids") or body.get("worldbuilding_id") or body.get("character_ids")):
             raise HttpError(400, "Escreva um prompt ou anexe algo para gerar o mundo.")
         pipeline_req = {
-            "prompt": text(body.get("prompt"), "", 20000), "attachment_ids": list(body.get("attachment_ids") or [])[:40],
-            "worldbuilding_id": text(body.get("worldbuilding_id"), "", 60), "character_ids": list(body.get("character_ids") or [])[:24],
+            "prompt": text(body.get("prompt"), "", 20000), "attachment_ids": [x for x in _as_list(body.get("attachment_ids")) if isinstance(x, str)][:40],
+            "worldbuilding_id": text(body.get("worldbuilding_id"), "", 60), "character_ids": [x for x in _as_list(body.get("character_ids")) if isinstance(x, str)][:24],
             "settings": body.get("settings") if isinstance(body.get("settings"), dict) else {},
             "project_id": text(body.get("project_id"), "", 60),
         }
@@ -690,6 +690,11 @@ class App:
 # --------------------------------------------------------------------------- requisição
 
 
+def _as_list(v):
+    """Lista vinda do JSON do navegador/API: qualquer outra coisa vira lista vazia (em vez de um erro 500)."""
+    return v if isinstance(v, list) else []
+
+
 class Request:
     def __init__(self, handler: "Handler", method: str):
         self.h = handler
@@ -719,9 +724,12 @@ class Request:
         if not raw:
             return {}
         try:
-            return json.loads(raw.decode("utf-8"))
+            data = json.loads(raw.decode("utf-8"))
         except (ValueError, UnicodeDecodeError):
             raise HttpError(400, "JSON inválido")
+        if not isinstance(data, dict):  # todas as rotas esperam um objeto: lista/texto/número virariam um erro 500 lá dentro
+            raise HttpError(400, "JSON inválido: esperava um objeto {…}")
+        return data
 
     # saída
     def _head(self, status: int, mime: str, length: Optional[int], extra: Optional[Dict[str, str]] = None) -> None:

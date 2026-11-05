@@ -16,7 +16,7 @@ FONTS = ("system", "serif", "mono")
 CHAT_SIZES = ("small", "medium", "large")
 SEND_KEYS = ("enter", "ctrl_enter")  # enter: Enter envia (Shift+Enter quebra a linha) · ctrl_enter: Ctrl/⌘+Enter envia (Enter quebra a linha)
 START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "library")
-HIDEABLE = ("worlds", "avatars", "games", "canvas", "library")  # "Principal" e "Configuração" nunca somem da barra lateral
+HIDEABLE = ("worlds", "avatars", "games", "canvas", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
 LANGS = ("auto", "pt-BR", "en")
 
 DEFAULT_UI: Dict[str, Any] = {

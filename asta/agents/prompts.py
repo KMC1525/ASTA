@@ -32,6 +32,8 @@ def system_prompt(agent: str, language: str, content_mode: str, domain: str = "w
         "You are one agent inside ASTA, a multi-agent studio that turns a user's prompt and attachments into "
         f"{DOMAINS.get(domain, DOMAINS['world'])}.\n"
         "Reply with exactly ONE valid JSON object and nothing else: no markdown fences, no commentary.\n"
+        "JSON rules: double-quoted keys and strings, no comments, no trailing commas, and never placeholders such as \"...\" or \"etc.\": write every list and every text out "
+        "in full. If you reason before answering, keep it brief and finish with the complete JSON object.\n"
         f"Write every user-facing text (titles, names, descriptions, dialogue, character prompts) in the user's language ({language}).\n"
         f"{policy}\n\n"
     )

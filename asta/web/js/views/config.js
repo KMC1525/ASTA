@@ -12,7 +12,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...TABS.map(([id, l]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l))));
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, chat, generation, creative, voice, local, appearance, system }[tab]; body.replaceChildren(await fn()); };
-  root.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
+  root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
 }
 

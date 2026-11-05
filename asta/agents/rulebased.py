@@ -174,12 +174,27 @@ def _pick_mood(t: str, default: str = "calm") -> str:
     return default
 
 
+_TRAIL = {"de", "da", "do", "das", "dos", "com", "sem", "um", "uma", "uns", "umas", "e", "ou", "a", "o", "as", "os", "em", "no", "na", "nos", "nas", "por", "para", "pra", "que", "à", "ao",
+          "of", "the", "an", "and", "or", "with", "without", "in", "on", "at", "for", "to", "by", "from", "that", "its", "his", "her", "their", "my", "your"}
+
+
+def short_title(prompt: str, fallback: str, words: int = 7) -> str:
+    """Título curto a partir do prompt (para o gerador offline): a primeira frase/trecho, sem terminar numa preposição/artigo («…à beira de um»), só a 1ª letra maiúscula."""
+    text_ = re.sub(r"\s+", " ", (prompt or "").strip().split("\n")[0])
+    text_ = re.split(r"\s*(?:[(\[:;—–]|\s-\s|[.!?](?:\s|$))", text_)[0].strip(" .,:;!?-—–")
+    ws = text_.split(" ") if text_ else []
+    cut = ws[:words]
+    if len(ws) > words or len(text_) > 60:  # texto cortado: não deixa preposição/artigo pendurado no fim
+        while len(cut) > 2 and cut[-1].lower().strip(",") in _TRAIL:
+            cut.pop()
+    title = " ".join(cut).strip(" .,:;!?-—–")
+    if not title:
+        return fallback
+    return title[0].upper() + title[1:]
+
+
 def _sentence_title(prompt: str, lang: str) -> str:
-    words = re.sub(r"\s+", " ", prompt.strip()).split(" ")
-    first = " ".join(words[:7]).strip(" .,:;!?")
-    if not first:
-        return "Novo mundo" if lang == "pt" else "New world"
-    return first[0].upper() + first[1:]
+    return short_title(prompt, "Novo mundo" if lang == "pt" else "New world")
 
 
 # --------------------------------------------------------------------------- agentes

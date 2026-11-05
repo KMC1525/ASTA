@@ -240,6 +240,26 @@ class BrowserTests(unittest.TestCase):
 
             lmstudio.forget()
 
+    def test_19_chat_tabs_new_tab_command_background_answers_and_persistence(self):
+        from tests.test_lmstudio import FakeLMStudio
+
+        def reply(n, body):
+            c = body["messages"][-1]["content"]
+            last = c if isinstance(c, str) else " ".join(p.get("text", "") for p in c)
+            return ["parte "] * 24 if "[lento]" in last else [f"Resposta {n}"]
+
+        fake = FakeLMStudio(reply=reply, delay=0.1)
+        try:
+            self.run_script("chat_tabs_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
+    def test_20_audit_worlds_list_only_worlds_translations_titles_and_config_tabs(self):
+        self.run_script("audit_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()
