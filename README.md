@@ -341,3 +341,7 @@ Browser tests (Chromium via Playwright) and the JavaScript engine tests run auto
 ## License and credits
 
 [MIT](LICENSE) © 2026 KMC. Bundles [three.js](https://threejs.org) r159 (MIT) in `asta/runtime/vendor`.
+
+---
+
+> **AI-generated notice:** this entire project was generated and reviewed using the AI **Claude** by Anthropic, and only models from the **Claude Sonnet 5.0+** line were used.

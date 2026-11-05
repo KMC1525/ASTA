@@ -341,3 +341,7 @@ Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript 
 ## Licença e créditos
 
 [MIT](LICENSE) © 2026 KMC. Usa o [three.js](https://threejs.org) r159 (MIT), embutido em `asta/runtime/vendor`.
+
+---
+
+> **Aviso sobre IA:** este projeto inteiro foi gerado e revisado usando a IA **Claude**, da Anthropic, e foram usados somente modelos da linha **Claude Sonnet 5.0+**.
