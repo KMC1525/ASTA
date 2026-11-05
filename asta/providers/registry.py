@@ -7,6 +7,7 @@ from typing import Any, Dict, List, Optional
 from .anthropic import AnthropicProvider
 from .base import Provider, ProviderError
 from .demo import DemoProvider
+from .lmstudio import LMStudioProvider
 from .local_llama import LocalLlamaProvider
 from .openai_compat import OpenAICompatProvider
 
@@ -55,6 +56,7 @@ PRESETS: Dict[str, Dict[str, Any]] = {
         "label": "LM Studio (local)", "kind": "openai", "base_url": "http://127.0.0.1:1234/v1",
         "model": "", "needs_key": False, "local": True, "vision": False,
         "docs": "https://lmstudio.ai",
+        "hint": "Abra o LM Studio, ligue o servidor (Developer → Start Server) e carregue um modelo: o ASTA detecta sozinho o servidor e o modelo carregado.",
     },
     "llamacpp": {
         "label": "llama.cpp server (local)", "kind": "openai", "base_url": "http://127.0.0.1:8080/v1",
@@ -82,6 +84,7 @@ def provider_config(settings: Dict[str, Any], pid: str) -> Dict[str, Any]:
     for key in ("base_url", "api_key", "model", "vision", "n_ctx"):
         if key in user and user[key] not in (None, ""):
             cfg[key] = user[key]
+    cfg["vision_user"] = "vision" in user and user["vision"] not in (None, "")  # o usuário decidiu a visão (senão o LM Studio a detecta pelo tipo do modelo)
     if pid == "huggingface" and not cfg.get("api_key"):
         cfg["api_key"] = (settings.get("hf") or {}).get("token", "")
     cfg["id"] = pid
@@ -98,6 +101,8 @@ def build_provider(settings: Dict[str, Any], pid: str, models_dir: Optional[Path
     if kind == "local_hf":
         cfg["models_dir"] = str(models_dir or ".")
         return LocalLlamaProvider(cfg)
+    if cfg.get("id") == "lmstudio":
+        return LMStudioProvider(cfg)  # detecta o servidor, usa o modelo carregado e a visão (vlm)
     return OpenAICompatProvider(cfg)
 
 

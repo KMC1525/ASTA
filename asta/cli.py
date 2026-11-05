@@ -330,6 +330,16 @@ def _doctor(_args: argparse.Namespace) -> int:
         print("Modelos locais embutidos (llama-cpp-python): disponível")
     except ImportError:
         print('Modelos locais embutidos: não instalado (opcional: pip install "asta[local]")')
+    try:
+        from .providers import lmstudio
+
+        lm = lmstudio.probe(timeout=1.5)
+        if lm["running"]:
+            print(f"LM Studio: rodando em {lm['url']} · modelo carregado: {', '.join(lm['loaded']) or 'nenhum (carregue um no LM Studio)'}")
+        else:
+            print("LM Studio: não detectado em " + lm["url"] + " (opcional: abra o LM Studio e ligue o servidor em Developer → Start Server)")
+    except Exception:  # noqa: BLE001
+        pass
     libs = []
     for mod in ("torch", "diffusers", "transformers"):
         try:

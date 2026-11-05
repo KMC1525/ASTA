@@ -53,7 +53,8 @@ async function providers() {
       res.textContent = r.ok ? '✓ ' + t('Funcionou') + ' (' + (r.ms / 1000).toFixed(1) + ' s) · ' + t('resposta:') + ' ' + r.reply : '✗ ' + r.error;
     };
     const save = async () => {
-      const patch = { base_url: draft.base_url, model: draft.model, vision: !!draft.vision };
+      const patch = { base_url: draft.base_url, model: draft.model };
+      if (p.id !== 'lmstudio') patch.vision = !!draft.vision;   // no LM Studio a visão é detectada pelo tipo do modelo (vlm)
       if (p.kind === 'local_hf') patch.n_ctx = draft.n_ctx > 0 ? draft.n_ctx : 0;   // 0 = automático
       if (draft.api_key) patch.api_key = draft.api_key;
       await saveSettings({ providers: { [p.id]: patch } }); draft.api_key = ''; toast(t('Salvo'), 'ok'); await refreshState(); renderSide(); paint();
@@ -61,14 +62,17 @@ async function providers() {
     const inputs = [];
     if (p.id === 'demo') inputs.push(h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, t(p.hint)));
     else {
+      if (p.id === 'lmstudio') inputs.push(lmStudioBox(p, draft, () => modelIn));
       if (p.needs_key || p.kind === 'openai' || p.id === 'anthropic') inputs.push(field(t('Chave de API') + (p.needs_key ? '' : ' (' + t('opcional') + ')'),
         h('div', { class: 'row nw' }, h('input', { type: 'password', autocomplete: 'off', placeholder: cfg.has_key ? '•••••••• (' + t('salva') + ')' : 'sk-…', oninput: (e) => { draft.api_key = e.target.value; } }),
           cfg.has_key ? h('button', { class: 'btn sm danger', onclick: async () => { await saveSettings({ providers: { [p.id]: { api_key: null } } }); toast(t('Chave removida')); await refreshState(); paint(); } }, t('Remover')) : null),
         p.docs ? h('a', { href: p.docs, target: '_blank', rel: 'noopener', class: 'muted' }, t('Obter chave →')) : null));
       if (p.kind === 'openai' || p.id === 'anthropic') inputs.push(field(t('URL base'), h('input', { value: draft.base_url || p.base_url, placeholder: p.base_url || 'https://…/v1', oninput: (e) => { draft.base_url = e.target.value.trim(); } })));
-      inputs.push(field(t('Modelo'), h('div', { class: 'row nw' }, h('input', { list: 'models-' + p.id, value: draft.model, placeholder: p.kind === 'local_hf' ? t('arquivo .gguf baixado') : t('clique em “Carregar modelos”'), oninput: (e) => { draft.model = e.target.value.trim(); } }), dl,
+      const modelIn = h('input', { list: 'models-' + p.id, value: draft.model, placeholder: p.kind === 'local_hf' ? t('arquivo .gguf baixado') : p.id === 'lmstudio' ? t('automático: o modelo carregado no LM Studio') : t('clique em “Carregar modelos”'), oninput: (e) => { draft.model = e.target.value.trim(); } });
+      inputs.push(field(t('Modelo'), h('div', { class: 'row nw' }, modelIn, dl,
         p.kind !== 'local_hf' ? h('button', { class: 'btn sm', onclick: loadModels }, icon('refresh', 13), t('Carregar modelos')) : null)));
-      if (p.kind !== 'local_hf') inputs.push(checkbox(t('Aceita imagens (visão)'), draft.vision, (v) => { draft.vision = v; }));
+      if (p.id === 'lmstudio') { /* visão: automática pelo tipo do modelo */ }
+      else if (p.kind !== 'local_hf') inputs.push(checkbox(t('Aceita imagens (visão)'), draft.vision, (v) => { draft.vision = v; }));
       else {
         // janela de contexto: vazio = automático (32K nos modelos de texto pré-instalados; nos demais, conforme o hardware)
         const ctxHint = h('p', { class: 'muted small', style: { margin: '4px 0 0' } });
@@ -95,6 +99,32 @@ async function providers() {
   }
   paint();
   return container;
+}
+
+// LM Studio: detecta o servidor, lista os modelos (carregados primeiro), escolhe com um clique e usa nos avatares.
+function lmStudioBox(p, draft, getModelInput) {
+  const box = h('div', { class: 'card', style: { background: 'var(--bg2, rgba(255,255,255,.03))', margin: '4px 0 12px', padding: '12px 14px' } });
+  const status = h('div', { class: 'row', style: { gap: '8px' } }), list = h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap', marginTop: '8px' } }), note = h('p', { class: 'muted small', style: { margin: '8px 0 0' } });
+  const use = async (role) => {
+    await saveSettings({ providers: { lmstudio: { base_url: draft.base_url, model: draft.model } }, active: { [role]: 'lmstudio' } });
+    toast(role === 'characters' ? t('Os avatares vão conversar pelo LM Studio.') : t('A geração vai usar o LM Studio.'), 'ok'); await refreshState(); renderSide();
+  };
+  async function detect() {
+    status.replaceChildren(h('div', { class: 'spinner' })); list.replaceChildren(); note.textContent = '';
+    let r;
+    try { r = await api('/api/lmstudio?url=' + encodeURIComponent(draft.base_url || '')); } catch (e) { status.replaceChildren(h('span', { class: 'dim small' }, e.message)); return; }
+    const dot = h('span', { style: { width: '9px', height: '9px', borderRadius: '50%', background: r.running ? 'var(--ok)' : 'var(--dim)', display: 'inline-block' } });
+    status.replaceChildren(dot, h('b', null, r.running ? t('LM Studio detectado em {u}', { u: r.url }) : t('LM Studio não detectado em {u}', { u: r.url })), h('span', { class: 'grow' }),
+      h('button', { class: 'btn sm', onclick: detect }, icon('refresh', 13), t('Detectar de novo')),
+      r.running ? h('button', { class: 'btn sm primary', onclick: () => use('characters') }, t('Usar nos avatares')) : null,
+      r.running ? h('button', { class: 'btn sm', onclick: () => use('generation') }, t('Usar na geração')) : null);
+    if (!r.running) { note.textContent = t(r.hint) + (r.error ? ' (' + r.error + ')' : ''); return; }
+    list.replaceChildren(...(r.models.length ? r.models.map((m) => h('button', { class: 'chip' + (draft.model === m.id || (!draft.model && r.selected === m.id) ? ' on' : ''), title: [m.loaded ? t('carregado') : t('não carregado'), m.quant, m.vision ? t('visão') : ''].filter(Boolean).join(' · '),
+      onclick: () => { draft.model = m.id; const inp = getModelInput(); if (inp) inp.value = m.id; detect(); } }, (m.loaded ? '● ' : '○ ') + m.id + (m.vision ? ' 👁' : ''))) : [h('span', { class: 'dim small' }, t('Nenhum modelo instalado: baixe um na aba «Discover» do LM Studio.'))]));
+    note.textContent = r.loaded.length ? t('● carregado agora · ○ instalado (o LM Studio pode carregar sob demanda). Sem escolher, o ASTA usa o modelo carregado.') : t('Nenhum modelo está carregado no LM Studio: carregue um (ou escolha um acima).');
+  }
+  box.append(status, list, note); detect();
+  return box;
 }
 
 // ---------------------------------------------------------------------------------- geração

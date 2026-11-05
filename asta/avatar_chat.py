@@ -272,5 +272,6 @@ class ChatEngine:
 
 def _visible(raw: str) -> str:
     """Texto visível durante o streaming: corta a partir da primeira tag [[…]] (ainda incompleta ou não)."""
+    raw = av.strip_reasoning(raw)
     i = raw.find("[[")
     return (raw if i < 0 else raw[:i]).lstrip()

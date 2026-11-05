@@ -38,8 +38,8 @@ class BrowserTests(unittest.TestCase):
         cls.httpd.server_close()
         shutil.rmtree(cls.tmp, ignore_errors=True)
 
-    def run_script(self, name: str) -> None:
-        r = subprocess.run(["node", str(BROWSER / name)], capture_output=True, text=True, timeout=300, env={**os.environ, "ASTA_PORT": str(self.port)})
+    def run_script(self, name: str, extra_env=None) -> None:
+        r = subprocess.run(["node", str(BROWSER / name)], capture_output=True, text=True, timeout=300, env={**os.environ, "ASTA_PORT": str(self.port), **(extra_env or {})})
         self.assertEqual(r.returncode, 0, r.stderr[-1500:])
         out = json.loads(r.stdout.strip().splitlines()[-1])
         failed = [k for k, v in out["checks"].items() if not v]
@@ -112,6 +112,15 @@ class BrowserTests(unittest.TestCase):
 
     def test_10_avatar_chat_tells_which_ai_answers_or_that_it_is_only_demo(self):
         self.run_script("avatar_engine_ui.js")
+
+    def test_11_lm_studio_card_detects_the_server_and_picks_a_model(self):
+        from tests.test_lmstudio import FakeLMStudio
+
+        fake = FakeLMStudio()
+        try:
+            self.run_script("lmstudio_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
 
 
 if __name__ == "__main__":

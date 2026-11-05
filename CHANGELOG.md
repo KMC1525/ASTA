@@ -5,6 +5,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.17] — 2026-11-05
+
+### Adicionado
+- **Suporte de primeira classe ao LM Studio para conversar com os avatares** (e para a geração e os NPCs). Antes o LM Studio era só um endereço OpenAI-compatível que você preenchia à mão; agora o ASTA fala com ele de verdade:
+  - **Detecção automática:** o ASTA procura o servidor do LM Studio em `http://127.0.0.1:1234` (ou na URL configurada, com ou sem `/v1`; também numa outra máquina da rede) e, com o papel *Personagens* em **Automático**, usa o LM Studio quando ele está rodando **com um modelo carregado** — antes do modelo GGUF embutido e depois do provedor de geração configurado. A consulta tem cache curto (8 s) para um servidor desligado não atrasar as mensagens.
+  - **Modelos:** usa a API nativa `/api/v0/models` (estado carregado/não carregado, tipo `llm`/`vlm`/`embeddings`, quantização, contexto) e cai em `/v1/models` nas versões antigas. Só aparecem os modelos de **chat** (os de embeddings ficam escondidos), com os carregados primeiro.
+  - **Sem escolher modelo**, usa o que está carregado no LM Studio; **a visão é ligada sozinha** para modelos `vlm` (a escolha manual do usuário continua valendo); chave de API opcional.
+  - **Erros que ensinam:** servidor desligado → *"Não consegui falar com o LM Studio… vá em Developer → Start Server (ou lms server start) e carregue um modelo"*; nenhum modelo carregado → lista o que está instalado; modelo inexistente → mensagem específica.
+  - **Configuração → Provedores → LM Studio:** detecta o servidor (indicador ligado/desligado), lista os modelos (`●` carregado, `○` instalado, `👁` visão), escolhe com um clique e tem os botões **Usar nos avatares** e **Usar na geração**; não há mais a caixa manual de visão nesse cartão.
+  - API: `GET /api/lmstudio` (estado, modelos e o que será usado); `asta doctor` mostra o estado do LM Studio.
+- **Raciocínio escondido no chat:** modelos que escrevem o raciocínio junto da resposta (`<think>…</think>`: Qwen3, DeepSeek R1…, muito comuns no LM Studio e no Ollama) não mostram mais esse trecho nas mensagens dos avatares, nem durante o streaming.
+- Testes: um **servidor LM Studio falso** (API nativa, API antiga, com chave, streaming) cobre a detecção, a lista filtrada, o modelo carregado, a visão, a escolha do usuário, as mensagens de erro, a escolha automática (antes do modelo embutido), o chat dos avatares ponta a ponta e o cartão da Configuração no navegador.
+
+### Observação
+- Não há LM Studio real neste ambiente de desenvolvimento: tudo foi testado contra um servidor simulado que segue a documentação pública da API (`/api/v0/models` e `/v1/chat/completions`). Se alguma versão do LM Studio responder diferente, o cartão mostra o erro e a rota genérica OpenAI-compatível continua valendo.
+- O LM Studio pode carregar modelos sob demanda (JIT): ao escolher um modelo instalado mas não carregado, ele costuma ser carregado na primeira mensagem (a primeira resposta demora).
+
 ## [0.2.16] — 2026-11-05
 
 ### Corrigido
@@ -315,7 +332,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.16...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.17...HEAD
+[0.2.17]: https://github.com/KMC1525/ASTA/compare/v0.2.16...v0.2.17
 [0.2.16]: https://github.com/KMC1525/ASTA/compare/v0.2.15...v0.2.16
 [0.2.15]: https://github.com/KMC1525/ASTA/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/KMC1525/ASTA/compare/v0.2.13...v0.2.14

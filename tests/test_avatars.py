@@ -754,9 +754,10 @@ class ChatProviderChoiceTests(TmpCase):
     def resolve(self, settings, llama=False):
         from unittest import mock
 
-        from asta.providers import auto
+        from asta.providers import auto, lmstudio
 
-        with mock.patch.object(auto, "_llama_installed", return_value=llama):
+        off = {"running": False, "loaded": [], "models": [], "url": "", "native": False, "error": "off"}  # nenhum LM Studio rodando na máquina de testes
+        with mock.patch.object(auto, "_llama_installed", return_value=llama), mock.patch.object(lmstudio, "detect", return_value=off):
             return auto.resolve(settings, "characters", self.tmp)
 
     def test_default_is_auto_and_falls_back_to_demo_with_a_reason_when_nothing_is_available(self):
@@ -802,6 +803,15 @@ class ChatProviderChoiceTests(TmpCase):
 
 
 class AvatarCreationUsesAiTests(ServerCase):
+    def setUp(self):
+        from unittest import mock
+
+        from asta.providers import lmstudio
+
+        p = mock.patch.object(lmstudio, "detect", return_value={"running": False, "loaded": [], "models": [], "url": "", "native": False, "error": "off"})
+        p.start()
+        self.addCleanup(p.stop)
+
     def test_creation_uses_the_configured_ai_even_when_generation_is_still_demo_and_warns_when_there_is_none(self):
         # sem nenhuma IA: cria no Demo, mas avisa
         status, r = self.c.json("POST", "/api/avatars/generate", {"prompt": "Uma amiga chamada Luna"})
@@ -838,6 +848,14 @@ class ChatUsesRealAiTests(ServerCase):
                 self.c.json("PUT", "/api/settings", {"active": {"generation": "demo"}, "providers": {"custom": {"api_key": None}}})
 
     def test_without_any_ai_the_chat_says_it_is_demo_and_why(self):
+        from unittest import mock
+
+        from asta.providers import lmstudio
+
+        with mock.patch.object(lmstudio, "detect", return_value={"running": False, "loaded": [], "models": [], "url": "", "native": False, "error": "off"}):
+            self._demo_check()
+
+    def _demo_check(self):
         eng = self.c.json("GET", "/api/avatars/engine")[1]
         self.assertTrue(eng["demo"])
         self.assertTrue(eng["reason"])

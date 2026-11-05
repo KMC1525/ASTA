@@ -125,6 +125,7 @@ class App:
         a("PUT", r"/api/settings", self.r_settings_put)
         a("POST", r"/api/providers/test", self.r_provider_test)
         a("POST", r"/api/providers/models", self.r_provider_models)
+        a("GET", r"/api/lmstudio", self.r_lmstudio)
 
         for kind, store in (("characters", self.store.characters), ("worldbuildings", self.store.worldbuildings)):
             a("GET", rf"/api/{kind}", self._cards_list(store))
@@ -215,6 +216,17 @@ class App:
             req.json({"ok": True, "models": provider.list_models()})
         except ProviderError as exc:
             req.json({"ok": False, "error": str(exc), "models": []})
+
+    def r_lmstudio(self, req: "Request") -> None:
+        """Estado do LM Studio agora: servidor rodando?, modelos de chat (carregados primeiro) e o que o ASTA vai usar."""
+        from .providers import lmstudio
+
+        cfg = provider_config(self.store.get_settings(), "lmstudio")
+        info = lmstudio.probe(req.query.get("url", [""])[0] or cfg.get("base_url") or "", cfg.get("api_key") or "", timeout=3)
+        lmstudio.forget()  # o usuário acabou de pedir: o cache não pode esconder o que mudou (ligou o servidor, carregou um modelo)
+        info["selected"] = cfg.get("model") or (info["loaded"][0] if info["loaded"] else "")
+        info["hint"] = lmstudio.HOW_TO_START
+        req.json(info)
 
     # ----- cards
     def _cards_list(self, store):

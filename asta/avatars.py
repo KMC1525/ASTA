@@ -377,6 +377,22 @@ def find_mentions(body: str, avatars: List[Dict[str, Any]]) -> List[str]:
 _TAG_RE = re.compile(r"\[\[\s*(remember|mood|silence)\s*(?::\s*([^\]]*?))?\s*\]\]", re.I)
 
 
+_THINK_RE = re.compile(r"<think(?:ing)?>.*?</think(?:ing)?>", re.S | re.I)
+
+
+def strip_reasoning(raw: str) -> str:
+    """Tira o "raciocínio" de modelos que o escrevem junto da resposta (<think>…</think>: Qwen3, DeepSeek R1…, comuns no LM Studio e no Ollama).
+    Um <think> ainda aberto (durante o streaming) esconde o resto; um </think> sem abertura (o modelo já começou pensando) descarta o que veio antes."""
+    s = _THINK_RE.sub("", raw or "")
+    i = s.lower().find("<think")
+    if i >= 0:
+        s = s[:i]
+    j = s.lower().rfind("</think")
+    if j >= 0:
+        s = s[s.find(">", j) + 1:]
+    return s
+
+
 def parse_reply(raw: str, name: str = "", others: Optional[List[str]] = None) -> Dict[str, Any]:
     """Separa o texto visível das tags [[remember:…]] / [[mood:…]] / [[silence]]."""
     remembers: List[str] = []
@@ -394,7 +410,7 @@ def parse_reply(raw: str, name: str = "", others: Optional[List[str]] = None) ->
             silence = True
         return ""
 
-    say = _TAG_RE.sub(repl, raw or "")
+    say = _TAG_RE.sub(repl, strip_reasoning(raw or ""))
     say = clean_group_text(say, name, others or [])
     return {"say": say, "remember": remembers, "mood": mood, "silence": silence}
 
