@@ -260,6 +260,16 @@ class BrowserTests(unittest.TestCase):
     def test_20_audit_worlds_list_only_worlds_translations_titles_and_config_tabs(self):
         self.run_script("audit_ui.js")
 
+    def test_21_rebuild_tool_rebuilds_a_game_shows_the_legal_notice_and_the_game_runs(self):
+        from tests import rebuild_fixtures as F
+
+        d = self.tmp / "rb"
+        d.mkdir(exist_ok=True)
+        (d / "mv.zip").write_bytes(F.zip_bytes(F.mv_project()))
+        (d / "vn.zip").write_bytes(F.zip_bytes({"game/script.rpy": F.RPY.encode()}, "VN"))
+        (d / "lixo.zip").write_bytes(F.zip_bytes({"leiame.txt": b"oi"}))
+        self.run_script("rebuild_ui.js", {"ASTA_REBUILD_MV": str(d / "mv.zip"), "ASTA_REBUILD_RPY": str(d / "vn.zip"), "ASTA_REBUILD_BAD": str(d / "lixo.zip")})
+
 
 if __name__ == "__main__":
     unittest.main()

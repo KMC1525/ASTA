@@ -197,6 +197,29 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 - **Templates** to start fast: Text → Image, Text → Image → Video, With project style, and a full scene (script → image → video + narration + sound, assembled in the Editor).
 - **Every file is yours**: a canvas is a folder (`canvas.json` + `assets/`) you can download as a ZIP.
 
+## Rebuild — rebuild an existing game in plain HTML/CSS/JS
+
+*Home → Rebuild.* Attach a game you already have (a **ZIP** or the loose files) and ASTA rebuilds its **structure** as a new game that runs in any browser with no engine, no installer and no external libraries. **This version supports only two engines:**
+
+| Engine | Versions | What is read |
+|---|---|---|
+| **Ren'Py** | `.rpy` scripts | labels, dialogue, menus/choices, jumps/calls, variables and `if`s |
+| **RPG Maker** | **2000, 2003, XP, VX, VX Ace, MV, MZ** | maps and their size, events (pages, conditions, messages, choices, switches/variables, transfers, shops, battles), actors, items, enemies, troops, common events |
+
+The rebuilt game keeps the **same structure as the original** (same maps/labels, same event flow, same choices and conditions). It opens in ASTA's own 2D engines (RPG Maker → RPG engine, Ren'Py → visual novel) and exports as a ZIP like any other game.
+
+- **Only the structure is rebuilt.** The original art, audio, fonts and other assets are **never read or copied**; the rebuilt game uses ASTA's own procedural visuals/sound. Encrypted or compiled packages (`.rgss*a`, `.rpa`, `.rpyc`, MV/MZ-encrypted assets) cannot be read — extract the plain project first.
+- **Legal notice, shown at the end of every rebuild** (and written into the ZIP as `LEGAL-NOTICE.md`): do not publish the result on Steam or any other platform; it is for **personal use only**; any legal problem is the **responsibility of whoever rebuilds**, never of ASTA's creator or contributors; and *even with this notice, we will not stop you from rebuilding — but be aware of what you are doing.*
+- Tested with synthetic projects for every engine; real commercial projects vary, so expect to touch up the result.
+
+## Performance — Rust core and Light mode
+
+ASTA's backend is still Python, now with an optional **Rust core** and a **performance mode** for modest PCs.
+
+- **Rust core (`asta_core`).** A small, dependency-free Rust library (std only, no crates, loaded through `ctypes`) that does the heavy number crunching — currently the **audio synthesis** of the Canvas (music, effects, voice → PCM). It works on shared buffers instead of one Python object per sample: on our benchmark a 20-second music track went from ~15 s to ~0.05 s. **It is optional:** every function has a pure-Python twin, so without Rust nothing breaks. Enable it with `asta native build` (needs [Rust](https://rustup.rs); the installers do it automatically when `cargo` exists); `asta native` / `asta doctor` show whether it is active; `ASTA_NO_NATIVE=1` turns it off.
+- **Performance mode** (*Configuration → System → Performance*): **Auto** (by hardware tier), **Light**, **Balanced** or **Maximum**. Light mode caps the local model's context window (a value you set by hand always wins), loads weights with `mmap` and a smaller batch, uses **flash attention and an 8-bit KV cache** (about half the attention-cache memory) when the llama-cpp build supports it, **unloads idle models** (configurable) and, for local image/video models, enables attention/VAE slicing and CPU offload — which lowers **VRAM** peaks. Options an older llama-cpp-python does not know are skipped automatically.
+- Honest limits: the Rust speed-up is measured on audio synthesis only; the RAM/VRAM savings of Light mode come from documented llama.cpp/diffusers features and were not benchmarked on real GPUs or models here.
+
 ## The interface
 
 | Section | What it is for |
@@ -336,7 +359,7 @@ Browser tests (Chromium via Playwright) and the JavaScript engine tests run auto
 - Local multiplayer (several players in the same world).
 - AI-generated behavior scripts in a sandbox.
 - Export a world as a desktop/mobile app.
-- Ideas on the table (not scheduled): a backend rewrite in Rust and a "Studio" workspace view.
+- Ideas on the table (not scheduled): moving more hot paths to the Rust core and a "Studio" workspace view.
 
 ## License and credits
 

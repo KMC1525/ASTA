@@ -95,6 +95,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "models": {},  # {"openai": {"image": "gpt-image-1"}} — modelo por provedor e capacidade
         "urls": {},  # {"a1111": "http://127.0.0.1:7860"} — endereço de servidores (locais ou compatíveis)
     },
+    "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},
     "hf": {"token": ""},
 }

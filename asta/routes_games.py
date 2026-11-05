@@ -19,9 +19,34 @@ class GameRoutes:
     def register(self) -> None:
         self.app.add("GET", r"/api/games/genres", self.r_genres)
         self.app.add("POST", r"/api/games/generate", self.r_generate)
+        self.app.add("POST", r"/api/games/rebuild", self.r_rebuild)
+        self.app.add("GET", r"/api/games/rebuild/notice", self.r_notice)
 
     def r_genres(self, req) -> None:
         req.json([{"id": k, **v} for k, v in GENRES.items()])
+
+    def r_notice(self, req) -> None:
+        from .rebuild import ENGINES, NOTICE_EN, NOTICE_PT
+
+        req.json({"pt": NOTICE_PT, "en": NOTICE_EN, "engines": ENGINES})
+
+    def r_rebuild(self, req) -> None:
+        """Reconstrói um jogo Ren'Py / RPG Maker (2000 → MZ) enviado como ZIP (ou arquivos soltos) nos motores 2D do ASTA. Job com SSE; sem IA."""
+        from .rebuild.pipeline import RebuildPipeline
+
+        body = req.body_json()
+        running = self.app.jobs.running("game_rebuild")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+        ids = [x for x in (body.get("attachment_ids") if isinstance(body.get("attachment_ids"), list) else []) if isinstance(x, str)][:40]
+        if not ids:
+            raise HttpError(400, "Anexe o ZIP do jogo (ou os arquivos de dados/scripts) para reconstruí-lo.")
+
+        def work(job: Job) -> None:
+            RebuildPipeline(self.store, job.emit, lambda: job.cancelled).run({"attachment_ids": ids})
+
+        job = self.app.jobs.start("game_rebuild", work)
+        req.json({"job_id": job.id})
 
     def r_generate(self, req) -> None:
         body = req.body_json()

@@ -197,6 +197,29 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 - **Modelos** para começar rápido: Texto → Imagem, Texto → Imagem → Vídeo, Com estilo do projeto e uma cena completa (roteiro → imagem → vídeo + narração + som, montada no Editor).
 - **Todos os arquivos são seus**: um canvas é uma pasta (`canvas.json` + `assets/`) que você pode baixar em ZIP.
 
+## Rebuild — reconstrua um jogo existente em HTML/CSS/JS puro
+
+*Início → Rebuild.* Anexe um jogo que você já tem (um **ZIP** ou os arquivos soltos) e o ASTA reconstrói a **estrutura** dele como um jogo novo que roda em qualquer navegador, sem engine, instalador nem bibliotecas externas. **Esta versão suporta só dois motores:**
+
+| Motor | Versões | O que é lido |
+|---|---|---|
+| **Ren'Py** | scripts `.rpy` | labels, diálogos, menus/escolhas, jumps/calls, variáveis e `if`s |
+| **RPG Maker** | **2000, 2003, XP, VX, VX Ace, MV, MZ** | mapas e tamanho, eventos (páginas, condições, mensagens, escolhas, switches/variáveis, teleportes, lojas, batalhas), heróis, itens, inimigos, tropas, eventos comuns |
+
+O jogo reconstruído mantém a **mesma estrutura do original** (mesmos mapas/labels, mesmo fluxo de eventos, mesmas escolhas e condições). Ele abre nos motores 2D do próprio ASTA (RPG Maker → motor de RPG, Ren'Py → visual novel) e exporta em ZIP como qualquer outro jogo.
+
+- **Só a estrutura é reconstruída.** Arte, áudio, fontes e outros recursos do original **nunca são lidos nem copiados**; o jogo novo usa os visuais/sons procedurais do ASTA. Pacotes criptografados ou compilados (`.rgss*a`, `.rpa`, `.rpyc`, recursos criptografados do MV/MZ) não podem ser lidos — extraia o projeto antes.
+- **Aviso legal, mostrado no fim de toda reconstrução** (e gravado no ZIP como `LEGAL-NOTICE.md`): não publique o resultado na Steam nem em outra plataforma; é para **uso pessoal**; qualquer problema legal é **responsabilidade de quem reconstrói**, nunca do criador ou dos colaboradores do ASTA; e *mesmo com este aviso, não iremos impedir você de reconstruir, mas tenha consciência das suas ações.*
+- Testado com projetos sintéticos de cada motor; projetos comerciais reais variam, então espere ajustar o resultado.
+
+## Desempenho — núcleo Rust e modo Leve
+
+O backend do ASTA continua em Python, agora com um **núcleo Rust** opcional e um **modo de desempenho** para PCs modestos.
+
+- **Núcleo Rust (`asta_core`).** Uma biblioteca Rust pequena e sem dependências (só a biblioteca padrão, sem crates, carregada por `ctypes`) que faz a conta pesada — hoje a **síntese de áudio** do Canvas (música, efeitos, voz → PCM). Ela trabalha em buffers compartilhados em vez de um objeto Python por amostra: no nosso teste, uma música de 20 s foi de ~15 s para ~0,05 s. **É opcional:** toda função tem um equivalente em Python puro, então sem Rust nada quebra. Ative com `asta native build` (precisa do [Rust](https://rustup.rs); os instaladores fazem isso sozinhos quando o `cargo` existe); `asta native` / `asta doctor` mostram se está ativo; `ASTA_NO_NATIVE=1` desliga.
+- **Modo de desempenho** (*Configuração → Sistema → Desempenho*): **Automático** (pelo nível do hardware), **Leve**, **Equilibrado** ou **Máximo**. O modo Leve limita a janela de contexto do modelo local (um valor definido por você sempre vence), carrega os pesos com `mmap` e lote menor, usa **flash attention e cache KV de 8 bits** (cerca de metade da memória do cache de atenção) quando a build do llama-cpp suporta, **descarrega modelos ociosos** (configurável) e, nos modelos locais de imagem/vídeo, ativa fatias de atenção/VAE e descarga para a CPU — o que reduz os picos de **VRAM**. Opções que um llama-cpp-python antigo não conhece são puladas automaticamente.
+- Limites honestos: o ganho do Rust foi medido só na síntese de áudio; a economia de RAM/VRAM do modo Leve vem de recursos documentados do llama.cpp/diffusers e não foi medida em GPUs ou modelos reais aqui.
+
 ## A interface
 
 | Seção | Para quê |
@@ -336,7 +359,7 @@ Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript 
 - Multiplayer local (vários jogadores no mesmo mundo).
 - Scripts de comportamento gerados por IA em *sandbox*.
 - Exportar o mundo como aplicativo desktop/mobile.
-- Ideias na mesa (sem data): reescrever o backend em Rust e uma visão de trabalho "Studio".
+- Ideias na mesa (sem data): levar mais trechos críticos para o núcleo Rust e uma visão de trabalho "Studio".
 
 ## Licença e créditos
 

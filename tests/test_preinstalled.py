@@ -272,9 +272,12 @@ class ContextWindowTests(TmpCase):
 
             for ctx in (None, None, 8192, 8192):
                 cfg = provider_config({"providers": {"local_hf": {"model": str(model), **({"n_ctx": ctx} if ctx else {})}}}, "local_hf")
+                cfg["performance"] = {"mode": "max"}
                 p = local_llama.LocalLlamaProvider(cfg)
                 p._llm()
-        self.assertEqual(loaded, [32768, 8192])  # 32K por padrão; mudar o valor recarrega; o mesmo valor reaproveita o modelo em memória
+            cfg = provider_config({"providers": {"local_hf": {"model": str(model)}}}, "local_hf")  # modo automático em PC fraco → Leve limita o padrão de 32K
+            local_llama.LocalLlamaProvider(cfg)._llm()
+        self.assertEqual(loaded, [32768, 8192, 4096])  # 32K por padrão; mudar o valor recarrega; o mesmo valor reaproveita o modelo; no modo Leve o padrão é limitado
         local_llama._CACHE.clear()
 
 

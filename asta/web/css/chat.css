@@ -146,3 +146,8 @@ button.cite:hover{background:var(--accent);color:var(--on-accent);border-color:v
 .chx-tab .spinner{width:11px;height:11px;border-width:2px}
 .chx-tab-new{border:0;background:transparent;color:var(--muted);width:28px;height:28px;border-radius:999px;cursor:pointer;display:grid;place-items:center;flex:none;margin-bottom:3px}
 .chx-tab-new:hover{background:var(--bg2);color:var(--text)}
+
+/* v0.5: aviso legal do Rebuild */
+.legal{border:1px solid var(--warn);background:color-mix(in srgb,var(--warn) 9%,transparent);border-radius:14px;padding:12px 16px;font-size:13.5px;line-height:1.55}
+.legal .lg-t{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--warn);margin-bottom:4px}
+.legal p{margin:.35em 0}.legal ul{margin:.3em 0 .5em;padding-left:1.3em}.legal li{margin:.15em 0}

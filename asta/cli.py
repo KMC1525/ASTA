@@ -356,6 +356,17 @@ def _update(args: argparse.Namespace) -> int:
     return 0
 
 
+def _native(args: argparse.Namespace) -> int:
+    from . import native
+
+    if args.action == "build":
+        return native.build()
+    st = native.status()
+    print("Núcleo Rust: " + ("ativo" if st["active"] else "inativo (usando Python puro)") + (f" — {st['reason']}" if st["reason"] else ""))
+    print("cargo: " + ("encontrado" if st["cargo"] else "não encontrado (opcional: https://rustup.rs)"))
+    return 0
+
+
 def _doctor(_args: argparse.Namespace) -> int:
     from .util import asta_home, hardware_info
 
@@ -372,6 +383,14 @@ def _doctor(_args: argparse.Namespace) -> int:
         print("pip: não encontrado neste ambiente")
     print(f"ffmpeg: {'sim' if hw['ffmpeg'] else 'não (opcional: análise de vídeo/áudio)'}")
     print(f"Pasta de dados: {asta_home()}")
+    try:
+        from . import native, perf
+
+        nst = native.status()
+        print("Núcleo Rust: " + ("ativo" if nst["active"] else "inativo — usando Python puro (opcional: asta native build)"))
+        print("Modo de desempenho: " + perf.describe(perf.profile({}, hw)))
+    except Exception:  # noqa: BLE001
+        pass
     try:
         import llama_cpp  # type: ignore  # noqa: F401
 
@@ -424,6 +443,8 @@ def main(argv=None) -> int:
     mod.add_argument("--home", help="pasta de dados (padrão ~/.asta)")
     libs = sub.add_parser("libs", help="instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)")
     libs.add_argument("--extras", default="", help="all (padrão), none ou lista separada por vírgula (docs,media,local)")
+    nat = sub.add_parser("native", help="núcleo Rust opcional (mais rápido e leve): build | status")
+    nat.add_argument("action", choices=("build", "status"), nargs="?", default="status")
     sub.add_parser("doctor", help="mostra diagnóstico do ambiente")
     sub.add_parser("version", help="mostra a versão")
     args = parser.parse_args(argv)
@@ -433,6 +454,8 @@ def main(argv=None) -> int:
         return _models(args)
     if args.cmd == "libs":
         return _libs(args)
+    if args.cmd == "native":
+        return _native(args)
     if args.cmd == "doctor":
         return _doctor(args)
     if args.cmd == "version":

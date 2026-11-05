@@ -21,6 +21,7 @@ import zlib
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from .. import native
 from ..providers.base import ProviderError
 
 SR = 22050
@@ -182,15 +183,13 @@ def png_of(prompt: str, size: str = "512x512") -> bytes:
 # --------------------------------------------------------------------------- áudio
 
 def wav_bytes(samples: List[float]) -> bytes:
-    peak = max(1e-6, max((abs(s) for s in samples), default=1.0))
-    k = 0.85 / peak if peak > 0.85 else 1.0
-    pcm = array.array("h", (int(max(-1.0, min(1.0, s * k)) * 32767) for s in samples))
+    pcm = native.pcm16(samples)  # Rust quando existe (asta native build); senão Python — mesmo resultado
     bio = io.BytesIO()
     with wave.open(bio, "wb") as f:
         f.setnchannels(1)
         f.setsampwidth(2)
         f.setframerate(SR)
-        f.writeframes(pcm.tobytes() if hasattr(pcm, "tobytes") else pcm.tostring())
+        f.writeframes(pcm)
     return bio.getvalue()
 
 
@@ -200,27 +199,11 @@ def _env(n: int, a: float = 0.01, r: float = 0.2) -> List[float]:
 
 
 def _tone(freq: float, dur: float, wave_: str = "sine", vol: float = 0.5, sweep: Optional[float] = None) -> List[float]:
-    n = int(dur * SR)
-    out, ph = [], 0.0
-    for i in range(n):
-        f = freq if sweep is None else freq + (sweep - freq) * i / max(1, n - 1)
-        ph += 2 * math.pi * f / SR
-        s = math.sin(ph) if wave_ == "sine" else (1.0 if math.sin(ph) >= 0 else -1.0) if wave_ == "square" else (2 * (ph / (2 * math.pi) % 1) - 1) if wave_ == "saw" else (2 * abs(2 * (ph / (2 * math.pi) % 1) - 1) - 1)
-        out.append(s * vol)
-    e = _env(n, 0.005, min(0.25, dur / 2))
-    return [o * k for o, k in zip(out, e)]
+    return native.tone(freq, dur, wave_, vol, sweep, SR).tolist()
 
 
 def _noise(dur: float, rnd: random.Random, vol: float = 0.4, lp: float = 0.2, decay: float = 0.0, lfo: float = 0.0) -> List[float]:
-    n = int(dur * SR)
-    out, y = [], 0.0
-    for i in range(n):
-        y += lp * (rnd.uniform(-1, 1) - y)
-        a = vol * (math.exp(-decay * i / SR) if decay else 1.0)
-        if lfo:
-            a *= 0.65 + 0.35 * math.sin(2 * math.pi * lfo * i / SR)
-        out.append(y * a)
-    return out
+    return native.noise(dur, rnd, vol, lp, decay, lfo, SR).tolist()
 
 
 def _mixdown(parts: List[List[float]], n: Optional[int] = None) -> List[float]:
@@ -312,35 +295,22 @@ def music(prompt: str, duration: float = 20.0, seed: int = 0) -> bytes:
     hz = lambda n: 440.0 * 2 ** ((n - 69) / 12)  # noqa: E731
     note = lambda deg, octv: root + sc[deg % len(sc)] + 12 * (deg // len(sc) + octv)  # noqa: E731
     prog = [0, 5, 3, 4] if scale_name == "major" else [0, 5, 2, 4]
-    out = [0.0] * total
+    out = native.zeros(total)  # buffer de doubles (8 bytes/amostra) em vez de uma lista de objetos float
     t, bar = 0.0, 0
     while int(t * SR) < total:
         d = prog[bar % len(prog)]
         for deg, vol, wf in ((d, 0.16, "triangle"), (d + 2, 0.10, "sine"), (d + 4, 0.10, "sine")):
-            seg = _tone(hz(note(deg, 0)), beat * 4, wf, vol)
-            i0 = int(t * SR)
-            for i, v in enumerate(seg):
-                if i0 + i < total:
-                    out[i0 + i] += v
-        seg = _tone(hz(note(d, -1)), beat * 2, "sine", 0.22)
+            native.mix_add(out, native.tone(hz(note(deg, 0)), beat * 4, wf, vol, None, SR), int(t * SR))
+        seg = native.tone(hz(note(d, -1)), beat * 2, "sine", 0.22, None, SR)
         for k in (0, 2):
-            i0 = int((t + k * beat) * SR)
-            for i, v in enumerate(seg):
-                if i0 + i < total:
-                    out[i0 + i] += v
+            native.mix_add(out, seg, int((t + k * beat) * SR))
         for s in range(8):
             if rnd.random() < 0.55 * density:
                 deg = d + rnd.choice([0, 2, 4, 7, 4, 2, 1])
-                seg = _tone(hz(note(deg, 2)), beat * 0.9, "triangle", 0.12)
-                i0 = int((t + s * beat / 2) * SR)
-                for i, v in enumerate(seg):
-                    if i0 + i < total:
-                        out[i0 + i] += v
+                native.mix_add(out, native.tone(hz(note(deg, 2)), beat * 0.9, "triangle", 0.12, None, SR), int((t + s * beat / 2) * SR))
         t += beat * 4
         bar += 1
-    fade = int(min(1.5, duration / 4) * SR)
-    for i in range(fade):
-        out[total - 1 - i] *= i / fade
+    native.fade_out(out, int(min(1.5, duration / 4) * SR))
     return wav_bytes(out)
 
 

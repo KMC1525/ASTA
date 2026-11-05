@@ -37,7 +37,7 @@ export async function refreshState() {
   const s = await api('/api/state');
   // o servidor foi reiniciado numa versão nova com esta página aberta: os módulos da página (já carregados) não combinam mais com os do servidor
   if (state.version && s.version && s.version !== state.version) { reloadPage(); return s; }
-  Object.assign(state, { settings: s.settings, presets: s.presets, hardware: s.hardware, version: s.version, diskVersion: s.disk_version || '', home: s.home });
+  Object.assign(state, { settings: s.settings, presets: s.presets, hardware: s.hardware, native: s.native || {}, version: s.version, diskVersion: s.disk_version || '', home: s.home });
   setLang(state.settings.language);
   applyUi(state.settings.ui);  // aparência (tema, cor, escala…) vinda do servidor; o cache local já pintou a tela no primeiro quadro
   return s;

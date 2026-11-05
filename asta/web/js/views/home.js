@@ -11,7 +11,7 @@ const toast0 = (msg) => toast(msg, 'err');
 // avisos vindos do servidor (em português): «modo Demo (sem IA): <motivo>» etc.
 const trWarn = (w) => { const m = /^(modo Demo \(sem IA\): )(.*)$/.exec(String(w)); return m ? t(m[1]) + t(m[2]) : t(String(w)); };
 export const MODES = [['world', 'Mundo 3D', 'worlds'], ['avatar', 'Avatar', 'avatars'], ['game', 'Jogo 2D', 'games'], ['canvas', 'Canvas', 'canvas']];
-export const TITLES = { world: ['O que vamos criar?', 'O que vamos mudar?'], avatar: ['Quem vamos criar?', ''], game: ['Que jogo vamos criar?', 'O que vamos mudar neste jogo?'], canvas: ['O que vamos produzir?', ''] };
+export const TITLES = { world: ['O que vamos criar?', 'O que vamos mudar?'], avatar: ['Quem vamos criar?', ''], game: ['Que jogo vamos criar?', 'O que vamos mudar neste jogo?'], canvas: ['O que vamos produzir?', ''], rebuild: ['Qual jogo vamos reconstruir?', ''] };
 export const HINTS = () => {
   const pt = getLang() === 'pt';
   return {
@@ -22,6 +22,7 @@ export const HINTS = () => {
     game: pt ? ['Uma visual novel romântica num café, com escolhas e três finais', 'Um RPG de aventura: uma vila, uma floresta e um dragão numa masmorra', 'Um jogo de plataforma numa floresta encantada, com moedas e inimigos', 'Um shooter espacial com chefes', 'Um escape room point & click numa casa trancada']
       : ['A romantic visual novel in a café, with choices and three endings', 'An adventure RPG: a village, a forest and a dragon in a dungeon', 'A platformer in an enchanted forest, with coins and enemies', 'A space shooter with bosses', 'A point & click escape room in a locked house'],
     canvas: [],
+    rebuild: [],
   };
 };
 
@@ -157,6 +158,7 @@ async function canvasTool(root, project, carry, composer) {
 function resume(root, info) {
   const retry = () => go('main', { fresh: true, mode: info.kind === 'game' ? 'game' : info.kind, project: info.project, prompt: info.prompt });
   if (info.kind === 'avatar') return renderRun(root, info.id, info, { title: t('Criando seus avatares…'), doneTitle: t('Avatares prontos!'), retry, done: avatarDone });
+  if (info.kind === 'rebuild') return renderRun(root, info.id, info, { title: t('Reconstruindo o jogo…'), doneTitle: t('Jogo reconstruído!'), retry: () => go('main', { fresh: true, mode: 'rebuild' }), done: rebuildDone });
   if (info.kind === 'game') return renderRun(root, info.id, info, { title: info.project ? t('Atualizando o jogo…') : t('Criando o seu jogo…'), doneTitle: t('Jogo pronto!'), retry, done: gameDone });
   return renderRun(root, info.id, info, { title: info.project ? t('Atualizando o mundo…') : t('Criando o seu mundo…'), doneTitle: t('Mundo pronto!'), retry, done: worldDone });
 }
@@ -174,6 +176,24 @@ async function worldDone(ev) {
         h('button', { class: 'btn', onclick: () => go('main', { project: { id: ev.project_id, name: ev.title, current: ev.version, kind: 'world' } }) }, icon('refresh', 15), t('Atualizar este mundo')),
         h('button', { class: 'btn ghost', onclick: () => go('library', { highlight: ev.project_id }) }, t('Ver na biblioteca')),
         h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'world' }) }, t('Novo mundo')))));
+}
+
+// aviso legal do Rebuild (vem do servidor, nos dois idiomas)
+const legalBox = (n) => { const x = n && (n[getLang() === 'pt' ? 'pt' : 'en'] || n.pt); return !x ? null : h('div', { class: 'legal', role: 'note' }, h('div', { class: 'lg-t' }, icon('warn', 16), x.title), h('p', null, x.intro), h('ul', null, x.points.map((p) => h('li', null, p))), h('p', { class: 'small dim' }, x.scope)); };
+
+async function rebuildDone(ev) {
+  let palette = {};
+  try { palette = (await api('/api/projects/' + ev.project_id)).palette || {}; } catch (e) { /* ok */ }
+  return h('div', { class: 'result' }, h('div', { class: 'hero', style: { background: gradient(palette) } }),
+    h('div', { class: 'body' }, h('h3', null, ev.title), h('p', { class: 'muted', style: { margin: '0 0 12px' } }, ev.description || ''),
+      h('div', { class: 'row', style: { gap: '6px', marginBottom: '16px' } }, h('span', { class: 'chip on' }, GENRE_LABEL[ev.genre] || ev.genre), h('span', { class: 'chip' }, (ev.rebuild && ev.rebuild.engine_name) || ''), h('span', { class: 'badge' }, 'v' + ev.version)),
+      ev.warnings && ev.warnings.length ? h('details', { class: 'muted small', style: { marginBottom: '12px' } }, h('summary', null, '⚠ ' + t('{n} aviso(s) da reconstrução', { n: ev.warnings.length })), h('ul', null, ev.warnings.slice(0, 12).map((w) => h('li', null, w)))) : null,
+      legalBox(ev.notice),
+      h('div', { class: 'row', style: { marginTop: '14px' } },
+        h('a', { class: 'btn primary', href: '/play/' + ev.project_id + '/', target: '_blank', rel: 'noopener' }, icon('play', 15), t('Jogar')),
+        h('a', { class: 'btn', href: '/api/projects/' + ev.project_id + '/download' }, icon('download', 15), t('Baixar ZIP')),
+        h('button', { class: 'btn ghost', onclick: () => go('games', { highlight: ev.project_id }) }, t('Ver na biblioteca')),
+        h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'rebuild' }) }, t('Reconstruir outro jogo')))));
 }
 
 async function gameDone(ev) {
@@ -207,4 +227,18 @@ async function avatarDone(ev) {
 }
 
 // ferramentas de criação do Chat (os ativadores): cada uma devolve a configuração do compositor — placeholder, opções, o que o Run faz
-export const TOOL_BUILDERS = { world: worldTool, avatar: avatarTool, game: gameTool, canvas: canvasTool };
+// Rebuild: reconstrói um jogo Ren'Py / RPG Maker (ZIP anexado) nos motores 2D do ASTA — sem IA; o aviso legal aparece no fim.
+async function rebuildTool(root, project, carry, composer) {
+  const cfg = {
+    placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [],
+    onSend: async ({ ids }) => {
+      if (!ids.length) { toast0(t('Anexe o ZIP do jogo (ou os scripts/arquivos de dados) para reconstruí-lo.')); return; }
+      composer.setSending(true);
+      try { await startJob(root, '/api/games/rebuild', { attachment_ids: ids }, 'rebuild', { prompt: '' }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+    },
+  };
+  return Object.assign(cfg, { below: h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px', maxWidth: '560px', marginInline: 'auto' } },
+    t("Aceita Ren'Py (scripts .rpy) e RPG Maker 2000 → MZ, em ZIP. Reconstrói a estrutura (mapas, eventos, diálogos, escolhas…) em HTML, CSS e JS puros; a arte e o áudio originais não são copiados. Só para uso pessoal — um aviso legal aparece ao final.")) });
+}
+
+export const TOOL_BUILDERS = { world: worldTool, avatar: avatarTool, game: gameTool, canvas: canvasTool, rebuild: rebuildTool };

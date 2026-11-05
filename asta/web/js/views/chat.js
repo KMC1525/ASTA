@@ -15,8 +15,8 @@ const LAST_KEY = 'asta.chat', WEB_KEY = 'asta.web', SIDE_KEY = 'asta.sources', T
 const INFLIGHT = new Map();   // conversa → resposta em andamento (continua mesmo se a pessoa sair da tela do Chat e voltar)
 const NEW_TAB_CMD = /^\/(nova|nova aba|new|new tab|tab|aba)\s*$/i;   // comando digitado na caixa: abre uma aba nova
 const THINK_HINT = { off: 'Sem pensar antes: a resposta mais rápida', slow: 'Pensa pouco: um pouco mais cuidadoso', medium: 'Equilíbrio entre tempo e qualidade', high: 'Raciocínio mais profundo', xhigh: 'Para problemas difíceis (mais lento e caro)', ultra: 'O máximo de raciocínio (bem mais lento e caro)' };
-const TOOL_LABEL = { world: 'Mundo 3D', avatar: 'Avatar', game: 'Jogo 2D', canvas: 'Canvas' };
-const TOOL_ICON = { world: 'worlds', avatar: 'avatars', game: 'games', canvas: 'canvas' };
+const TOOL_LABEL = { world: 'Mundo 3D', avatar: 'Avatar', game: 'Jogo 2D', canvas: 'Canvas', rebuild: 'Rebuild' };
+const TOOL_ICON = { world: 'worlds', avatar: 'avatars', game: 'games', canvas: 'canvas', rebuild: 'refresh' };
 
 const SUGGESTIONS = () => (getLang() === 'pt'
   ? ['Como faço um bolo de cenoura fofinho?', 'Me explique a fotossíntese como se eu tivesse 12 anos', 'Monte um plano de estudos de inglês para 30 dias', 'Revise e melhore este texto: …']
@@ -24,7 +24,7 @@ const SUGGESTIONS = () => (getLang() === 'pt'
 
 export default async function render(root, ctx) {
   if (await resumeIfRunning(root, ctx)) return;   // uma criação em andamento: mostra o acompanhamento (como sempre foi)
-  const toolFromCtx = ctx.mode ? ({ game: 'game', world: 'world', avatar: 'avatar', canvas: 'canvas' })[ctx.mode] : (ctx.project ? (ctx.project.kind === 'game2d' ? 'game' : 'world') : '');
+  const toolFromCtx = ctx.mode ? ({ game: 'game', world: 'world', avatar: 'avatar', canvas: 'canvas', rebuild: 'rebuild' })[ctx.mode] : (ctx.project ? (ctx.project.kind === 'game2d' ? 'game' : 'world') : '');
   const updating = ctx.project || null;
   const st = { levels: [['off', 'Desligado'], ['slow', 'Slow'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['ultra', 'Ultra']], tool: toolFromCtx || '', web: false, sideOpen: false, current: null, chats: [] };
   const tabs = []; let tab = null;   // abas: cada uma é uma conversa com a própria resposta em andamento (segue chegando mesmo com outra aba na frente)
@@ -118,6 +118,7 @@ export default async function render(root, ctx) {
       h('div', { class: 'dim small', style: { padding: '0 10px 8px' } }, t('Só rodam quando você liga uma e aperta Run.')),
       item('world', t('Mundo 3D'), 'worlds', t('Um mundo jogável com NPCs')), item('avatar', t('Avatar'), 'avatars', t('Personagens para conversar')),
       item('game', t('Jogo 2D'), 'games', t('Um jogo completo e jogável')), item('canvas', t('Canvas'), 'canvas', t('Imagem, vídeo, som e voz em nós')),
+      item('rebuild', t('Rebuild'), 'refresh', t("Reconstrói um jogo Ren'Py ou RPG Maker")),
       st.tool ? h('div', { class: 'opt', onclick: () => { pop.close(); setTool(''); } }, icon('x', 16), t('Só conversar')) : null));
   }
 

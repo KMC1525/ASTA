@@ -1,0 +1,19 @@
+[package]
+name = "asta_core"
+version = "0.5.0"
+edition = "2021"
+description = "Núcleo em Rust do ASTA: síntese de áudio e conversões em lote (biblioteca C carregada pelo Python via ctypes; só a biblioteca padrão, sem dependências)."
+license = "MIT"
+
+[lib]
+name = "asta_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+panic = "abort"
+strip = true

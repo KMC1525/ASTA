@@ -189,6 +189,14 @@ case "${ASTA_MODELS:-ask}" in
      "$APP_DIR/venv/bin/asta" models install || MODELS_FAILED=1 ;;
 esac
 
+# 7) núcleo Rust opcional (mais rápido e leve): só se o cargo existir; nunca é obrigatório nem faz o instalador falhar
+if command -v cargo >/dev/null 2>&1; then
+  say "Compilando o núcleo Rust opcional …"
+  "$APP_DIR/venv/bin/asta" native build >/dev/null 2>&1 && say "✓ Núcleo Rust ativo." || note "Núcleo Rust não compilado (opcional; o ASTA usa Python). Tente depois:  asta native build"
+else
+  note "Dica: instale o Rust (https://rustup.rs) e rode  asta native build  para deixar o ASTA mais rápido e leve."
+fi
+
 if [ "$MODELS_FAILED" = "1" ]; then
   note "⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install"
 fi

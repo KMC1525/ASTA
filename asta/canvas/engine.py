@@ -22,6 +22,7 @@ from ..agents.runner import Cancelled
 from ..providers import ProviderError, build_provider
 from ..util import now_iso
 from . import procedural as proc
+from . import media as media_mod
 from .media import Ctl, Media, build_media, media_config, pick_provider
 from .render import render_timeline
 from .schema import GENERATORS, NODE_TYPES
@@ -79,6 +80,7 @@ class CanvasEngine:
         self.cs = store.canvases
         self.cid = cid
         self.settings = store.get_settings()
+        media_mod.PERF = self.settings.get("performance") or {}
         self.emit = emit or (lambda ev: None)
         self.cancelled = cancelled
         self._cur = ""

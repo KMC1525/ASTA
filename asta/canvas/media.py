@@ -28,6 +28,8 @@ import wave
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from .. import perf as _perf
+from ..util import hardware_info
 from ..providers import http
 from ..providers.base import ProviderError
 from . import procedural as proc
@@ -888,8 +890,45 @@ def _device() -> Tuple[str, Any]:
     return "cpu", torch.float32
 
 
+def _media_unload() -> None:
+    with _LOCAL_LOCK:
+        _LOCAL_CACHE.clear()
+    gc.collect()
+    try:
+        import torch  # type: ignore
+
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+    except ImportError:
+        pass
+
+
+_MEDIA_IDLE = _perf.IdleUnloader(_media_unload)
+PERF: Dict[str, Any] = {}  # settings["performance"], preenchido pela rota/engine antes de gerar
+
+
+def _slim(pipe: Any, dev: str) -> Any:
+    """Modo leve: fatias de atenção/VAE e (na GPU) descarrega para a CPU o que não está em uso."""
+    prof = _perf.profile(PERF, hardware_info())
+    if not prof["media_offload"]:
+        return pipe.to(dev)
+    for fn in ("enable_attention_slicing", "enable_vae_slicing", "enable_vae_tiling"):
+        try:
+            getattr(pipe, fn)()
+        except Exception:  # noqa: BLE001
+            pass
+    if dev == "cuda":
+        try:
+            pipe.enable_model_cpu_offload()
+            return pipe
+        except Exception:  # noqa: BLE001
+            pass
+    return pipe.to(dev)
+
+
 def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
     """Mantém só um modelo local na memória por vez (hardware modesto)."""
+    _MEDIA_IDLE.touch(_perf.profile(PERF, hardware_info())["idle_s"])
     with _LOCAL_LOCK:
         key = (cap, model)
         if key not in _LOCAL_CACHE:
@@ -960,7 +999,7 @@ class LocalHFMedia(MediaProvider):
             if ready["variant"]:
                 kw["variant"] = ready["variant"]
             pipe = diffusers.AutoPipelineForText2Image.from_pretrained(model, **kw)
-            return pipe.to(dev)
+            return _slim(pipe, dev)
 
         pipe = _local_load("image", model, load)
         (torch,) = _local_import("torch")
@@ -1025,7 +1064,7 @@ class LocalHFMedia(MediaProvider):
         dev, _ = _device()
         ready = self._ready(model)
         vkw = {"torch_dtype": ready["dtype"], "local_files_only": True, **({"variant": ready["variant"]} if ready["variant"] else {})}
-        pipe = _local_load("video", model, lambda: diffusers.DiffusionPipeline.from_pretrained(model, **vkw).to(dev))
+        pipe = _local_load("video", model, lambda: _slim(diffusers.DiffusionPipeline.from_pretrained(model, **vkw), dev))
         w, h = size_of_aspect(aspect, 704 if dev != "cpu" else 384)
         w, h = w // 32 * 32 or 32, h // 32 * 32 or 32
         fps = 24

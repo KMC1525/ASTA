@@ -170,6 +170,15 @@ else {
   & $asta models install
   if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
 }
+# 7) núcleo Rust opcional (mais rápido e leve): só se o cargo existir; nunca faz o instalador falhar
+if (Get-Command cargo -ErrorAction SilentlyContinue) {
+  Say 'Compilando o núcleo Rust opcional …'
+  $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+  & $asta native build *> $null
+  if ($LASTEXITCODE -eq 0) { Say '✓ Núcleo Rust ativo.' } else { Note 'Núcleo Rust não compilado (opcional; o ASTA usa Python). Tente depois:  asta native build' }
+  $ErrorActionPreference = $prevEap
+}
+else { Note 'Dica: instale o Rust (https://rustup.rs) e rode  asta native build  para deixar o ASTA mais rápido e leve.' }
 if ($modelsFailed) { Note '⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install' }
 
 if (-not $old) { Say "✓ ASTA $new instalado." }

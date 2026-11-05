@@ -101,10 +101,20 @@ def build_game_package(store, project: Dict[str, Any], data: Dict[str, Any]) -> 
         total += size
         shutil.copyfile(p, prompts / "attachments" / safe_filename(nm))
 
+    if project.get("rebuild"):  # jogo reconstruído de outro motor: o aviso legal acompanha o pacote
+        from ..rebuild import notice_markdown
+
+        pt_ = str(spec.get("language", "pt")).lower().startswith("pt")
+        (pkg / "LEGAL-NOTICE.md").write_text(notice_markdown("pt" if pt_ else "en"), "utf-8")
     page = (RUNTIME2D / "game.html").read_text("utf-8")
     page = page.replace("{{TITLE}}", html.escape(spec["title"])).replace("{{LANG}}", html.escape(spec.get("language", "pt-BR"))).replace("{{ENGINE}}", ENGINES[genre])
     (pkg / "Game.html").write_text(page, "utf-8")
-    (pkg / "README.md").write_text(_readme(project, data), "utf-8")
+    readme = _readme(project, data)
+    if project.get("rebuild"):
+        from ..rebuild import notice_markdown
+
+        readme += "\n" + notice_markdown("pt" if str(spec.get("language", "pt")).lower().startswith("pt") else "en")
+    (pkg / "README.md").write_text(readme, "utf-8")
     (pkg / "CHANGELOG.md").write_text(changelog_text(project), "utf-8")
 
     for key, obj in (("game", spec), ("brief", data.get("brief")), ("review", data.get("review"))):

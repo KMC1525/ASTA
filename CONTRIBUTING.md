@@ -21,6 +21,8 @@ python -m unittest discover -s tests -t .         # roda tudo (sem rede)
 
 Os testes dos motores em JavaScript e os de navegador (Chromium via Playwright, em `tests/browser`) rodam quando o Node.js e o Playwright existem e são pulados caso contrário; o `ffmpeg` habilita os testes de vídeo do Canvas. O CI instala o Node 22.
 
+**Núcleo Rust (`asta/native`):** opcional e só com a biblioteca padrão (sem crates). Toda função precisa ter um equivalente em Python em `asta/native/__init__.py` com o mesmo resultado. `cargo test --manifest-path asta/native/Cargo.toml` roda os testes do Rust; `asta native build` compila; `ASTA_NATIVE_LIB=<caminho>` faz `tests/test_perf_native.py` comparar Rust × Python. **Rebuild (`asta/rebuild`):** nunca leia nem copie arte/áudio do jogo original, só a estrutura; mantenha o aviso legal.
+
 Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. (use `from __future__ import annotations`).
 
 ## Onde mexer

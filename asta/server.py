@@ -61,6 +61,16 @@ def guess_mime(path: str) -> str:
 # --------------------------------------------------------------------------- aplicação
 
 
+def _native_status() -> dict:
+    try:
+        from . import native
+
+        st = native.status()
+        return {"active": st["active"], "cargo": st["cargo"]}
+    except Exception:  # noqa: BLE001
+        return {"active": False, "cargo": False}
+
+
 class App:
     def __init__(self, store: Store, bind_host: str = "127.0.0.1"):
         self.store = store
@@ -190,7 +200,7 @@ class App:
     def r_state(self, req: "Request") -> None:
         s = self.store.get_settings()
         req.json({
-            "version": __version__, "disk_version": _disk_version(), "hardware": hardware_info(), "home": str(self.store.home),
+            "version": __version__, "disk_version": _disk_version(), "hardware": hardware_info(), "native": _native_status(), "home": str(self.store.home),
             "presets": describe_presets(), "settings": self.store.public_settings(),
             "configured": [pid for pid in s["providers"] if s["providers"][pid].get("api_key") or s["providers"][pid].get("model") or s["providers"][pid].get("base_url")],
         })

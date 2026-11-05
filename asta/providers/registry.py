@@ -100,6 +100,7 @@ def build_provider(settings: Dict[str, Any], pid: str, models_dir: Optional[Path
         return AnthropicProvider(cfg)
     if kind == "local_hf":
         cfg["models_dir"] = str(models_dir or ".")
+        cfg["performance"] = settings.get("performance") or {}
         return LocalLlamaProvider(cfg)
     if cfg.get("id") == "lmstudio":
         return LMStudioProvider(cfg)  # detecta o servidor, usa o modelo carregado e a visão (vlm)

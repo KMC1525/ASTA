@@ -6,10 +6,12 @@ que são suportados como provedores OpenAI-compatíveis.
 """
 from __future__ import annotations
 
+import gc
 import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Tuple
 
+from .. import perf
 from ..util import hardware_info
 from .base import Provider, ProviderError, content_text, split_system
 
@@ -22,6 +24,31 @@ def _n_ctx(tier: str) -> int:
 
 
 MAX_CTX = 1 << 20
+
+
+def _unload() -> None:
+    with _LOCK:
+        _CACHE.clear()
+    gc.collect()
+
+
+_IDLE = perf.IdleUnloader(_unload)
+
+
+def _load_llama(Llama: Any, base: Dict[str, Any], prof: Dict[str, Any]) -> Any:
+    """Carrega o modelo com as opções de economia do modo escolhido; versões antigas do llama-cpp-python que não as conhecem recebem só as básicas."""
+    extra: Dict[str, Any] = {"n_batch": prof["n_batch"], "use_mmap": True}
+    if prof["flash"]:
+        extra["flash_attn"] = True
+    if prof["kv_q8"]:
+        extra.update(type_k=8, type_v=8, flash_attn=True)  # 8 = GGML_TYPE_Q8_0 (cache de atenção pela metade; exige flash attention)
+    basic = {k: v for k, v in extra.items() if k in ("n_batch", "use_mmap")}
+    for kw in (extra, basic):
+        try:
+            return Llama(**base, **kw)
+        except Exception:  # noqa: BLE001  (versão/backend sem essas opções: tenta com menos)
+            continue
+    return Llama(**base)
 
 
 def context_size(configured: Any, model_name: str, tier: str) -> int:
@@ -70,6 +97,7 @@ class LocalLlamaProvider(Provider):
         self.label = cfg.get("label", "Hugging Face local")
         self.models_dir = Path(cfg.get("models_dir", "."))
         self.n_ctx_cfg = cfg.get("n_ctx")
+        self.perf_cfg = cfg.get("performance") or {}
 
     def _model_path(self) -> Path:
         name = self.model
@@ -92,21 +120,19 @@ class LocalLlamaProvider(Provider):
             ) from None
         path = str(self._model_path())
         hw = hardware_info()
-        ctx = context_size(self.n_ctx_cfg, Path(path).name, hw["tier"])
-        key = f"{path}|{ctx}"  # mudar a janela de contexto recarrega o modelo
+        prof = perf.profile(self.perf_cfg, hw)
+        ctx = perf.cap_context(context_size(self.n_ctx_cfg, Path(path).name, hw["tier"]), prof, explicit=bool(self.n_ctx_cfg))
+        key = f"{path}|{ctx}|{prof['mode']}"  # mudar a janela de contexto ou o modo recarrega o modelo
         with _LOCK:
             llm = _CACHE.get(key)
             if llm is None:
                 use_gpu = bool(hw.get("gpu")) or (hw["os"] == "Darwin" and "arm" in hw["arch"].lower())
-                llm = Llama(
-                    model_path=path,
-                    n_ctx=ctx,
-                    n_threads=max(1, hw["cpus"] - 1),
-                    n_gpu_layers=-1 if use_gpu else 0,
-                    verbose=False,
-                )
+                base = dict(model_path=path, n_ctx=ctx, n_threads=max(1, hw["cpus"] - 1), n_gpu_layers=-1 if use_gpu else 0, verbose=False)
                 _CACHE.clear()  # mantém apenas um modelo na RAM (hardware leve)
+                gc.collect()
+                llm = _load_llama(Llama, base, prof)
                 _CACHE[key] = llm
+        _IDLE.touch(prof["idle_s"])
         return llm, path
 
     def _messages(self, messages: List[dict], system: str) -> List[dict]:

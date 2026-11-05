@@ -86,4 +86,27 @@ export const GAME = {
   },
 };
 
-export const KINDS = { world: WORLD, avatar: AVATAR, game: GAME };
+export const REBUILD = {
+  steps: {
+    attachments: ['Arquivos', 'Abre o ZIP e lê só os scripts e arquivos de dados (mídia nunca é lida)'],
+    analyst: ['Leitura', 'Descobre o motor do jogo e lê mapas, eventos e roteiro'],
+    designer: ['Reconstrução', 'Refaz a estrutura nos motores 2D do ASTA (HTML, CSS e JS puros)'],
+    reviewer: ['Validação', 'Confere se dá para jogar do início ao fim'],
+    package: ['Empacotamento', 'Monta o ZIP do jogo e salva na biblioteca'],
+  },
+  detail(id, s, d) {
+    d = d || {};
+    if (s === 'running') return t('trabalhando…');
+    if (s === 'error') return d.message || '';
+    switch (id) {
+      case 'attachments': return t('{n} arquivo(s) de dados', { n: d.count });
+      case 'analyst': return (d.engine || '') + (d.title ? ' · “' + d.title + '”' : '');
+      case 'designer': return GENRE_LABEL[d.genre] || '';
+      case 'reviewer': return (d.approved ? t('aprovado') : t('com ressalvas')) + (d.issues ? ' · ' + t('{n} apontamentos', { n: d.issues }) : '');
+      case 'package': return t('versão {n} salva', { n: d.version });
+      default: return '';
+    }
+  },
+};
+
+export const KINDS = { world: WORLD, avatar: AVATAR, game: GAME, rebuild: REBUILD };

@@ -7,6 +7,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-05
+
+### Added
+- **Rebuild — rebuild existing games in plain HTML/CSS/JS** (*Home → Rebuild*). Attach a ZIP (or loose files) and ASTA rebuilds the game's **structure** with the **same organization as the original**, as a game that runs in any browser. **Only two engines are supported in this version:** **Ren'Py** (`.rpy` scripts: labels, dialogue, menus, jumps/calls, variables, `if`) and **RPG Maker 2000, 2003, XP, VX, VX Ace, MV and MZ** (maps, events with pages/conditions, messages, choices, switches/variables, transfers, shops, battles, actors, items, enemies, troops, common events). The engine is detected automatically; an unknown, encrypted or compiled ZIP (`.rgss*a`, `.rpa`, `.rpyc`, encrypted MV/MZ) gets a clear message.
+  - New `asta/rebuild/` package: `.rpy` reader, Ruby Marshal reader (XP/VX/Ace), LCF binary reader (2000/2003), JSON reader (MV/MZ), a common converter to ASTA's RPG engine and a Ren'Py → visual novel converter.
+  - **Only the structure is rebuilt; original art, audio and fonts are never read or copied.**
+  - **Legal notice at the end of every rebuild** (result screen and `LEGAL-NOTICE.md` in the ZIP, also appended to the game's README): do not publish on Steam or other platforms; personal use only; any legal problem is the responsibility of whoever rebuilds, not ASTA's creator/contributors; and "even with this notice, we will not stop you from rebuilding, but be aware of what you are doing". Routes `POST /api/games/rebuild` and `GET /api/games/rebuild/notice`.
+- **Optional Rust core (`asta/native`)**, standard library only (no crates), loaded through `ctypes`, with a **pure-Python equivalent for every function**. It speeds up Canvas audio synthesis (music, effects, voice → 16-bit PCM) by working on shared buffers (`array('d')`) instead of one Python object per sample: a 20 s music track went from ~15 s to ~0.05 s. Commands `asta native [build|status]`; `asta doctor` shows the state; `ASTA_NO_NATIVE=1` turns it off and `ASTA_NATIVE_LIB` points at a custom library. The installers (Linux/macOS/Windows) build it automatically when `cargo` exists, never failing because of it.
+- **Performance mode** (*Configuration → System → Performance*; `settings.performance`): Automatic (by hardware), Light, Balanced, Maximum. Light: capped context window (a user-set value always wins), `mmap` and a smaller batch, flash attention + 8-bit KV cache, **automatic unloading of idle models** (default 10 min; at most 3 min in Light) and, for local image/video models, attention/VAE slicing and CPU offload. Options the installed llama-cpp-python does not know are skipped.
+
+### Changed
+- `asta doctor` shows the Rust core and the performance mode. The package ships the core's source (`native/Cargo.toml`, `native/src/*.rs`).
+- Roadmap: "rewrite the backend in Rust" became "move more hot paths to the Rust core".
+
+### Known limits
+- Rebuild was tested with synthetic projects for each engine; the LCF (2000/2003) reader was not validated against real commercial files.
+- The Rust speed-up was measured on audio synthesis only; Light mode's RAM/VRAM savings were not measured on real GPUs or models.
+
+### Tests
+- `tests/test_rebuild.py` (all engines, ZIP, warnings, API) and `tests/browser/rebuild_ui.js`; `tests/test_perf_native.py` (profiles, context caps, idle unloading, llama load fallback, Rust × Python equivalence, CLI).
+
 ## [0.4.5] — 2026-11-05
 
 ### Added
@@ -600,7 +621,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.4.5...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/KMC1525/ASTA/compare/v0.4.3...v0.4.4
 [0.4.3]: https://github.com/KMC1525/ASTA/compare/v0.4.2...v0.4.3
