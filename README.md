@@ -105,6 +105,9 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 - **Model picker** (next to Run): switch provider *and* model in one click — Claude, ChatGPT, Grok, Gemini, OpenRouter, LM Studio, Ollama, the embedded GGUF model… The choice is saved and applies to the whole app.
 - **Markdown replies, streamed live** (lists, tables, code blocks with *Copy*), a **Stop** button (Run turns into Stop; a half answer is never saved), **Reply again**, copy, and a **History** of conversations (the last one reopens by itself; *New chat* starts a blank one). Attach images, PDFs, spreadsheets, audio, video… — they are read and used as context.
 - **Activator for the heavy stuff.** The multi-agent pipelines (3D world, avatar, 2D game, Canvas) **never start on their own**. Chat only talks; if you ask it to create something it *suggests* the matching tool, and nothing runs until **you** turn the tool on (✦ *Create* → pick one, or press the suggestion button) and press **Run**. Turn it off (×) to go back to plain chatting. The creation options (genre, count, relationship, SFW/NSFW, perspective…) appear only while the tool is on.
+- **Web search, built in (🌐 Web button).** Turn it on and the Chat searches the web for your question, reads the first pages and gives the model numbered sources; the answer cites them as [1], [2] and shows clickable **Sources** chips (kept in the history). It works with **any model, local ones included**, and with **any prompt**: with a creation tool on, the prompt is searched too and the references travel with it. Engines: DuckDuckGo → Wikipedia by default (no key), Brave Search, Tavily or your own SearXNG. Follow-up questions ("and the price?") get a model-written search query. Result pages are read only from public hosts (no localhost/private networks, redirects included) and treated as untrusted text. *Configuration → Chat* has a **Test search** button.
+- **Thinking time** (next to the model name, only when the chosen model supports it): **Off · Slow · Medium · High · Extra high · Ultra**. Claude gets extended-thinking budgets (1K → 32K tokens, on top of the answer size); OpenAI reasoning models (o-series, GPT-5), Gemini 2.5+, gpt-oss (LM Studio/Ollama) and reasoning models on OpenRouter get `reasoning_effort` (Extra high and Ultra use the provider's highest effort with more token headroom). Models without the feature show no selector and nothing is sent; if a model refuses the mode, ASTA retries without it and says so.
+- **Chat settings** (*Configuration → Chat*): **answer size** (tokens), **context window** (what ASTA sends — oldest messages leave first), remembered turns, creativity, **custom instructions**, default thinking level and the web-search options.
 - Without a provider the Demo engine is used and Chat says so honestly — it cannot really answer questions. Pick a model to fix it.
 
 ## The four creation tools
@@ -202,7 +205,7 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 | **2D games** | Your games: play, download, update. |
 | **Canvas** | Your canvases and the node editor. |
 | **Library** | Everything you created as updatable projects, plus the **local AI models you installed**, with search and automatic + custom tags. Press *Select* to pick several items and delete them at once; models can be deleted one at a time or in bulk. |
-| **Configuration** | Providers, media providers, generation, avatars and games, voice, local Hugging Face models, **appearance** and system. |
+| **Configuration** | Providers, media providers, **Chat** (answer size, context window, thinking time, web search), generation, avatars and games, voice, local Hugging Face models, **appearance** and system. |
 
 ### Make it yours (Configuration → Appearance)
 
@@ -305,7 +308,7 @@ asta/
   runtime2d/     2D engines: visual novel, RPG, platformer, side scroller, point & click
   games2d/       2D game spec: schema, validation, packaging
   avatars.py  avatar_chat.py  routes_avatars.py    avatar cards, chat director, API
-  assistant_chat.py  routes_chat.py                general-purpose Chat (history, streaming, tool suggestion)
+  assistant_chat.py  routes_chat.py  websearch.py  general-purpose Chat (history, streaming, tool suggestion, web search)
   canvas/        node schema, store, engine, media providers, timeline renderer, procedural Demo
   web/           the WebUI (plain HTML/CSS/JS, no build)
 tests/           unittest suite (API, pipelines, engines, providers, Canvas) + optional browser tests

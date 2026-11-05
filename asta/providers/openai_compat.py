@@ -10,7 +10,7 @@ import re
 import urllib.parse
 from typing import Any, Dict, Iterator, List
 
-from . import http, images
+from . import http, images, thinking as think
 from .base import Provider, ProviderError, content_images, content_text, split_system
 
 
@@ -101,6 +101,12 @@ class OpenAICompatProvider(Provider):
         }
         if json_mode and self.use_json_mode:
             body["response_format"] = {"type": "json_object"}
+        level = think.normalize(self.thinking)
+        kind = think.support(self.cfg.get("id", ""), self.model)["kind"]
+        if level != "off" and kind in ("effort", "reasoning"):
+            body.update(think.body_extra(kind, level, int(max_tokens)))
+            body["max_tokens"] = think.total_tokens(kind, level, int(max_tokens))  # a folga de raciocínio vai além do tamanho da resposta
+            self._answer_tokens = int(max_tokens)
         return body
 
     def _adapt(self, body: dict, err: ProviderError) -> bool:
@@ -109,6 +115,13 @@ class OpenAICompatProvider(Provider):
         if err.status not in (400, 415, 422):
             return False
         if _IMAGE_ERR.search(msg) and self._strip_images(body):  # o servidor recusou as imagens (formato, modelo sem visão…): segue só com o texto
+            return True
+        if ("reasoning" in msg or "thinking" in msg) and ("reasoning_effort" in body or "reasoning" in body):  # o modelo não aceita o parâmetro de raciocínio
+            body.pop("reasoning_effort", None)
+            body.pop("reasoning", None)
+            key = "max_tokens" if "max_tokens" in body else "max_completion_tokens"
+            body[key] = getattr(self, "_answer_tokens", body.get(key))
+            self.notes.append("Este modelo não aceitou o modo de pensamento escolhido; respondi sem ele.")
             return True
         if "max_completion_tokens" in msg and "max_tokens" in body:
             body["max_completion_tokens"] = body.pop("max_tokens")

@@ -11,7 +11,7 @@ export default async function render(root, ctx) {
   const body = h('div'), tabs = h('div', { class: 'tabs' });
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...TABS.map(([id, l]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l))));
-  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, generation, creative, voice, local, appearance, system }[tab]; body.replaceChildren(await fn()); };
+  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, chat, generation, creative, voice, local, appearance, system }[tab]; body.replaceChildren(await fn()); };
   root.replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
 }
@@ -153,6 +153,59 @@ async function generation() {
         field(t('Memórias de longo prazo por NPC'), h('input', { type: 'number', min: 5, max: 100, value: c.memory_limit, oninput: (e) => { c.memory_limit = parseInt(e.target.value || '30', 10); } })))),
     h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn primary', onclick: async () => { await saveSettings({ generation: g, characters: c }); toast(t('Salvo'), 'ok'); } }, icon('check', 15), t('Salvar'))));
   return wrap;
+}
+
+// ---------------------------------------------------------------------------------- chat
+async function chat() {
+  const c = JSON.parse(JSON.stringify(state.settings.chat)), w = c.web, keys = { brave: '', tavily: '' };
+  const num = (key, min, max, step, label, hint, target = c) => field(label, h('input', { type: 'number', min, max, step, value: target[key], id: 'cc-' + key, oninput: (e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) target[key] = Math.max(min, Math.min(max, v)); } }), hint);
+  const quick = (key, values, fmt, input) => h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap', marginTop: '6px' } }, ...values.map((v) => h('button', { class: 'chip', type: 'button', onclick: () => { c[key] = v; document.getElementById(input).value = v; } }, fmt(v))));
+  const kb = (n) => (n >= 1000000 ? (n / 1000000) + 'M' : n >= 1000 ? (n / 1000) + 'K' : String(n));
+  const keyField = (id, label, setFlag) => field(label, h('div', { class: 'row', style: { gap: '8px' } }, h('input', { type: 'password', autocomplete: 'off', id: 'cc-' + id, placeholder: setFlag ? '•••••••• (' + t('salva') + ')' : '', oninput: (e) => { keys[id.replace('_key', '')] = e.target.value; } }),
+    setFlag ? h('button', { class: 'btn sm', type: 'button', onclick: async () => { await saveSettings({ chat: { web: { [id]: null } } }); toast(t('Chave removida'), 'ok'); await refreshState(); } }, t('Remover')) : null));
+  const results = h('div', { class: 'col', style: { marginTop: '10px' } });
+  const levels = [['off', t('Desligado')], ['slow', 'Slow'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['ultra', 'Ultra']];
+  const test = async () => {
+    results.replaceChildren(h('div', { class: 'spinner' }));
+    try {
+      const patch = { chat: { web: { engine: w.engine, results: w.results, read_pages: w.read_pages, searxng_url: w.searxng_url, language: w.language } } };
+      if (keys.brave) patch.chat.web.brave_key = keys.brave;
+      if (keys.tavily) patch.chat.web.tavily_key = keys.tavily;
+      await saveSettings(patch);   // o teste usa o que está na tela
+      const r = await api('/api/web/search', { method: 'POST', body: { query: 'ASTA open source AI' } });
+      results.replaceChildren(h('div', { class: 'ok small' }, '✓ ' + t('Funcionando — motor: {n}', { n: r.engine })), ...r.sources.map((x) => h('div', { class: 'small' }, h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title), h('span', { class: 'dim' }, ' — ' + x.host))));
+    } catch (e) { results.replaceChildren(h('div', { class: 'errbox' }, e.message)); }
+  };
+  return h('div', null,
+    h('p', { class: 'muted', style: { marginTop: 0 } }, t('Ajustes da tela Chat. O modelo e o provedor se escolhem no botão ao lado do Run; aqui ficam o tamanho das respostas, a memória da conversa, o tempo de pensamento e a busca na web.')),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Respostas')),
+      h('div', { class: 'grid2' },
+        h('div', null, num('max_tokens', 64, 32000, 100, t('Tamanho das respostas (tokens)'), t('Limite do texto de cada resposta. 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Com tempo de pensamento ligado, o pensamento vai além desse limite.')), quick('max_tokens', [500, 2000, 6000, 16000], (v) => t('{n} tokens', { n: kb(v) }), 'cc-max_tokens')),
+        field(t('Criatividade (temperatura)'), range(0, 1.5, 0.05, c.temperature, (v) => { c.temperature = v; }), t('Baixa = mais objetivo; alta = mais criativo. Modelos com pensamento estendido ignoram este valor.'))),
+      field(t('Instruções personalizadas'), h('textarea', { rows: 3, id: 'cc-instructions', maxlength: 3000, placeholder: t('Ex.: Responda sempre em português, de forma curta e com exemplos.'), oninput: (e) => { c.instructions = e.target.value; } }, c.instructions || ''), t('Entram em toda conversa do Chat, como um pedido seu ao assistente.'))),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Janela de contexto')),
+      h('div', { class: 'grid2' },
+        h('div', null, num('context_tokens', 1000, 2000000, 1000, t('Janela de contexto (tokens)'), t('Quanto da conversa (mais anexos e fontes da web) o ASTA envia ao modelo. Passou disso, as mensagens mais antigas saem primeiro. Nunca ponha mais do que o modelo aguenta.')), quick('context_tokens', [4000, 8000, 16000, 32000, 128000], (v) => kb(v), 'cc-context_tokens')),
+        num('history_turns', 1, 100, 1, t('Máximo de turnos lembrados'), t('Pares pergunta/resposta no máximo, mesmo que caibam mais na janela.'))),
+      h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, t('Modelos locais têm a própria janela, definida ao carregá-los (LM Studio: Context Length; Ollama: num_ctx; GGUF embutido: n_ctx em Provedores). Este valor só limita o que o ASTA envia.'))),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Tempo de pensamento')),
+      field(t('Nível padrão'), seg(levels, c.thinking, (v) => { c.thinking = v; }), t('Slow → Ultra: quanto o modelo pode «pensar» antes de responder (mais tempo e tokens, respostas melhores em problemas difíceis).')),
+      h('p', { class: 'muted small', style: { margin: '6px 0 0' } }, t('O seletor aparece ao lado do nome do modelo no Chat só quando o modelo escolhido tem o recurso: Claude (pensamento estendido), modelos de raciocínio da OpenAI (o-series, GPT-5), Gemini 2.5+, gpt-oss (LM Studio/Ollama) e modelos com raciocínio no OpenRouter. Nos demais, nada é enviado. Extra high e Ultra usam o esforço mais alto do provedor com mais folga de tokens.'))),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Busca na web')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('O botão Web do Chat pesquisa a sua pergunta (ou o prompt de uma ferramenta de criação), lê as primeiras páginas e entrega ao modelo com as fontes numeradas. Funciona com qualquer modelo, inclusive local. Sem chave, usa o DuckDuckGo e, se falhar, a Wikipédia.')),
+      checkbox(t('Deixar a busca na web ligada por padrão'), c.web.default, (v) => { w.default = v; }),
+      h('div', { class: 'grid2', style: { marginTop: '12px' } },
+        field(t('Motor de busca'), select([['auto', t('Automático (DuckDuckGo → Wikipédia)')], ['duckduckgo', 'DuckDuckGo'], ['wikipedia', t('Wikipédia')], ['brave', 'Brave Search (' + t('chave') + ')'], ['tavily', 'Tavily (' + t('chave') + ')'], ['searxng', 'SearXNG (' + t('sua instância') + ')']], w.engine, (v) => { w.engine = v; })),
+        field(t('Idioma da busca'), select([['auto', t('Automático')], ['pt', 'Português'], ['en', 'English']], w.language, (v) => { w.language = v; }))),
+      h('div', { class: 'grid2' }, num('results', 1, 10, 1, t('Resultados por busca'), '', w), num('read_pages', 0, 5, 1, t('Páginas lidas por inteiro'), t('0 = só os títulos e trechos. Ler mais páginas dá respostas melhores, porém mais lentas e com mais tokens.'), w)),
+      h('div', { class: 'grid2' }, keyField('brave_key', t('Chave da Brave Search'), c.web.brave_key_set), keyField('tavily_key', t('Chave da Tavily'), c.web.tavily_key_set)),
+      field(t('Endereço da instância SearXNG'), h('input', { id: 'cc-searxng_url', value: w.searxng_url || '', placeholder: 'http://localhost:8080', oninput: (e) => { w.searxng_url = e.target.value.trim(); } }), t('A instância precisa permitir o formato json (search.formats em settings.yml).')),
+      h('div', { class: 'row' }, h('button', { class: 'btn', id: 'cc-test', type: 'button', onclick: test }, icon('globe', 15), t('Testar busca'))), results),
+    h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn primary', id: 'cc-save', onclick: async () => {
+      const patch = JSON.parse(JSON.stringify(c)); delete patch.web.brave_key_set; delete patch.web.tavily_key_set; delete patch.web.brave_key; delete patch.web.tavily_key;
+      if (keys.brave) patch.web.brave_key = keys.brave;
+      if (keys.tavily) patch.web.tavily_key = keys.tavily;
+      await saveSettings({ chat: patch }); await refreshState(); toast(t('Salvo'), 'ok'); } }, icon('check', 15), t('Salvar'))));
 }
 
 // ---------------------------------------------------------------------------------- voz

@@ -4,10 +4,12 @@ from __future__ import annotations
 import traceback
 from typing import Any
 
+from . import websearch
 from .assistant_chat import AssistantChat, title_from
 from .jobs import HttpError
 from .providers import PRESETS, ProviderError, provider_config, resolve_provider
 from .providers import auto
+from .providers import thinking as think
 from .util import text
 
 
@@ -27,6 +29,8 @@ class ChatRoutes:
         a("POST", r"/api/chats/(?P<cid>[\w-]+)/send", self.r_send)
         a("POST", r"/api/chats/(?P<cid>[\w-]+)/regenerate", self.r_regenerate)
         a("GET", r"/api/chat/providers", self.r_providers)
+        a("POST", r"/api/web/search", self.r_web_search)
+        a("POST", r"/api/web/context", self.r_web_context)
 
     # ----- conversas
     def _chat(self, cid: str):
@@ -86,11 +90,41 @@ class ChatRoutes:
         ids = [text(i, "", 60) for i in body.get("attachment_ids")][:20] if isinstance(body.get("attachment_ids"), list) else []
         if not message and not ids:
             raise HttpError(400, "Escreva uma mensagem.")
-        self._stream(req, lambda emit: self.engine.send(cid, message, ids, emit))
+        self._stream(req, lambda emit: self.engine.send(cid, message, ids, emit, web=bool(body.get("web"))))
 
     def r_regenerate(self, req, cid: str) -> None:
         self._chat(cid)
-        self._stream(req, lambda emit: self.engine.regenerate(cid, emit))
+        body = req.body_json()
+        web = bool(body.get("web")) if isinstance(body, dict) else False
+        self._stream(req, lambda emit: self.engine.regenerate(cid, emit, web=web))
+
+    # ----- busca na web (também usada pelas ferramentas de criação: «pesquisar na web» entra no prompt)
+    def _query(self, req) -> str:
+        body = req.body_json()
+        q = text(body.get("query"), "", 300) if isinstance(body, dict) else ""
+        if not q:
+            raise HttpError(400, "Escreva o que pesquisar.")
+        return q
+
+    def _ui_lang(self) -> str:
+        return "pt" if str(self.store.get_settings().get("language") or "auto").lower().startswith("pt") else "auto"
+
+    def r_web_search(self, req) -> None:
+        """Só a busca (títulos, links e trechos) — usado pelo botão «Testar busca» em Configuração → Chat."""
+        try:
+            found = websearch.search(self._query(req), self.store.get_settings(), ui_lang=self._ui_lang())
+        except websearch.SearchError as exc:
+            raise HttpError(502, str(exc)) from None
+        req.json({"engine": found["engine"], "query": found["query"], "sources": [{"n": i, "title": r["title"], "url": r["url"], "snippet": r["snippet"],
+                                                                                    "host": (r["url"].split("/")[2] if r["url"].count("/") >= 2 else "")} for i, r in enumerate(found["results"], 1)]})
+
+    def r_web_context(self, req) -> None:
+        """Busca + leitura das páginas: devolve o bloco de texto com fontes numeradas, para anexar ao prompt de uma ferramenta de criação."""
+        try:
+            got = websearch.gather(self._query(req), self.store.get_settings(), ui_lang=self._ui_lang())
+        except websearch.SearchError as exc:
+            raise HttpError(502, str(exc)) from None
+        req.json({"engine": got["engine"], "query": got["query"], "text": got["text"], "sources": websearch.public_sources(got["sources"])})
 
     # ----- seletor de modelo
     def r_providers(self, req) -> None:
@@ -109,4 +143,7 @@ class ChatRoutes:
                           "has_key": bool(cfg.get("api_key")), "model": cfg.get("model") or "", "usable": auto.usable(settings, pid, self.store.models_dir),
                           "selected": current.get("id") == pid})
         items.sort(key=lambda i: (not i["selected"], not i["usable"], not i["local"], i["label"].lower()))
-        req.json({"current": current, "providers": items})
+        sup = think.support(current.get("id", ""), current.get("model", ""))
+        chat_cfg = settings.get("chat") or {}
+        current = dict(current, thinking={**sup, "level": think.normalize(chat_cfg.get("thinking")) if sup["supported"] else "off"})
+        req.json({"current": current, "providers": items, "web_default": bool((chat_cfg.get("web") or {}).get("default")), "thinking_levels": [[k, think.LABELS[k]] for k in think.LEVELS]})

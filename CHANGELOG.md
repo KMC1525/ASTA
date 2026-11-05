@@ -5,6 +5,39 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.4.1] — 2026-11-05
+
+**Chat com busca na web nativa e uma aba de configurações própria** (tamanho da resposta, janela de contexto, tempo de pensamento).
+
+### Adicionado
+- **Busca na web nativa no Chat (botão 🌐 Web)**, para qualquer prompt e qualquer modelo (nuvem ou local — a busca é do ASTA, não depende de recurso do provedor):
+  - pesquisa a pergunta, **lê as primeiras páginas** e entrega ao modelo um bloco com **fontes numeradas**; a resposta cita [1], [2] e mostra chips de **Fontes** clicáveis, que ficam salvos no histórico. Em perguntas de seguimento ("e o preço dele?") o modelo reescreve a consulta com o contexto da conversa; a data de hoje vai no contexto.
+  - **Motores:** *Automático* (DuckDuckGo → Wikipédia, sem chave), DuckDuckGo, Wikipédia, **Brave Search** (chave), **Tavily** (chave) e **SearXNG** (a sua instância). As chaves ficam no servidor e nunca voltam ao navegador. Número de resultados, páginas lidas por inteiro e idioma configuráveis; botão **Testar busca**.
+  - **Também nas ferramentas de criação:** com a ferramenta ligada e o Web aceso, o Run pesquisa o prompt e anexa as referências (limitadas a 6.000 caracteres) antes de iniciar o pipeline; se a busca falhar, cria sem ela e avisa.
+  - **Segurança:** só `http(s)`; páginas de resultados em `localhost`, redes privadas, link-local (como `169.254.169.254`) e IPs reservados são recusadas, **inclusive em redirecionamentos**; resultados são tratados como texto não confiável (o modelo é instruído a nunca seguir ordens vindas das páginas); limites de tamanho e de tempo.
+  - A escolha do botão é lembrada; *Configuração → Chat → Deixar a busca na web ligada por padrão* define o começo. Com o Demo (sem IA) a busca não roda e o Chat explica o porquê. Falha de busca → aviso e a resposta segue só com o que o modelo sabe.
+  - API: `POST /api/web/search` (títulos, links e trechos) e `POST /api/web/context` (bloco para o prompt); `POST /api/chats/<id>/send` e `/regenerate` aceitam `"web": true` e emitem os eventos `search` e `sources`.
+- **Aba Chat em Configuração:**
+  - **Tamanho das respostas (tokens)** — de 64 a 32.000, com atalhos (500 · 2K · 6K · 16K). Vale só para o texto visível: o pensamento vai além.
+  - **Janela de contexto (tokens)** — de 1K a 2M, com atalhos (4K … 128K): o histórico enviado ao modelo cabe nela (descontados texto de sistema, fontes da web e a resposta); o que passar tem as mensagens **mais antigas** cortadas primeiro. Mais **turnos lembrados**, **criatividade** e **instruções personalizadas** (entram em toda conversa do Chat).
+  - **Tempo de pensamento padrão** e as opções da **busca na web** (motor, resultados, páginas lidas, chaves, SearXNG, idioma).
+- **Tempo de pensamento (Desligado · Slow · Medium · High · Extra high · Ultra)**, num botão **ao lado do nome do modelo — que só aparece quando o modelo escolhido tem o recurso**:
+  - **Claude** (3.7 e família 4/5): pensamento estendido, com orçamento de 1.024 / 4.000 / 10.000 / 20.000 / 32.000 tokens **além** do tamanho da resposta (a temperatura não é enviada, como a API exige; o total respeita o teto de 32.000 de saída).
+  - **OpenAI** (o-series, GPT-5), **Gemini 2.5+** (endpoint compatível), **gpt-oss** (LM Studio, Ollama, llama.cpp, personalizado) e modelos com raciocínio no **OpenRouter**: `reasoning_effort` (ou `reasoning.effort`) low / medium / high — *Extra high* e *Ultra* usam *high* com mais folga de tokens (esses provedores só têm três degraus).
+  - Modelos sem o recurso: nenhum seletor e nada é enviado. Se um modelo recusar o modo, o ASTA **refaz o pedido sem ele e avisa**.
+- Menus do Chat maiores (modelo e ferramentas rolam menos) e `settings.chat` ganhou `context_tokens`, `thinking`, `instructions` e `web`.
+
+### Alterado
+- O aviso "gastou o limite pensando" agora aponta para *Configuração → Chat* (aumentar o tamanho da resposta ou baixar o tempo de pensamento). Os avisos do Chat passaram a ser traduzidos.
+
+### Testes
+- `tests/test_websearch.py`: análise do HTML do DuckDuckGo (anúncios fora, redirecionamentos desfeitos), Wikipédia, Brave/SearXNG, motores sem chave, fallback do modo automático, bloqueio de hosts privados, HTML → texto, bloco de contexto com limite, consulta reescrita em seguimentos, fontes salvas na resposta, falha de busca e Demo; suporte por modelo, níveis, orçamentos, pedido ao Claude e `reasoning_effort` (com o retry quando o modelo recusa); janela de contexto cortando o mais antigo; segredos das chaves; rotas.
+- `tests/browser/chat_settings_ui.js`: aba Chat (campos, atalhos, salvar), botão Web (padrão, lembrar, fontes persistentes), seletor de pensamento ao lado do modelo (só com modelo compatível) e a busca no prompt de uma ferramenta de criação.
+
+### Observação
+- **Não consegui testar a busca contra a internet real** neste ambiente de desenvolvimento (a rede de saída é bloqueada): o DuckDuckGo foi testado com HTML de exemplo no formato conhecido da página (`result__a`/`result__snippet`) e os demais motores com respostas simuladas. Se o DuckDuckGo mudar o HTML ou pedir verificação (CAPTCHA), o modo Automático cai para a Wikipédia e a mensagem aponta para os motores com chave (Brave/Tavily) ou SearXNG.
+- Os modos de pensamento seguem a documentação pública de cada API, sem ter sido testados contra um Claude/OpenAI/Gemini reais; os testes usam servidores simulados.
+
 ## [0.4.0] — 2026-11-05
 
 **Chat 2.0.** A tela **Principal** virou **Chat**: uma conversa limpa e de uso geral (receita de bolo, estudo, texto, código…), com o seletor de modelo ao lado do Run. As criações com vários agentes continuam todas lá, mas agora só rodam **quando você pede** — um ativador.
@@ -477,7 +510,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/KMC1525/ASTA/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/KMC1525/ASTA/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/KMC1525/ASTA/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/KMC1525/ASTA/compare/v0.3.1...v0.3.2

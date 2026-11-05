@@ -6,6 +6,7 @@ import subprocess
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from pathlib import Path
 
 from asta.server import make_server
@@ -174,6 +175,29 @@ class BrowserTests(unittest.TestCase):
         fake = FakeLMStudio(reply=reply, delay=0.12)
         try:
             self.run_script("chat_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
+    def test_17_chat_settings_tab_web_search_with_sources_and_thinking_level_next_to_the_model(self):
+        from tests.test_lmstudio import MODELS, FakeLMStudio
+
+        found = {"engine": "duckduckgo", "query": "dólar", "results": [{"title": "Dólar hoje", "url": "https://a.com/d", "snippet": "O dólar fechou a R$ 5,10."}]}
+        got = {"engine": "duckduckgo", "query": "dólar", "text": "[1] Dólar hoje\nhttps://a.com/d\nO dólar fechou a R$ 5,10.",
+               "sources": [{"n": 1, "title": "Dólar hoje", "url": "https://a.com/d", "host": "a.com", "snippet": "", "text": ""}]}
+        fake = FakeLMStudio(models=MODELS + [{"id": "openai/gpt-oss-20b", "type": "llm", "state": "loaded"}], reply=lambda n, body: ["Segundo a fonte [1], o dólar fechou a R$ 5,10."])
+        try:
+            with mock.patch("asta.websearch.search", return_value=found), mock.patch("asta.websearch.gather", return_value=got) as gather:
+                self.run_script("chat_settings_ui.js", {"ASTA_FAKE_LM": fake.url})
+            posts = [r[2] for r in fake.requests if r[0] == "POST" and r[2]]
+            self.assertTrue(any("[WEB SEARCH RESULTS" in str(b["messages"][0]["content"]) and "R$ 5,10" in str(b["messages"][0]["content"]) for b in posts))
+            self.assertTrue(any("Responda sempre em tópicos." in str(b["messages"][0]["content"]) for b in posts))
+            think = [b for b in posts if b.get("reasoning_effort")]
+            self.assertTrue(think and think[-1]["reasoning_effort"] == "high" and think[-1]["max_tokens"] == 3000 + 24000)  # Ultra: esforço high + folga; tamanho da resposta 3.000
+            self.assertGreaterEqual(gather.call_count, 2)  # uma no Chat, outra no prompt da ferramenta de criação
+            self.assertTrue(any("dólar" in c[0][0] for c in gather.call_args_list))
         finally:
             fake.close()
             from asta.providers import lmstudio

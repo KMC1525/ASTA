@@ -3,7 +3,7 @@ const { run, until } = require('./_common.js');
 run('models', async ({ open, check }) => {
   const page = await open();
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForTimeout(400);
-  await page.locator('.tabs button').nth(5).click(); await page.waitForTimeout(400);
+  await page.locator('.tabs button').nth(6).click(); await page.waitForTimeout(400);
   await page.locator('input[type=search]').fill('tiny'); await page.keyboard.press('Enter');
   await page.waitForSelector('.li', { timeout: 10000 });
   await page.locator('.li').first().click(); await page.waitForSelector('.quant', { timeout: 10000 });

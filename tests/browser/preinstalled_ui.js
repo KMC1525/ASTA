@@ -3,7 +3,7 @@ const { run } = require('./_common.js');
 run('preinstalled', async ({ open, check }) => {
   const page = await open();
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForTimeout(400);
-  await page.locator('.tabs button').nth(5).click(); await page.waitForTimeout(700);
+  await page.locator('.tabs button').nth(6).click(); await page.waitForTimeout(700);
   const card = page.locator('.card:has(h3:has-text("Pre-installed models"))');
   check('pre:cartao-existe', (await card.count()) === 1);
   const txt = await card.innerText();

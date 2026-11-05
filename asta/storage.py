@@ -38,7 +38,9 @@ from .util import asta_home, deep_merge, new_id, now_iso, read_json, safe_filena
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",  # auto | pt-BR | en
-    "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000},  # Chat geral (a tela «Chat»)
+    # Chat geral (a tela «Chat»): tamanho da resposta, janela de contexto, tempo de pensamento e busca na web
+    "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000, "context_tokens": 16000, "thinking": "off", "instructions": "",
+             "web": {"default": False, "engine": "auto", "results": 5, "read_pages": 2, "language": "auto", "brave_key": "", "tavily_key": "", "searxng_url": ""}},
     "ui": DEFAULT_UI,  # aparência, atalhos, barra lateral, chat (ver uiprefs.py)
     "active": {"generation": "demo", "characters": "auto"},  # characters "auto": IA de verdade sempre que houver (ver providers/auto.py)
     "providers": {},
@@ -102,6 +104,8 @@ SECRET_PATHS = [
     ("hf", "token"),
     ("voice", "stt", "api_key"),
     ("voice", "tts", "api_key"),
+    ("chat", "web", "brave_key"),
+    ("chat", "web", "tavily_key"),
 ]
 
 
