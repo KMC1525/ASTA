@@ -24,6 +24,7 @@ from .games2d.builder import rebuild_game
 from .jobs import HttpError, Job, JobManager  # noqa: F401  (reexportados)
 from .providers import ProviderError, build_provider, describe_presets, provider_config, resolve_provider
 from .routes_avatars import AvatarRoutes
+from .routes_chat import ChatRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
@@ -176,6 +177,8 @@ class App:
 
         self.avatar_routes = AvatarRoutes(self)
         self.avatar_routes.register()
+        self.chat_routes = ChatRoutes(self)
+        self.chat_routes.register()
         self.game_routes = GameRoutes(self)
         self.game_routes.register()
         self.canvas_routes = CanvasRoutes(self)

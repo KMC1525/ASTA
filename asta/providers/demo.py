@@ -59,6 +59,8 @@ class DemoProvider(Provider):
                 except json.JSONDecodeError:
                     data = {}
             return json.dumps(AGENTS[m.group(1)](data), ensure_ascii=False)
+        if "[[ASTA_CHAT:assistant]]" in sys_text:
+            return rulebased.assistant_reply(last_user)
         if "[[ASTA_CHAT:avatar]]" in sys_text:
             return rulebased_avatars.avatar_reply(sys_text, last_user)
         return rulebased.npc_reply(sys_text, last_user)

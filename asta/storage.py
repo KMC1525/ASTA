@@ -30,6 +30,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .avatars import normalize_avatar, normalize_chat
+from .assistant_chat import normalize_chat as normalize_assistant_chat
 from .uiprefs import DEFAULT_UI, normalize_ui
 from .canvas.store import CanvasStore
 from .cards import normalize_character, normalize_worldbuilding
@@ -37,6 +38,7 @@ from .util import asta_home, deep_merge, new_id, now_iso, read_json, safe_filena
 
 DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",  # auto | pt-BR | en
+    "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000},  # Chat geral (a tela «Chat»)
     "ui": DEFAULT_UI,  # aparência, atalhos, barra lateral, chat (ver uiprefs.py)
     "active": {"generation": "demo", "characters": "auto"},  # characters "auto": IA de verdade sempre que houver (ver providers/auto.py)
     "providers": {},
@@ -180,6 +182,7 @@ class Store:
         self.characters = CardStore(self.home / "characters", normalize_character, "c_")
         self.worldbuildings = CardStore(self.home / "worldbuildings", normalize_worldbuilding, "w_")
         self.avatars = CardStore(self.home / "avatars", normalize_avatar, "a_")
+        self.chats = CardStore(self.home / "chats", normalize_assistant_chat, "t_")  # conversas do Chat geral
         self.avatar_chats = CardStore(self.home / "avatar_chats", normalize_chat, "ch_")
         self.avatar_portraits_dir = self.home / "avatars" / "portraits"
         self.avatar_memory_dir = self.home / "avatar_memory"

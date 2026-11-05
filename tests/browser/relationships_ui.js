@@ -1,9 +1,9 @@
 // Relações dos avatars: namorada, namorado, esposa e marido aparecem na criação e no editor, e o seletor não corta o texto.
-const { run } = require('./_common.js');
+const { run, useTool } = require('./_common.js');
 run('relationships', async ({ open, api, check }) => {
   const page = await open({ width: 1300, height: 900 });
   await page.evaluate(() => { location.hash = '#/main'; }); await page.waitForTimeout(500);
-  await page.locator('.modes .mode').nth(1).click(); await page.waitForTimeout(500);
+  await useTool(page, 'avatar');
   const sel = page.locator('.composer select').filter({ has: page.locator('option', { hasText: 'Relationship: automatic' }) });
   const opts = await sel.locator('option').allInnerTexts();
   check('rel:opcoes-na-criacao', ['Girlfriend', 'Boyfriend', 'Wife', 'Husband'].every((x) => opts.includes(x)) && opts.includes('Friend') && opts.includes('Partner'));

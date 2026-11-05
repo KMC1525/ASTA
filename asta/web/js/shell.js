@@ -34,7 +34,8 @@ export function installShell(app) {
       const tabs = CONFIG_TABS.map(([id, label]) => ({ group: t('Configuração'), label: t('Configuração') + ' → ' + t(label), icon: 'config', run: () => go('config', { tab: id }) }));
       const actions = [
         { group: t('Ações'), label: t('Novo avatar'), icon: 'plus', run: () => { location.hash = '#/avatars/edit/new'; } },
-        { group: t('Ações'), label: t('Nova criação (tela Principal)'), icon: 'sparkle', run: () => go('main', { fresh: true }) },
+        { group: t('Ações'), label: t('Novo chat'), icon: 'plus', run: () => go('main', { fresh: true }) },
+        { group: t('Ações'), label: t('Nova criação (tela Chat)'), icon: 'sparkle', run: () => go('main', { fresh: true }) },
         { group: t('Ações'), label: t('Alternar tema claro/escuro'), icon: 'panel', keys: 'Alt+T', run: toggleTheme },
         { group: t('Ações'), label: t('Recolher/expandir a barra lateral'), icon: 'panel', keys: 'Alt+B', run: toggleSidebar },
         { group: t('Ações'), label: t('Ver atalhos de teclado'), icon: 'chev', keys: '?', run: shortcutsHelp },

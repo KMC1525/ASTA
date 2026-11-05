@@ -167,14 +167,20 @@ export function accordion(title, body, open = false, right) {
 }
 
 export function popover(anchor, content, onClose) {
-  const r = anchor.getBoundingClientRect();
   const pop = h('div', { class: 'pop' }, content);
   document.body.appendChild(pop);
-  const w = pop.offsetWidth, hgt = pop.offsetHeight;
-  pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
-  pop.style.top = (r.top - hgt - 8 > 8 ? r.top - hgt - 8 : r.bottom + 8) + 'px';
+  // posiciona acima do botão (ou abaixo, se não couber) e reposiciona quando o conteúdo cresce (listas carregadas depois)
+  const place = () => {
+    const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
+    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+    const top = r.top - hgt - 8 > 8 ? r.top - hgt - 8 : r.bottom + 8;
+    pop.style.top = Math.max(8, Math.min(innerHeight - hgt - 8, top)) + 'px';
+  };
+  place();
+  let ro = null;
+  if (typeof ResizeObserver !== 'undefined') { ro = new ResizeObserver(place); ro.observe(pop); }
   const off = (e) => { if (!pop.contains(e.target) && !anchor.contains(e.target)) close(); };
-  const close = () => { pop.remove(); document.removeEventListener('mousedown', off); if (onClose) onClose(); };
+  const close = () => { if (ro) ro.disconnect(); pop.remove(); document.removeEventListener('mousedown', off); if (onClose) onClose(); };
   setTimeout(() => document.addEventListener('mousedown', off), 0);
   pop.close = close;
   return pop;

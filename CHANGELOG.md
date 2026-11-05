@@ -5,6 +5,29 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.4.0] — 2026-11-05
+
+**Chat 2.0.** A tela **Principal** virou **Chat**: uma conversa limpa e de uso geral (receita de bolo, estudo, texto, código…), com o seletor de modelo ao lado do Run. As criações com vários agentes continuam todas lá, mas agora só rodam **quando você pede** — um ativador.
+
+### Adicionado
+- **Tela Chat** no lugar da Principal (o atalho `#/chat` e a ordem do menu continuam; a *Tela inicial* "Principal" passou a se chamar "Chat"). Layout: **caixa de texto** em cima; embaixo, **anexos à esquerda** e, **à direita, o botão de modelo e o Run**. Anexos de qualquer tipo (clique, arrastar-e-soltar, colar) são lidos e usados como contexto.
+- **Seletor de modelo e provedor** (botão ao lado do Run): lista os provedores (nuvem e locais), mostra os modelos de cada um (para o LM Studio, inclui *Automático*), aceita digitar outro nome e leva a *Gerenciar provedores…*. A troca é salva em `settings` (provedor de geração + modelo) e vale para o app todo.
+- **Conversa geral persistida**, com resposta em **streaming** e **Markdown** (listas, títulos, tabelas, citações, código com botão *Copiar*; renderizador próprio que só cria nós DOM — HTML do modelo nunca é interpretado, links só `http(s)`/`mailto`). **Histórico** (a última conversa reabre sozinha; *Novo chat*; apagar), título automático, **Parar** (o Run vira Parar; nada pela metade é salvo), **Responder de novo** e copiar. Aviso honesto quando o motor é só o **Demo** (sem IA): o Chat diz que não consegue responder de verdade e aponta para o seletor de modelo.
+  - API: `GET/POST /api/chats`, `GET/PUT/DELETE /api/chats/<id>`, `POST /api/chats/<id>/send` e `/regenerate` (SSE: `user, title, provider, notice, typing, delta, message, suggest, removed, error, end`), `GET /api/chat/providers`. Ajustes em `settings.chat` (`history_turns`, `temperature`, `max_tokens`).
+- **Ativador das ferramentas de criação** (✦ *Criar*): Mundo 3D, Avatar, Jogo 2D e Canvas. **Nada de agente/multiagente/multi-etapas roda sozinho**: o Chat só conversa. Se o pedido parecer uma criação ("crie um jogo 2D…"), ele **sugere** a ferramenta (faixa com *Ligar Jogo 2D*), mas só pré-preenche a caixa — quem executa é você, apertando **Run** com a ferramenta ligada. Dá para desligar (×) e voltar a conversar. As opções de cada ferramenta (gênero, quantidade, relacionamento, SFW/NSFW, perspectiva, foto-base…) aparecem só enquanto ela está ligada; atualizar um projeto pela Biblioteca abre o Chat já com a ferramenta certa.
+- Paleta de comandos: **Novo chat**.
+
+### Alterado
+- `home.js` agora só contém as ferramentas de criação e as telas de resultado (o compositor `composer.js` ficou configurável: ferramentas à esquerda/direita, rótulo do botão, troca de ação sem perder texto nem anexos).
+- O menu flutuante (`popover`) se reposiciona quando a lista cresce e nunca sai da tela.
+
+### Testes
+- `tests/test_chat.py` (conversa, histórico, contexto, anexos, Parar/regenerar, detecção do ativador sem execução, Demo honesto, provedores) e `tests/browser/chat_ui.js` (layout: anexos à esquerda e modelo + Run à direita; streaming e Markdown sem HTML injetado; sugestão que não executa; troca de modelo; Parar; histórico; e o Run da ferramenta criando o jogo). Os testes de navegador antigos passaram a usar o ativador no lugar da barra de modos.
+
+### Observação
+- Os pipelines de criação são os mesmos de antes; só mudou **como** se chega neles. Quem usava a barra de modos da tela Principal agora liga a ferramenta em ✦ *Criar*.
+- Com o provedor **Demo** o Chat não "entende" perguntas — o Demo é por regras. Para conversar de verdade, escolha um modelo no seletor.
+
 ## [0.3.3] — 2026-11-05
 
 Revisão da seção **Avatars**, principalmente da hora em que o usuário conversa com o avatar. Cada item foi reproduzido (em teste ou no navegador) antes de corrigir.
@@ -454,7 +477,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.3.3...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/KMC1525/ASTA/compare/v0.3.3...v0.4.0
 [0.3.3]: https://github.com/KMC1525/ASTA/compare/v0.3.2...v0.3.3
 [0.3.2]: https://github.com/KMC1525/ASTA/compare/v0.3.1...v0.3.2
 [0.3.1]: https://github.com/KMC1525/ASTA/compare/v0.3.0...v0.3.1

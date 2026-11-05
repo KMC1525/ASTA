@@ -93,12 +93,21 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 
 ## Primeiros passos
 
-1. **Teste sem configurar nada.** O provedor padrão é o **Demo** (offline, gera por regras). Na tela **Principal**, escolha um modo, escreva um prompt e envie — você verá os agentes trabalhando e, no fim, **Jogar**, **Conversar** ou **Abrir**.
+1. **Teste sem configurar nada.** O provedor padrão é o **Demo** (offline, gera por regras). Abra o **Chat**, pergunte qualquer coisa e aperte **Run** — ou ligue uma ferramenta de criação (✦ *Criar*), descreva o que quer e aperte **Run** para ver os agentes trabalhando e, no fim, **Jogar**, **Conversar** ou **Abrir**.
 2. **Ligue uma IA de verdade** em **Configuração → Provedores**: cole a chave (Claude, ChatGPT, Grok, Gemini…), clique em *Carregar modelos*, escolha um e *Testar*. Ou use **Ollama / LM Studio** (grátis, local).
 3. **Para o Canvas**, escolha os provedores de imagem/vídeo/som/voz em **Configuração → Mídia** (OpenAI, ElevenLabs, Google, Stability AI, Replicate, Hugging Face, uma Stable Diffusion WebUI local ou modelos locais do Hugging Face). Sem nenhum, o provedor Demo deixa você testar fluxos inteiros offline.
 4. Volte à **Biblioteca** quando quiser e clique em *Atualizar* para evoluir o mesmo projeto.
 
-## Os quatro modos
+## Chat — a tela principal
+
+O **Chat** é um assistente de uso geral, limpo: peça uma receita de bolo, estude um assunto, reescreva um texto, depure código. A tela é só uma caixa de texto com **anexos à esquerda**, o botão de **modelo** e o **Run** à direita.
+
+- **Seletor de modelo** (ao lado do Run): troca de provedor *e* de modelo em um clique — Claude, ChatGPT, Grok, Gemini, OpenRouter, LM Studio, Ollama, modelo GGUF embutido… A escolha é salva e vale para o app todo.
+- **Respostas em Markdown, ao vivo** (listas, tabelas, blocos de código com *Copiar*), botão **Parar** (o Run vira Parar; resposta pela metade nunca é salva), **Responder de novo**, copiar e **Histórico** de conversas (a última reabre sozinha; *Novo chat* abre uma em branco). Anexe imagens, PDFs, planilhas, áudio, vídeo… — são lidos e usados como contexto.
+- **Ativador para o trabalho pesado.** Os pipelines com vários agentes (mundo 3D, avatar, jogo 2D, Canvas) **nunca começam sozinhos**. O Chat só conversa; se você pedir para criar algo, ele *sugere* a ferramenta certa, e nada roda até **você** ligar a ferramenta (✦ *Criar* → escolher uma, ou apertar o botão da sugestão) e apertar **Run**. Desligue (×) para voltar a só conversar. As opções de criação (gênero, quantidade, relacionamento, SFW/NSFW, perspectiva…) só aparecem com a ferramenta ligada.
+- Sem provedor, vale o motor Demo e o Chat avisa com honestidade — ele não responde perguntas de verdade. Escolha um modelo para resolver.
+
+## As quatro ferramentas de criação
 
 ### 🌍 Mundos 3D
 
@@ -187,7 +196,7 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 
 | Seção | Para quê |
 |---|---|
-| **Principal** | A caixa de prompt com os quatro modos (texto + anexos de qualquer tipo, arrastar-e-soltar/colar) e o acompanhamento ao vivo dos agentes. |
+| **Chat** | A tela principal: chat de uso geral com seletor de modelo, anexos e histórico — e, ao ligar uma ferramenta de criação, a caixa de prompt de mundos 3D, avatars, jogos 2D e Canvas com o acompanhamento ao vivo dos agentes. |
 | **Mundos** | Tudo sobre os mundos 3D em três abas: **Mundos** (personalizar os mundos gerados: bioma, clima, hora, ciclo dia/noite, NPCs, áudio, interface, qualidade — cada salvamento vira uma nova versão **sem gastar IA**), **Personagens** (cards dos NPCs e do jogador: nome, tags, system prompt, voz, aparência; importa/exporta JSON e cards de PNG, Character Card V2/V3) e **Worldbuilding** (regras gerais dos mundos — cenário, tom, convenções — também salvas como cards). |
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
@@ -200,8 +209,8 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 - **Tema:** escuro (padrão), **claro** ou **automático** (segue o sistema, ao vivo). A aparência é aplicada antes do primeiro quadro, então nunca pisca. O grafo de nós do Canvas e o editor de vídeo ficam escuros de propósito, como nos editores de mídia.
 - **Cor de destaque:** 6 predefinidas ou qualquer cor; botões, seleções e a sua bolha no chat seguem a cor (o contraste do texto é escolhido sozinho).
 - **Conforto:** tamanho da interface de 90 a 150%, densidade confortável ou compacta, fonte do sistema/serifada/monoespaçada, tamanho do texto do chat dos avatares e **reduzir animações** (também respeita a configuração do sistema).
-- **Uso:** idioma da interface, **enviar com Enter ou Ctrl+Enter** (chat e caixa de criação), **tela inicial** (Principal, uma tela específica ou *a última que usei*), atalhos de teclado ligados/desligados.
-- **Barra lateral:** esconda as telas que você não usa (*Principal* e *Configuração* ficam sempre; as escondidas continuam acessíveis pela busca).
+- **Uso:** idioma da interface, **enviar com Enter ou Ctrl+Enter** (chat e caixa de criação), **tela inicial** (Chat, uma tela específica ou *a última que usei*), atalhos de teclado ligados/desligados.
+- **Barra lateral:** esconda as telas que você não usa (*Chat* e *Configuração* ficam sempre; as escondidas continuam acessíveis pela busca).
 - **Paleta de comandos — `Ctrl/⌘ + K`:** digite para ir a qualquer tela ou aba da Configuração, conversar com/editar um avatar, abrir um projeto ou canvas, ou rodar uma ação (novo avatar, alternar tema, exportar configurações…). Atalhos: `Alt+1…7` telas, `Alt+B` barra lateral, `Alt+T` tema, `?` ajuda.
 - **Backup:** *Exportar configurações* (um JSON **sem chaves de API nem tokens**), *Importar* em outro computador e *Restaurar padrões da aparência* (chaves, avatares e projetos nunca são tocados).
 - **Primeira vez:** uma boas-vindas curta deixa escolher tema, cor e idioma e mostra se há uma IA pronta — só numa instalação nova, nunca para quem já usa o ASTA.
@@ -322,7 +331,7 @@ Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript 
 - Multiplayer local (vários jogadores no mesmo mundo).
 - Scripts de comportamento gerados por IA em *sandbox*.
 - Exportar o mundo como aplicativo desktop/mobile.
-- Próximas versões planejadas: **v0.3 — Rebuild** (novo backend em Rust) e **v0.4 — Studio**. Elas não fazem parte da 0.2.
+- Ideias na mesa (sem data): reescrever o backend em Rust e uma visão de trabalho "Studio".
 
 ## Licença e créditos
 

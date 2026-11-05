@@ -162,6 +162,24 @@ class BrowserTests(unittest.TestCase):
 
             lmstudio.forget()
 
+    def test_16_chat_2_clean_layout_markdown_model_picker_and_tools_only_run_when_activated(self):
+        from tests.test_lmstudio import FakeLMStudio
+
+        def reply(n, body):
+            last = str(body["messages"][-1]["content"])
+            if "[lento]" in last:
+                return ["parte "] * 25
+            return ["Aqui vai:\n\n- **item** um\n- item dois com `codigo`\n\n", f"(resposta {n})"]
+
+        fake = FakeLMStudio(reply=reply, delay=0.12)
+        try:
+            self.run_script("chat_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
 
 if __name__ == "__main__":
     unittest.main()

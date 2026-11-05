@@ -8,11 +8,11 @@ import { h, icon, toast } from './ui.js';
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Principal', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'],
+  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'],
   ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
-  main: () => import('./views/home.js'), worlds: () => import('./views/worlds.js'),
+  main: () => import('./views/chat.js'), worlds: () => import('./views/worlds.js'),
   library: () => import('./views/library.js'), config: () => import('./views/config.js'),
   avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), canvas: () => import('./views/canvas.js'),
 };
@@ -53,6 +53,7 @@ export async function saveSettings(patch) {
 function route() {
   const old = location.hash.match(/^#\/(characters|worldbuilding)\b/);  // links antigos: agora vivem dentro de Mundos
   if (old) history.replaceState(null, '', '#/worlds/' + old[1]);
+  if (/^#\/chat\b/.test(location.hash)) history.replaceState(null, '', '#/main');   // apelido: #/chat = tela Chat
   const m = location.hash.match(/^#\/(\w+)/); return m && VIEWS[m[1]] ? m[1] : 'main'; }
 
 export function renderSide() {
@@ -78,7 +79,7 @@ export function renderSide() {
 let renderToken = 0;
 async function render() {
   const token = ++renderToken, r = route(), main = document.getElementById('main');
-  document.title = 'ASTA — ' + t((NAV.find(([id]) => id === r) || [0, 'Principal'])[1]);
+  document.title = 'ASTA — ' + t((NAV.find(([id]) => id === r) || [0, 'Chat'])[1]);
   try { localStorage.setItem('asta.last', r); } catch (e) { /* ok */ }
   renderSide();
   main.replaceChildren(h('div', { class: 'page' }, h('div', { class: 'spinner' })));

@@ -467,3 +467,15 @@ def npc_reply(system: str, user_text: str) -> str:
     if weather and weather != "clear" and has("tempo", "clima", "weather", "chuva", "rain"):
         return {"pt": f"O clima anda assim ({weather}). Melhor se agasalhar.", "en": f"The weather's been like this ({weather}). Better dress warm.", "es": f"El clima está así ({weather})."}[lang]
     return rng.choice(GENERIC[lang])
+
+
+def assistant_reply(user_text: str) -> str:
+    """Resposta do Chat geral no modo Demo (sem IA): honesta — o Demo não sabe responder perguntas, mas diz como ligar uma IA e o que ainda dá para fazer."""
+    lang = detect_lang(user_text or "")
+    if lang == "pt":
+        return ("Estou no **modo Demo** (sem IA), então não consigo responder de verdade a perguntas como a sua.\n\n"
+                "Para conversar com uma IA — nuvem (Claude, ChatGPT, Gemini…), o LM Studio ou um modelo local — escolha um modelo no botão **Modelo** ao lado do Run.\n\n"
+                "Mesmo no Demo você pode **criar** mundos 3D, avatares, jogos 2D e canvases: ative uma ferramenta no botão ✦ da caixa de texto e aperte Run.")
+    return ("I'm in **Demo mode** (no AI), so I can't really answer questions like yours.\n\n"
+            "To chat with an AI — cloud (Claude, ChatGPT, Gemini…), LM Studio or a local model — pick a model with the **Model** button next to Run.\n\n"
+            "Even in Demo you can **create** 3D worlds, avatars, 2D games and canvases: turn on a tool with the ✦ button in the message box and press Run.")

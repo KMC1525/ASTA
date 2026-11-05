@@ -93,12 +93,21 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 
 ## Getting started
 
-1. **Try it with zero setup.** The default provider is **Demo** (offline, rule-based). On **Main**, pick a mode, write a prompt and send it — you will watch the agents work and then get **Play**, **Chat** or **Open**.
+1. **Try it with zero setup.** The default provider is **Demo** (offline, rule-based). Open **Chat**, ask anything and press **Run** — or turn on a creation tool (✦ *Create*), describe what you want and press **Run** to watch the agents work and get **Play**, **Chat** or **Open**.
 2. **Plug in a real AI** in **Configuration → Providers**: paste a key (Claude, ChatGPT, Grok, Gemini…), *Load models*, pick one and *Test*. Or use **Ollama / LM Studio** (free, local).
 3. **For the Canvas**, choose image/video/sound/voice providers in **Configuration → Media** (OpenAI, ElevenLabs, Google, Stability AI, Replicate, Hugging Face, a local Stable Diffusion WebUI, or local Hugging Face models). Without any, the Demo provider lets you test whole flows offline.
 4. Come back to the **Library** at any time and press *Update* to evolve the same project.
 
-## The four modes
+## Chat — the main screen
+
+**Chat** is a clean, general-purpose assistant: ask for a cake recipe, study a topic, rewrite a text, debug code. The screen is just a text box with **attachments on the left**, the **model** button and **Run** on the right.
+
+- **Model picker** (next to Run): switch provider *and* model in one click — Claude, ChatGPT, Grok, Gemini, OpenRouter, LM Studio, Ollama, the embedded GGUF model… The choice is saved and applies to the whole app.
+- **Markdown replies, streamed live** (lists, tables, code blocks with *Copy*), a **Stop** button (Run turns into Stop; a half answer is never saved), **Reply again**, copy, and a **History** of conversations (the last one reopens by itself; *New chat* starts a blank one). Attach images, PDFs, spreadsheets, audio, video… — they are read and used as context.
+- **Activator for the heavy stuff.** The multi-agent pipelines (3D world, avatar, 2D game, Canvas) **never start on their own**. Chat only talks; if you ask it to create something it *suggests* the matching tool, and nothing runs until **you** turn the tool on (✦ *Create* → pick one, or press the suggestion button) and press **Run**. Turn it off (×) to go back to plain chatting. The creation options (genre, count, relationship, SFW/NSFW, perspective…) appear only while the tool is on.
+- Without a provider the Demo engine is used and Chat says so honestly — it cannot really answer questions. Pick a model to fix it.
+
+## The four creation tools
 
 ### 🌍 3D worlds
 
@@ -187,7 +196,7 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 
 | Section | What it is for |
 |---|---|
-| **Main** | The prompt box with the four modes (text + attachments of any kind, drag-and-drop/paste) and the live view of the agents. |
+| **Chat** | The main screen: general-purpose chat with a model picker, attachments and history — and, when you turn a creation tool on, the prompt box for 3D worlds, avatars, 2D games and Canvas with the live view of the agents. |
 | **Worlds** | Everything about 3D worlds in three tabs: **Worlds** (customize generated worlds: biome, weather, time, day/night cycle, NPCs, audio, interface, quality — each save is a new version **without spending AI**), **Characters** (cards for NPCs and the player: name, tags, system prompt, voice, appearance; import/export JSON and PNG cards, Character Card V2/V3) and **Worldbuilding** (general rules for worlds — setting, tone, conventions — also stored as cards). |
 | **Avatars** | Your avatar cards, plus single and group conversations. |
 | **2D games** | Your games: play, download, update. |
@@ -200,8 +209,8 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 - **Theme:** dark (default), **light** or **automatic** (follows your system, live). The look is applied before the first frame, so it never flashes. The Canvas node graph and the video editor stay dark on purpose, like media editors.
 - **Accent color:** 6 presets or any color; buttons, selections and your chat bubble follow it (text contrast is picked automatically).
 - **Comfort:** interface size 90–150%, comfortable or compact density, system/serif/monospace font, avatar chat text size, and **reduce animations** (also respects your system setting).
-- **Usage:** interface language, **send with Enter or Ctrl+Enter** (chat and creation box), **start screen** (Main, a specific screen or *the last one I used*), keyboard shortcuts on/off.
-- **Sidebar:** hide the screens you do not use (*Main* and *Configuration* always stay; hidden ones remain reachable by search).
+- **Usage:** interface language, **send with Enter or Ctrl+Enter** (chat and creation box), **start screen** (Chat, a specific screen or *the last one I used*), keyboard shortcuts on/off.
+- **Sidebar:** hide the screens you do not use (*Chat* and *Configuration* always stay; hidden ones remain reachable by search).
 - **Command palette — `Ctrl/⌘ + K`:** type to jump to any screen or Configuration tab, chat with or edit an avatar, open a project or canvas, or run an action (new avatar, toggle theme, export settings…). Shortcuts: `Alt+1…7` screens, `Alt+B` sidebar, `Alt+T` theme, `?` help.
 - **Backup:** *Export settings* (a JSON **without API keys or tokens**), *Import* on another computer, and *Reset appearance defaults* (keys, avatars and projects are never touched).
 - **First run:** a short welcome lets you pick theme, color and language and shows whether an AI is ready — only on a fresh install, never for people who already use ASTA.
@@ -296,6 +305,7 @@ asta/
   runtime2d/     2D engines: visual novel, RPG, platformer, side scroller, point & click
   games2d/       2D game spec: schema, validation, packaging
   avatars.py  avatar_chat.py  routes_avatars.py    avatar cards, chat director, API
+  assistant_chat.py  routes_chat.py                general-purpose Chat (history, streaming, tool suggestion)
   canvas/        node schema, store, engine, media providers, timeline renderer, procedural Demo
   web/           the WebUI (plain HTML/CSS/JS, no build)
 tests/           unittest suite (API, pipelines, engines, providers, Canvas) + optional browser tests
@@ -321,7 +331,7 @@ Browser tests (Chromium via Playwright) and the JavaScript engine tests run auto
 - Local multiplayer (several players in the same world).
 - AI-generated behavior scripts in a sandbox.
 - Export a world as a desktop/mobile app.
-- Next planned versions: **v0.3 — Rebuild** (new backend in Rust) and **v0.4 — Studio**. They are not part of 0.2.
+- Ideas on the table (not scheduled): a backend rewrite in Rust and a "Studio" workspace view.
 
 ## License and credits
 

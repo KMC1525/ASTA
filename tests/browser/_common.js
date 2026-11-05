@@ -25,3 +25,9 @@ exports.run = async function run(name, fn) {
   console.log(JSON.stringify(result));
 };
 exports.until = async (page, fn, arg, timeout = 90000) => page.waitForFunction(fn, arg, { timeout });
+// Liga uma ferramenta de criação (ativador) no Chat: world | avatar | game | canvas
+exports.useTool = async (page, id) => {
+  await page.locator('.composer .tool[aria-haspopup]').click();
+  await page.locator(`.toolmenu .toolopt[data-tool="${id}"]`).click();
+  await page.waitForTimeout(450);
+};

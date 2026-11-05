@@ -4,14 +4,13 @@ import { go, presetOf, state } from '../main.js';
 import { avatarPic, REL_LABEL } from '../avatar_ui.js';
 import { gradient, h, icon, popover, select, seg, toast } from '../ui.js';
 import { openChat } from './avatars.js';
-import { createComposer } from './composer.js';
 import { clearJob, renderRun, saveJob, savedJob } from './run.js';
 import { GENRE_LABEL } from './steps.js';
 
 const toast0 = (msg) => toast(msg, 'err');
-const MODES = [['world', 'Mundo 3D', 'worlds'], ['avatar', 'Avatar', 'avatars'], ['game', 'Jogo 2D', 'games'], ['canvas', 'Canvas', 'canvas']];
-const TITLES = { world: ['O que vamos criar?', 'O que vamos mudar?'], avatar: ['Quem vamos criar?', ''], game: ['Que jogo vamos criar?', 'O que vamos mudar neste jogo?'], canvas: ['O que vamos produzir?', ''] };
-const HINTS = () => {
+export const MODES = [['world', 'Mundo 3D', 'worlds'], ['avatar', 'Avatar', 'avatars'], ['game', 'Jogo 2D', 'games'], ['canvas', 'Canvas', 'canvas']];
+export const TITLES = { world: ['O que vamos criar?', 'O que vamos mudar?'], avatar: ['Quem vamos criar?', ''], game: ['Que jogo vamos criar?', 'O que vamos mudar neste jogo?'], canvas: ['O que vamos produzir?', ''] };
+export const HINTS = () => {
   const pt = getLang() === 'pt';
   return {
     world: pt ? ['Uma vila medieval numa floresta ao anoitecer, com chuva leve e uma taverna acolhedora', 'Um acampamento no deserto com ruínas antigas e uma arqueóloga curiosa', 'Uma cidade cyberpunk à noite, com neblina e ruas movimentadas']
@@ -24,39 +23,14 @@ const HINTS = () => {
   };
 };
 
-export default async function render(root, ctx) {
+// Retoma a execução de uma criação em andamento (a tela de acompanhamento) quando o usuário volta ao Chat. Devolve true se retomou.
+export async function resumeIfRunning(root, ctx) {
   if (ctx.fresh) clearJob();
   const saved = savedJob();
   if (saved && !ctx.project) {
-    try { const j = await api('/api/jobs/' + saved.id); if (j) return resume(root, saved); } catch (e) { clearJob(); }
+    try { const j = await api('/api/jobs/' + saved.id); if (j) { resume(root, saved); return true; } } catch (e) { clearJob(); }
   }
-  return renderHub(root, ctx);
-}
-
-// ------------------------------------------------------------------ hub (central de criação)
-async function renderHub(root, ctx) {
-  const updating = ctx.project || null;
-  let mode = ctx.mode || (updating ? (updating.kind === 'game2d' ? 'game' : 'world') : localStorage.getItem('asta.mode') || 'world');
-  if (!MODES.some((m) => m[0] === mode)) mode = 'world';
-  const body = h('div'), titleEl = h('h1'), sugEl = h('div', { class: 'suggest' }), bar = h('div', { class: 'modes' });
-  const demo = state.settings.active.generation === 'demo';
-  let carry = ctx.prompt || '';
-
-  const paintBar = () => bar.replaceChildren(...MODES.map(([id, label, ic]) => h('button', { class: 'mode' + (id === mode ? ' on' : ''), type: 'button', onclick: () => { carry = body.querySelector('textarea') ? body.querySelector('textarea').value : carry; mode = id; localStorage.setItem('asta.mode', id); paint(); } }, icon(ic, 18), t(label))));
-  async function paint() {
-    paintBar(); titleEl.textContent = t(TITLES[mode][updating ? 1 : 0] || TITLES[mode][0]);
-    const builders = { world: worldComposer, avatar: avatarComposer, game: gameComposer, canvas: canvasComposer };
-    const c = await builders[mode](root, updating, carry);
-    body.replaceChildren(c.el); if (c.composer) { c.composer.focus(); }
-    const hints = HINTS()[mode];
-    sugEl.replaceChildren(...(updating ? [] : hints.map((s) => h('button', { onclick: () => { if (c.composer) { c.composer.setText(s); c.composer.focus(); } } }, s.length > 62 ? s.slice(0, 60) + '…' : s))));
-  }
-  root.replaceChildren(h('div', { class: 'home' },
-    updating ? h('div', { class: 'ctxbar' }, h('span', { class: 'chip' }, icon('refresh', 13), t('Atualizando:') + ' ' + updating.name + ' (v' + updating.current + ')',
-      h('span', { class: 'x', title: t('Criar algo novo'), onclick: () => go('main', { fresh: true }) }, '×'))) : null,
-    titleEl, updating ? null : bar, body, sugEl,
-    demo ? h('div', { class: 'notice' }, t('Modo Demo (offline, sem IA): gera tudo por regras. Para usar IA de verdade, '), h('a', { href: '#/config', onclick: () => { state.ctx = { tab: 'providers' }; } }, t('configure um provedor'), '.')) : h('div', { class: 'notice' }, presetOf(state.settings.active.generation).label)));
-  await paint();
+  return false;
 }
 
 function conflict(root, e, kind, info) {
@@ -71,7 +45,7 @@ async function startJob(root, url, body, kind, extra, toastFn) {
 }
 
 // ------------------------------------------------------------------ modo: Mundo 3D
-async function worldComposer(root, project, carry) {
+async function worldTool(root, project, carry, composer) {
   const [wbs, chars] = await Promise.all([api('/api/worldbuildings'), api('/api/characters')]);
   const m = { wb: '', chars: [], persp: state.settings.generation.perspective };
   if (project && project.kind !== 'game2d') {
@@ -90,20 +64,20 @@ async function worldComposer(root, project, carry) {
     }) : h('div', { class: 'col', style: { padding: '10px' } }, h('span', { class: 'muted small' }, t('Você ainda não criou personagens.')), h('a', { href: '#/worlds/characters', class: 'small' }, t('Criar personagem'))));
     popover(charBtn, body);
   });
-  const composer = createComposer({
-    placeholder: project ? t('Descreva o que mudar neste mundo…') : t('Descreva o mundo que você quer criar…'), value: carry,
+  const cfg = {
+    placeholder: project ? t('Descreva o que mudar neste mundo…') : t('Descreva o mundo que você quer criar…'),
     extraReady: () => !!(m.wb || m.chars.length), tools: [h('span', { class: 'tool' }, icon('worldbuilding', 15), wbSel), charBtn, perspSeg],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
       try { await startJob(root, '/api/generate', { prompt: text, attachment_ids: ids, worldbuilding_id: m.wb, character_ids: m.chars, settings: { perspective: m.persp }, project_id: project ? project.id : '' }, 'world', { prompt: text, project }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
-  });
+  };
   paintChars(); paintPersp();
-  return { el: composer.el, composer };
+  return cfg;
 }
 
 // ------------------------------------------------------------------ modo: Avatar
-async function avatarComposer(root, project, carry) {
+async function avatarTool(root, project, carry, composer) {
   const m = { count: 0, rel: 'auto', ctype: 'auto', base: false, imgMode: 'each', content: state.settings.avatars && state.settings.avatars.content === 'nsfw' ? 'nsfw' : 'sfw' };
   const countEl = h('span', { class: 'tool nopad' }), relSel = select([['auto', t('Relação: automática')], ...Object.keys(REL_LABEL).filter((k) => k !== 'custom').map((k) => [k, t(REL_LABEL[k])])], m.rel, (v) => { m.rel = v; });
   const paintCount = () => countEl.replaceChildren(icon('characters', 15), h('button', { type: 'button', class: 'step-b', title: t('Menos'), onclick: () => { m.count = Math.max(0, m.count - 1); paintCount(); } }, '−'),
@@ -122,37 +96,36 @@ async function avatarComposer(root, project, carry) {
     modeSeg.replaceChildren(...[['each', t('Um avatar por imagem')], ['one', t('Uma pessoa com todas as imagens')]].map(([v, l]) => h('button', { type: 'button', class: m.imgMode === v ? 'on' : '', onclick: () => { m.imgMode = v; paintBase(); } }, l)));
     baseNote.textContent = (m.base ? t('Anexe a foto ou arte (clipe ou arrastar). O texto é opcional: nome, personalidade, história… Fotos de pessoas reais ficam sempre em SFW; NSFW só vale para arte de personagens fictícios.') + ' ' : '')
       + (m.ctype === 'real' && m.content === 'nsfw' ? t('Pessoas reais ficam sempre em SFW: o ASTA não cria conteúdo sexual sobre pessoas reais. Personagens fictícios adultos podem ser NSFW.') : '');
-    composer.ta.placeholder = m.base ? t('Opcional: nome, personalidade, história… (a imagem anexada é a base do visual)') : t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…');
-    composer.refresh();
+    composer.configure({ placeholder: m.base ? t('Opcional: nome, personalidade, história… (a imagem anexada é a base do visual)') : t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…') });
   };
-  const composer = createComposer({
-    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), value: carry, tools: [baseBtn, modeSeg, countEl, h('span', { class: 'tool' }, relSel), h('span', { class: 'tool' }, typeSel), contentSeg],
+  const cfg = {
+    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), tools: [baseBtn, modeSeg, countEl, h('span', { class: 'tool' }, relSel), h('span', { class: 'tool' }, typeSel), contentSeg],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
       try { await startJob(root, '/api/avatars/generate', { prompt: text, attachment_ids: ids, count: m.count, relationship: m.rel, character_type: m.ctype, content: m.content, from_images: m.base, images_mode: m.imgMode }, 'avatar', { prompt: text }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
-  });
+  };
   paintCount(); paintBase();
-  return { el: h('div', null, composer.el, baseNote), composer };
+  return Object.assign(cfg, { below: baseNote });
 }
 
 // ------------------------------------------------------------------ modo: Jogo 2D
-async function gameComposer(root, project, carry) {
+async function gameTool(root, project, carry, composer) {
   const upd = project && project.kind === 'game2d' ? project : null;
   const m = { genre: 'auto', length: state.settings.games ? state.settings.games.length : 'medium', content: state.settings.generation.content === 'sfw' ? 'sfw' : 'free' };
   const genres = (await api('/api/games/genres'));
   const genreSel = select([['auto', t('Gênero: automático')]].concat(genres.map((g) => [g.id, GENRE_LABEL[g.id] || g.label])), m.genre, (v) => { m.genre = v; });
   const lenSel = select([['short', t('Curto')], ['medium', t('Médio')], ['long', t('Longo')]], m.length, (v) => { m.length = v; });
   const contentSel = select([['free', t('Livre (SFW + NSFW)')], ['sfw', 'SFW']], m.content, (v) => { m.content = v; });
-  const composer = createComposer({
-    placeholder: upd ? t('Descreva o que mudar neste jogo…') : t('Descreva o jogo que você quer criar…'), value: carry,
+  const cfg = {
+    placeholder: upd ? t('Descreva o que mudar neste jogo…') : t('Descreva o jogo que você quer criar…'),
     tools: [...(upd ? [] : [h('span', { class: 'tool' }, icon('games', 15), genreSel)]), h('span', { class: 'tool' }, lenSel), h('span', { class: 'tool' }, contentSel)],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
       try { await startJob(root, '/api/games/generate', { prompt: text, attachment_ids: ids, genre: m.genre, length: m.length, content: m.content, project_id: upd ? upd.id : '' }, 'game', { prompt: text, project: upd }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
-  });
-  return { el: composer.el, composer };
+  };
+  return cfg;
 }
 
 // ------------------------------------------------------------------ modo: Canvas
@@ -163,19 +136,19 @@ const TPL_TEXT = {
 };
 const TPL_LABEL = (x) => t((TPL_TEXT[x.id] || [x.label])[0]);
 const TPL_HINT = (x) => (x ? t((TPL_TEXT[x.id] || [0, x.hint])[1]) : '');
-async function canvasComposer(root, project, carry) {
+async function canvasTool(root, project, carry, composer) {
   const templates = (await api('/api/canvas-templates')).templates;
   const m = { template: 'text_image' };
   const tplSel = select(templates.map((x) => [x.id, TPL_LABEL(x)]), m.template, (v) => { m.template = v; hint.textContent = TPL_HINT(templates.find((x) => x.id === v)); });
   const hint = h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px' } }, TPL_HINT(templates.find((x) => x.id === m.template)));
-  const composer = createComposer({
-    placeholder: t('Descreva o que você quer produzir (opcional) — vira o primeiro prompt do fluxo…'), value: carry, allowEmpty: true, tools: [h('span', { class: 'tool' }, icon('canvas', 15), tplSel)],
+  const cfg = {
+    placeholder: t('Descreva o que você quer produzir (opcional) — vira o primeiro prompt do fluxo…'), allowEmpty: true, tools: [h('span', { class: 'tool' }, icon('canvas', 15), tplSel)],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
       try { const c = await api('/api/canvases', { method: 'POST', body: { template: m.template, prompt: text, attachment_ids: ids } }); location.hash = '#/canvas/edit/' + c.id; } catch (e) { toast0(e.message); composer.refresh(); }
     },
-  });
-  return { el: h('div', null, composer.el, hint), composer };
+  };
+  return Object.assign(cfg, { below: hint });
 }
 
 // ------------------------------------------------------------------ execução + resultado
@@ -230,3 +203,6 @@ async function avatarDone(ev) {
       list.length > 1 ? h('button', { class: 'btn primary', onclick: () => openChat(list.map((a) => a.id)) }, icon('characters', 15), t('Conversa em grupo')) : null,
       h('a', { class: 'btn', href: '#/avatars' }, t('Ver todos os avatares')), h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'avatar' }) }, t('Criar mais')))));
 }
+
+// ferramentas de criação do Chat (os ativadores): cada uma devolve a configuração do compositor — placeholder, opções, o que o Run faz
+export const TOOL_BUILDERS = { world: worldTool, avatar: avatarTool, game: gameTool, canvas: canvasTool };

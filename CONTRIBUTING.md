@@ -32,6 +32,7 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 | Novo tipo de estrutura/bioma | `schema.py` (listas) + `runtime/scene.js` (construtor) + `rulebased.py` (Demo) |
 | Comportamento/ações dos NPCs | `runtime/actors.js`, `runtime/agent.js` |
 | Telas da WebUI | `web/js/views/*.js` (a frase em português é a chave de tradução; adicione em `web/js/en.js` — `tests/test_i18n.py` falha se faltar alguma) |
+| Chat (conversa geral, histórico, ativador das ferramentas) | `assistant_chat.py`, `routes_chat.py`, `web/js/views/chat.js`, `web/js/modelpicker.js`, `web/js/markdown.js` (as ferramentas de criação ficam em `web/js/views/home.js`) |
 | Avatars (cards, diretor da conversa, voz) | `avatars.py`, `avatar_chat.py`, `routes_avatars.py`, `agents/avatar_pipeline.py`, `web/js/views/avatar*.js` |
 | Jogos 2D (um gênero novo ou uma regra) | `games2d/schema.py` (spec e validação), `agents/rulebased_games.py` (gerador offline), `runtime2d/*.js` (motor); mantenha a gramática de condições igual em Python (`parse_cond`) e JS (`G2.cond`) |
 | Canvas: novo tipo de nó | `canvas/schema.py` (`NODE_TYPES`, parâmetros), `canvas/engine.py` (execução), `web/js/canvas_nodes.js` (controles) |

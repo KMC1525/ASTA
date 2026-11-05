@@ -1,5 +1,5 @@
 // Todas as telas abrem sem erro no desktop e no celular, sem rolagem horizontal; abas da configuração; modos do hub.
-const { run } = require('./_common.js');
+const { run, useTool } = require('./_common.js');
 run('smoke', async ({ open, check }) => {
   for (const [label, vp] of [['desktop', { width: 1300, height: 860 }], ['mobile', { width: 390, height: 844 }]]) {
     const page = await open(vp);
@@ -28,7 +28,7 @@ run('smoke', async ({ open, check }) => {
   await nav.close();
   const page = await open();
   await page.evaluate(() => { location.hash = '#/main'; }); await page.waitForTimeout(500);
-  check('hub:4-modos', (await page.locator('.modes .mode').count()) === 4);
-  for (let i = 0; i < 4; i++) { await page.locator('.modes .mode').nth(i).click(); await page.waitForTimeout(350); check(`hub:modo-${i}-tem-compositor`, (await page.locator('.composer').count()) === 1); }
+  check('chat:tela-principal-limpa', (await page.locator('.chx.empty').count()) === 1 && (await page.locator('.modes').count()) === 0 && (await page.locator('.composer').count()) === 1);
+  for (const [i, id] of ['world', 'avatar', 'game', 'canvas'].entries()) { await useTool(page, id); check(`chat:ferramenta-${id}-tem-compositor`, (await page.locator('.composer').count()) === 1); }
   await page.close();
 });

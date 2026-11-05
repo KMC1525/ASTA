@@ -1,5 +1,5 @@
 // Editor de avatar: pipeline do system prompt (Analisa → Gera → Revisa → Entrega) e tipo de personagem (real = sempre SFW).
-const { run } = require('./_common.js');
+const { run, useTool } = require('./_common.js');
 run('avatar_prompt', async ({ open, api, check }) => {
   const card = await api('/api/avatars', { method: 'POST', body: { name: 'Selene', age: 28, content: 'nsfw', personality: 'misteriosa e carinhosa' } });
   const page = await open();
@@ -26,9 +26,8 @@ run('avatar_prompt', async ({ open, api, check }) => {
   await page.locator('.seg button:text-is("NSFW")').click(); await page.waitForTimeout(250);
   check('ap:ficticio-aceita-nsfw', (await page.locator('.seg button.on', { hasText: 'NSFW' }).count()) === 1);
 
-  // composer da home: seletor de tipo de personagem
+  // ferramenta Avatar do Chat: seletor de tipo de personagem
   await page.evaluate(() => { location.hash = '#/main'; }); await page.waitForTimeout(500);
-  const hasAvatarMode = await page.locator('button:has-text("Avatar")').count();
-  if (hasAvatarMode) { await page.locator('button:has-text("Avatar")').first().click(); await page.waitForTimeout(500); }
+  await useTool(page, 'avatar');
   check('ap:home-seletor-de-tipo', (await page.locator('select option:text-is("Real person (always SFW)")').count()) >= 1);
 });
