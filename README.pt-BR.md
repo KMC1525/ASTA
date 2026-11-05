@@ -71,6 +71,7 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_EXTRAS=all` (padrão) | instala/atualiza **todas** as bibliotecas: `docs` + `media` + `local` |
 | `ASTA_EXTRAS=none` | instala só o ASTA (nenhuma dependência) |
 | `ASTA_EXTRAS=docs,media,local` | escolha as bibliotecas: `docs` = extração de PDFs mais precisa (`pypdf`) · `media` = modelos locais de imagem/vídeo/som/voz do Canvas (`torch`, `diffusers`, `transformers`…) · `local` = modelos GGUF embutidos: texto, imagem e vídeo (`llama-cpp-python`, `stable-diffusion-cpp-python`) |
+| `ASTA_MODELS=all` (padrão) | baixa os **modelos locais pré-instalados** (veja abaixo): `none` pula, `text` ou `image` escolhe um |
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
@@ -226,6 +227,15 @@ Você escolhe um modelo **para gerar** (o mais capaz) e outro **para os personag
 | **Hugging Face local** (embutido) | ✅ | ✅ | ✅ | ✅ | ✅ | diffusers + transformers dentro do ASTA (`pip install "asta[media]"`); vídeo exige GPU |
 | **GGUF local** (embutido) | ✅ | ✅ | | | | modelos GGUF quantizados de imagem/vídeo pela stable-diffusion.cpp (`pip install "asta[local]"`); o vídeo depende da versão da biblioteca |
 | **Demo** (offline) | ✅ | ✅ | ✅ | ✅ | | imagens procedurais, som sintetizado, "voz" de balbucio, vídeo Ken Burns (precisa do `ffmpeg`) |
+
+**Modelos pré-instalados.** O ASTA já vem com dois modelos locais prontos para rodar no seu computador, baixados pelo instalador (e pelo `asta update`) com a quantização já definida:
+
+| Tipo | Modelo | Quantização | Download |
+|---|---|---|---|
+| Texto | [`empero-ai/Qwen3.8-2B-Distill`](https://huggingface.co/empero-ai/Qwen3.8-2B-Distill) (GGUF: `Qwen3.8-2B-Distill-GGUF`) | **Q8_0** | ~1,9 GB |
+| Imagem | [`Tongyi-MAI/Z-Image`](https://huggingface.co/Tongyi-MAI/Z-Image) (GGUF: `unsloth/Z-Image-GGUF`) | **Q4_K_M** | ~6,2 GB (modelo + VAE + codificador de texto Qwen3-4B) |
+
+São só esses dois por enquanto. Instale-os em *Configuração → Modelos locais → Modelos pré-instalados* com um clique, ou com `asta models install` (`asta models list` mostra o estado); `ASTA_MODELS=none` pula no instalador. Quando a biblioteca do modelo está instalada (`asta[local]`) e você ainda usa o provedor Demo, o ASTA os torna o modelo de texto padrão / o provedor de imagem do Canvas; se você já escolheu outro provedor, a sua escolha é mantida. Arquivos já baixados nunca são baixados de novo.
 
 **Modelos GGUF por tipo.** A aba *Modelos locais* é dividida em **Texto, Imagem, Vídeo, Som e música, Voz e Outros**. Cada tipo tem a sua busca no Hugging Face (filtrada pela tarefa do repositório), a sua pasta (`models/`, `models/image`, `models/video`, …), o mesmo seletor de quantização e a sua lista de *Baixados*. Os modelos de texto rodam o próprio ASTA (`llama.cpp`); **os GGUF de Imagem e Vídeo (FLUX, Stable Diffusion, Wan…) rodam no Canvas pela `stable-diffusion.cpp`** (provedor *GGUF local*, `pip install "asta[local]"`): use *Usar no Canvas* num arquivo baixado. Opções extras de carregamento (VAE, codificadores de texto…) vão em *Avançado → parâmetros extras* do nó (`{"load": {"diffusion_model_path": "@model", "vae_path": "ae.safetensors"}}`). Para **Som, Voz e Outros** o ASTA por enquanto só baixa e organiza os arquivos — ainda não há motor embutido para rodá-los.
 

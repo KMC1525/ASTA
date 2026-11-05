@@ -734,6 +734,19 @@ class GGUFMediaTests(TmpCase):
         self.assertEqual(loads[0], {"diffusion_model_path": str(self.tmp / "image" / "flux-Q4_K_S.gguf"), "vae_path": str(self.tmp / "image" / "ae.safetensors"), "keep_clip_on_cpu": True})
         self.assertEqual(runs[0]["sample_steps"], 4)  # o que está fora de "load" vai para a geração
 
+    def test_preinstalled_z_image_loads_with_its_vae_and_text_encoder_and_node_extra_wins(self):
+        mod, loads, runs = self.fake_sdcpp()
+        for n in ("z-image-Q4_K_M.gguf", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf"):
+            (self.tmp / "image" / n).write_bytes(b"g")
+        img = self.tmp / "image"
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            self.prov(image="z-image-Q4_K_M.gguf").image("x")
+            M._LOCAL_CACHE.clear()
+            self.prov(image="z-image-Q4_K_M.gguf").image("x", extra={"cfg_scale": 1.0, "load": {"vae_path": "ae.safetensors"}})
+        self.assertEqual(loads[0], {"diffusion_model_path": str(img / "z-image-Q4_K_M.gguf"), "vae_path": str(img / "ae.safetensors"), "llm_path": str(img / "Qwen3-4B-Instruct-2507-Q4_K_M.gguf")})
+        self.assertEqual((runs[0]["cfg_scale"], runs[0]["sample_steps"]), (4.0, 30))
+        self.assertEqual((runs[1]["cfg_scale"], runs[1]["sample_steps"]), (1.0, 30))  # o "extra" do nó sobrescreve só o que ele define
+
     def test_missing_model_or_library_or_video_support_explain_what_to_do(self):
         mod, _, _ = self.fake_sdcpp()
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):

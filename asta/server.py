@@ -26,6 +26,7 @@ from .providers import ProviderError, build_provider, describe_presets, provider
 from .routes_avatars import AvatarRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_games import GameRoutes
+from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
 from .util import hardware_info, new_id, safe_filename, slugify, text
 
@@ -161,6 +162,8 @@ class App:
         self.game_routes.register()
         self.canvas_routes = CanvasRoutes(self)
         self.canvas_routes.register()
+        self.preinstalled_routes = PreinstalledRoutes(self)
+        self.preinstalled_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:

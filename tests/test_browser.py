@@ -27,6 +27,7 @@ class BrowserTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = Path(tempfile.mkdtemp(prefix="asta-browser-"))
+        cls.store_dir = cls.tmp
         cls.httpd, _ = make_server("127.0.0.1", 0, Store(cls.tmp))
         cls.port = cls.httpd.server_address[1]
         threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
@@ -76,6 +77,20 @@ class BrowserTests(unittest.TestCase):
 
         with mock.patch.dict(sys.modules, {"huggingface_hub": FakeHub(self.tmp).module}):
             self.run_script("local_models_ui.js")
+
+    def test_06_preinstalled_models_card_installs_with_one_click(self):
+        from unittest import mock
+
+        from asta import hf, preinstalled
+        from tests.test_preinstalled import FakeHub
+
+        hub = FakeHub()
+        try:
+            with mock.patch.object(hf, "HF", hub.url), mock.patch("asta.hf.shutil.disk_usage", return_value=mock.Mock(free=10 ** 13)), mock.patch.object(preinstalled, "_lib", return_value=False):
+                self.run_script("preinstalled_ui.js")
+        finally:
+            hub.close()
+            (self.store_dir / "models" / "Qwen3.8-2B-Q8_0.gguf").unlink(missing_ok=True)
 
 
 if __name__ == "__main__":

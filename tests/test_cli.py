@@ -88,6 +88,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(calls[1][-1], cli.REPO_ZIP)
         self.assertIn("--upgrade", calls[1])
         self.assertEqual(calls[2][1:4], ["-m", "asta", "libs"])  # processo novo: lê as bibliotecas da versão recém-instalada
+        self.assertEqual(calls[3][1:5], ["-m", "asta", "models", "install"])
         self.assertIn("Pronto", out)
         self.assertIn("gerenciador de pacotes", out)  # explica que o Python do sistema não é gerenciado nesse caso
 
@@ -96,7 +97,8 @@ class UpdateTests(unittest.TestCase):
             calls = run_cli(["update", "--core"])[1]
             self.assertEqual(len(calls), 2)  # pip+setuptools+wheel e ASTA; nada de bibliotecas
             calls = run_cli(["update", "--no-python", "--extras", "docs"])[1]
-            self.assertEqual(calls[-1][-2:], ["--extras", "docs"])
+            self.assertEqual(calls[2][-2:], ["--extras", "docs"])
+            self.assertEqual(calls[3][1:5], ["-m", "asta", "models", "install"])  # modelos pré-instalados também são verificados
             run_cli(["update"], env={"ASTA_PYTHON": "keep"})
             inst.assert_not_called()
 
@@ -245,6 +247,8 @@ class InstallerTests(unittest.TestCase):
         sh = (self.ROOT / "install.sh").read_text(encoding="utf-8")
         ps = (self.ROOT / "install.ps1").read_text(encoding="utf-8")
         for src in (sh, ps):
+            self.assertIn("models install", src)  # modelos pré-instalados (ASTA_MODELS=none pula)
+            self.assertIn("ASTA_MODELS", src)
             self.assertIn("asta libs" if src is sh else "libs", src)
             self.assertIn("none", src)  # dá para pular com ASTA_EXTRAS=none
         self.assertIn("LIBS_FAILED", sh)  # falha de biblioteca = aviso

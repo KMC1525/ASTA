@@ -521,4 +521,12 @@ export default {
   'Outros GGUF (embeddings, visão…). O ASTA só baixa e organiza esses arquivos.': 'Other GGUF models (embeddings, vision…). ASTA only downloads and organizes these files.',
   'Outros': 'Other',
   'Quem vamos criar?': 'Who shall we create?',
+  'Modelos pré-instalados': 'Pre-installed models',
+  'Vêm com o ASTA (baixados pelo instalador) e já com a quantização definida: um modelo de texto e um de imagem. Para outras quantizações ou outros modelos, use a busca abaixo.': 'They come with ASTA (downloaded by the installer) with the quantization already set: one text model and one image model. For other quantizations or other models, use the search below.',
+  'Instalado': 'Installed',
+  'Instalar': 'Install',
+  'Baixando {n}…': 'Downloading {n}…',
+  '{n} pronto para usar.': '{n} is ready to use.',
+  'Modelo de texto pequeno e rápido (2B, destilado para raciocínio): roda mundos, avatars, jogos e o nó Texto IA no seu computador.': 'Small, fast text model (2B, distilled for reasoning): runs worlds, avatars, games and the AI-text node on your computer.',
+  'Modelo de imagem da Tongyi-MAI (Alibaba). Vem com o VAE e o codificador de texto (Qwen3-4B) de que precisa; roda pelo provedor GGUF local do Canvas.': 'Image model from Tongyi-MAI (Alibaba). Comes with the VAE and the text encoder (Qwen3-4B) it needs; runs through the Canvas GGUF local provider.',
 };

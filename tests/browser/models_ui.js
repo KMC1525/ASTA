@@ -36,7 +36,7 @@ run('models', async ({ open, check }) => {
   check('baixados:marca-3-partes', (await page.locator('.row:has(.mono:has-text("huge")) .dim').first().innerText()).includes('3'));
   // GGUF de imagem: aba própria, pasta própria e "usar no Canvas"
   await page.locator('.seg button:text-is("Image")').click(); await page.waitForTimeout(300);
-  check('tipos:aba-imagem-comeca-vazia', (await page.locator('.row:has(.mono:has-text("gguf"))').count()) === 0);
+  check('tipos:aba-imagem-comeca-vazia', (await page.locator('.card:has(h3:text-is("Downloaded")) .row:has(.mono)').count()) === 0);
   await page.locator('input[type=search]').fill('flux'); await page.keyboard.press('Enter');
   await page.waitForSelector('.li'); await page.locator('.li').first().click(); await page.waitForSelector('.quant');
   await page.locator('.quant:has(b:text-is("Q4_K_M")):not(:has(.chip:has-text("parts")))').first().click();

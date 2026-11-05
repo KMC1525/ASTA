@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.9] — 2026-11-05
+
+### Adicionado
+- **Modelos pré-instalados**: o ASTA agora já vem com dois modelos locais, baixados pelo instalador (e pelo `asta update`) com a quantização definida — **somente estes dois, por enquanto**:
+  - **texto:** `empero-ai/Qwen3.8-2B-Distill` em **Q8_0** (GGUF oficial `empero-ai/Qwen3.8-2B-Distill-GGUF`, ~1,9 GB);
+  - **imagem:** `Tongyi-MAI/Z-Image` em **Q4_K_M** (GGUF `unsloth/Z-Image-GGUF`, ~3,9 GB), junto com o VAE (`ae.safetensors`) e o codificador de texto Qwen3-4B (Q4_K_M) de que ele precisa — ~6,2 GB no total.
+- Instalação: `install.sh` e `install.ps1` baixam os dois (`ASTA_MODELS=all`, padrão; `none` pula; `text`/`image` escolhe um); `asta models install` / `asta models list`; cartão **Modelos pré-instalados** em *Configuração → Modelos locais* com instalação por um clique, progresso e cancelamento; `asta update` também verifica. Arquivos já baixados são pulados, partes que faltam voltam sozinhas, o espaço em disco é conferido antes e uma falha vira aviso (o ASTA continua instalado). API: `GET /api/preinstalled` e `POST /api/preinstalled/install`.
+- Depois de instalado, o modelo fica pronto: o de texto vira o modelo padrão de geração e de personagens e o de imagem vira o provedor de imagem do Canvas (*GGUF local*) — **só se** você ainda estiver no provedor Demo e a biblioteca que roda o modelo estiver instalada (`asta[local]`); caso contrário a sua escolha é mantida e o ASTA diz o que falta.
+- O Z-Image já carrega com o VAE e o codificador de texto certos e com `cfg_scale 4` e `sample_steps 30` (o campo "extra" do nó sobrescreve).
+- Testes: catálogo, instalação (com um Hugging Face simulado), configuração automática, retomada, CLI, API, provedor GGUF com os padrões do catálogo e navegador.
+
+### Observação
+- Ao contrário dos demais modelos locais (em que o ASTA pergunta a quantização antes de baixar), nos pré-instalados a quantização vem definida pelo catálogo; outras quantizações continuam disponíveis na busca da mesma aba.
+- O ASTA **não consegue rodar o Z-Image neste ambiente de desenvolvimento** (sem GPU nem a `stable-diffusion-cpp-python` real): o download e a configuração estão testados, mas os nomes dos argumentos de carregamento (`llm_path` etc.) e os parâmetros de geração seguem a documentação da stable-diffusion.cpp e podem precisar de ajuste conforme a versão da biblioteca — use o campo "extra" do nó.
+
 ## [0.2.8] — 2026-11-05
 
 ### Adicionado
@@ -184,7 +199,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.8...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.9...HEAD
+[0.2.9]: https://github.com/KMC1525/ASTA/compare/v0.2.8...v0.2.9
 [0.2.8]: https://github.com/KMC1525/ASTA/compare/v0.2.7...v0.2.8
 [0.2.7]: https://github.com/KMC1525/ASTA/compare/v0.2.6...v0.2.7
 [0.2.6]: https://github.com/KMC1525/ASTA/compare/v0.2.5...v0.2.6

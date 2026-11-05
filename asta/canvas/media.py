@@ -1110,9 +1110,12 @@ class GGUFMedia(MediaProvider):
         return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", lambda: sdc.StableDiffusion(**kw))
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
-        extra = dict(extra or {})
+        from .. import preinstalled
+
         path = self._path("image", model)
-        sd = self._engine("image", path, extra.pop("load", None) or {})
+        base = preinstalled.defaults_for("image", path.name)  # modelos pré-instalados já vêm com o jeito certo de carregar; o "extra" do nó sobrescreve
+        extra = {**base.get("run", {}), **(extra or {})}
+        sd = self._engine("image", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
         w, h = parse_wh(size)
         w, h = max(256, min(w, 1024) // 8 * 8), max(256, min(h, 1024) // 8 * 8)
         out = []

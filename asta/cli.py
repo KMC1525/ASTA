@@ -1,4 +1,4 @@
-"""Linha de comando do ASTA:  asta [run|update|libs|doctor|version]"""
+"""Linha de comando do ASTA:  asta [run|update|libs|models|doctor|version]"""
 from __future__ import annotations
 
 import argparse
@@ -170,6 +170,22 @@ def _update_with_installer(args: argparse.Namespace) -> int:
             pass
 
 
+def _models(args: argparse.Namespace) -> int:
+    """`asta models list|install`: os modelos locais pré-instalados (texto e imagem)."""
+    if getattr(args, "home", None):
+        os.environ["ASTA_HOME"] = args.home
+    from . import preinstalled
+    from .storage import Store
+
+    store = Store()
+    if args.action == "list":
+        for m in preinstalled.status(store.models_dir):
+            print(f"{'✓' if m['installed'] else '·'} {m['id']:<26} {m['kind']:<6} {m['label']} ({m['quant']}) · {m['size'] / 1024 ** 3:.1f} GB · {m['repo']}")
+        return 0
+    token = (store.get_settings().get("hf") or {}).get("token", "")
+    return preinstalled.install_selected(store, args.which or os.environ.get("ASTA_MODELS") or "all", token)
+
+
 def _update(args: argparse.Namespace) -> int:
     """Atualiza o Python, o ASTA e todas as bibliotecas dele. --core: só o ASTA e as ferramentas do Python; --no-python: sem mexer no Python."""
     if not getattr(args, "no_python", False) and not getattr(args, "core", False) and os.environ.get("ASTA_PYTHON", "auto") != "keep":
@@ -188,6 +204,7 @@ def _update(args: argparse.Namespace) -> int:
         # processo novo: lê os metadados da versão recém-instalada (ela pode ter bibliotecas novas)
         lib_cmd = [sys.executable, "-m", "asta", "libs"] + (["--extras", args.extras] if getattr(args, "extras", "") else [])
         subprocess.run(lib_cmd)  # falhas de bibliotecas opcionais viram aviso; o ASTA já está atualizado
+        subprocess.run([sys.executable, "-m", "asta", "models", "install"])  # modelos pré-instalados (pula o que já existe)
     print("\nPronto! Reinicie o ASTA para usar a nova versão.")
     return 0
 
@@ -241,6 +258,10 @@ def main(argv=None) -> int:
     upd.add_argument("--core", action="store_true", help="atualiza só o ASTA (e pip/setuptools/wheel), sem o Python do sistema nem as bibliotecas opcionais")
     upd.add_argument("--no-python", action="store_true", help="não atualiza o Python do sistema (atualiza o ASTA, o pip e as bibliotecas)")
     upd.add_argument("--extras", default="", help="bibliotecas a atualizar: all (padrão), none ou lista (docs,media,local)")
+    mod = sub.add_parser("models", help="modelos locais pré-instalados (texto e imagem): list | install")
+    mod.add_argument("action", choices=("list", "install"), nargs="?", default="list")
+    mod.add_argument("--which", default="", help="all (padrão), none, text, image ou ids (também ASTA_MODELS)")
+    mod.add_argument("--home", help="pasta de dados (padrão ~/.asta)")
     libs = sub.add_parser("libs", help="instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)")
     libs.add_argument("--extras", default="", help="all (padrão), none ou lista separada por vírgula (docs,media,local)")
     sub.add_parser("doctor", help="mostra diagnóstico do ambiente")
@@ -248,6 +269,8 @@ def main(argv=None) -> int:
     args = parser.parse_args(argv)
     if args.cmd == "update":
         return _update(args)
+    if args.cmd == "models":
+        return _models(args)
     if args.cmd == "libs":
         return _libs(args)
     if args.cmd == "doctor":

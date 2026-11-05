@@ -194,6 +194,32 @@ async function local() {
       else if (ev.type === 'cancelled') { toast(t('Download cancelado')); prog.replaceChildren(); }
     });
   }
+  // modelos pré-instalados: um de texto e um de imagem, com a quantização já definida
+  const preBox = h('div', { class: 'col', style: { gap: '10px' } });
+  async function paintPre() {
+    let list = [];
+    try { list = (await api('/api/preinstalled')).models; } catch (e) { return; }
+    preBox.replaceChildren(...list.map((m) => {
+      const area = h('div');
+      const act = m.installed ? h('span', { class: 'chip on' }, '✓ ' + t('Instalado')) : h('button', { class: 'btn sm primary', onclick: async () => {
+        const bar = h('i'), label = h('span', { class: 'small muted' }, '0%'), cancelBtn = h('button', { class: 'btn sm' }, t('Cancelar'));
+        area.replaceChildren(h('div', { class: 'card', style: { marginTop: '8px' } }, h('div', { class: 'row', style: { marginBottom: '8px' } }, h('span', { class: 'grow small' }, t('Baixando {n}…', { n: m.label })), label, cancelBtn), h('div', { class: 'bar' }, bar)));
+        let jid;
+        try { jid = (await api('/api/preinstalled/install', { method: 'POST', body: { id: m.id } })).job_id; } catch (e) { area.replaceChildren(); return toast(e.message, 'err'); }
+        cancelBtn.onclick = () => api('/api/jobs/' + jid + '/cancel', { method: 'POST' });
+        events('/api/jobs/' + jid + '/events', (ev) => {
+          if (ev.type === 'progress' && ev.total) { const pc = Math.min(1, ev.done / ev.total); bar.style.width = Math.round(pc * 100) + '%'; label.textContent = Math.round(pc * 100) + '% · ' + fmtBytes(ev.done) + ' / ' + fmtBytes(ev.total); }
+          else if (ev.type === 'done') { toast(t('{n} pronto para usar.', { n: m.label }), 'ok'); refreshState().then(() => { renderSide(); paintPre(); paintInstalled(); }); }
+          else if (ev.type === 'error') { toast(ev.message, 'err'); area.replaceChildren(); }
+          else if (ev.type === 'cancelled') { toast(t('Download cancelado')); area.replaceChildren(); }
+        });
+      } }, icon('download', 13), t('Instalar'));
+      return h('div', { class: 'prerow' },
+        h('div', { class: 'row nw' }, h('div', { class: 'grow', style: { minWidth: 0 } },
+          h('div', { class: 'row', style: { gap: '8px' } }, h('b', null, m.label), h('span', { class: 'chip' }, t(GGUF_KINDS.find(([k]) => k === m.kind)[1])), h('span', { class: 'chip solid' }, m.quant), h('span', { class: 'dim small' }, fmtBytes(m.size))),
+          h('div', { class: 'dim small' }, t(m.hint)), h('div', { class: 'mono dim', style: { fontSize: '11px' } }, m.source + ' · ' + m.repo + ' · ' + m.license)), act), area);
+    }));
+  }
   const kindSeg = h('div', { class: 'seg', style: { marginBottom: '14px', flexWrap: 'wrap' } });
   const paintKind = () => {
     kindSeg.replaceChildren(...GGUF_KINDS.map(([k, l]) => h('button', { type: 'button', class: kind === k ? 'on' : '', onclick: () => { kind = k; results.replaceChildren(); files.replaceChildren(); paintKind(); paintInstalled(); } }, t(l))));
@@ -202,7 +228,10 @@ async function local() {
   };
   paintKind();
   await paintInstalled();
+  await paintPre();
   return h('div', null,
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Modelos pré-instalados')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Vêm com o ASTA (baixados pelo instalador) e já com a quantização definida: um modelo de texto e um de imagem. Para outras quantizações ou outros modelos, use a busca abaixo.')), preBox),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Modelos locais do Hugging Face')), kindSeg,
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Baixe modelos GGUF direto do Hugging Face e rode-os no seu computador. Requer o extra opcional:'), ' ', h('span', { class: 'kbd' }, 'pip install "asta[local]"'), ' ', t('Alternativa sem instalar nada: use Ollama ou LM Studio (aba Provedores).')), kindHint,
       h('div', { class: 'row nw' }, h('div', { class: 'search', style: { maxWidth: 'none' } }, icon('search', 17), q), h('button', { class: 'btn', onclick: search }, t('Buscar'))),

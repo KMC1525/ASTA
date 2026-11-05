@@ -57,6 +57,7 @@ jobs:
     name: Instalador (Linux)
     runs-on: ubuntu-latest
     env:
+      ASTA_MODELS: none  # nada de baixar vários GB de modelos no CI
       ASTA_PYTHON: keep  # o Python do runner é gerenciado pelo GitHub; o teste do instalador não deve trocá-lo
     steps:
       - uses: actions/checkout@v4

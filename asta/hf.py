@@ -165,11 +165,16 @@ def local_models(models_dir: Path, kind: str = "text") -> List[Dict[str, Any]]:
     return out
 
 
+ANY_FILE_RE = re.compile(r"^[\w][\w .+()=/-]{0,200}$")
+
+
 def download(
     repo: str, filename: str, models_dir: Path, token: str = "",
-    progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False,
+    progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False, any_file: bool = False,
 ) -> Path:
-    if not REPO_RE.match(repo or "") or not FILE_RE.match(Path(filename).name) or ".." in filename:
+    """`any_file=True` (só para o catálogo de pré-instalados) permite arquivos que não são .gguf, como o VAE `.safetensors`."""
+    ok_name = ANY_FILE_RE.match(filename) and Path(filename).name == filename.rsplit("/", 1)[-1] if any_file else FILE_RE.match(Path(filename).name)
+    if not REPO_RE.match(repo or "") or not ok_name or ".." in filename:
         raise ProviderError("Repositório ou arquivo inválido.")
     dest = models_dir / Path(filename).name
     part = dest.with_suffix(dest.suffix + ".part")
@@ -206,7 +211,7 @@ def download(
 
 def download_many(
     repo: str, filenames: List[str], models_dir: Path, token: str = "", sizes: Optional[Dict[str, int]] = None,
-    progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False,
+    progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False, any_file: bool = False,
 ) -> Path:
     """Baixa uma opção (um arquivo ou todas as partes de um modelo dividido) com progresso somado. Devolve o arquivo principal."""
     if not filenames or len(filenames) > 99:
@@ -232,7 +237,7 @@ def download_many(
             if progress:
                 progress(base + done, total or (base + tot))
 
-        path = download(repo, f, models_dir, token, prog, cancelled)
+        path = download(repo, f, models_dir, token, prog, cancelled, any_file)
         first = first or path
         base += int(sizes.get(f, 0)) or path.stat().st_size
     return first  # type: ignore[return-value]

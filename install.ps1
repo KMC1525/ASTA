@@ -5,6 +5,8 @@
 # O MESMO comando instala e atualiza. Seus dados (%USERPROFILE%\.asta) nunca são tocados.
 # Variáveis opcionais: $env:ASTA_EXTRAS = "all" (padrão: instala/atualiza TODAS as bibliotecas do ASTA) | "none" (só o ASTA)
 #                                         | lista: "docs,media,local". Uma biblioteca que falhe não aborta a instalação.
+#                      $env:ASTA_MODELS = "all" (padrão: baixa os modelos locais pré-instalados: Qwen3.8 2B Distill Q8_0 (texto) e Z-Image Q4_K_M (imagem))
+#                                         | "none" | "text" | "image"
 #                      $env:ASTA_PYTHON = "auto" (padrão: instala o Python se faltar e o atualiza pelo winget, com pip/setuptools/wheel)
 #                                         | "keep" (nunca mexe no Python do sistema)
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
@@ -129,6 +131,16 @@ else {
   if ($LASTEXITCODE -ne 0) { $libsFailed = $true }
   $ErrorActionPreference = $prevEap
 }
+
+# 6) modelos locais pré-instalados (texto e imagem); o que já foi baixado é pulado
+$modelsFailed = $false
+if ($env:ASTA_MODELS -in @('none', 'no', '0')) { Note "Modelos pré-instalados: pulados (ASTA_MODELS=$($env:ASTA_MODELS))." }
+else {
+  Say 'Baixando os modelos locais pré-instalados (texto e imagem; vários GB na primeira vez) …'
+  & $asta models install
+  if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
+}
+if ($modelsFailed) { Note '⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install' }
 
 if (-not $old) { Say "✓ ASTA $new instalado." }
 elseif ($old -eq $new) { Say "✓ ASTA $new já estava atualizado (arquivos reinstalados)." }
