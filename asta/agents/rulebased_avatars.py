@@ -317,18 +317,28 @@ def prompt_writer(inp: Dict[str, Any]) -> Dict[str, Any]:
     rel = str(card.get("relationship") or "friend")
     base = {"name": name, "relationship": rel if rel in REL_LABEL else "friend", "gender": "female" if fem else "male", "age": _age(an.get("age") or card.get("age")),
             "traits": [str(t) for t in (an.get("traits") or [])][:4], "backstory": str(an.get("backstory") or card.get("description") or "")[:300]}
-    system = _card(base, lang, "sfw", [], _rng("prompt", name, base["age"]))["system_prompt"]
-    extra = [str(an.get("identity") or "").strip()] if an.get("identity") and an.get("identity") != base["backstory"] else []
-    looks = str(card.get("looks") or "").strip()
+    previous = str(card.get("system_prompt") or "").strip()
+    # o que o criador (ou o Designer) já escreveu é o ponto de partida; sem nada escrito, monta um do zero a partir dos campos
+    system = previous or _card(base, lang, "sfw", [], _rng("prompt", name, base["age"]))["system_prompt"]
+    extra = [str(an.get("identity") or "").strip()] if not previous and an.get("identity") and an.get("identity") != base["backstory"] else []
+    looks = str(card.get("looks") or "").strip().rstrip(".")
     if looks:
         extra.append(_t(lang, f"Aparência: {looks}.", f"Appearance: {looks}.", f"Aspecto: {looks}."))
-    if inp.get("instructions"):
-        extra.append(str(inp["instructions"]).strip())
+    instr = str(inp.get("instructions") or "").strip()
+    if instr and not instr.startswith("Original request:"):
+        extra.append(instr)
+    if card.get("knows") and str(card["knows"]) not in system:
+        extra.append(_t(lang, f"Você conhece {card['knows']} e vocês fazem parte do mesmo grupo.", f"You know {card['knows']} and you are all part of the same group.",
+                        f"Conoces a {card['knows']} y forman parte del mismo grupo."))
     if an.get("character_type") == "real":
         extra.append(_t(lang, "Você é uma interpretação ficcional e respeitosa de uma pessoa real, nunca a pessoa de verdade: não invente fatos privados ou falas como se fossem reais.",
                         "You are a fictional, respectful interpretation of a real person, never the real person: do not invent private facts or quotes as if they were real.",
                         "Eres una interpretación ficticia y respetuosa de una persona real, nunca la persona de verdad: no inventes hechos privados ni frases como si fueran reales."))
-    return {"system_prompt": " ".join([system] + [e for e in extra if e]), "notes": ""}
+    parts = [system]
+    for e in extra:
+        if e and e.rstrip(".") not in " ".join(parts):  # nada repetido (clicar em "gerar" de novo não empilha o mesmo texto)
+            parts.append(e)
+    return {"system_prompt": " ".join(parts), "notes": ""}
 
 
 def prompt_reviewer(inp: Dict[str, Any]) -> Dict[str, Any]:

@@ -621,6 +621,93 @@ class SystemPromptPipelineTests(TmpCase):
             self.run_pipeline({"avatar_id": "nao-existe"})
 
 
+class CreationUsesThePromptPipelineTests(TmpCase):
+    """Ao criar avatars, cada um passa pelo pipeline de system prompt (analisa, gera, revisa, entrega)."""
+
+    def setUp(self):
+        super().setUp()
+        self.store = Store(self.tmp / "home")
+        self.events = []
+
+    def run_creation(self, req, script):
+        from unittest import mock
+
+        from asta.agents import avatar_pipeline
+
+        prov = ScriptedProvider(script)
+        with mock.patch.object(avatar_pipeline, "build_provider", return_value=prov):
+            res = avatar_pipeline.AvatarPipeline(self.store, self.events.append).run(req)
+        return res, prov
+
+    @staticmethod
+    def script(**over):
+        brief = {"language": "pt-BR", "group": True, "tone": "amigos", "avatars": [
+            {"name": "Ana", "relationship": "friend", "gender": "female", "age": 25, "traits": ["alegre"], "talkativeness": 0.7},
+            {"name": "Beto", "relationship": "friend", "gender": "male", "age": 27, "traits": ["calmo"], "talkativeness": 0.5}]}
+        cards = {"avatars": [{"name": n, "relationship": "friend", "age": a, "system_prompt": f"Você é {n} (rascunho do designer).", "greeting": "Oi!", "examples": "Usuário: oi", "personality": "x", "content": "nsfw"}
+                             for n, a in (("Ana", 25), ("Beto", 27))]}
+        base = {"avatar_analyst": brief, "avatar_designer": cards, "avatar_reviewer": {"approved": True, "score": 9, "issues": []},
+                "avatar_prompt_analyst": {"character_type": "fictional", "age": 25, "is_minor": False, "traits": ["alegre"], "language": "pt-BR"},
+                "avatar_prompt_writer": [{"system_prompt": "Você é Ana, alegre e falante; conhece o Beto."}, {"system_prompt": "Você é Beto, calmo; amigo da Ana."}],
+                "avatar_prompt_reviewer": {"approved": True, "score": 8, "issues": []}}
+        base.update(over)
+        return base
+
+    def test_every_avatar_gets_its_own_analysis_generation_and_review(self):
+        res, prov = self.run_creation({"prompt": "Dois amigos: Ana e Beto", "content": "nsfw", "count": 2}, self.script())
+        steps = [e["id"] for e in self.events if e["type"] == "step" and e["status"] in ("done", "warn", "skipped")]
+        self.assertEqual([x for x in steps if x in ("analyst", "designer", "reviewer", "prompts", "save")], ["analyst", "designer", "reviewer", "prompts", "save"])
+        self.assertEqual([c[0] for c in prov.calls].count("avatar_prompt_analyst"), 2)
+        self.assertEqual([c[0] for c in prov.calls].count("avatar_prompt_writer"), 2)
+        self.assertEqual([c[0] for c in prov.calls].count("avatar_prompt_reviewer"), 2)
+        cards = [self.store.avatars.get(i) for i in res["avatar_ids"]]
+        self.assertEqual(cards[0]["system_prompt"], "Você é Ana, alegre e falante; conhece o Beto.")  # o texto do pipeline substitui o rascunho do designer
+        self.assertEqual(cards[1]["system_prompt"], "Você é Beto, calmo; amigo da Ana.")
+        self.assertEqual([c["content"] for c in cards], ["nsfw", "nsfw"])  # fictícios adultos mantêm NSFW
+        writer_calls = [c[1] for c in prov.calls if c[0] == "avatar_prompt_writer"]
+        self.assertIn("Beto", writer_calls[0])  # em grupo, sabe com quem convive ("knows")
+        self.assertIn("rascunho do designer", writer_calls[0])  # o rascunho entra como ponto de partida
+        prompts_done = next(e for e in self.events if e["type"] == "step" and e["id"] == "prompts" and e["status"] in ("done", "warn"))
+        self.assertEqual((prompts_done["detail"]["count"], prompts_done["detail"]["approved"]), (2, 2))
+        progress = [e["detail"].get("current") for e in self.events if e["type"] == "step" and e["id"] == "prompts" and e["status"] == "running" and e["detail"].get("current")]
+        self.assertEqual(progress, ["Ana", "Beto"])
+
+    def test_the_reviewer_of_the_prompt_pipeline_can_send_one_avatar_back(self):
+        script = self.script(avatar_prompt_reviewer=[{"approved": False, "score": 3, "issues": [{"problem": "genérico", "fix": "mais voz"}]}, {"approved": True, "score": 8, "issues": []}],
+                             avatar_prompt_writer=[{"system_prompt": "Você é Ana."}, {"system_prompt": "Você é Ana, falante e cheia de gírias."}, {"system_prompt": "Você é Beto, calmo."}])
+        res, prov = self.run_creation({"prompt": "Dois amigos: Ana e Beto", "count": 2}, script)
+        self.assertEqual(self.store.avatars.get(res["avatar_ids"][0])["system_prompt"], "Você é Ana, falante e cheia de gírias.")
+        done = next(e for e in self.events if e["type"] == "step" and e["id"] == "prompts" and e["status"] in ("done", "warn"))
+        self.assertEqual(done["detail"]["revised"], 1)
+
+    def test_it_can_be_turned_off(self):
+        res, prov = self.run_creation({"prompt": "Dois amigos: Ana e Beto", "count": 2, "prompt_pipeline": False}, self.script())
+        self.assertFalse(any(c[0].startswith("avatar_prompt_") for c in prov.calls))
+        self.assertTrue(any(e["type"] == "step" and e["id"] == "prompts" and e["status"] == "skipped" for e in self.events))
+        self.assertIn("rascunho do designer", self.store.avatars.get(res["avatar_ids"][0])["system_prompt"])
+
+    def test_rules_still_hold_after_the_prompt_pipeline(self):
+        # o analista do pipeline marca "pessoa real": o avatar vira SFW mesmo que o designer e o usuário tenham pedido NSFW
+        script = self.script(avatar_prompt_analyst={"character_type": "real", "age": 40, "is_minor": False, "traits": ["x"], "language": "pt-BR"})
+        res, prov = self.run_creation({"prompt": "Dois amigos: Ana e Beto", "content": "nsfw", "count": 2}, script)
+        cards = [self.store.avatars.get(i) for i in res["avatar_ids"]]
+        self.assertEqual([(c["character_type"], c["content"]) for c in cards], [("real", "sfw")] * 2)
+        self.assertTrue(any("pessoa real" in w for w in res["warnings"]))
+        # menor de idade segundo o pipeline: SFW e amigo
+        script = self.script(avatar_prompt_analyst={"character_type": "fictional", "age": 15, "is_minor": True, "traits": ["x"], "language": "pt-BR"})
+        res, prov = self.run_creation({"prompt": "Dois amigos: Ana e Beto", "content": "nsfw", "count": 2}, script)
+        self.assertTrue(all(self.store.avatars.get(i)["content"] == "sfw" for i in res["avatar_ids"]))
+
+    def test_demo_mode_keeps_the_designer_text_and_runs_every_stage(self):
+        from asta.agents.avatar_pipeline import AvatarPipeline
+
+        res = AvatarPipeline(self.store, self.events.append).run({"prompt": "Uma amiga chamada Luna, gosta de astronomia"})
+        done = next(e for e in self.events if e["type"] == "step" and e["id"] == "prompts" and e["status"] in ("done", "warn"))
+        self.assertEqual(done["detail"]["count"], 1)
+        self.assertIn("Luna", self.store.avatars.get(res["avatar_ids"][0])["system_prompt"])
+        self.assertNotIn("..", self.store.avatars.get(res["avatar_ids"][0])["system_prompt"])
+
+
 class SystemPromptApiTests(ServerCase):
     def test_api_runs_the_pipeline_as_a_job_and_validates(self):
         status, r = self.c.json("POST", "/api/avatars/system-prompt", {"draft": {"name": "Mira", "personality": "gentil"}, "instructions": "ama jardinagem"})

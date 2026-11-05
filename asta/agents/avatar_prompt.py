@@ -67,6 +67,12 @@ class AvatarPromptPipeline(Runner):
         self.provider = build_provider(settings, pid, st.models_dir)
         self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "content": want, "avatar_id": avatar_id})
 
+        produced = self.produce(card, instructions, want, hint, detail)
+        # ---------- 4. Entrega
+        return self._deliver(produced["system_prompt"], produced["analysis"], produced["review"], produced["content"], avatar_id, base, card, bool(req.get("apply")), produced["revised"])
+
+    def produce(self, card: Dict[str, Any], instructions: str, want: str, hint: str, detail: str) -> Dict[str, Any]:
+        """Etapas 1 a 3 (analisa, gera, revisa) para um card. Usada pelo editor (`run`) e pela criação de avatars (um card por vez)."""
         # ---------- 1. Analisa
         analysis, fb = self._agent("analyze", "avatar_prompt_analyst", P.PROMPT_ANALYST,
                                    {"card": card, "instructions": instructions, "content": want, "character_type_hint": hint,
@@ -107,9 +113,7 @@ class AvatarPromptPipeline(Runner):
             review = self._review(system_prompt, analysis, card, instructions, content, detail)
         if not review["approved"]:
             self.warnings.append("reviewer: não aprovado depois da correção")
-
-        # ---------- 4. Entrega
-        return self._deliver(system_prompt, analysis, review, content, avatar_id, base, card, bool(req.get("apply")), revised)
+        return {"system_prompt": system_prompt, "analysis": analysis, "review": review, "content": content, "revised": revised}
 
     # ------------------------------------------------------------------ etapas
     def _finish_analysis(self, raw: Dict[str, Any], card: Dict[str, Any], instructions: str, hint: str) -> Dict[str, Any]:

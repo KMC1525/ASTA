@@ -594,4 +594,9 @@ export default {
   'Personagem fictício': 'Fictional character',
   'Pessoa real (sempre SFW)': 'Real person (always SFW)',
   'Pessoas reais ficam sempre em SFW: o ASTA não cria conteúdo sexual sobre pessoas reais. Personagens fictícios adultos podem ser NSFW.': 'Real people are always SFW: ASTA does not create sexual content about real people. Adult fictional characters can be NSFW.',
+  'Desligado': 'Off',
+  '{c} ({i}/{n})': '{c} ({i}/{n})',
+  '{n} corrigido(s)': '{n} fixed',
+  'System prompts': 'System prompts',
+  'Pipeline por avatar: analisa, gera, revisa e entrega o system prompt': 'Per-avatar pipeline: analyzes, generates, reviews and delivers the system prompt',
 };

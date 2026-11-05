@@ -159,7 +159,7 @@ class AvatarRoutes:
             "from_images": bool(body.get("from_images")), "images_mode": "one" if body.get("images_mode") == "one" else "each",
             "count": body.get("count") or 0, "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),
-            "character_type": text(body.get("character_type"), "auto", 10),
+            "character_type": text(body.get("character_type"), "auto", 10), "prompt_pipeline": body.get("prompt_pipeline") is not False,
             "detail": text(body.get("detail"), "detailed", 10),
         }
 

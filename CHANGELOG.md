@@ -5,6 +5,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.15] — 2026-11-05
+
+### Adicionado
+- **A criação de avatars também usa o pipeline de system prompt.** Depois do Analista → Designer → Revisor, uma nova etapa **System prompts** roda o pipeline *Analisa → Gera → Revisa → Entrega* (o mesmo do editor, da 0.2.14) **em cada avatar criado**, e o texto final substitui o do Designer. O texto do Designer não é descartado: entra como ponto de partida ("mantenha o que está bom"), junto com o pedido original e, nos grupos, os nomes dos outros avatares (`knows`) para que cada um saiba com quem convive. O progresso aparece na tela de criação (*System prompts — Ana (1/2)*, depois quantos foram corrigidos pelo revisor).
+- As regras fixas valem nessa etapa também, por código: se o pipeline concluir que o personagem é **pessoa real** ou **menor de idade**, o avatar vira SFW (menor também fica só amigo), mesmo que o usuário e o Designer tenham pedido NSFW; fictícios adultos mantêm o NSFW. O analista do pipeline pode marcar "real" mesmo quando o da criação marcou "fictício" (vale o mais restritivo); o tipo escolhido pelo usuário continua valendo mais que o palpite do modelo.
+- Para pular a etapa (mais rápido, menos chamadas ao modelo): `prompt_pipeline: false` em `POST /api/avatars/generate`. Ela custa cerca de 3 chamadas a mais por avatar.
+- Modo Demo (sem IA): o texto já escrito é mantido e só se acrescentam aparência, quem o avatar conhece, instruções e a nota de pessoa real, sem repetir o que já está lá (apertar *Gerar* de novo não empilha texto).
+- Testes: cada avatar tem a sua análise/geração/revisão, o rascunho do Designer e o grupo chegam ao redator, a rodada de correção de um avatar, desligar a etapa, regras (real e menor) depois do pipeline e o modo Demo.
+
+### Observação
+- Uma criação com vários avatares fica mais lenta com um modelo de IA de verdade (mais chamadas). O pipeline com um modelo real não foi exercitado aqui: foi testado com um provedor roteirizado e com o modo Demo.
+
 ## [0.2.14] — 2026-11-05
 
 ### Adicionado
@@ -286,7 +298,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.14...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.15...HEAD
+[0.2.15]: https://github.com/KMC1525/ASTA/compare/v0.2.14...v0.2.15
 [0.2.14]: https://github.com/KMC1525/ASTA/compare/v0.2.13...v0.2.14
 [0.2.13]: https://github.com/KMC1525/ASTA/compare/v0.2.12...v0.2.13
 [0.2.12]: https://github.com/KMC1525/ASTA/compare/v0.2.11...v0.2.12

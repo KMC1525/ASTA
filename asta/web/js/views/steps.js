@@ -42,6 +42,7 @@ export const AVATAR = {
     analyst: ['Analista', 'Entende quem você quer criar e extrai ideias dos anexos'],
     designer: ['Designer de avatares', 'Escreve personalidade, voz, aparência e primeira mensagem'],
     reviewer: ['Revisor', 'Confere idade adulta, conteúdo SFW/NSFW e coerência'],
+    prompts: ['System prompts', 'Pipeline por avatar: analisa, gera, revisa e entrega o system prompt'],
     save: ['Salvando', 'Guarda os avatares na sua coleção'],
   },
   detail(id, s, d) {
@@ -54,6 +55,7 @@ export const AVATAR = {
       case 'analyst': return (d.names && d.names.length ? d.names.join(', ') : t('{n} avatar(es)', { n: d.count })) + warn;
       case 'designer': return t('{n} avatar(es)', { n: d.count }) + warn;
       case 'reviewer': return (d.approved ? t('aprovado') : t('com ressalvas')) + (d.score != null ? ' · ' + t('nota {n}/10', { n: d.score }) : '') + (d.issues ? ' · ' + t('{n} apontamentos', { n: d.issues }) : '') + warn;
+      case 'prompts': return s === 'skipped' ? t('Desligado') : d.current ? t('{c} ({i}/{n})', { c: d.current, i: d.index, n: d.total }) : d.count != null ? t('{n} avatar(es)', { n: d.count }) + (d.revised ? ' · ' + t('{n} corrigido(s)', { n: d.revised }) : '') + warn : '';
       case 'save': return t('{n} avatar(es)', { n: d.count });
       default: return '';
     }

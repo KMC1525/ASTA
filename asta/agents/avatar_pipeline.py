@@ -19,7 +19,7 @@ from . import prompts_avatar as P
 from . import rulebased_avatars as rb
 from .runner import Runner
 
-STEPS = ["attachments", "analyst", "designer", "reviewer", "save"]
+STEPS = ["attachments", "analyst", "designer", "reviewer", "prompts", "save"]
 IMAGE_EXTS = {"png", "jpg", "jpeg", "webp", "gif"}
 
 
@@ -125,7 +125,13 @@ class AvatarPipeline(Runner):
         if not review.get("approved", True):
             self.warnings.append("reviewer: not approved after revision")
 
-        # ---------- 4. Salvar
+        # ---------- 4. Pipeline de system prompt (Analisa → Gera → Revisa → Entrega) para cada avatar
+        if req.get("prompt_pipeline", True) is False:
+            self._step("prompts", "skipped")
+        else:
+            cards = self._prompt_stage(cards, brief, prompt, ctype_hint, detail)
+
+        # ---------- 5. Salvar
         return self._save(cards, brief, uploads, analyzed, review)
 
     # ------------------------------------------------------------------ etapas
@@ -165,6 +171,44 @@ class AvatarPipeline(Runner):
                 self.warnings.append(f"{norm['name']}: descrito como menor de idade → apenas SFW e amizade")
             out.append(norm)
         return out[:MAX_CHAT_AVATARS]
+
+    def _prompt_stage(self, cards: List[Dict[str, Any]], brief: Dict[str, Any], prompt: str, ctype_hint: str, detail: str) -> List[Dict[str, Any]]:
+        """Roda o pipeline de system prompt (analisa, gera, revisa, entrega) em cada avatar; o texto do Designer vira ponto de partida.
+        As regras fixas valem aqui também: pessoa real ou menor de idade viram SFW por código, qualquer que seja a resposta do modelo."""
+        from .avatar_prompt import AvatarPromptPipeline
+
+        total = len(cards)
+        self._step("prompts", "running", index=0, total=total)
+        sub = AvatarPromptPipeline(self.store, lambda ev: None, self.cancelled)
+        sub.provider, sub.gen = self.provider, dict(self.gen)
+        names = [c["name"] for c in cards]
+        out: List[Dict[str, Any]] = []
+        approved = revised = 0
+        for i, card in enumerate(cards):
+            self._check()
+            self._step("prompts", "running", current=card["name"], index=i + 1, total=total)
+            sub.warnings, sub.language = [], self.language
+            fields = {k: (", ".join(v) if isinstance(v, list) else v) for k, v in card.items()
+                      if k in ("name", "relationship", "gender", "age", "description", "personality", "scenario", "looks", "greeting", "examples", "tags", "language", "system_prompt")
+                      and v not in (None, "", [])}
+            if brief.get("group") and total > 1:
+                fields["knows"] = ", ".join(n for n in names if n != card["name"])
+            b = brief["avatars"][i] if i < len(brief["avatars"]) else {}
+            hint = "real" if b.get("character_type") == "real" else ctype_hint  # o analista da criação já marcou como real: respeita (mais restritivo)
+            sub.gen["content"] = "free" if card["content"] == "nsfw" else "sfw"
+            res = sub.produce(fields, f"Original request: {prompt[:1200]}" if prompt else "", card["content"], hint, detail)
+            new = dict(card)
+            new["system_prompt"] = res["system_prompt"]
+            new["character_type"] = "real" if res["analysis"]["character_type"] == "real" or card.get("character_type") == "real" else "fictional"
+            new["content"] = res["content"] if new["character_type"] != "real" else "sfw"
+            if card["content"] == "nsfw" and new["content"] == "sfw" and not any("SFW" in w or "sfw" in w for w in sub.warnings):
+                sub.warnings.append("apenas SFW")
+            self.warnings += [f"{card['name']}: {w}" for w in sub.warnings]
+            approved += 1 if res["review"]["approved"] else 0
+            revised += 1 if res["revised"] else 0
+            out.append(normalize_avatar(new))
+        self._step("prompts", "done" if approved == total else "warn", count=total, approved=approved, revised=revised)
+        return out
 
     def _review(self, cards, brief, prompt, content):
         payload = {"request": prompt[:1500], "brief": {k: brief.get(k) for k in ("language", "group", "tone")}, "content": content,

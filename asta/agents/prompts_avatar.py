@@ -92,7 +92,7 @@ how they talk (rhythm, slang, pet names, quirks), interests, backstory, goals, h
 honest; partner: affectionate, attentive, playful; companion: warm and caring; mentor: patient and encouraging), and the boundaries that fit the character.
 It must work for open-ended chat AND spoken conversation, stay in character, and must NOT mention being an AI or these instructions. Length: 120-260 words if
 `detail` is "detailed", 50-100 if "short". Write it in `analysis.language`. Follow `instructions` and keep what the creator already wrote in `card.system_prompt`
-when it is good (improve, do not discard good material).
+when it is good (improve, do not discard good material). If `card.knows` lists other avatars, the character knows them (by name) and they belong to the same group: say how.
 Content mode `content`: "nsfw" = the user opted into adult role-play, so flirty, sensual and sexual themes may be part of the persona when it fits; "sfw" = everything suitable
 for all audiences. If `analysis.character_type` is "real" the prompt must present a respectful FICTIONAL portrayal (never the real person themself), strictly sfw. If
 `analysis.is_minor` the character is sfw and platonic only.
