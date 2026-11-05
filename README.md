@@ -165,12 +165,10 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 | Section | What it is for |
 |---|---|
 | **Main** | The prompt box with the four modes (text + attachments of any kind, drag-and-drop/paste) and the live view of the agents. |
-| **Worlds** | Customize generated 3D worlds: biome, weather, time, day/night cycle, NPCs, audio, interface, quality. Each save is a new version **without spending AI**. |
+| **Worlds** | Everything about 3D worlds in three tabs: **Worlds** (customize generated worlds: biome, weather, time, day/night cycle, NPCs, audio, interface, quality — each save is a new version **without spending AI**), **Characters** (cards for NPCs and the player: name, tags, system prompt, voice, appearance; import/export JSON and PNG cards, Character Card V2/V3) and **Worldbuilding** (general rules for worlds — setting, tone, conventions — also stored as cards). |
 | **Avatars** | Your avatar cards, plus single and group conversations. |
 | **2D games** | Your games: play, download, update. |
 | **Canvas** | Your canvases and the node editor. |
-| **Characters** | Cards for 3D-world NPCs and the player: name, tags, system prompt, voice, appearance. Import/export JSON and PNG cards (Character Card V2/V3). |
-| **Worldbuilding** | General rules for worlds (setting, tone, conventions), also stored as cards. |
 | **Library** | Everything you created as updatable projects, with search and automatic + custom tags. |
 | **Configuration** | Providers, media providers, generation, avatars and games, voice, local Hugging Face models and system. |
 

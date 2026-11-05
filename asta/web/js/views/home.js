@@ -87,7 +87,7 @@ async function worldComposer(root, project, carry) {
       const cb = h('input', { type: 'checkbox', checked: m.chars.includes(c.id) });
       cb.addEventListener('change', () => { m.chars = cb.checked ? m.chars.concat(c.id) : m.chars.filter((x) => x !== c.id); paintChars(); composer.refresh(); });
       return h('label', { class: 'opt' }, cb, h('div', null, h('div', null, c.name), h('div', { class: 'small dim' }, (c.role === 'player' ? t('jogador') : 'NPC') + (c.tags.length ? ' · ' + c.tags.slice(0, 3).join(', ') : ''))));
-    }) : h('div', { class: 'col', style: { padding: '10px' } }, h('span', { class: 'muted small' }, t('Você ainda não criou personagens.')), h('a', { href: '#/characters', class: 'small' }, t('Criar personagem'))));
+    }) : h('div', { class: 'col', style: { padding: '10px' } }, h('span', { class: 'muted small' }, t('Você ainda não criou personagens.')), h('a', { href: '#/worlds/characters', class: 'small' }, t('Criar personagem'))));
     popover(charBtn, body);
   });
   const composer = createComposer({

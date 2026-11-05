@@ -7,11 +7,11 @@ export const state = { settings: null, presets: [], hardware: {}, version: '', h
 
 export const NAV = [
   ['main', 'Principal', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'],
-  ['characters', 'Personagens', 'characters'], ['worldbuilding', 'Worldbuilding', 'worldbuilding'], ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
+  ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
-  main: () => import('./views/home.js'), worlds: () => import('./views/worlds.js'), characters: () => import('./views/characters.js'),
-  worldbuilding: () => import('./views/worldbuilding.js'), library: () => import('./views/library.js'), config: () => import('./views/config.js'),
+  main: () => import('./views/home.js'), worlds: () => import('./views/worlds.js'),
+  library: () => import('./views/library.js'), config: () => import('./views/config.js'),
   avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), canvas: () => import('./views/canvas.js'),
 };
 
@@ -33,7 +33,10 @@ export async function saveSettings(patch) {
   return state.settings;
 }
 
-function route() { const m = location.hash.match(/^#\/(\w+)/); return m && VIEWS[m[1]] ? m[1] : 'main'; }
+function route() {
+  const old = location.hash.match(/^#\/(characters|worldbuilding)\b/);  // links antigos: agora vivem dentro de Mundos
+  if (old) history.replaceState(null, '', '#/worlds/' + old[1]);
+  const m = location.hash.match(/^#\/(\w+)/); return m && VIEWS[m[1]] ? m[1] : 'main'; }
 
 export function renderSide() {
   const side = document.getElementById('side');

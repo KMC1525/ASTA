@@ -14,3 +14,6 @@
   #side nav{min-width:max-content;gap:0}
   #side .item{min-width:58px}
 }
+
+/* Mundos: abas Mundos / Personagens / Worldbuilding */
+.wtabs{padding-bottom:0}.wtabs .tabs{margin-bottom:0}.wtabs+div>.page{padding-top:22px}

@@ -165,12 +165,10 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 | Seção | Para quê |
 |---|---|
 | **Principal** | A caixa de prompt com os quatro modos (texto + anexos de qualquer tipo, arrastar-e-soltar/colar) e o acompanhamento ao vivo dos agentes. |
-| **Mundos** | Personalizar os mundos 3D gerados: bioma, clima, hora, ciclo dia/noite, NPCs, áudio, interface, qualidade. Cada salvamento vira uma nova versão **sem gastar IA**. |
+| **Mundos** | Tudo sobre os mundos 3D em três abas: **Mundos** (personalizar os mundos gerados: bioma, clima, hora, ciclo dia/noite, NPCs, áudio, interface, qualidade — cada salvamento vira uma nova versão **sem gastar IA**), **Personagens** (cards dos NPCs e do jogador: nome, tags, system prompt, voz, aparência; importa/exporta JSON e cards de PNG, Character Card V2/V3) e **Worldbuilding** (regras gerais dos mundos — cenário, tom, convenções — também salvas como cards). |
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós. |
-| **Personagens** | Cards dos NPCs dos mundos 3D e do jogador: nome, tags, system prompt, voz, aparência. Importa/exporta JSON e cards de PNG (Character Card V2/V3). |
-| **Worldbuilding** | Regras gerais dos mundos (cenário, tom, convenções), também salvas como cards. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, com busca e tags automáticas + personalizadas. |
 | **Configuração** | Provedores, provedores de mídia, geração, avatars e jogos, voz, modelos locais do Hugging Face e sistema. |
 

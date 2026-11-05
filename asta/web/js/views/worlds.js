@@ -2,7 +2,8 @@ import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { go, state } from '../main.js';
 import { accordion, checkbox, field, fmtDate, gradient, h, icon, range, select, seg, toast } from '../ui.js';
-import { figureSVG } from './characters.js';
+import renderCharacters, { figureSVG } from './characters.js';
+import renderWorldbuilding from './worldbuilding.js';
 
 const BIOMES = [['temperate', 'Temperado'], ['forest', 'Floresta'], ['desert', 'Deserto'], ['snow', 'Neve'], ['tropical', 'Tropical'], ['island', 'Ilha'], ['urban', 'Urbano'], ['wasteland', 'Pós-apocalipse'], ['swamp', 'Pântano'], ['mountain', 'Montanha']];
 const WEATHER = [['clear', 'Limpo'], ['cloudy', 'Nublado'], ['fog', 'Névoa'], ['rain', 'Chuva'], ['snow', 'Neve'], ['storm', 'Tempestade']];
@@ -12,7 +13,18 @@ const SCALES = [['major', 'Maior'], ['minor', 'Menor'], ['dorian', 'Dórica'], [
 const BEHAV = [['wander', 'Vagar'], ['idle', 'Parado'], ['patrol', 'Patrulhar'], ['stand', 'Em pé']];
 const tr = (arr) => arr.map(([v, l]) => [v, t(l)]);
 
+// Seção "Mundos": os mundos gerados + os Personagens e o Worldbuilding que alimentam a geração (subrotas #/worlds/characters e #/worlds/worldbuilding).
+export const WORLD_TABS = [['worlds', 'Mundos'], ['characters', 'Personagens'], ['worldbuilding', 'Worldbuilding']];
+export const worldsTab = () => { const m = location.hash.match(/^#\/worlds\/(characters|worldbuilding)/); return m ? m[1] : 'worlds'; };
+
 export default async function render(root, ctx) {
+  const tab = worldsTab(), body = h('div');
+  const tabs = h('div', { class: 'tabs' }, WORLD_TABS.map(([id, label]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { state.ctx = {}; location.hash = '#/worlds' + (id === 'worlds' ? '' : '/' + id); } }, t(label))));
+  root.replaceChildren(h('div', { class: 'page wtabs' }, tabs), body);
+  await ({ worlds: renderWorlds, characters: renderCharacters, worldbuilding: renderWorldbuilding }[tab])(body, ctx);
+}
+
+async function renderWorlds(root, ctx) {
   const projects = await api('/api/projects');
   const libChars = await api('/api/characters');
   let sel = ctx.select || (projects[0] && projects[0].id) || null, proj = null, w = null, swaps = {};

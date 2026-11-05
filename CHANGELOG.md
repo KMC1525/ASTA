@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.2.1] — 2026-11-05
+
+### Alterado
+- As seções **Personagens** e **Worldbuilding** saíram da barra lateral e agora ficam dentro de **Mundos**, como abas (`Mundos`, `Personagens`, `Worldbuilding`; rotas `#/worlds`, `#/worlds/characters` e `#/worlds/worldbuilding`). Os links antigos (`#/characters` e `#/worldbuilding`) continuam funcionando e abrem a aba correspondente.
+- A barra lateral fica com sete itens: Principal, Mundos, Avatars, Jogos 2D, Canvas, Biblioteca e Configuração.
+- README (inglês e português) atualizados com a nova organização.
+
 ## [0.2.0] — 2026-11-05
 
 Reformulação do projeto: além de mundos 3D com NPCs-agentes, o ASTA agora é uma **central open source de criação com IA** com quatro modos — mundos 3D, **avatars**, **jogos 2D** e **Canvas** de mídia — todos a partir da mesma caixa de prompt e salvos na mesma biblioteca.
@@ -96,6 +103,7 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/KMC1525/ASTA/compare/v0.2.0...v0.2.1
 [0.2.0]: https://github.com/KMC1525/ASTA/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/KMC1525/ASTA/releases/tag/v0.1.0
