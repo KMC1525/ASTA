@@ -549,7 +549,13 @@ async function mobileTab() {
       cmd('asta mobile'),
       h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O QR code de pareamento aparece aqui e no terminal.')));
   }
-  return h('div', null, pairing,
+  const appSvg = new DOMParser().parseFromString(info.app_qr_svg, 'image/svg+xml').documentElement;
+  const appCard = cfgCard(t('Baixar o app sem computador'),
+    h('div', { class: 'mob-qr' }, h('div', { class: 'qr', id: 'mob-app-qr', role: 'img', 'aria-label': t('QR code do app Android') }, document.importNode(appSvg, true)),
+      h('div', { style: { flex: 1, minWidth: '220px' } },
+        h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Aponte a câmera do celular Android para baixar o app pelo repositório do ASTA (APK); o app avisa quando sai versão nova e pergunta se você quer baixar. No iPhone/iPad, use «Adicionar à Tela de Início» pelo endereço do ASTA. O app é a janela: o ASTA em si precisa estar rodando num computador ou servidor seu.')),
+        h('a', { href: info.app_url, target: '_blank', rel: 'noopener', class: 'small mono' }, info.app_url))));
+  return h('div', null, pairing, appCard,
     cfgCard(t('Este aparelho'), h('table', { class: 'mob-table', id: 'mob-device' },
       row(t('Tipo'), ({ phone: t('Smartphone'), foldable: t('Smartphone dobrável'), tablet: t('Tablet'), desktop: t('Computador') })[d.device] || '—'),
       row(t('Tela'), (d.width || '?') + '×' + (d.height || '?') + ' · ' + (d.orient === 'landscape' ? t('deitado') : t('em pé')) + (d.fold ? ' · ' + t('dobrável') + ': ' + d.fold : '')),

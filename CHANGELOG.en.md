@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.1] — 2026-11-06
+
+### Added — Mobile without a computer
+- **Android app (APK) from the repository**: `mobile-app/` folder (Capacitor shell) and an `android-apk` workflow that builds the APK and attaches it to every Release. A QR code in the README (en/pt-BR) and in Configuration → Mobile and tablet leads to `releases/latest`.
+- The app asks for the ASTA address (pairing QR by camera or typing), remembers the last one and **checks Releases for a new version, asking "Download now" or "Later"**.
+- Note: the app is only the window; ASTA itself keeps running on a computer/server/VPN; iPhone/iPad keep "Add to Home Screen". The APK is built by CI and was neither run on a real device nor built here.
+
 ## [0.10.0] — 2026-11-06
 
 ### Added — Mobile

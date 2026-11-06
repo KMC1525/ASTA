@@ -1,0 +1,128 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<title>ASTA</title>
+<style>
+  :root{color-scheme:dark}
+  body{margin:0;background:#000;color:#eee;font:16px/1.5 system-ui,sans-serif;padding:max(20px,env(safe-area-inset-top)) 20px 30px}
+  main{max-width:34em;margin:0 auto}
+  h1{font-weight:600;margin:.4em 0}
+  .card{background:#111;border:1px solid #2a2a2a;border-radius:16px;padding:16px;margin:14px 0}
+  input{width:100%;box-sizing:border-box;background:#0b0b0b;color:#eee;border:1px solid #333;border-radius:12px;padding:12px;font-size:16px}
+  button{background:#fff;color:#000;border:0;border-radius:999px;padding:12px 18px;font-size:16px;font-weight:600;margin:8px 8px 0 0;min-height:44px}
+  button.ghost{background:transparent;color:#eee;border:1px solid #333}
+  .muted{color:#999;font-size:14px}.err{color:#ff7b72}
+  video{width:100%;border-radius:12px;background:#000;margin-top:10px}
+  .hidden{display:none}
+</style>
+</head>
+<body><main>
+<h1>ASTA</h1>
+<p class="muted" id="lead"></p>
+
+<div class="card" id="upd" hidden>
+  <b id="upd-t"></b>
+  <div><button id="upd-go"></button><button class="ghost" id="upd-later"></button></div>
+</div>
+
+<div class="card" id="saved" hidden>
+  <div class="muted" id="saved-l"></div><div id="saved-u" style="word-break:break-all"></div>
+  <button id="saved-go"></button><button class="ghost" id="saved-forget"></button>
+</div>
+
+<div class="card">
+  <b id="scan-t"></b>
+  <p class="muted" id="scan-d"></p>
+  <button id="scan"></button>
+  <video id="cam" class="hidden" playsinline muted></video>
+  <p class="err" id="scan-e"></p>
+</div>
+
+<div class="card">
+  <b id="addr-t"></b>
+  <p class="muted" id="addr-d"></p>
+  <input id="addr" inputmode="url" autocapitalize="off" autocomplete="off" placeholder="http://192.168.0.10:8787">
+  <button id="addr-go"></button>
+</div>
+<p class="muted" id="ver"></p>
+</main>
+<script>
+// Casca nativa do ASTA mobile: guarda o endereço do servidor ASTA (no seu computador, num servidor da sua casa ou numa VPN como o Tailscale), lê o QR code de pareamento
+// e abre o ASTA nesse endereço. Também avisa de versão nova do APP (GitHub Releases) e pergunta se quer baixar agora.
+var APP_VERSION = '0.10.0';
+var REPO = 'KMC1525/ASTA';
+var pt = /^pt/i.test(navigator.language || '');
+var T = pt ? {
+  lead: 'Conecte este app a um ASTA: o ASTA do seu computador (ou de um servidor seu). O ASTA em si continua rodando lá; este app é a janela.',
+  scanT: 'Escanear o QR code', scanD: 'No computador: rode «asta mobile» (ou Configuração → Celular e tablet) e aponte a câmera para o QR code.', scan: 'Abrir a câmera',
+  addrT: 'Ou digite o endereço', addrD: 'Ex.: http://192.168.0.10:8787 (use o endereço mostrado no computador).', go: 'Conectar',
+  saved: 'Último ASTA usado', open: 'Abrir', forget: 'Esquecer',
+  updT: function (v) { return 'Há uma versão nova do app ASTA (' + v + '). Quer baixar agora?'; }, updGo: 'Baixar agora', updLater: 'Depois',
+  noCam: 'Não consegui usar a câmera. Digite o endereço abaixo.', noScan: 'Este aparelho não lê QR code pelo app; digite o endereço abaixo.', bad: 'Endereço inválido.', ver: 'App ASTA v'
+} : {
+  lead: "Connect this app to an ASTA: the one on your computer (or on your own server). ASTA itself keeps running there; this app is the window.",
+  scanT: 'Scan the QR code', scanD: 'On the computer: run “asta mobile” (or Configuration → Mobile and tablet) and point the camera at the QR code.', scan: 'Open the camera',
+  addrT: 'Or type the address', addrD: 'E.g. http://192.168.0.10:8787 (use the address shown on the computer).', go: 'Connect',
+  saved: 'Last ASTA used', open: 'Open', forget: 'Forget',
+  updT: function (v) { return 'There is a new ASTA app version (' + v + '). Download it now?'; }, updGo: 'Download now', updLater: 'Later',
+  noCam: 'I could not use the camera. Type the address below.', noScan: "This device can't read QR codes in the app; type the address below.", bad: 'Invalid address.', ver: 'ASTA app v'
+};
+var $ = function (id) { return document.getElementById(id); };
+$('lead').textContent = T.lead; $('scan-t').textContent = T.scanT; $('scan-d').textContent = T.scanD; $('scan').textContent = T.scan;
+$('addr-t').textContent = T.addrT; $('addr-d').textContent = T.addrD; $('addr-go').textContent = T.go;
+$('saved-l').textContent = T.saved; $('saved-go').textContent = T.open; $('saved-forget').textContent = T.forget; $('ver').textContent = T.ver + APP_VERSION;
+var KEY = 'asta.server';
+function get() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
+function set(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) { /* ok */ } }
+function origin(u) { try { var x = new URL(/^https?:\/\//i.test(u) ? u : 'http://' + u); return x.origin; } catch (e) { return ''; } }
+function connect(url) {
+  var o = origin(url);
+  if (!o) { $('scan-e').textContent = T.bad; return; }
+  set(o);
+  // o QR traz /api/mobile/pair?code=… (pareia e redireciona para o ASTA); um endereço simples abre direto
+  location.href = /\/api\/mobile\/pair/.test(url) ? url : o + '/';
+}
+$('addr-go').onclick = function () { connect($('addr').value.trim()); };
+$('saved-go').onclick = function () { connect(get()); };
+$('saved-forget').onclick = function () { set(''); $('saved').hidden = true; };
+if (get()) { $('saved').hidden = false; $('saved-u').textContent = get(); }
+
+var stream = null;
+$('scan').onclick = async function () {
+  $('scan-e').textContent = '';
+  if (!('BarcodeDetector' in window)) { $('scan-e').textContent = T.noScan; return; }
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+    var v = $('cam'); v.srcObject = stream; v.classList.remove('hidden'); await v.play();
+    var det = new BarcodeDetector({ formats: ['qr_code'] });
+    var loop = async function () {
+      if (!stream) return;
+      try { var r = await det.detect(v); if (r.length && /^https?:\/\//i.test(r[0].rawValue)) { stream.getTracks().forEach(function (t) { t.stop(); }); stream = null; connect(r[0].rawValue); return; } } catch (e) { /* tenta de novo */ }
+      setTimeout(loop, 250);
+    };
+    loop();
+  } catch (e) { $('scan-e').textContent = T.noCam; }
+};
+
+// versão nova do app (APK nas Releases do repositório); a pergunta aparece uma vez por versão e por abertura
+(async function () {
+  try {
+    var r = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    var rel = await r.json(), v = String(rel.tag_name || '').replace(/^v/, '');
+    var n = function (s) { return s.split('.').map(function (x) { return parseInt(x, 10) || 0; }); };
+    var a = n(v), b = n(APP_VERSION), newer = false;
+    for (var i = 0; i < 3; i++) { if ((a[i] || 0) !== (b[i] || 0)) { newer = (a[i] || 0) > (b[i] || 0); break; } }
+    if (!newer) return;
+    var apk = (rel.assets || []).filter(function (x) { return /\.apk$/i.test(x.name); })[0];
+    var url = apk ? apk.browser_download_url : rel.html_url;
+    $('upd-t').textContent = T.updT(v); $('upd-go').textContent = T.updGo; $('upd-later').textContent = T.updLater; $('upd').hidden = false;
+    $('upd-go').onclick = function () { location.href = url; };
+    $('upd-later').onclick = function () { $('upd').hidden = true; };
+  } catch (e) { /* sem internet: tudo bem */ }
+})();
+</script>
+</body></html>

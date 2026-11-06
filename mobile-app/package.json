@@ -1,0 +1,8 @@
+{
+  "name": "asta-mobile",
+  "version": "0.10.0",
+  "private": true,
+  "description": "ASTA mobile app (Android): a thin native shell (Capacitor) that connects to an ASTA server by QR code or address.",
+  "scripts": { "sync": "cap sync android" },
+  "dependencies": { "@capacitor/android": "^6.1.0", "@capacitor/cli": "^6.1.0", "@capacitor/core": "^6.1.0" }
+}

@@ -18,6 +18,7 @@ from . import qr
 
 COOKIE = "asta_pair"
 PAIR_PATH = "/api/mobile/pair"
+APP_RELEASES_URL = "https://github.com/KMC1525/ASTA/releases/latest"  # onde fica o APK do app mobile (anexado a cada Release)
 _FORWARD_HEADERS = ("x-forwarded-for", "forwarded", "x-real-ip", "cf-connecting-ip")
 
 
@@ -112,7 +113,8 @@ class Mobile:
         urls = [f"http://{ip}:{port}/" for ip in ips]
         pair = [f"http://{ip}:{port}{PAIR_PATH}?code={self.token()}" for ip in ips]
         return {"exposed": self.exposed, "port": port, "urls": urls, "pair_urls": pair if self.exposed else [],
-                "qr_svg": qr.svg(pair[0], scale=5, border=3) if self.exposed and pair else "", "has_network": bool(ips)}
+                "qr_svg": qr.svg(pair[0], scale=5, border=3) if self.exposed and pair else "", "has_network": bool(ips),
+                "app_url": APP_RELEASES_URL, "app_qr_svg": qr.svg(APP_RELEASES_URL, scale=4, border=3)}
 
 
 PAIR_REQUIRED_HTML = """<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.10.1] — 2026-11-06
+
+### Adicionado — Mobile sem computador
+- **App Android (APK) pelo repositório**: pasta `mobile-app/` (casca Capacitor) e workflow `android-apk` que gera o APK e o anexa a cada Release. QR code no README (en/pt-BR) e em Configuração → Celular e tablet leva a `releases/latest`.
+- O app pede o endereço do ASTA (QR de pareamento pela câmera ou digitando), lembra o último e **consulta as Releases por versão nova, perguntando «Baixar agora» ou «Depois»**.
+- Observação: o app é só a janela, o ASTA em si segue rodando num computador/servidor/VPN; iPhone/iPad seguem com «Adicionar à Tela de Início». O APK é compilado pelo CI e não foi executado em aparelho real nem compilado aqui.
+
 ## [0.10.0] — 2026-11-06
 
 ### Adicionado — Mobile

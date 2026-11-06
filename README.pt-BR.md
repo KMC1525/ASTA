@@ -125,6 +125,12 @@ O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O
 
 > O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
 
+**Sem computador por perto (app Android):** escaneie este QR code (ou abra [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest)) para baixar o **app ASTA** (APK, gerado pelo GitHub Actions a cada release; permita «instalar apps desconhecidos» uma vez). Abra, escaneie o QR code de pareamento do seu ASTA ou digite o endereço, e pronto. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**.
+
+<img src="docs/android-app-qr.svg" alt="QR code: app Android mais recente do ASTA" width="140">
+
+> O app é uma casca nativa (a janela); **o ASTA em si ainda precisa rodar em algum lugar** — seu computador, um servidor caseiro ou uma VPN como o Tailscale. iPhone/iPad não recebe app fora da App Store, então lá continua «Adicionar à Tela de Início» pelo endereço do seu ASTA. O APK é gerado pelo CI e não foi executado em um aparelho por quem fez esta alteração.
+
 **Segurança:** `asta mobile` abre o ASTA para a sua rede, mas **só aparelhos pareados entram** (o próprio computador nunca precisa parear). *Gerar novo código* em *Configuração → Celular e tablet* despareia todos. Atrás de proxy ou túnel, o pareamento também é exigido.
 
 **Atualizações:** o app avisa quando o ASTA do computador tem versão nova e **pergunta se você quer atualizar agora ou depois**. A checagem é uma requisição minúscula, então funciona em **Wi-Fi e dados móveis**, desde que o aparelho alcance o computador. Abrir sem rede e o diálogo de instalar como app exigem HTTPS ou localhost (regra do navegador); em `http://` simples na rede local, o iPhone/iPad ainda adiciona à tela inicial e o Android cria um atalho.

@@ -1218,4 +1218,7 @@ export default {
   "Atualizações": "Updates",
   "O app avisa quando o ASTA do computador tem versão nova e pergunta se você quer atualizar agora ou depois. Funciona em Wi-Fi e em dados móveis, desde que o aparelho alcance o computador.": "The app tells you when the ASTA on your computer has a new version and asks whether to update now or later. It works on Wi-Fi and mobile data, as long as the device can reach the computer.",
   "Celular e tablet": "Mobile and tablet",
+  "Baixar o app sem computador": "Get the app without a computer",
+  "QR code do app Android": "Android app QR code",
+  "Aponte a câmera do celular Android para baixar o app pelo repositório do ASTA (APK); o app avisa quando sai versão nova e pergunta se você quer baixar. No iPhone/iPad, use «Adicionar à Tela de Início» pelo endereço do ASTA. O app é a janela: o ASTA em si precisa estar rodando num computador ou servidor seu.": "Point an Android phone's camera to download the app from the ASTA repository (APK); the app tells you when a new version is out and asks if you want to download it. On iPhone/iPad, use “Add to Home Screen” from the ASTA address. The app is the window: ASTA itself must be running on a computer or server of yours.",
 };

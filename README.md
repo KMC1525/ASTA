@@ -125,6 +125,12 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
+**Without a computer at hand (Android app):** scan this QR code (or open [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest)) to download the **ASTA app** (APK, built by GitHub Actions on every release; allow "install unknown apps" once). Open it, scan your ASTA's pairing QR code or type its address, and you are in. The app **checks the repository for new versions and asks "Download now / Later"**.
+
+<img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
+
+> The app is a native shell (the window); **ASTA itself must still run somewhere** — your computer, a home server or a VPN such as Tailscale. iPhone/iPad can't receive an app outside the App Store, so there it stays *Add to Home Screen* from your ASTA's address. The APK is built by CI and was not run on a device by the author of this change.
+
 **Safety:** `asta mobile` opens ASTA to your network, but **only paired devices get in** (the computer itself never needs to pair). *Generate new code* in *Configuration → Mobile and tablet* unpairs every device. Behind a proxy or tunnel, pairing is required too.
 
 **Updates:** the app tells you when the ASTA on your computer has a new version and **asks whether to update now or later**. The check is a tiny request, so it works on **Wi-Fi and mobile data** as long as the device can reach the computer. Offline start-up and the install-as-app dialog need HTTPS or localhost (a browser rule); over plain `http://` on the local network, iPhone/iPad can still add it to the home screen and Android can add a shortcut.

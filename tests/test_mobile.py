@@ -120,6 +120,8 @@ class LocalServerTests(ServerCase):
         self.assertFalse(r["exposed"])  # o servidor de teste escuta só em 127.0.0.1
         self.assertEqual(r["pair_urls"], [])
         self.assertEqual(self.c.json("GET", "/api/mobile/pair?code=errado")[0], 403)
+        self.assertEqual(r["app_url"], "https://github.com/KMC1525/ASTA/releases/latest")  # QR do app para baixar sem computador
+        self.assertIn("<svg", r["app_qr_svg"])
 
 
 class NetworkServerTests(unittest.TestCase):

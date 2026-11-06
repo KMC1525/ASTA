@@ -305,6 +305,9 @@ class BrowserTests(unittest.TestCase):
     def test_26_mobile_device_adaptation_install_update_prompt_and_settings_tab(self):
         self.run_script("mobile_ui.js")
 
+    def test_27_android_app_shell_connects_remembers_and_offers_the_new_apk(self):
+        self.run_script("mobile_shell_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()
