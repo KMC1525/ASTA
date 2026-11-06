@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.5.1] — 2026-11-06
+
+### Adicionado
+- **Nova seção «Rebuild» na barra lateral** (logo abaixo de Canvas): lista só os jogos reconstruídos e tem o botão «Reconstruir um jogo». Pode ser ocultada em Configuração → Aparência como as demais; os atalhos Alt+N seguem a nova ordem (Rebuild = Alt+6, Biblioteca = Alt+7, Configuração = Alt+8).
+
+### Corrigido
+- A seção Rebuild não aparecia em quem já tinha a 0.5.0: o atualizador só reinstala quando o número da versão sobe. Esta versão (0.5.1) existe para que `asta` atualize sozinho; se a barra ainda não mostrar o Rebuild, rode `asta update --force` e recarregue a página (Ctrl+Shift+R).
+
 ## [0.5.0] — 2026-11-05
 
 ### Adicionado
@@ -16,7 +24,6 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - **Modo de desempenho** (*Configuração → Sistema → Desempenho*; `settings.performance`): Automático (pelo hardware), Leve, Equilibrado, Máximo. No Leve: janela de contexto limitada (valor definido pelo usuário sempre vence), `mmap` e lote menor, flash attention + cache KV de 8 bits, **descarga automática de modelos ociosos** (padrão 10 min; até 3 min no Leve) e, nos modelos locais de imagem/vídeo, fatias de atenção/VAE e descarga para a CPU. Opções que a versão instalada do llama-cpp-python não conhece são puladas.
 
 ### Alterado
-- **Nova seção «Rebuild» na barra lateral** (logo abaixo de Canvas): lista só os jogos reconstruídos e tem o botão «Reconstruir um jogo». Pode ser ocultada em Configuração → Aparência como as demais; os atalhos Alt+N seguem a nova ordem (Biblioteca e Configuração passam para Alt+7 e Alt+8).
 - `asta doctor` mostra o núcleo Rust e o modo de desempenho. O pacote inclui o código-fonte do núcleo (`native/Cargo.toml`, `native/src/*.rs`).
 - Roadmap: «reescrever o backend em Rust» virou «levar mais trechos críticos para o núcleo Rust».
 
@@ -620,7 +627,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.5.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/KMC1525/ASTA/compare/v0.4.3...v0.4.4

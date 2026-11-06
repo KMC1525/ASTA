@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.5.1] — 2026-11-06
+
+### Added
+- **New "Rebuild" section in the sidebar** (right below Canvas): lists only rebuilt games and has a "Rebuild a game" button. It can be hidden in Configuration → Appearance like the others; Alt+N shortcuts follow the new order (Rebuild = Alt+6, Library = Alt+7, Configuration = Alt+8).
+
+### Fixed
+- The Rebuild section did not show up for anyone already on 0.5.0: the updater only reinstalls when the version number goes up. This release (0.5.1) exists so `asta` updates itself; if the sidebar still lacks Rebuild, run `asta update --force` and reload the page (Ctrl+Shift+R).
+
 ## [0.5.0] — 2026-11-05
 
 ### Added
@@ -18,7 +26,6 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Performance mode** (*Configuration → System → Performance*; `settings.performance`): Automatic (by hardware), Light, Balanced, Maximum. Light: capped context window (a user-set value always wins), `mmap` and a smaller batch, flash attention + 8-bit KV cache, **automatic unloading of idle models** (default 10 min; at most 3 min in Light) and, for local image/video models, attention/VAE slicing and CPU offload. Options the installed llama-cpp-python does not know are skipped.
 
 ### Changed
-- **New "Rebuild" section in the sidebar** (right below Canvas): lists only rebuilt games and has a "Rebuild a game" button. It can be hidden in Configuration → Appearance like the others; Alt+N shortcuts follow the new order.
 - `asta doctor` shows the Rust core and the performance mode. The package ships the core's source (`native/Cargo.toml`, `native/src/*.rs`).
 - Roadmap: "rewrite the backend in Rust" became "move more hot paths to the Rust core".
 
@@ -622,7 +629,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.5.1...HEAD
+[0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5
 [0.4.4]: https://github.com/KMC1525/ASTA/compare/v0.4.3...v0.4.4
