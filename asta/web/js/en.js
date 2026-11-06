@@ -1469,4 +1469,5 @@ export default {
   "Pesquisar modelo ou provedor": "Search model or provider",
   "Nenhum modelo encontrado para «{q}».": "No model found for “{q}”.",
   "configurar": "set up",
+  "Limite do texto de cada resposta (mínimo 2.000). 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Com tempo de pensamento ligado, o pensamento vai além desse limite.": null,
 };
