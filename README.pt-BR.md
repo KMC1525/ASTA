@@ -6,7 +6,7 @@
 
 Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
-[Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [English](README.md)
+[Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `zero dependências obrigatórias`
 
@@ -375,7 +375,7 @@ asta --home ./asta-data                            # dados de desenvolvimento is
 python -m unittest discover -s tests -t .          # testes, sem rede
 ```
 
-Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.md](CONTRIBUTING.md) (em inglês: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)). O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md).
+Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) (em inglês: [CONTRIBUTING.md](CONTRIBUTING.md)). O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 

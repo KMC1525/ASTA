@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.8.4] — 2026-11-06
+
+### Alterado
+- **O guia de contribuição em inglês agora é o `CONTRIBUTING.md`** — o arquivo que o GitHub mostra na aba «Contributing» do repositório (que só exibe um). A versão em português passou para **`CONTRIBUTING.pt-BR.md`** (como já era com o README). O `CONTRIBUTING.en.md` deixou de existir; os links dos READMEs e dos guias foram ajustados.
+
 ## [0.8.3] — 2026-11-06
 
 ### Alterado
@@ -737,7 +742,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.3...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.4...HEAD
+[0.8.4]: https://github.com/KMC1525/ASTA/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/KMC1525/ASTA/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/KMC1525/ASTA/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/KMC1525/ASTA/compare/v0.8.0...v0.8.1

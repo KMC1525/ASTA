@@ -6,7 +6,7 @@
 
 A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a playable 3D world, a companion to chat with, a complete 2D game, or a node flow that produces images, videos, sounds and voices.
 
-[Install](#install) · [Getting started](#getting-started) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.en.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
+[Install](#install) · [Getting started](#getting-started) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `no required dependencies`
 
@@ -375,7 +375,7 @@ asta --home ./asta-data                            # isolated development data
 python -m unittest discover -s tests -t .          # offline test suite
 ```
 
-Browser tests (Chromium via Playwright) and the JavaScript engine tests run automatically when Node.js (and Playwright) are available, and are skipped otherwise. See [CONTRIBUTING.en.md](CONTRIBUTING.en.md) (Portuguese: [CONTRIBUTING.md](CONTRIBUTING.md)). The change history is in [CHANGELOG.md](CHANGELOG.md).
+Browser tests (Chromium via Playwright) and the JavaScript engine tests run automatically when Node.js (and Playwright) are available, and are skipped otherwise. See [CONTRIBUTING.md](CONTRIBUTING.md) (Portuguese: [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md)). The change history is in [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 
