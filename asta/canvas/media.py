@@ -977,19 +977,36 @@ class LocalHFMedia(MediaProvider):
     caps = ("image", "video", "sound", "voice", "stt")
     supports_refs = False
 
+    def _pick(self, cap: str, model: str, default: str) -> str:
+        """O modelo pedido; se ele ainda não foi baixado, usa outro já baixado da mesma função (o padrão ou uma sugestão) em vez de falhar. Se nenhum foi baixado, devolve o pedido
+        (e `_ready` explica como baixar). Nada é baixado em silêncio."""
+        from . import localmodels as lm
+
+        want = self.model_for(cap, model) or default
+        try:
+            if lm.downloaded_precision(want):
+                return want
+            for alt in [default] + list((MEDIA_PRESETS.get("local_hf") or {}).get("suggest", {}).get(cap, [])):
+                if alt != want and lm.downloaded_precision(alt):
+                    self.ctl.note(f'O modelo "{want}" ainda não foi baixado: usando "{alt}", que já está baixado.')
+                    return alt
+        except ProviderError:
+            pass  # sem as bibliotecas de modelos locais: `_ready` mostra a mensagem de instalação
+        return want
+
     def _ready(self, model: str) -> Dict[str, Any]:
         """Argumentos de carregamento do modelo (precisão escolhida, só arquivos locais). Recusa modelos que ainda não foram baixados."""
         from . import localmodels as lm
 
         prec = lm.downloaded_precision(model)
         if not prec:
-            raise ProviderError(f'O modelo local "{model}" ainda não foi baixado. Em Configuração → Mídia, escolha a precisão (quantização) e baixe-o antes de usar.')
+            raise ProviderError(f'O modelo local "{model}" ainda não foi baixado. Em Configuração → Mídia, escolha a precisão (quantização) e baixe-o antes de usar.', status=424)
         low = prec in ("fp16", "bf16")
         self.ctl.note(f"Modelo local {model} ({prec})")
         return {"precision": prec, "dtype": lm.torch_dtype(prec), "variant": "fp16" if low and lm.has_fp16_variant(model) else None}
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
-        model = self.model_for("image", model) or "stabilityai/sd-turbo"
+        model = self._pick("image", model, "stabilityai/sd-turbo")
         (diffusers,) = _local_import("diffusers")
         dev, _ = _device()
         ready = self._ready(model)
@@ -1023,7 +1040,7 @@ class LocalHFMedia(MediaProvider):
         return out
 
     def sound(self, prompt, *, kind="sfx", duration=5, model="", extra=None, seed=0):
-        model = self.model_for("sound", model) or "facebook/musicgen-small"
+        model = self._pick("sound", model, "facebook/musicgen-small")
         (tf,) = _local_import("transformers")
         ready = self._ready(model)
         pipe = _local_load("sound", model, lambda: tf.pipeline("text-to-audio", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
@@ -1032,7 +1049,7 @@ class LocalHFMedia(MediaProvider):
         return Media(_wav_from_array(res["audio"], res["sampling_rate"]), "audio/wav")
 
     def voice(self, text, *, voice="", speed=1.0, model="", extra=None, instructions=""):
-        model = self.model_for("voice", model) or "suno/bark-small"
+        model = self._pick("voice", model, "suno/bark-small")
         (tf,) = _local_import("transformers")
         ready = self._ready(model)
         pipe = _local_load("voice", model, lambda: tf.pipeline("text-to-speech", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
@@ -1041,7 +1058,7 @@ class LocalHFMedia(MediaProvider):
         return Media(_wav_from_array(res["audio"], res["sampling_rate"]), "audio/wav")
 
     def transcribe(self, data, filename, mime, *, language="", model=""):
-        model = self.model_for("stt", model) or "openai/whisper-small"
+        model = self._pick("stt", model, "openai/whisper-small")
         (tf,) = _local_import("transformers")
         ready = self._ready(model)
         pipe = _local_load("stt", model, lambda: tf.pipeline("automatic-speech-recognition", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
@@ -1056,7 +1073,7 @@ class LocalHFMedia(MediaProvider):
 
     def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
         """Vídeo local exige GPU com bastante memória. Os quadros viram MP4 pelo ffmpeg."""
-        model = self.model_for("video", model) or "Lightricks/LTX-Video"
+        model = self._pick("video", model, "Lightricks/LTX-Video")
         (diffusers,) = _local_import("diffusers")
         ff = proc.ffmpeg_path()
         if not ff:

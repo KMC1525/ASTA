@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.10.4] — 2026-11-06
+
+### Corrigido
+- **Canvas: gerar imagem com modelo local ainda não baixado** só mostrava um erro. Agora, se o modelo escolhido não foi baixado, o ASTA usa outro já baixado da mesma função (o padrão ou uma sugestão) e avisa no nó; se nenhum foi baixado, o erro ganha o botão «Baixar o modelo agora» (abre Configuração → Mídia na escolha da precisão). Nada é baixado em silêncio. Vale para imagem, som, voz, transcrição e vídeo.
+
 ## [0.10.3] — 2026-11-06
 
 ### Adicionado

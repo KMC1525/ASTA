@@ -831,6 +831,24 @@ class LocalHFTests(unittest.TestCase):
                 self.assertIn("precisão (quantização)", str(cm.exception))
         self.assertNotIn("model", calls)  # o modelo nem chegou a ser carregado
 
+    def test_a_not_downloaded_model_falls_back_to_one_that_is_downloaded(self):
+        from asta.canvas import localmodels as lm
+
+        mods, calls = self.fake_modules()
+        have = lambda m: "fp16" if m == "stabilityai/sdxl-turbo" else ""  # noqa: E731 — só um modelo sugerido está baixado
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", side_effect=have), mock.patch.object(lm, "has_fp16_variant", return_value=False):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "Qwen/Qwen-Image-2.1"}, key="", needs_key=False)  # o escolhido nunca foi baixado
+            out = p.image("uma floresta", size="512x512", count=1, seed=1)
+        self.assertEqual(out[0].mime, "image/png")
+        self.assertEqual(calls["model"], "stabilityai/sdxl-turbo")  # usou o que já estava baixado, sem baixar nada
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value=""):
+            M._LOCAL_CACHE.clear()
+            with self.assertRaises(ProviderError) as cm:  # nada baixado: continua explicando como baixar (e a tela mostra o botão)
+                provider("local_hf", "", {"image": "Qwen/Qwen-Image-2.1"}, key="", needs_key=False).image("x")
+            self.assertIn("Qwen/Qwen-Image-2.1", str(cm.exception))
+            self.assertEqual(cm.exception.status, 424)
+
     def test_missing_libraries_explain_how_to_install(self):
         with mock.patch.dict(sys.modules, {"torch": None, "diffusers": None, "transformers": None}):
             M._LOCAL_CACHE.clear()

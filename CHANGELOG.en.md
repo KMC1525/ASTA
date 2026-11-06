@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.4] — 2026-11-06
+
+### Fixed
+- **Canvas: generating an image with a local model that was not downloaded yet** only showed an error. Now, if the chosen model was not downloaded, ASTA uses another already-downloaded one for the same function (the default or a suggestion) and says so on the node; if none was downloaded, the error gets a "Download the model now" button (opens Configuration → Media at the precision choice). Nothing is downloaded silently. Applies to image, sound, voice, transcription and video.
+
 ## [0.10.3] — 2026-11-06
 
 ### Added

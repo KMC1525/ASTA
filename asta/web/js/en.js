@@ -1232,4 +1232,5 @@ export default {
   "Login oficial (OAuth): você autoriza no site do OpenRouter e não precisa copiar chave. O uso é cobrado na sua conta de lá.": "Official login (OAuth): you authorize on the OpenRouter site and don't need to copy a key. Usage is billed to your account there.",
   "Entrar na conta e criar a chave": "Sign in and create the key",
   "Este provedor não deixa outros apps usarem o login da conta nem da assinatura (Claude Pro, ChatGPT Plus…): você entra no site dele, cria a chave em um clique e cola no campo abaixo.": "This provider doesn't let other apps use the account or subscription login (Claude Pro, ChatGPT Plus…): you sign in on its site, create the key in one click and paste it in the field below.",
+  "Baixar o modelo agora": "Download the model now",
 };

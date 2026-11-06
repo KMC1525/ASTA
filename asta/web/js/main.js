@@ -113,6 +113,7 @@ async function render() {
 }
 
 let shell = null;
+addEventListener('asta:go', (e) => { if (e.detail && e.detail.route) go(e.detail.route, e.detail.ctx); });   // telas que não importam o main.js pedem navegação por evento
 addEventListener('hashchange', () => { render(); });
 (async () => {
   try { await refreshState(); } catch (e) { document.getElementById('main').replaceChildren(h('div', { class: 'page narrow' }, h('div', { class: 'errbox' }, e.message))); return; }

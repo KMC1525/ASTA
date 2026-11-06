@@ -143,7 +143,10 @@ export function nodeResult(c, n) {
   else if (st.state === 'queued') box.append(h('div', { class: 'run' }, t('Na fila…')));
   else if (st.state === 'skipped') box.append(h('div', { class: 'dim small' }, t('Pulado: um nó de entrada falhou.')));
   const error = st.state === 'error' ? st.message : (r.state === 'error' ? r.error : '');
-  if (error) box.append(h('div', { class: 'err' }, error));
+  if (error) {
+    box.append(h('div', { class: 'err' }, error));
+    if (/ainda não foi baixado|not been downloaded/i.test(error)) box.append(h('button', { class: 'btn sm primary nodrag', type: 'button', style: { marginTop: '6px' }, onclick: () => window.dispatchEvent(new CustomEvent('asta:go', { detail: { route: 'config', ctx: { tab: 'media' } } })) }, icon('download', 13), t('Baixar o modelo agora')));   // abre Configuração → Mídia na escolha da precisão
+  }
   if (st.state === 'running' || st.state === 'queued') return box;
   const imgs = items.filter((a) => a.kind === 'image');
   if (imgs.length) box.append(h('div', { class: 'rimgs nodrag' + (imgs.length === 1 ? ' one' : '') }, imgs.map((a) => h('img', { src: c.url(a), loading: 'lazy', title: a.prompt || a.name, draggable: 'false', onclick: () => c.preview(a, imgs) }))));
