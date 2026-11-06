@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.9.4] — 2026-11-06
+
+### Corrigido
+- **Analista e Diretor da edição automática: «nenhum objeto JSON na resposta»**. Causas tratadas: modelo que «pensa» e não fecha o `<think>` (o JSON ficava escondido no raciocínio — agora é procurado ali também); resposta vazia ou só em texto (a nova tentativa repete o formato exato esperado e a instrução `/no_think` pede aos modelos Qwen3 e afins que pulem o raciocínio).
+- Quando ainda assim falha, a mensagem mostra o começo do que a IA respondeu (ou «respondeu vazio»), para dar para diagnosticar o modelo.
+
 ## [0.9.3] — 2026-11-06
 
 ### Corrigido

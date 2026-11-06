@@ -14,6 +14,8 @@ def salvage_json(raw: str) -> Any:
     from ..avatars import strip_reasoning
 
     text = strip_reasoning(str(raw or "")).strip()
+    if "{" not in text and "{" in str(raw or ""):
+        text = re.sub(r"</?think[^>]*>", "", str(raw), flags=re.I).strip()
     fence = re.search(r"```(?:json)?\s*(.*)", text, re.S | re.I)
     if fence and "{" in fence.group(1):
         text = fence.group(1).replace("```", "").strip()
@@ -61,6 +63,8 @@ def extract_json(raw: str) -> Any:
     from ..avatars import strip_reasoning
 
     text = strip_reasoning(str(raw)).strip()
+    if "{" not in text and "{" in str(raw):  # <think> que nunca fechou (tokens acabaram) ou resposta escrita dentro do raciocínio: procura o JSON ali
+        text = re.sub(r"</?think[^>]*>", "", str(raw), flags=re.I).strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S | re.I)
     if fence and "{" in fence.group(1):
         text = fence.group(1).strip()
@@ -131,6 +135,7 @@ def call_json(
     ]
     last_err = "desconhecido"
     raw = ""
+    want = re.search(r"Output JSON:\s*(\{.*\})", instruction, re.S)  # o formato esperado, repetido na nova tentativa
     for attempt in range(attempts):
         if cancelled and cancelled():
             raise ProviderError("cancelado")
@@ -152,7 +157,8 @@ def call_json(
             messages.append({"role": "assistant", "content": str(raw)[:6000]})
             messages.append({
                 "role": "user",
-                "content": f"Your reply was not valid JSON ({last_err}). Reply again with ONLY the corrected, complete JSON object: no reasoning, no commentary, and keep it short.",
+                "content": f"Your reply was not valid JSON ({last_err}). Reply again with ONLY the corrected, complete JSON object: no reasoning, no commentary, and keep it short." + (f" Expected format: {want.group(1)}" if want else ""),
             })
             temperature = max(0.2, temperature - 0.3)
-    raise ValueError(f"JSON inválido após {attempts} tentativas: {last_err}")
+    snippet = " ".join(str(raw or "").split())[:90]
+    raise ValueError(f"JSON inválido após {attempts} tentativas: {last_err}" + (f" — a IA respondeu: «{snippet}»" if snippet else " — a IA respondeu vazio"))

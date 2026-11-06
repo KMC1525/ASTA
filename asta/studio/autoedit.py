@@ -299,7 +299,7 @@ class AutoEditPipeline(Runner):
         if self.demo:
             self._check()
             return fallback(payload), False
-        return self._agent(step, agent, instruction, payload, fallback, salvage=True)
+        return self._agent(step, agent, instruction + "\n/no_think", payload, fallback, salvage=True)  # «/no_think»: Qwen3 e afins pulam o raciocínio
 
     def run(self, req: Dict[str, Any]) -> Dict[str, Any]:
         tools.need_ffmpeg("A edição automática")

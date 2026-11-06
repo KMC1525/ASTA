@@ -514,6 +514,29 @@ class AutoEditTests(TmpCase):
         notes = [x["message"] for x in ev if x["type"] == "note" and "JSON válido" in x["message"]]
         self.assertEqual(len(notes), 2)
 
+    def test_answers_with_no_visible_json_are_rescued_or_explained(self):
+        from asta.agents.llm import call_json, extract_json
+
+        self.assertEqual(extract_json('<think>penso... {"pace":"fast"} pronto')["pace"], "fast")  # <think> que nunca fechou
+        self.assertEqual(extract_json('<think>{"a":1}</think>')["a"], 1)  # resposta escrita dentro do raciocínio
+
+        class Seq:
+            vision = False
+
+            def __init__(self, *outs):
+                self.outs, self.msgs = list(outs), []
+
+            def chat(self, messages, **kw):
+                self.msgs.append(messages)
+                return self.outs.pop(0)
+        p = Seq("", '{"ok": true}')
+        o, _ = call_json(p, "s", 'x\nOutput JSON: {"ok": bool}', {})
+        self.assertTrue(o["ok"])
+        self.assertIn('Expected format: {"ok": bool}', p.msgs[1][-1]["content"])  # a nova tentativa repete o formato
+        with self.assertRaises(ValueError) as cm:
+            call_json(Seq("Claro! Segue a análise.", "Claro de novo."), "s", "x", {})
+        self.assertIn("Claro de novo", str(cm.exception))  # o erro mostra o que a IA respondeu
+
     def test_errors_for_unusable_inputs(self):
         junk = self.tmp / "x.bin"
         junk.write_bytes(b"nada")

@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.4] — 2026-11-06
+
+### Fixed
+- **Automatic-edit Analyst and Director: "no JSON object in the answer"**. Handled causes: a model that "thinks" and never closes `<think>` (the JSON stayed hidden inside the reasoning — it is now searched there too); an empty or text-only answer (the retry repeats the exact expected format and the `/no_think` instruction asks Qwen3-like models to skip reasoning).
+- When it still fails, the message shows the beginning of what the AI answered (or "answered empty"), so the model can be diagnosed.
+
 ## [0.9.3] — 2026-11-06
 
 ### Fixed
