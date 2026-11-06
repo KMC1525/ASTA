@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.9.3] — 2026-11-06
+
+### Corrigido
+- **Edição automática: Analista e Diretor caíam no ⚠ (método automático)** quando a IA devolvia a resposta cortada — comum em modelos que «pensam» antes de responder, porque o limite de tokens era pequeno (900). Agora o limite é de 3000, o pedido ao modelo é curto e direto, uma resposta cortada é repetida com o dobro de espaço e, em último caso, a parte válida é aproveitada (o que faltar usa os padrões do estilo).
+- Quando um agente ainda precisa do método automático, a tela mostra o motivo («a IA não devolveu um JSON válido…») em vez de só o ⚠.
+- Vale também para todos os agentes: respostas cortadas ganham mais espaço na nova tentativa.
+
 ## [0.9.2] — 2026-11-06
 
 ### Melhorado

@@ -485,6 +485,35 @@ class AutoEditTests(TmpCase):
         self.assertTrue(any("dica: use mais zoom" in w for w in r["warnings"]))
         self.assertTrue(any(c["text"] == "Meu título" for c in e["timeline"]["clips"] if c["track"] == "t_t1"))
 
+    def test_truncated_agent_answers_are_recovered_and_failures_are_explained(self):
+        """Resposta cortada (modelo que «pensa» e estoura os tokens) é recuperada; resposta inútil vira nota visível, não só um ⚠ mudo."""
+        from asta.agents.llm import call_json, salvage_json
+
+        obj = salvage_json('<think>hmm</think>```json\n{"title":"T","focus":["a"],"roles":{"x":"footage","y":"mu')
+        self.assertEqual((obj["title"], obj["roles"]["x"]), ("T", "footage"))
+
+        class Cut:
+            vision = False
+            seen = []
+
+            def chat(self, messages, system="", temperature=0.2, max_tokens=512, json_mode=False, stream=False):
+                Cut.seen.append(max_tokens)
+                return '{"pace":"fast","order":["a"],"highlights":[{"asset":"a","t":3},{"asset":"a","t'
+        o, _ = call_json(Cut(), "s", "i", {}, max_tokens=900, salvage=True)
+        self.assertEqual(o["pace"], "fast")
+        self.assertEqual(Cut.seen, [900, 1800])  # a 2ª tentativa tem mais espaço
+        with self.assertRaises(ValueError):
+            call_json(Cut(), "s", "i", {}, max_tokens=900)  # sem salvage (outros agentes) continua exigindo JSON completo
+
+        self.store.save_settings({"active": {"generation": "openai"}})
+        ids = [upload(self.store, self.media[k]) for k in ("game", "music")]
+        prov = FakeProvider({"studio_edit_analyst": "garbage", "studio_edit_director": "garbage"})
+        ev = []
+        with mock.patch("asta.studio.autoedit.build_provider", return_value=prov):
+            AE.AutoEditPipeline(self.store, ev.append).run({"attachment_ids": ids, "style": "vlog", "target_seconds": 20, "prompt": "x"})
+        notes = [x["message"] for x in ev if x["type"] == "note" and "JSON válido" in x["message"]]
+        self.assertEqual(len(notes), 2)
+
     def test_errors_for_unusable_inputs(self):
         junk = self.tmp / "x.bin"
         junk.write_bytes(b"nada")

@@ -69,14 +69,14 @@ ANALYST = """ROLE: Edit analyst.
 INPUT_JSON lists the attached files of a video edit (id, name, kind, duration, has_audio, loud_peaks, scene_changes) plus the user's prompt and the edit style.
 Assign each file a role: "footage" (main video to cut), "broll" (supporting images/clips), "music" (background track), "voiceover" (narration) or "ignore" (unusable/duplicate).
 Also give a short video "title" and "focus": up to 4 keywords of what the edit should highlight.
-Output JSON: {"title": str, "focus": [str], "roles": {"<id>": "footage|broll|music|voiceover|ignore"}}"""
+Keep it SHORT (no explanations, no reasoning). Output JSON: {"title": str, "focus": [str], "roles": {"<id>": "footage|broll|music|voiceover|ignore"}}"""
 
 DIRECTOR = """ROLE: Edit director.
 Given the file roles, the edit style profile, target_seconds and the user's prompt (INPUT_JSON), give DIRECTIVES for the cutting algorithm (do not list every cut):
 "pace": "fast"|"medium"|"slow" (relative to the style default); "order": file ids in the order they should appear (footage/broll); "highlights": up to 8 {"asset": id, "t": seconds} moments that must be included;
 "avoid": up to 6 {"asset": id, "from": s, "to": s} stretches to skip; "titles": up to 4 short title cards (empty if the style does not use them).
 Follow the style's "craft" note (the technique references editors of that genre use). "highlights"[0] is the HOOK: the single best moment, used to open the video.
-Output JSON: {"pace": str, "order": [str], "highlights": [{"asset": str, "t": number}], "avoid": [{"asset": str, "from": number, "to": number}], "titles": [str]}"""
+Keep it SHORT (no explanations, no reasoning). Output JSON: {"pace": str, "order": [str], "highlights": [{"asset": str, "t": number}], "avoid": [{"asset": str, "from": number, "to": number}], "titles": [str]}"""
 
 CRITIC = """ROLE: Edit reviewer.
 INPUT_JSON summarizes a finished automatic edit: style, target_seconds, total seconds, cut count, average cut length, whether music/voice exist, and objective checks.
@@ -299,7 +299,7 @@ class AutoEditPipeline(Runner):
         if self.demo:
             self._check()
             return fallback(payload), False
-        return self._agent(step, agent, instruction, payload, fallback, tokens_mult=0.5)
+        return self._agent(step, agent, instruction, payload, fallback, salvage=True)
 
     def run(self, req: Dict[str, Any]) -> Dict[str, Any]:
         tools.need_ffmpeg("A edição automática")
@@ -309,7 +309,7 @@ class AutoEditPipeline(Runner):
         gid = settings["active"].get("generation", "demo")
         self.demo = gid == "demo"
         self.provider = build_provider(settings, gid, self.store.models_dir)
-        self.gen = {"temperature": 0.4, "max_tokens": 1800, "content": "free"}
+        self.gen = {"temperature": 0.3, "max_tokens": 3000, "content": "free"}
         prompt = text(req.get("prompt"), "", 4000)
         self.emit({"type": "start", "steps": ["attachments", "analyst", "director", "reviewer", "assemble"], "style": style_id, "demo": self.demo})
 

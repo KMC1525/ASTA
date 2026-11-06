@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.3] — 2026-11-06
+
+### Fixed
+- **Automatic editing: the Analyst and Director fell back to the automatic method (⚠)** when the AI answer was cut off — common with models that "think" before answering, because the token limit was small (900). The limit is now 3000, the request to the model is short and direct, a cut-off answer is retried with twice the room and, as a last resort, the valid part is used (anything missing takes the style's defaults).
+- When an agent still needs the automatic method, the screen shows the reason ("the AI did not return valid JSON…") instead of only the ⚠.
+- Applies to every agent: cut-off answers get more room on the retry.
+
 ## [0.9.2] — 2026-11-06
 
 ### Improved

@@ -8,6 +8,50 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from ..providers.base import Provider, ProviderError
 
 
+def salvage_json(raw: str) -> Any:
+    """Último recurso para uma resposta CORTADA: descarta o pedaço final incompleto e fecha strings/listas/objetos abertos. Só para agentes cujo resultado
+    parcial é aceitável (cada um tem valores padrão para o que faltar)."""
+    from ..avatars import strip_reasoning
+
+    text = strip_reasoning(str(raw or "")).strip()
+    fence = re.search(r"```(?:json)?\s*(.*)", text, re.S | re.I)
+    if fence and "{" in fence.group(1):
+        text = fence.group(1).replace("```", "").strip()
+    start = text.find("{")
+    if start < 0:
+        raise ValueError("nenhum objeto JSON na resposta")
+    text = text[start:]
+    for _ in range(40):  # tira o último item incompleto até o resto fechar num JSON válido
+        stack, in_str, esc = [], False, False
+        for ch in text:
+            if in_str:
+                esc = (not esc) if ch == "\\" else False
+                if ch == '"' and not esc:
+                    in_str = False
+                continue
+            if ch == '"':
+                in_str = True
+            elif ch in "{[":
+                stack.append("}" if ch == "{" else "]")
+            elif ch in "}]" and stack:
+                stack.pop()
+        cand = text + ('"' if in_str else "")
+        cand = re.sub(r"[,:\s]+$", "", cand) if not in_str else cand
+        cand = re.sub(r",\s*$", "", cand) + "".join(reversed(stack))
+        for variant in (cand, re.sub(r",\s*([}\]])", r"\1", cand), re.sub(r'"[^"]*"\s*:\s*([}\]])', r"\1", cand)):
+            try:
+                obj = json.loads(variant)
+                if isinstance(obj, dict):
+                    return obj
+            except json.JSONDecodeError:
+                pass
+        cut = max(text.rfind(","), text.rfind("{"), text.rfind("["))
+        if cut <= 0:
+            break
+        text = text[:cut]
+    raise ValueError("não consegui recuperar a resposta cortada")
+
+
 def extract_json(raw: str) -> Any:
     """Extrai o primeiro objeto JSON de um texto. Tolera cercas ```json, texto em volta, vírgulas sobrando e o «raciocínio» `<think>…</think>` que modelos
     como Qwen3/DeepSeek R1 escrevem antes da resposta (as chaves dentro dele não viram o objeto). Um trecho entre chaves que não é JSON (ex.: «{exemplo}» numa frase)
@@ -78,6 +122,7 @@ def call_json(
     temperature: float = 0.8,
     max_tokens: int = 4096,
     attempts: int = 2,
+    salvage: bool = False,
     cancelled: Optional[Callable[[], bool]] = None,
 ) -> Tuple[Dict[str, Any], str]:
     """Chama o provedor esperando JSON. Devolve (objeto, texto_bruto)."""
@@ -97,10 +142,17 @@ def call_json(
             return obj, str(raw)
         except (ValueError, json.JSONDecodeError) as exc:
             last_err = str(exc)
+            if "incompleto" in last_err or "cortada" in last_err:
+                max_tokens = min(max_tokens * 2, 8192)  # resposta cortada: da próxima vez cabe mais
+                if salvage and attempt == attempts - 1:
+                    try:
+                        return salvage_json(str(raw)), str(raw)
+                    except ValueError:
+                        pass
             messages.append({"role": "assistant", "content": str(raw)[:6000]})
             messages.append({
                 "role": "user",
-                "content": f"Your reply was not valid JSON ({last_err}). Reply again with ONLY the corrected, complete JSON object.",
+                "content": f"Your reply was not valid JSON ({last_err}). Reply again with ONLY the corrected, complete JSON object: no reasoning, no commentary, and keep it short.",
             })
             temperature = max(0.2, temperature - 0.3)
     raise ValueError(f"JSON inválido após {attempts} tentativas: {last_err}")

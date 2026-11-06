@@ -63,7 +63,7 @@ class Runner:
 
     def _agent(
         self, step: str, agent: str, instruction: str, payload: Dict[str, Any], fallback: Callable[[Dict[str, Any]], Dict[str, Any]],
-        *, images: Optional[List[dict]] = None, tokens_mult: float = 1.0, feedback: bool = False,
+        *, images: Optional[List[dict]] = None, tokens_mult: float = 1.0, feedback: bool = False, salvage: bool = False,
     ) -> Tuple[Dict[str, Any], bool]:
         """Executa um agente. JSON inválido → fallback determinístico. Erro de rede/credencial → falha o job."""
         self._check()
@@ -76,7 +76,7 @@ class Runner:
                     self.provider, system, instruction, payload, images=images,
                     temperature=float(self.gen.get("temperature", 0.8)),
                     max_tokens=int(int(self.gen.get("max_tokens", 6000)) * tokens_mult),
-                    cancelled=self.cancelled,
+                    salvage=salvage, cancelled=self.cancelled,
                 )
                 self._log(agent, system, instruction, payload, raw)
                 self._note_dropped_images(agent)
@@ -96,6 +96,7 @@ class Runner:
                 break
         self._note_dropped_images(agent)
         self.warnings.append(f"{agent}: fallback ({last})")
+        self.emit({"type": "note", "message": f"{agent}: a IA não devolveu um JSON válido ({str(last)[:120]}); usei o método automático"})
         out = fallback(payload)
         self._log(agent, system, instruction, payload, "// FALLBACK determinístico: " + str(last) + "\n" + json.dumps(out, ensure_ascii=False, indent=2))
         return out, True
