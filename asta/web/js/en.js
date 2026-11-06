@@ -1465,4 +1465,8 @@ export default {
   "descarga do modelo": "model offload",
   "descarga sequencial (pouca VRAM)": "sequential offload (low VRAM)",
   "O núcleo Rust acelera a síntese de áudio do Canvas, lê o cabeçalho dos modelos locais (GGUF e safetensors) e escolhe contexto, camadas na GPU, threads e descarga conforme a memória livre, além de pré-carregar os pesos em paralelo. Os instaladores e o “asta update” instalam e atualizam o Rust sozinhos; para fazer agora, rode no terminal:": "The Rust core speeds up Canvas audio synthesis, reads the header of local models (GGUF and safetensors) and picks context, GPU layers, threads and offload from the free memory, besides preloading the weights in parallel. The installers and “asta update” install and update Rust by themselves; to do it now, run in the terminal:",
+  "Pesquisar modelo ou provedor…": "Search model or provider…",
+  "Pesquisar modelo ou provedor": "Search model or provider",
+  "Nenhum modelo encontrado para «{q}».": "No model found for “{q}”.",
+  "configurar": "set up",
 };

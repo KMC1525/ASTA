@@ -55,6 +55,19 @@ run('chat', async ({ open, api, check }) => {
   const s = await api('/api/settings');
   check('modelo:troca-salva-e-mostra', s.providers.lmstudio.model === 'llama-3.2-3b' && s.active.generation === 'lmstudio' && (await page.locator('.composer .mbtn').innerText()).includes('llama-3.2-3b'));
 
+  // ---- pesquisa de modelo entre todos os provedores usáveis
+  await page.locator('.composer .mbtn').click(); await page.waitForSelector('.mpick .mp-search', { timeout: 8000 });
+  check('pesquisa:campo-no-topo-e-com-foco', (await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('mp-search'))));
+  await page.keyboard.type('LLAMA 3.2', { delay: 30 });   // digitando de verdade: o foco não pode sair do campo a cada letra
+  check('pesquisa:foco-fica-no-campo-ao-digitar', (await page.evaluate(() => document.activeElement && document.activeElement.classList.contains('mp-search'))) && (await page.inputValue('.mpick .mp-search')) === 'LLAMA 3.2');
+  await page.waitForTimeout(300);
+  await page.fill('.mpick .mp-search', 'LLAMA 3.2'); await page.waitForSelector('.mpick .mp-results .mp-model', { timeout: 8000 });
+  check('pesquisa:filtra-modelos-sem-abrir-o-provedor', (await page.locator('.mpick .mp-results .mp-model').allInnerTexts()).every((x) => /llama.*3\.2/i.test(x)) && (await page.locator('.mpick .mp-group').count()) >= 1);
+  await page.fill('.mpick .mp-search', 'zzzz-nao-existe'); await page.waitForSelector('.mpick .mp-results .dim', { timeout: 8000 });
+  check('pesquisa:sem-resultado-avisa', (await page.locator('.mpick .mp-results').innerText()).includes('zzzz-nao-existe'));
+  await page.fill('.mpick .mp-search', 'llama-3.2-3b'); await page.waitForSelector('.mpick .mp-results .mp-model'); await page.keyboard.press('Enter'); await page.waitForTimeout(800);
+  check('pesquisa:enter-escolhe-o-primeiro', (await api('/api/settings')).providers.lmstudio.model === 'llama-3.2-3b' && (await page.locator('.mpick').count()) === 0);
+
   // ---- Parar: a resposta pela metade não fica
   const n0 = (await page.locator('.cmsg.ai').count());
   await ta.fill('[lento] me conta uma história longa'); await runBtn.click();

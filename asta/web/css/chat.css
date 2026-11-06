@@ -176,3 +176,7 @@ button.cite:hover{background:var(--accent);color:var(--on-accent);border-color:v
 .chx-panes.split .chx-scroll{flex:1}
 .chx-panes.split .chx-col{padding:0 16px}
 .mp-sep{height:1px;background:var(--line);margin:6px 4px}
+
+.mpick .mp-search{width:calc(100% - 12px);margin:2px 6px 8px;padding:8px 12px;font-size:13px}
+.mpick .mp-results{max-height:min(52vh,420px);overflow:auto}
+.mpick .mp-group{display:flex;align-items:center;gap:8px;padding:10px 10px 4px;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}

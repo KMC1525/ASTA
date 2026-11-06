@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.1] — 2026-11-06
+
+### Added
+- **Search in the Chat model picker**: a field at the top filters, at once, the models of **all ready providers** (cloud and local) — by model or provider name, with several terms. **Enter** picks the first result; providers without a key show up when the name matches and lead to the settings.
+
 ## [0.12.0] — 2026-11-06
 
 ### Improved — Rust core v2 (local model loading and inference)

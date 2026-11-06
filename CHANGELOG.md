@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.1] — 2026-11-06
+
+### Adicionado
+- **Pesquisa no seletor de modelo do Chat**: um campo no topo filtra, de uma vez, os modelos de **todos os provedores prontos** (nuvem e locais) — por nome do modelo ou do provedor, com vários termos. **Enter** escolhe o primeiro resultado; provedores sem chave aparecem quando o nome combina e levam para a configuração.
+
 ## [0.12.0] — 2026-11-06
 
 ### Melhorado — Núcleo Rust v2 (carga e inferência de modelos locais)
