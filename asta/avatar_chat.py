@@ -14,7 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import avatars as av
 from .agents import rulebased
-from .providers import resolve_provider
+from .providers import ProviderError, resolve_provider
 from .storage import Store
 from .util import new_id, now_iso, num
 
@@ -304,17 +304,48 @@ class ChatEngine:
         other_names = [o["name"] for o in others] + [uname]
         raw, sent = "", 0
         hold = max([len(n) for n in other_names] + [10]) + 4  # segura o fim do texto (pode ser o início de "Outro: …" ou de uma tag)
-        stream = provider.chat(messages, system=system, temperature=num(settings["avatars"].get("temperature"), 0.9, 0, 2),
-                               max_tokens=int(num(settings["avatars"].get("max_tokens"), 500, 16, 8000)), stream=True)
-        for chunk in stream:  # type: ignore[union-attr]
-            if cancelled():
-                break
-            raw += chunk
+        temp = num(settings["avatars"].get("temperature"), 0.9, 0, 2)
+        max_tok = int(num(settings["avatars"].get("max_tokens"), 500, 16, 8000))
+
+        def consume(chunks) -> None:
+            nonlocal raw, sent
+            for chunk in chunks:
+                if cancelled():
+                    break
+                raw += chunk
+                vis = av.clean_group_text(_visible(raw), speaker["name"], other_names)
+                safe = vis[:max(0, len(vis) - hold)] if len(vis) > sent else ""
+                if len(safe) > sent:
+                    emit({"type": "delta", "avatar_id": speaker["id"], "text": safe[sent:]})
+                    sent = len(safe)
+
+        consume(provider.chat(messages, system=system, temperature=temp, max_tokens=max_tok, stream=True))  # type: ignore[arg-type]
+        # o provedor não devolveu nada utilizável: tenta de outras formas antes de desistir (cada uma só roda se a anterior falhou)
+        def usable() -> bool:
+            return bool(av.parse_reply(raw, speaker["name"], other_names)["say"]) or bool(av.parse_reply(raw, speaker["name"], other_names)["silence"])
+
+        if not cancelled() and not usable():
+            # 1) sem streaming (alguns servidores/modelos não mandam pedaços, só a resposta inteira); modelo que só «pensou» ganha mais espaço
+            more = max_tok if not raw.strip() else min(8000, max(max_tok * 3, 1500))
+            raw = ""
+            try:
+                raw = _as_text(provider.chat(messages, system=system, temperature=temp, max_tokens=more, stream=False))
+            except ProviderError:
+                raw = ""
+        if not cancelled() and not usable():
+            # 2) pedido simplificado: sem papel «system» (templates estritos — Gemma, Mistral — devolvem vazio) e com o /no_think dos modelos Qwen3
+            flat = system + "\n\n[Conversation so far]\n" + "\n".join(("User: " if m["role"] == "user" else f"{speaker['name']}: ") + str(m["content"]) for m in messages[-12:]) \
+                + f"\n\nNow write {speaker['name']}'s next message only. /no_think"
+            raw = ""
+            try:
+                raw = _as_text(provider.chat([{"role": "user", "content": flat}], system="", temperature=temp, max_tokens=max(max_tok, 800), stream=False))
+            except ProviderError:
+                raw = ""
+        if not cancelled() and raw and sent == 0:  # a resposta veio de uma das tentativas acima: envia o texto de uma vez
             vis = av.clean_group_text(_visible(raw), speaker["name"], other_names)
-            safe = vis[:max(0, len(vis) - hold)] if len(vis) > sent else ""
-            if len(safe) > sent:
-                emit({"type": "delta", "avatar_id": speaker["id"], "text": safe[sent:]})
-                sent = len(safe)
+            if vis:
+                emit({"type": "delta", "avatar_id": speaker["id"], "text": vis})
+                sent = len(vis)
         if cancelled():  # o usuário falou (ou pediu para parar) no meio da fala: não guarda uma frase cortada no histórico
             emit({"type": "silence", "avatar_id": speaker["id"]})
             return None
@@ -338,6 +369,16 @@ class ChatEngine:
             self.store.add_memories(speaker["id"], parsed["remember"], int(num(settings["avatars"].get("memory_limit"), 40, 5, 500)))
         emit({"type": "message", "message": message, "remembered": parsed["remember"]})
         return message
+
+
+def _as_text(res: Any) -> str:
+    """O texto de uma chamada sem streaming (um provedor que devolva pedaços também é aceito)."""
+    if isinstance(res, str):
+        return res
+    try:
+        return "".join(str(x) for x in res or [])
+    except TypeError:
+        return str(res or "")
 
 
 def _empty_reason(raw: str) -> str:

@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.6.3] — 2026-11-06
+
+### Corrigido
+- **Avatar que não respondia («O provedor não devolveu nenhum texto»).** Antes, bastava o streaming vir vazio para o avatar ficar mudo. Agora, numa conversa a dois, o ASTA tenta de outras formas antes de mostrar o erro: **(1)** repete **sem streaming** (alguns servidores/modelos só mandam a resposta inteira; um modelo que só «pensou» ganha mais espaço de resposta); **(2)** repete com um **pedido simplificado** — sem o papel `system` (modelos de template estrito, como Gemma e Mistral, devolvem vazio com ele) e com o `/no_think` dos modelos Qwen3; só então avisa, com o motivo. Nada de mensagem vazia no histórico.
+- **Modelo local mudo com o modo de desempenho Leve.** Se o modelo GGUF embutido não devolve nenhum texto com flash attention / cache KV de 8 bits (depende da versão/build do llama-cpp), o ASTA o recarrega só com o carregamento básico, lembra disso para aquele modelo e tenta de novo — no streaming e fora dele.
+
+### Testes
+- Avatar: streaming vazio → sem streaming; só o pedido simplificado funciona; modelo que só «pensou»; tudo vazio continua explicando o erro. Modelo local: stream/chat vazios recarregam no modo básico.
+
 ## [0.6.2] — 2026-11-06
 
 ### Adicionado
@@ -660,7 +669,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.2...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0

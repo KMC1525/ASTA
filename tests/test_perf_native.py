@@ -68,6 +68,54 @@ class LlamaLoad(unittest.TestCase):
         self.assertEqual((seen["type_k"], seen["type_v"], seen["flash_attn"]), (8, 8, True))
 
 
+class MuteModelRetry(unittest.TestCase):
+    """Um modelo que fica mudo com flash attention/KV de 8 bits é recarregado só com o carregamento básico e responde."""
+
+    def test_empty_stream_and_chat_reload_plain(self):
+        import sys
+        import tempfile
+
+        loads = []
+
+        class Llama:
+            def __init__(self, **kw):
+                self.mute = bool(kw.get("flash_attn") or kw.get("type_k"))
+                loads.append(sorted(k for k in kw if k in ("flash_attn", "type_k", "n_batch")))
+
+            def n_ctx(self):
+                return 4096
+
+            def tokenize(self, b, add_bos=False):
+                return list(b)
+
+            def create_chat_completion(self, messages, temperature=0.8, max_tokens=64, stream=False, **kw):
+                if stream:
+                    return iter([] if self.mute else [{"choices": [{"delta": {"content": "oi"}}]}, {"choices": [{"delta": {"content": " lá"}}]}])
+                return {"choices": [{"message": {"content": "" if self.mute else "resposta"}}]}
+
+        with tempfile.TemporaryDirectory() as d:
+            m = Path(d) / "m.gguf"
+            m.write_bytes(b"x")
+            ll._CACHE.clear()
+            ll._PLAIN.discard(str(m))
+            fake = type(sys)("llama_cpp")
+            fake.Llama = Llama
+            from unittest import mock
+
+            with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(ll, "hardware_info", return_value={"tier": "low", "ram_gb": 4, "cpus": 2, "gpu": "", "os": "Linux", "arch": "x86_64"}):
+                p = ll.LocalLlamaProvider({"model": str(m), "models_dir": d, "performance": {"mode": "light"}})
+                self.assertEqual("".join(p.chat([{"role": "user", "content": "oi"}], stream=True)), "oi lá")
+                self.assertEqual(len(loads), 2)
+                self.assertIn("flash_attn", loads[0])
+                self.assertNotIn("flash_attn", loads[1])
+                self.assertNotIn("type_k", loads[1])
+                ll._PLAIN.discard(str(m))
+                ll._CACHE.clear()
+                self.assertEqual(p.chat([{"role": "user", "content": "oi"}]), "resposta")
+            ll._CACHE.clear()
+            ll._PLAIN.discard(str(m))
+
+
 class Settings(unittest.TestCase):
     def test_default_and_conform(self):
         from asta.storage import DEFAULT_SETTINGS, conform

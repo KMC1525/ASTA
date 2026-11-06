@@ -396,6 +396,49 @@ class ChatEngineTests(TmpCase):
         self.assertIn("Máximo de tokens", err[0]["message"])
         self.assertEqual([m["role"] for m in self.store.avatar_chats.get(chat["id"])["messages"]], ["user", "user"])  # nada de mensagem vazia no histórico
 
+    def test_a_provider_that_streams_nothing_is_retried_without_streaming_and_then_simplified(self):
+        class Quirky:
+            vision, model = False, "x"
+
+            def __init__(self, plan):
+                self.plan, self.calls = plan, []
+
+            def chat(self, messages, system="", temperature=0.8, max_tokens=100, json_mode=False, stream=False):
+                self.calls.append({"stream": stream, "system": system, "roles": [m["role"] for m in messages], "max": max_tokens, "last": str(messages[-1]["content"])})
+                out = self.plan[min(len(self.calls) - 1, len(self.plan) - 1)]
+                return iter(out) if stream else out
+
+        info = {"id": "x", "label": "x", "model": "x", "demo": False, "auto": False, "reason": ""}
+
+        def go(plan):
+            chat = self.engine.create_chat([self.avatar("Aya", greeting="")["id"]])
+            self.events.clear()
+            prov = Quirky(plan)
+            with mock.patch.object(avatar_chat, "resolve_provider", return_value=(prov, info)):
+                self.engine.send(chat["id"], "oi", self.events.append, lambda: False)
+            return prov, chat
+
+        # 1) o streaming vem vazio, mas a resposta inteira (sem streaming) funciona
+        prov, chat = go([[], "Oi, tudo bem?"])
+        self.assertEqual([c["stream"] for c in prov.calls], [True, False])
+        self.assertEqual([m["text"] for m in self.store.avatar_chats.get(chat["id"])["messages"] if m["role"] == "avatar"], ["Oi, tudo bem?"])
+        self.assertEqual([e["text"] for e in self.events if e["type"] == "delta"], ["Oi, tudo bem?"])
+        self.assertFalse([e for e in self.events if e["type"] == "error"])
+        # 2) só o pedido simplificado (sem papel system, com /no_think) funciona — modelos de template estrito
+        prov, chat = go([[], "", "Aqui estou!"])
+        self.assertEqual([c["stream"] for c in prov.calls], [True, False, False])
+        self.assertEqual(prov.calls[2]["system"], "")
+        self.assertEqual(prov.calls[2]["roles"], ["user"])
+        self.assertIn("/no_think", prov.calls[2]["last"])
+        self.assertEqual([m["text"] for m in self.store.avatar_chats.get(chat["id"])["messages"] if m["role"] == "avatar"], ["Aqui estou!"])
+        # 3) modelo que só «pensou» no streaming ganha mais espaço de resposta na segunda tentativa
+        prov, chat = go([["<think>hum</think>"], "Respondi."])
+        self.assertGreater(prov.calls[1]["max"], prov.calls[0]["max"])
+        # 4) tudo vazio: o erro continua explicado, sem mensagem vazia no histórico
+        prov, chat = go([[], "", ""])
+        self.assertEqual(len(prov.calls), 3)
+        self.assertEqual([e["kind"] for e in self.events if e["type"] == "error"], ["empty"])
+
     def test_empty_answer_in_a_group_is_just_silence(self):
         a, b = self.avatar("Aya", greeting="")["id"], self.avatar("Bia", greeting="")["id"]
         chat = self.engine.create_chat([a, b])

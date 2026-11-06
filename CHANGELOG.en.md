@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-11-06
+
+### Fixed
+- **Avatar that did not answer ("The provider returned no text").** Before, an empty stream was enough to leave the avatar mute. Now, in a one-to-one chat, ASTA tries other ways before showing the error: **(1)** retries **without streaming** (some servers/models only send the whole answer; a model that only "thought" gets more room to answer); **(2)** retries with a **simplified request** — without the `system` role (strict-template models such as Gemma and Mistral return empty with it) and with Qwen3's `/no_think`; only then does it warn, with the reason. No empty message in the history.
+- **Local model going mute with the Light performance mode.** If the built-in GGUF model returns no text with flash attention / 8-bit KV cache (depends on the llama-cpp version/build), ASTA reloads it with only the basic loading, remembers that for that model and tries again — both streaming and not.
+
+### Tests
+- Avatar: empty stream → non-streaming; only the simplified request works; a model that only "thought"; all-empty still explains the error. Local model: empty stream/chat reloads in basic mode.
+
 ## [0.6.2] — 2026-11-06
 
 ### Added
@@ -662,7 +671,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.2...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.3...HEAD
+[0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0

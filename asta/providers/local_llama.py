@@ -33,6 +33,7 @@ def _unload() -> None:
 
 
 _IDLE = perf.IdleUnloader(_unload)
+_PLAIN: set = set()   # modelos que ficaram mudos com as opções de economia (flash attention / cache KV de 8 bits): recarregados só com o básico
 
 
 def _load_llama(Llama: Any, base: Dict[str, Any], prof: Dict[str, Any]) -> Any:
@@ -121,8 +122,10 @@ class LocalLlamaProvider(Provider):
         path = str(self._model_path())
         hw = hardware_info()
         prof = perf.profile(self.perf_cfg, hw)
+        if path in _PLAIN:
+            prof = dict(prof, flash=False, kv_q8=False)
         ctx = perf.cap_context(context_size(self.n_ctx_cfg, Path(path).name, hw["tier"]), prof, explicit=bool(self.n_ctx_cfg))
-        key = f"{path}|{ctx}|{prof['mode']}"  # mudar a janela de contexto ou o modo recarrega o modelo
+        key = f"{path}|{ctx}|{prof['mode']}|{int(prof['flash'])}{int(prof['kv_q8'])}"  # mudar a janela de contexto ou o modo recarrega o modelo
         with _LOCK:
             llm = _CACHE.get(key)
             if llm is None:
@@ -170,16 +173,31 @@ class LocalLlamaProvider(Provider):
                 raise
             except Exception as exc:  # noqa: BLE001  (ValueError de contexto, RuntimeError do llama.cpp…)
                 raise self._wrap(exc) from None
-        return (res["choices"][0]["message"].get("content") or "").strip()
+        out = (res["choices"][0]["message"].get("content") or "").strip()
+        if not out and self._go_plain(path):  # modelo mudo com as opções de economia: recarrega só com o básico e tenta de novo
+            return self._chat(messages, system, temperature, max_tokens, json_mode)
+        return out
+
+    @staticmethod
+    def _go_plain(path: str) -> bool:
+        if path in _PLAIN:
+            return False
+        _PLAIN.add(path)
+        with _LOCK:
+            _CACHE.clear()
+        gc.collect()
+        return True
 
     def _stream(self, messages, system, temperature, max_tokens) -> Iterator[str]:
-        llm, _ = self._llm()
+        llm, path = self._llm()
         msgs, max_tokens = self._prepare(llm, messages, system, max_tokens)
+        got = False
         with _LOCK:
             try:
                 for chunk in llm.create_chat_completion(messages=msgs, temperature=temperature, max_tokens=max_tokens, stream=True):
                     delta = chunk["choices"][0].get("delta", {}).get("content")
                     if delta:
+                        got = True
                         yield delta
             except GeneratorExit:
                 raise
@@ -187,6 +205,8 @@ class LocalLlamaProvider(Provider):
                 raise
             except Exception as exc:  # noqa: BLE001
                 raise self._wrap(exc) from None
+        if not got and self._go_plain(path):  # mudo: tenta de novo com o carregamento básico
+            yield from self._stream(messages, system, temperature, max_tokens)
 
     def list_models(self) -> List[str]:
         """Os GGUF de texto baixados (um modelo dividido em partes aparece uma vez; arquivos de visão/mmproj ficam de fora)."""
