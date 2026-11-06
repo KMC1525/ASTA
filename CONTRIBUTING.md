@@ -1,5 +1,7 @@
 # Contribuindo com o ASTA
 
+*English: [CONTRIBUTING.en.md](CONTRIBUTING.en.md) — mantenha os dois arquivos em sincronia.*
+
 Obrigado por querer ajudar! O ASTA é pensado para ser **simples, leve e livre**. Antes de abrir um PR, vale conhecer os princípios:
 
 1. **Sem dependências obrigatórias.** O núcleo usa só a biblioteca padrão do Python. Dependências extras entram como *extras opcionais* (`pip install "asta[local]"`, `"asta[media]"`) e são importadas só quando usadas, com uma mensagem clara de como instalar.
@@ -21,7 +23,7 @@ python -m unittest discover -s tests -t .         # roda tudo (sem rede)
 
 Os testes dos motores em JavaScript e os de navegador (Chromium via Playwright, em `tests/browser`) rodam quando o Node.js e o Playwright existem e são pulados caso contrário; o `ffmpeg` habilita os testes de vídeo do Canvas. O CI instala o Node 22.
 
-**Núcleo Rust (`asta/native`):** opcional e só com a biblioteca padrão (sem crates). Toda função precisa ter um equivalente em Python em `asta/native/__init__.py` com o mesmo resultado. `cargo test --manifest-path asta/native/Cargo.toml` roda os testes do Rust; `asta native build` compila; `ASTA_NATIVE_LIB=<caminho>` faz `tests/test_perf_native.py` comparar Rust × Python. **Rebuild (`asta/rebuild`):** nunca leia nem copie arte/áudio do jogo original, só a estrutura; mantenha o aviso legal.
+**Núcleo Rust (`asta/native`):** opcional e só com a biblioteca padrão (sem crates). Toda função precisa ter um equivalente em Python em `asta/native/__init__.py` com o mesmo resultado. `cargo test --manifest-path asta/native/Cargo.toml` roda os testes do Rust; `asta native setup` instala/atualiza o Rust e compila o núcleo (`asta native build` só compila); `ASTA_NATIVE_LIB=<caminho>` faz `tests/test_perf_native.py` comparar Rust × Python. **Rebuild (`asta/rebuild`):** nunca leia nem copie arte/áudio do jogo original, só a estrutura; mantenha o aviso legal.
 
 Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. (use `from __future__ import annotations`).
 
@@ -45,7 +47,7 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 ## Testes e PRs
 
 - Toda correção/recurso precisa de teste em `tests/` quando possível.
-- Descreva **o que** mudou e **por quê**; registre no `CHANGELOG.md` em *Não lançado*. O `README.md` é em inglês e o `README.pt-BR.md` em português: mantenha os dois em sincronia.
+- Descreva **o que** mudou e **por quê**; registre no `CHANGELOG.md` em *Não lançado*. Registre também no `CHANGELOG.en.md`. O `README.md` é em inglês e o `README.pt-BR.md` em português; o `CONTRIBUTING.en.md` é o gêmeo em inglês deste arquivo: mantenha cada par em sincronia.
 - Adaptadores de APIs de terceiros: siga a documentação pública do serviço e teste contra um servidor simulado — não dá para testar serviços pagos no CI; diga no PR o que você verificou de verdade.
 - Mudanças no motor 3D: anexe um screenshot (antes/depois) — o Chromium headless funciona (`--use-angle=swiftshader`).
 

@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.8.3] — 2026-11-06
+
+### Alterado
+- **README atualizado** (inglês e português): agora apresenta as seis ferramentas (Studio e Rebuild incluídos), as seções Studio e Rebuild na tabela da interface, as variáveis `ASTA_RUST` e `ASTA_LANG`, o ffmpeg para o Studio, o layout do repositório (`studio/`, `rebuild/`, `native/`) e os links corretos (o menu apontava para âncoras que não existiam).
+- **`CONTRIBUTING.en.md`**: tradução completa do guia de contribuição para o inglês (o `CONTRIBUTING.md` continua em português); os dois se referenciam e devem ficar em sincronia.
+
 ## [0.8.2] — 2026-11-06
 
 ### Corrigido
@@ -731,7 +737,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.2...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.3...HEAD
+[0.8.3]: https://github.com/KMC1525/ASTA/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/KMC1525/ASTA/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/KMC1525/ASTA/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/KMC1525/ASTA/compare/v0.7.1...v0.8.0

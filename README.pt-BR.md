@@ -6,7 +6,7 @@
 
 Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
-[Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Os quatro modos](#os-quatro-modos) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [English](README.md)
+[Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [English](README.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `zero dependências obrigatórias`
 
@@ -18,13 +18,15 @@ Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto
 
 O ASTA é o **primeiro super app open source**: um único app para conversar, pesquisar, criar e jogar, com todos os modelos de IA que você quiser num só lugar. É **open source e o mais livre possível**: roda no seu computador, não exige conta nem nuvem, aceita conteúdo **SFW e NSFW** (o ASTA não adiciona filtros próprios) e funciona com os modelos que você quiser — Claude, ChatGPT, Grok, Gemini, OpenRouter, Hugging Face ou modelos 100% locais.
 
-Desde a **v0.2** ele é uma central universal de criação com quatro modos, todos na mesma caixa de prompt:
+Ele é uma central universal de criação com seis ferramentas, que você inicia na mesma caixa de prompt ou nas próprias seções:
 
 | Modo | Você recebe |
 |---|---|
 | 🌍 **Mundos 3D** | Mundos 3D jogáveis e persistentes (1ª ou 3ª pessoa), habitados por NPCs que são agentes de IA embutidos. |
 | 🙂 **Avatars** | Amigos, namorados(as), esposas/maridos, companheiros e mentores para conversar por **texto e voz** — um de cada vez ou **vários conversando entre si**. |
 | 🎮 **Jogos 2D** | Jogos 2D completos de qualquer tipo: visual novels, RPGs, plataformas, side scrollers e point & clicks. |
+| 🎬 **Studio** | **Vídeos audiovisuais com IA, cena a cena** — Shorts/Reels, curtas e longas de qualquer duração, únicos ou em série, nos estilos Realista, Cartoon, Anime ou personalizado, com **edição automática** (Gameplay, Documentário, Phonk…), **timeline estilo Kdenlive** e exportação (completo, só vídeo, só áudio). |
+| ♻️ **Rebuild** | Reconstrói a *estrutura* de um jogo **Ren'Py** ou **RPG Maker (2000 → MZ)** existente em HTML/CSS/JS puros (só para uso pessoal). |
 | 🧩 **Canvas** | Um fluxo simples de nós (inspirado no ElevenLabs Flow, bem mais leve que o ComfyUI) para gerar e editar **imagens, vídeos, sons e vozes**, com **Editor** de vídeo embutido e **estilos** para o projeto todo. |
 
 Tudo o que você cria vai para uma só **Biblioteca** de projetos atualizáveis.
@@ -81,6 +83,8 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_FORCE=1` | reinstala o ASTA mesmo que a versão instalada já seja a última publicada |
+| `ASTA_RUST=yes` (padrão) | **instala o Rust para você** (rustup, na sua pasta de usuário, sem sudo) se faltar, atualiza e compila o núcleo rápido do ASTA; `no` pula, `ask` pergunta antes |
+| `ASTA_LANG=pt\|en` | idioma dos textos do terminal (padrão: o idioma do seu computador) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
 
@@ -89,7 +93,7 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 
 </details>
 
-**Ferramenta opcional.** O [`ffmpeg`](https://ffmpeg.org) libera a análise de vídeo, a exportação do Editor de vídeo do Canvas e o vídeo offline do Demo. Todo o resto funciona sem ele.
+**Ferramenta opcional.** O [`ffmpeg`](https://ffmpeg.org) libera a análise de vídeo, a exportação do Editor de vídeo do Canvas, o **Studio** (geração, edição automática e exportação) e o vídeo offline do Demo. Todo o resto funciona sem ele.
 
 ## Primeiros passos
 
@@ -113,7 +117,7 @@ O **Chat** é um assistente de uso geral, limpo: peça uma receita de bolo, estu
 - **Ajustes do Chat** (*Configuração → Chat*): **tamanho das respostas** (tokens), **janela de contexto** (o que o ASTA envia — as mensagens mais antigas saem primeiro), turnos lembrados, criatividade, **instruções personalizadas**, nível de pensamento padrão e as opções da busca na web.
 - Sem provedor, vale o motor Demo e o Chat avisa com honestidade — ele não responde perguntas de verdade. Escolha um modelo para resolver.
 
-## As quatro ferramentas de criação
+## As ferramentas de criação
 
 ### 🌍 Mundos 3D
 
@@ -244,6 +248,8 @@ O backend do ASTA continua em Python, agora com um **núcleo Rust** opcional e u
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós. |
+| **Studio** | Seus projetos de vídeo (únicos ou em série): geração cena a cena, edição automática, o editor de timeline e a exportação. |
+| **Rebuild** | Reconstrua jogos Ren'Py / RPG Maker e veja os que você reconstruiu. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
 | **Configuração** | Provedores, provedores de mídia, **Chat** (tamanho da resposta, janela de contexto, tempo de pensamento, busca na web), geração, avatars e jogos, voz, modelos locais do Hugging Face, **aparência** e sistema. |
 
@@ -350,6 +356,10 @@ asta/
   games2d/       spec dos jogos 2D: esquema, validação, empacotamento
   avatars.py  avatar_chat.py  routes_avatars.py    cards de avatar, diretor da conversa, API
   canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural
+  studio/        projetos de vídeo: esquema, pipeline cena a cena, edição automática, exportação, ferramentas ffmpeg
+  rebuild/       leitores e conversores de Ren'Py / RPG Maker (+ a revisão de texto por IA, opcional)
+  native/        núcleo Rust opcional (só biblioteca padrão), com equivalente em Python para cada função
+  perf.py  termi18n.py  term_en.py   modos de desempenho · idioma do terminal (pt/en)
   web/           a WebUI (HTML/CSS/JS puros, sem build)
 tests/           testes (unittest) — API, pipelines, motores, provedores, Canvas — e testes de navegador opcionais
 install.sh  install.ps1
@@ -365,7 +375,7 @@ asta --home ./asta-data                            # dados de desenvolvimento is
 python -m unittest discover -s tests -t .          # testes, sem rede
 ```
 
-Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.md](CONTRIBUTING.md). O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md).
+Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.md](CONTRIBUTING.md) (em inglês: [CONTRIBUTING.en.md](CONTRIBUTING.en.md)). O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md).
 
 ## Roadmap
 
