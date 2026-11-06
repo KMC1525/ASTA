@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.4] — 2026-11-06
+
+### Testes — provedores em todas as seções
+- **Bateria de conformidade de provedores** (`tests/test_all_providers.py`): um servidor falso fala as APIs reais (OpenAI Chat Completions — usada por OpenAI, Grok, Gemini, OpenRouter, Hugging Face, Ollama, LM Studio, llama.cpp e personalizado — e Anthropic Messages), com e sem streaming, e o provedor embutido (GGUF) roda com um llama-cpp falso. **Todos os 11 provedores de texto passam em Chat, Mundos 3D, Avatars (criação e conversa), Jogos 2D e nós de texto do Canvas; Studio passou em 4 deles** (Claude, ChatGPT, Ollama e o embutido); conferem também o formato de imagens, do prompt de sistema e dos cabeçalhos de cada tipo, e a degradação sem visão.
+- Provedores de mídia: cada capacidade declarada (imagem, vídeo, som, voz, transcrição) tem implementação própria, e cada uma tem ao menos um provedor local ou sem chave.
+- Limite conhecido: modelos locais com janela de contexto menor que o pedido de um agente caem nas regras do ASTA para aquele passo (em vez de derrubar a geração).
+
 ## [0.12.3] — 2026-11-06
 
 ### Corrigido — Canvas

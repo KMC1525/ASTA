@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.4] — 2026-11-06
+
+### Tests — providers across all sections
+- **Provider conformance suite** (`tests/test_all_providers.py`): a fake server speaks the real APIs (OpenAI Chat Completions — used by OpenAI, Grok, Gemini, OpenRouter, Hugging Face, Ollama, LM Studio, llama.cpp and custom — and Anthropic Messages), with and without streaming, and the built-in (GGUF) provider runs with a fake llama-cpp. **All 11 text providers pass in Chat, 3D Worlds, Avatars (creation and chat), 2D Games and Canvas text nodes; Studio passed on 4 of them** (Claude, ChatGPT, Ollama and the built-in); it also checks each type's image format, system prompt and headers, and the no-vision degradation.
+- Media providers: every declared capability (image, video, sound, voice, transcription) has its own implementation, and each has at least one local or keyless provider.
+- Known limit: local models whose context window is smaller than an agent's request fall back to ASTA's rules for that step (instead of bringing the whole generation down).
+
 ## [0.12.3] — 2026-11-06
 
 ### Fixed — Canvas
