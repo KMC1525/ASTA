@@ -1471,4 +1471,10 @@ export default {
   "configurar": "set up",
   "Limite do texto de cada resposta (mínimo 2.000). 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Com tempo de pensamento ligado, o pensamento vai além desse limite.": null,
   "Imagens, vídeos e vozes com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo.": "Images, videos and voices with the same OpenRouter key (or login) as the chat. Use \u201cLoad models\u201d to see the current models of each type.",
+  "Edição manual": "Manual edit",
+  "Editar na timeline": "Edit on the timeline",
+  "Abre uma timeline vazia para você montar o vídeo do seu jeito: importe vídeos, imagens e áudios, corte, junte, ajuste volume, adicione legendas e exporte. Nada é gerado nem automatizado — a IA só entra se você pedir.": "Opens an empty timeline so you can build the video your way: import videos, images and audios, cut, join, adjust volume, add captions and export. Nothing is generated or automated — AI only comes in if you ask.",
+  "Nome do projeto": "Project name",
+  "Duração estimada (segundos)": "Estimated duration (seconds)",
+  "Abrir a timeline": "Open the timeline",
 };

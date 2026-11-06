@@ -115,7 +115,7 @@ async function renderList(root, ctx, meta) {
   const dflt = meta.durations.find((d) => d.id === D.duration_type) || meta.durations[0];
   const m = { kind: D.kind === 'series' ? 'series' : 'single', dtype: dflt.id, target: D.target_seconds || dflt.default, aspect: D.aspect && D.aspect !== 'auto' ? D.aspect : dflt.aspect, aspectTouched: !!(D.aspect && D.aspect !== 'auto'), style: D.style || 'realistic', style_custom: D.style_custom || '',
     language: D.language && D.language !== 'auto' ? D.language : (getLang() === 'pt' ? 'pt-BR' : 'en'), motion: D.motion || 'auto', captions: D.captions !== false, music: D.music !== false, revisions: Number.isInteger(D.revisions) ? D.revisions : 1, voice: D.voice || '', name: '' };
-  const mode = { v: ctx.mode === 'autoedit' ? 'autoedit' : 'new' };
+  const mode = { v: ['autoedit', 'manual'].includes(ctx.mode) ? ctx.mode : 'new' };
 
   // ---- novo projeto
   const kindSeg = chips([['single', t('Único'), t('começa e termina num vídeo')], ['series', t('Série'), t('vários episódios que continuam a história')]], m.kind, (v) => { m.kind = v; }, 'kinds');
@@ -165,10 +165,27 @@ async function renderList(root, ctx, meta) {
       h('div', { class: 'hidden' }, h('label', { class: 'f' }, t('Batida (BPM)')), aeBpm)), aeComposer.el, aeHost);
   aeBpm.parentElement.classList.add('hidden');
 
+  // ---- editar na mão: abre a timeline vazia, sem gerar nada nem usar a edição automática
+  const mm = { name: '', aspect: '16:9', seconds: 60 };
+  async function startManual() {
+    try {
+      const p = await api('/api/studio/projects', { method: 'POST', body: { name: mm.name.trim() || t('Edição manual'), kind: 'single', duration_type: 'custom', target_seconds: Math.max(5, mm.seconds || 60), aspect: mm.aspect, origin: 'manual', captions: false, music: false } });
+      state.ctx = { manual: true };
+      location.hash = '#/studio/' + p.id + '/timeline';
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  const manualCard = h('div', { class: 'card st-card', id: 'st-manual-card' }, h('h3', null, t('Editar na timeline')),
+    h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Abre uma timeline vazia para você montar o vídeo do seu jeito: importe vídeos, imagens e áudios, corte, junte, ajuste volume, adicione legendas e exporte. Nada é gerado nem automatizado — a IA só entra se você pedir.')),
+    h('div', { class: 'st-grid' }, h('div', null, h('label', { class: 'f' }, t('Nome do projeto')), h('input', { id: 'st-manual-name', placeholder: t('Edição manual'), oninput: (e) => { mm.name = e.target.value; } })),
+      h('div', null, h('label', { class: 'f' }, t('Formato')), select(meta.aspects.map((a) => [a, a === '9:16' ? '9:16 · ' + t('vertical') : a === '16:9' ? '16:9 · ' + t('horizontal') : a]), mm.aspect, (v) => { mm.aspect = v; })),
+      h('div', null, h('label', { class: 'f' }, t('Duração estimada (segundos)')), h('input', { type: 'number', min: 5, value: mm.seconds, id: 'st-manual-secs', oninput: (e) => { mm.seconds = parseInt(e.target.value || '60', 10) || 60; } }))),
+    h('div', { class: 'row', style: { marginTop: '12px' } }, h('button', { class: 'btn primary', id: 'st-manual-go', type: 'button', onclick: startManual }, icon('film', 14), t('Abrir a timeline'))));
+
   const tabs = h('div', { class: 'tabs st-modes' }, h('button', { class: mode.v === 'new' ? 'on' : '', id: 'st-tab-new', onclick: () => { mode.v = 'new'; paintMode(); } }, icon('film', 14), t('Gerar com IA')),
-    h('button', { class: mode.v === 'autoedit' ? 'on' : '', id: 'st-tab-auto', onclick: () => { mode.v = 'autoedit'; paintMode(); } }, icon('scissors', 14), t('Edição automática')));
+    h('button', { class: mode.v === 'autoedit' ? 'on' : '', id: 'st-tab-auto', onclick: () => { mode.v = 'autoedit'; paintMode(); } }, icon('scissors', 14), t('Edição automática')),
+    h('button', { class: mode.v === 'manual' ? 'on' : '', id: 'st-tab-manual', onclick: () => { mode.v = 'manual'; paintMode(); } }, icon('film', 14), t('Editar na timeline')));
   const creator = h('div');
-  const paintMode = () => { tabs.children[0].classList.toggle('on', mode.v === 'new'); tabs.children[1].classList.toggle('on', mode.v === 'autoedit'); fill(creator, mode.v === 'new' ? newCard : aeCard); };
+  const paintMode = () => { tabs.children[0].classList.toggle('on', mode.v === 'new'); tabs.children[1].classList.toggle('on', mode.v === 'autoedit'); tabs.children[2].classList.toggle('on', mode.v === 'manual'); fill(creator, mode.v === 'new' ? newCard : mode.v === 'manual' ? manualCard : aeCard); };
   paintMode();
 
   // ---- projetos
@@ -191,7 +208,7 @@ async function renderProject(root, ctx, meta, sub) {
   let p;
   try { p = await api('/api/studio/projects/' + sub.id); } catch (e) { fill(root, h('div', { class: 'page' }, h('div', { class: 'errbox' }, e.message), h('a', { class: 'btn', href: '#/studio' }, t('Voltar')))); return; }
   let epId = CUR_EP[p.id] && p.episodes.some((e) => e.id === CUR_EP[p.id]) ? CUR_EP[p.id] : (p.episodes.find((e) => e.status !== 'ready') || p.episodes[0]).id;
-  let tab = sub.tab || (epOf().timeline.clips.length && epOf().status === 'ready' ? 'timeline' : 'scenes');
+  let tab = sub.tab || (p.origin === 'manual' || (epOf().timeline.clips.length && epOf().status === 'ready') ? 'timeline' : 'scenes');
   let tl = null, closeJob = null, jobId = ctx.job || null, busy = false;
   const body = h('div', { class: 'st-body' }), head = h('div', { class: 'st-head' }), epBar = h('div', { class: 'st-eps' }), tabsEl = h('div', { class: 'tabs st-tabs' });
   function epOf() { return p.episodes.find((e) => e.id === epId) || p.episodes[0]; }
@@ -284,7 +301,7 @@ async function renderProject(root, ctx, meta, sub) {
   }
 
   // ---------------------------------------------------------------- timeline
-  let manual = false;
+  let manual = !!ctx.manual || p.origin === 'manual';   // projeto criado para editar na mão: a timeline abre mesmo vazia
   async function paintTimeline() {
     const my = ++tlToken;
     try { await reload(); } catch (e) { /* segue com o que há */ }   // mídias e timeline sempre frescas: nada de bin vazio por dado velho

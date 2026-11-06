@@ -312,6 +312,9 @@ class BrowserTests(unittest.TestCase):
     def test_28_canvas_new_nodes_palette_controls_and_a_real_chain(self):
         self.run_script("canvas_nodes_ui.js")
 
+    def test_29_studio_manual_timeline_without_generating(self):
+        self.run_script("studio_manual_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

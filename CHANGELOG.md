@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.7] — 2026-11-06
+
+### Adicionado — Studio
+- **Editar direto na timeline, sem gerar nem automatizar.** Novo modo «Editar na timeline» ao lado de «Gerar com IA» e «Edição automática»: dá nome, formato e duração estimada e abre uma **timeline vazia** (episódio já pronto, sem roteiro) para importar mídias, cortar, juntar, ajustar volume, pôr legendas e exportar. Nenhuma IA roda a menos que você peça; o projeto reabre sempre na timeline.
+
 ## [0.12.6] — 2026-11-06
 
 ### Melhorado — Edição automática em camadas

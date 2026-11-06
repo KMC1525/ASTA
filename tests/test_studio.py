@@ -601,6 +601,28 @@ class StudioApi(ServerCase):
         r = self.post(path, body)
         return self.c.sse(f"/api/jobs/{r['job_id']}/events")
 
+    @needs_ff
+    def test_manual_project_edit_on_the_timeline_import_cut_and_export_without_any_generation(self):
+        p = self.post("/api/studio/projects", {"name": "Na mão", "origin": "manual", "duration_type": "custom", "target_seconds": 30, "aspect": "9:16"}, 201)
+        pid, ep = p["id"], p["episodes"][0]
+        self.assertEqual((p["origin"], p["aspect"], ep["status"], ep["scenes"], ep["timeline"]["clips"]), ("manual", "9:16", "ready", [], []))
+        self.assertIsNone(self.c.json("GET", f"/api/studio/projects/{pid}/job")[1]["job_id"])        # nenhuma geração foi iniciada
+        media = make_media(self.tmp)
+        raw = media["game"].read_bytes()
+        s, _h, a = self.c.req("POST", f"/api/studio/projects/{pid}/media", raw=raw, headers={"X-Filename": "game.mp4", "Content-Length": str(len(raw))})
+        self.assertEqual(s, 200)
+        full = self.c.json("GET", f"/api/studio/projects/{pid}")[1]
+        vid = next(x for x in full["assets"] if x["kind"] == "video")
+        vt = next(t["id"] for t in full["episodes"][0]["timeline"]["tracks"] if t["kind"] == "video")
+        clips = [{"id": "c1", "track": vt, "asset": vid["id"], "start": 0, "dur": 4, "in": 2}, {"id": "c2", "track": vt, "asset": vid["id"], "start": 4, "dur": 3, "in": 12}]
+        s, r = self.c.json("PUT", f"/api/studio/projects/{pid}/episodes/{ep['id']}/timeline", {"timeline": {"tracks": full["episodes"][0]["timeline"]["tracks"], "clips": clips}})
+        self.assertEqual(s, 200, r)
+        s, r = self.c.json("POST", f"/api/studio/projects/{pid}/episodes/{ep['id']}/export", {"mode": "video", "quality": "480p"})
+        self.assertEqual(s, 200, r)
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        self.assertTrue([e for e in ev if e.get("type") == "done"], ev[-3:])
+        self.assertEqual(self.c.json("GET", f"/api/studio/projects/{pid}")[1]["episodes"][0]["scenes"], [])    # continua sem cenas geradas
+
     def test_meta_catalog(self):
         s, m = self.c.json("GET", "/api/studio/meta")
         self.assertEqual(s, 200)

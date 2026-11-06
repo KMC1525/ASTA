@@ -184,7 +184,7 @@ def normalize_project(raw: Any, keep_id: Optional[str] = None) -> Dict[str, Any]
         "schema": SCHEMA, "id": keep_id or text(r.get("id"), "", 40) or new_id("st_"), "name": text(r.get("name"), "Novo projeto", 100), "kind": kind, "duration_type": dtype, "target_seconds": target,
         "style": r.get("style") if r.get("style") in STYLES else "realistic", "style_custom": text(r.get("style_custom"), "", 400), "aspect": aspect, "language": text(r.get("language"), "pt-BR", 12),
         "motion": r.get("motion") if r.get("motion") in MOTIONS else "auto", "voice": text(r.get("voice"), "", 60), "music": r.get("music") is not False, "captions": r.get("captions") is not False,
-        "revisions": int(num(r.get("revisions"), 1, 0, 2)), "premise": text(r.get("premise"), "", 4000), "created": text(r.get("created"), "", 40) or now_iso(), "updated": text(r.get("updated"), "", 40) or now_iso(),
+        "revisions": int(num(r.get("revisions"), 1, 0, 2)), "origin": r.get("origin") if r.get("origin") in ("generated", "manual") else "generated", "premise": text(r.get("premise"), "", 4000), "created": text(r.get("created"), "", 40) or now_iso(), "updated": text(r.get("updated"), "", 40) or now_iso(),
         "bible": {"world": text(bible.get("world"), "", 800), "tone": text(bible.get("tone"), "", 200), "characters": [{"name": text(c.get("name"), "", 40), "look": text(c.get("look"), "", 300)}
                                                                                                         for c in (bible.get("characters") if isinstance(bible.get("characters"), list) else [])[:20] if isinstance(c, dict) and c.get("name")],
                   "facts": [text(x, "", 200) for x in (bible.get("facts") if isinstance(bible.get("facts"), list) else [])[:40]]},

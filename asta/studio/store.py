@@ -122,7 +122,8 @@ class StudioStore:
             (self.folder / pid / "media").mkdir(parents=True, exist_ok=True)
             p = S.normalize_project({**body, "id": pid}, keep_id=pid)
             if not p["episodes"]:
-                p["episodes"] = [S.normalize_episode({"title": p["name"], "prompt": body.get("prompt", ""), "target": p["target_seconds"]}, 0)]
+                manual = p["origin"] == "manual"   # projeto para editar na mão: o episódio já nasce «pronto» e vazio, sem roteiro nem geração
+                p["episodes"] = [S.normalize_episode({"title": p["name"], "prompt": body.get("prompt", ""), "target": p["target_seconds"], **({"status": "ready", "origin": "manual"} if manual else {})}, 0)]
             p["created"] = now_iso()
             return self._write(p)
 

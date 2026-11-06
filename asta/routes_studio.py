@@ -101,6 +101,8 @@ class StudioRoutes:
         meta = self._meta_of(b)
         for k, v in self._defaults().items():  # o que não veio no pedido usa o padrão de Configuração → Studio
             meta.setdefault(k, v)
+        if b.get("origin") == "manual":  # editar na timeline sem gerar nada
+            meta["origin"] = "manual"
         meta["premise"] = text(b.get("premise") or b.get("prompt"), "", 4000)
         p = self.ss.create({**meta, "prompt": text(b.get("prompt"), "", 8000)})
         req.json(p, 201)

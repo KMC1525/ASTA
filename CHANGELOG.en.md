@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.7] — 2026-11-06
+
+### Added — Studio
+- **Edit straight on the timeline, with no generating or automation.** A new "Edit on the timeline" mode next to "Generate with AI" and "Automatic editing": name it, pick the format and estimated duration and it opens an **empty timeline** (episode already ready, no script) to import media, cut, join, adjust volume, add captions and export. No AI runs unless you ask; the project always reopens on the timeline.
+
 ## [0.12.6] — 2026-11-06
 
 ### Improved — Layered automatic editing
