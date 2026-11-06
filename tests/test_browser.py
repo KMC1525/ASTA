@@ -302,6 +302,9 @@ class BrowserTests(unittest.TestCase):
     def test_25_config_sections_groups_defaults_and_reset(self):
         self.run_script("config_sections_ui.js")
 
+    def test_26_mobile_device_adaptation_install_update_prompt_and_settings_tab(self):
+        self.run_script("mobile_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

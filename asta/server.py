@@ -27,6 +27,8 @@ from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
+from .routes_mobile import MobileRoutes
+from .mobile import Mobile, PAIR_REQUIRED_HTML
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
@@ -41,7 +43,7 @@ MIME = {
     ".svg": "image/svg+xml", ".png": "image/png", ".jpg": "image/jpeg", ".mp3": "audio/mpeg", ".wav": "audio/wav",
     ".ogg": "audio/ogg", ".webm": "audio/webm", ".zip": "application/zip", ".ico": "image/x-icon", ".txt": "text/plain; charset=utf-8",
     ".mp4": "video/mp4", ".m4a": "audio/mp4", ".webp": "image/webp", ".gif": "image/gif", ".flac": "audio/flac", ".opus": "audio/ogg",
-    ".mov": "video/quicktime", ".mkv": "video/x-matroska",
+    ".mov": "video/quicktime", ".mkv": "video/x-matroska", ".webmanifest": "application/manifest+json",
 }
 
 
@@ -194,6 +196,9 @@ class App:
         self.game_routes.register()
         self.canvas_routes = CanvasRoutes(self)
         self.canvas_routes.register()
+        self.mobile = Mobile(self.store.home, self.bind_host)
+        self.mobile_routes = MobileRoutes(self)
+        self.mobile_routes.register()
         self.studio_routes = StudioRoutes(self)
         self.studio_routes.register()
         self.preinstalled_routes = PreinstalledRoutes(self)
@@ -692,6 +697,12 @@ class App:
     # ----- web ui estática
     def serve_static(self, req: "Request") -> None:
         rel = urllib.parse.unquote(req.path.lstrip("/")) or "index.html"
+        if rel == "sw.js":  # service worker do app mobile, carimbado com a versão (muda quando o ASTA é atualizado)
+            data = (WEB_DIR / "sw.js").read_text(encoding="utf-8").replace("__ASTA_VERSION__", __version__).encode("utf-8")
+            req._head(200, "text/javascript; charset=utf-8", len(data), {"Service-Worker-Allowed": "/"})
+            if req.method != "HEAD":
+                req.h.wfile.write(data)
+            return
         target = (WEB_DIR / rel).resolve()
         if not str(target).startswith(str(WEB_DIR.resolve())) or not target.is_file():
             if "." in rel.rsplit("/", 1)[-1]:
@@ -850,6 +861,11 @@ class Handler(BaseHTTPRequestHandler):
                     if urllib.parse.urlsplit(origin).netloc != self.headers.get("Host", ""):
                         raise HttpError(403, "Origem não permitida")
             path = req.path
+            if not self.app.mobile.allowed(self.client_address[0], self.headers, path):  # fora do computador, só aparelhos pareados (QR)
+                if method in ("GET", "HEAD") and not path.startswith("/api/"):
+                    req.bytes(PAIR_REQUIRED_HTML.encode("utf-8"), "text/html; charset=utf-8", 401)
+                    return
+                raise HttpError(401, "Aparelho não pareado: escaneie o QR code no computador.")
             if path.startswith("/api/") or path.startswith("/play/"):
                 if not self.app.dispatch(req):
                     raise HttpError(404, "Rota não encontrada")

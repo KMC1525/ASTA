@@ -54,7 +54,7 @@ def salvage_json(raw: str) -> Any:
     raise ValueError("não consegui recuperar a resposta cortada")
 
 
-def extract_json(raw: str) -> Any:
+def extract_json(raw: str, lenient: bool = False) -> Any:
     """Extrai o primeiro objeto JSON de um texto. Tolera cercas ```json, texto em volta, vírgulas sobrando e o «raciocínio» `<think>…</think>` que modelos
     como Qwen3/DeepSeek R1 escrevem antes da resposta (as chaves dentro dele não viram o objeto). Um trecho entre chaves que não é JSON (ex.: «{exemplo}» numa frase)
     é pulado; uma resposta cortada no meio levanta ValueError (o chamador pede de novo)."""
@@ -63,7 +63,7 @@ def extract_json(raw: str) -> Any:
     from ..avatars import strip_reasoning
 
     text = strip_reasoning(str(raw)).strip()
-    if "{" not in text and "{" in str(raw):  # <think> que nunca fechou (tokens acabaram) ou resposta escrita dentro do raciocínio: procura o JSON ali
+    if lenient and "{" not in text and "{" in str(raw):  # <think> que nunca fechou (tokens acabaram) ou resposta escrita dentro do raciocínio: procura o JSON ali
         text = re.sub(r"</?think[^>]*>", "", str(raw), flags=re.I).strip()
     fence = re.search(r"```(?:json)?\s*(.*?)```", text, re.S | re.I)
     if fence and "{" in fence.group(1):
@@ -141,7 +141,7 @@ def call_json(
             raise ProviderError("cancelado")
         raw = provider.chat(messages, system=system, temperature=temperature, max_tokens=max_tokens, json_mode=True)
         try:
-            obj = extract_json(str(raw))
+            obj = extract_json(str(raw), lenient=attempt == attempts - 1)  # na última tentativa aceita o JSON escrito dentro do raciocínio
             if not isinstance(obj, dict):
                 raise ValueError("o JSON não é um objeto")
             return obj, str(raw)

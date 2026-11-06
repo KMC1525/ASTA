@@ -517,8 +517,8 @@ class AutoEditTests(TmpCase):
     def test_answers_with_no_visible_json_are_rescued_or_explained(self):
         from asta.agents.llm import call_json, extract_json
 
-        self.assertEqual(extract_json('<think>penso... {"pace":"fast"} pronto')["pace"], "fast")  # <think> que nunca fechou
-        self.assertEqual(extract_json('<think>{"a":1}</think>')["a"], 1)  # resposta escrita dentro do raciocínio
+        self.assertEqual(extract_json('<think>penso... {"pace":"fast"} pronto', lenient=True)["pace"], "fast")  # <think> que nunca fechou
+        self.assertEqual(extract_json('<think>{"a":1}</think>', lenient=True)["a"], 1)  # resposta escrita dentro do raciocínio
 
         class Seq:
             vision = False

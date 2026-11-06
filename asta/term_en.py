@@ -120,4 +120,11 @@ EN = {
     "abre a pasta dos dados locais do ASTA no seu computador": "opens ASTA's local data folder on your computer",
     "só mostra o caminho, sem abrir": "only prints the path, without opening it",
     "abre a pasta do programa instalado em vez da dos dados": "opens the installed program folder instead of the data folder",
+    "libera o uso pelo celular/tablet na sua rede (só aparelhos pareados por QR code)": "allow phone/tablet use on your network (only devices paired by QR code)",
+    "inicia o ASTA liberado para celular/tablet e mostra o QR code de pareamento": "starts ASTA open to phones/tablets and shows the pairing QR code",
+    "  Rede:    só aparelhos pareados por QR code entram (o computador local não precisa parear).": "  Network: only devices paired by QR code get in (this computer does not need to pair).",
+    "  Celular: rode «asta mobile» para usar o ASTA no celular ou tablet (QR code).": "  Mobile:  run «asta mobile» to use ASTA on a phone or tablet (QR code).",
+    "  Celular: não encontrei uma rede local (Wi-Fi/Ethernet) neste computador.": "  Mobile:  I could not find a local network (Wi-Fi/Ethernet) on this computer.",
+    "  Celular ou tablet: escaneie com a câmera para instalar e parear o app ASTA": "  Phone or tablet: scan with the camera to install and pair the ASTA app",
+    "  (o aparelho precisa estar na mesma rede Wi-Fi; endereço: {u})": "  (the device must be on the same Wi-Fi network; address: {u})",
 }

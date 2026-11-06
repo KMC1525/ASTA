@@ -12,7 +12,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, system };
+  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -520,6 +520,45 @@ async function data() {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
         try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
+}
+
+// ---------------------------------------------------------------------------------- celular e tablet
+async function mobileTab() {
+  const info = await api('/api/mobile');
+  if (window.ASTA_CLASSIFY) window.ASTA_CLASSIFY();
+  const d = window.ASTA_DEVICE || {};
+  const cmd = (text) => h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13)));
+  const row = (a, b) => h('tr', null, h('th', null, a), h('td', null, b));
+  let pairing;
+  if (info.exposed && info.pair_urls.length) {
+    const svg = new DOMParser().parseFromString(info.qr_svg, 'image/svg+xml').documentElement;   // SVG gerado pelo servidor (só números e traçados)
+    pairing = cfgCard(t('Instalar no celular ou tablet'),
+      h('div', { class: 'mob-qr' }, h('div', { class: 'qr', id: 'mob-qr', role: 'img', 'aria-label': t('QR code de pareamento') }, document.importNode(svg, true)),
+        h('ol', null, h('li', null, t('Deixe o celular ou tablet na mesma rede Wi-Fi deste computador.')), h('li', null, t('Aponte a câmera para o QR code ao lado.')),
+          h('li', null, t('Abra o link: o aparelho fica pareado e o ASTA abre.')), h('li', null, t('Instale: no Android, «Instalar»; no iPhone/iPad, Compartilhar → «Adicionar à Tela de Início».')))),
+      h('p', { class: 'muted small' }, t('Endereço na rede: {u}', { u: info.urls.join(' · ') })),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm danger', type: 'button', id: 'mob-rotate', onclick: async () => {
+        if (!(await confirmDialog(t('Gerar um código novo? Os aparelhos já pareados precisam escanear o QR code de novo.'), true, t('Gerar novo código')))) return;
+        try { await api('/api/mobile/rotate', { method: 'POST', body: {} }); toast(t('Código novo gerado'), 'ok'); go('config', { tab: 'mobile' }); } catch (e) { toast(e.message, 'err'); }
+      } }, icon('refresh', 13), t('Gerar novo código (desparear todos)'))));
+  } else {
+    pairing = cfgCard(t('Liberar o uso pelo celular'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, info.has_network
+        ? t('Por segurança, o ASTA só fala com este computador. Para usar no celular ou tablet, abra o ASTA assim — só os aparelhos que você parear por QR code entram:')
+        : t('Não encontrei uma rede local (Wi-Fi/Ethernet) neste computador. Conecte-se a uma rede e abra o ASTA assim:')),
+      cmd('asta mobile'),
+      h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O QR code de pareamento aparece aqui e no terminal.')));
+  }
+  return h('div', null, pairing,
+    cfgCard(t('Este aparelho'), h('table', { class: 'mob-table', id: 'mob-device' },
+      row(t('Tipo'), ({ phone: t('Smartphone'), foldable: t('Smartphone dobrável'), tablet: t('Tablet'), desktop: t('Computador') })[d.device] || '—'),
+      row(t('Tela'), (d.width || '?') + '×' + (d.height || '?') + ' · ' + (d.orient === 'landscape' ? t('deitado') : t('em pé')) + (d.fold ? ' · ' + t('dobrável') + ': ' + d.fold : '')),
+      row(t('Plataforma'), ({ android: 'Android', ios: 'iOS / iPadOS', other: t('outra') })[d.platform] || '—'), row(t('App instalado'), d.standalone ? t('sim') : t('não')))),
+    cfgCard(t('O que é compatível'), h('table', { class: 'mob-table' },
+      row(t('Plataformas'), t('Android (Chrome, Edge, Samsung Internet, Firefox) e Apple (iOS e iPadOS 16.4 ou mais novo, no Safari)')),
+      row(t('Arquiteturas'), t('Qualquer uma: ARM64 (Snapdragon, Apple A e M, MediaTek, Exynos, Tensor) e x86. O app roda no navegador do aparelho; o processamento pesado fica no computador.')),
+      row(t('Aparelhos'), t('Smartphones, smartphones dobráveis, tablets, Chromebooks e similares. A interface se adapta sozinha ao tipo de aparelho, à orientação e ao tamanho da tela.')),
+      row(t('Atualizações'), t('O app avisa quando o ASTA do computador tem versão nova e pergunta se você quer atualizar agora ou depois. Funciona em Wi-Fi e em dados móveis, desde que o aparelho alcance o computador.')))));
 }
 
 async function system() {

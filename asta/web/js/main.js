@@ -3,6 +3,7 @@ import { setLang, t } from './i18n.js';
 import { applyUi, ui } from './prefs.js';
 import { installShell, maybeWelcome } from './shell.js';
 import { h, icon, toast } from './ui.js';
+import { initMobile, isMobile, offerUpdate } from './mobile.js';
 
 // Estado global compartilhado entre as telas
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
@@ -36,7 +37,7 @@ export const presetOf = (id) => { const p = state.presets.find((x) => x.id === i
 export async function refreshState() {
   const s = await api('/api/state');
   // o servidor foi reiniciado numa versão nova com esta página aberta: os módulos da página (já carregados) não combinam mais com os do servidor
-  if (state.version && s.version && s.version !== state.version) { reloadPage(); return s; }
+  if (state.version && s.version && s.version !== state.version) { if (isMobile()) { offerUpdate(s.version); } else { reloadPage(); return s; } }   // no celular pergunta antes de atualizar
   Object.assign(state, { settings: s.settings, presets: s.presets, hardware: s.hardware, native: s.native || {}, version: s.version, diskVersion: s.disk_version || '', home: s.home });
   setLang(state.settings.language);
   applyUi(state.settings.ui);  // aparência (tema, cor, escala…) vinda do servidor; o cache local já pintou a tela no primeiro quadro
@@ -126,5 +127,6 @@ addEventListener('hashchange', () => { render(); });
   }
   render();
   maybeWelcome(app).catch((e) => console.error(e));
+  initMobile(state.version);
 })();
 window.ASTA_WELCOME = () => maybeWelcome({ state, NAV, go, saveSettings, renderSide, refreshState }, true);

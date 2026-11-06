@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-11-06
+
+### Added — Mobile
+- **Mobile app (PWA)**: ASTA installs on the phone/tablet (home-screen icon, full screen) and talks to the ASTA on your computer. Manifest, icons (including maskable and Apple), service worker and iOS/Android meta tags.
+- **Install by QR code**: `asta mobile` shows the pairing QR in the terminal, and **Configuration → Mobile and tablet** shows the same QR on the PC screen; scanning installs and pairs. The README (en/pt-BR) gained a "Mobile and tablet" section (with a QR that opens the guide on your phone).
+- **Pairing and safety**: outside localhost only paired devices get in (secret code in the QR, HttpOnly cookie); the local computer needs no pairing; proxies/tunnels also require pairing; "Generate new code" unpairs all. A dependency-free QR generator of our own (versions 1–10, checked with a real reader).
+- **In-app updates**: on open, on return to the app, when the connection comes back and every 5 minutes the app asks `/api/version`; if the ASTA on your computer has a new version it **asks "Update now" or "Later"**. Works on Wi-Fi and mobile data (the device only needs to reach the computer). A network-first service worker cache lets it open offline.
+- **Platforms, architectures and devices**: Android and Apple (iOS/iPadOS), any chip (ARM64 — Snapdragon, Apple A/M, MediaTek, Exynos, Tensor — and x86); smartphones, foldables, tablets and the like.
+- **Adaptive interface**: the app detects the device type (phone, foldable, tablet, computer), orientation, fold state, width-based layout and platform, and adjusts by itself — 44px touch targets, no zoom-on-focus on iOS, safe areas (notch/gestures), landscape phone with a side menu, tablet/open foldable with more room, and hinge-split foldables with the menu on one screen and the content on the other.
+- "Install the app" bar (native dialog on Android; "Add to Home Screen" instruction on iPhone/iPad).
+
+### Notes
+- The hinge split (Surface Duo etc.) and the native install dialog depend on device-browser features and could not be tested on real devices here; classification was tested with emulation (iPhone, Pixel, iPad, Galaxy Fold).
+- Mobile data away from home requires the computer to be reachable from outside (VPN/tunnel); that is not part of this version.
+
 ## [0.9.4] — 2026-11-06
 
 ### Fixed

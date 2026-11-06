@@ -103,6 +103,7 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 | `asta` | abre a WebUI (também atualiza/instala tudo antes, quando for a hora; pule com `--no-update`) |
 | **`asta update`** | atualiza **Python, ASTA, todas as bibliotecas dele e o Rust** para as versões mais recentes, rodando o instalador oficial (`--no-python`, `--core`, `--extras docs,media`, `--rust yes\|no`, `--force`) |
 | **`asta folder`** | **abre a pasta dos dados locais do ASTA** (`~/.asta`: conversas, projetos, mídias, modelos, configurações) no seu gerenciador de arquivos (`--print` só mostra o caminho, `--app` abre a pasta do programa instalado) |
+| **`asta mobile`** | **libera o ASTA para o celular/tablet** e mostra o QR code de pareamento (só aparelhos pareados entram) |
 | `asta libs` | instala/atualiza as bibliotecas opcionais (`docs`, `media`, `local`) |
 | `asta models list\|install` | os modelos locais pré-instalados |
 | `asta native setup` | instala/atualiza o Rust e recompila o núcleo rápido (também `install`, `update`, `build`, `status`) |
@@ -110,6 +111,23 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 | `asta version` · `asta --help` | versão · todas as opções |
 
 Os textos do terminal seguem o idioma do seu computador (português ou inglês; `ASTA_LANG=pt\|en` força um).
+
+## Celular e tablet
+
+O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O app mobile é o próprio ASTA instalado no aparelho (um PWA: ícone na tela inicial, tela cheia, sem loja de apps), então funciona em **Android e Apple (iOS/iPadOS)**, em **qualquer chip** — ARM64 (Snapdragon, Apple A/M, MediaTek, Exynos, Tensor) e x86 — e em **smartphones, dobráveis, tablets**, Chromebooks e afins. A interface se adapta sozinha ao tipo de aparelho, à orientação, à dobra e ao tamanho da tela.
+
+<img src="docs/mobile-guide-qr.pt-BR.svg" alt="QR code deste guia" width="140" align="right">
+
+**Instalar por QR code**
+1. No computador, rode **`asta mobile`** (ou abra *Configuração → Celular e tablet*). Um **QR code** de pareamento aparece no terminal e nessa tela.
+2. Deixe o celular/tablet na **mesma rede Wi-Fi** e aponte a câmera para o QR code. O aparelho fica **pareado** e o ASTA abre.
+3. Instale: no Android toque em **Instalar**; no iPhone/iPad, **Compartilhar → Adicionar à Tela de Início**.
+
+> O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
+
+**Segurança:** `asta mobile` abre o ASTA para a sua rede, mas **só aparelhos pareados entram** (o próprio computador nunca precisa parear). *Gerar novo código* em *Configuração → Celular e tablet* despareia todos. Atrás de proxy ou túnel, o pareamento também é exigido.
+
+**Atualizações:** o app avisa quando o ASTA do computador tem versão nova e **pergunta se você quer atualizar agora ou depois**. A checagem é uma requisição minúscula, então funciona em **Wi-Fi e dados móveis**, desde que o aparelho alcance o computador. Abrir sem rede e o diálogo de instalar como app exigem HTTPS ou localhost (regra do navegador); em `http://` simples na rede local, o iPhone/iPad ainda adiciona à tela inicial e o Android cria um atalho.
 
 ## Primeiros passos
 

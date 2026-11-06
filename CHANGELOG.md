@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.10.0] — 2026-11-06
+
+### Adicionado — Mobile
+- **App mobile (PWA)**: o ASTA instala no celular/tablet (ícone na tela inicial, tela cheia) e fala com o ASTA do seu computador. Manifest, ícones (inclusive maskable e Apple), service worker e meta tags de iOS/Android.
+- **Instalação por QR code**: `asta mobile` mostra o QR de pareamento no terminal, e **Configuração → Celular e tablet** mostra o mesmo QR na tela do PC; escanear instala e pareia. O README (en/pt-BR) ganhou a seção «Celular e tablet» (com um QR que abre o guia no celular).
+- **Pareamento e segurança**: fora do localhost só entram aparelhos pareados (código secreto no QR, cookie HttpOnly); o computador local não precisa parear; proxy/túnel também exige pareamento; «Gerar novo código» despareia todos. Gerador de QR próprio, sem dependências (versões 1–10, validado com um leitor real).
+- **Atualizações no app**: ao abrir, ao voltar ao app, ao recuperar a conexão e a cada 5 minutos o app consulta `/api/version`; se o ASTA do computador tem versão nova, **pergunta «Atualizar agora» ou «Depois»**. Funciona em Wi-Fi e em dados móveis (basta o aparelho alcançar o computador). Service worker com cache «rede primeiro» para abrir sem rede.
+- **Plataformas, arquiteturas e aparelhos**: Android e Apple (iOS/iPadOS), qualquer chip (ARM64 — Snapdragon, Apple A/M, MediaTek, Exynos, Tensor — e x86); smartphones, dobráveis, tablets e afins.
+- **Interface adaptativa**: o app detecta o tipo de aparelho (celular, dobrável, tablet, computador), a orientação, o estado da dobra, o layout por largura e a plataforma, e se ajusta sozinho — alvos de toque de 44px, campos sem zoom no iOS, áreas seguras (notch/gestos), celular deitado com menu lateral, tablet/dobrável aberto com mais espaço e dobrável dividido por dobradiça com menu numa tela e conteúdo na outra.
+- Faixa «Instalar o app» (diálogo nativo no Android; instrução de «Adicionar à Tela de Início» no iPhone/iPad).
+
+### Observações
+- A dobradiça dividida (Surface Duo etc.) e o diálogo nativo de instalação dependem de recursos do navegador do aparelho e não puderam ser testados em aparelhos reais aqui; a classificação foi testada com emulação (iPhone, Pixel, iPad, Galaxy Fold).
+- Dados móveis fora de casa exigem que o computador seja alcançável de fora (VPN/túnel); isso não faz parte desta versão.
+
 ## [0.9.4] — 2026-11-06
 
 ### Corrigido

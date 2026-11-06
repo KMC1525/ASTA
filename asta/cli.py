@@ -69,6 +69,18 @@ def _auto_update(args: argparse.Namespace, argv) -> object:
     return None  # pragma: no cover
 
 
+def _print_mobile_qr(app, port: int) -> None:
+    from . import qr
+
+    info = app.mobile.info(port)
+    if not info["pair_urls"]:
+        print(_("  Celular: não encontrei uma rede local (Wi-Fi/Ethernet) neste computador."))
+        return
+    print("\n" + _("  Celular ou tablet: escaneie com a câmera para instalar e parear o app ASTA") + "\n")
+    print("\n".join("    " + line for line in qr.terminal(info["pair_urls"][0]).splitlines()))
+    print("\n" + _("  (o aparelho precisa estar na mesma rede Wi-Fi; endereço: {u})", u=info["urls"][0]))
+
+
 def _run(args: argparse.Namespace) -> int:
     if args.home:
         os.environ["ASTA_HOME"] = args.home
@@ -94,7 +106,10 @@ def _run(args: argparse.Namespace) -> int:
     print(f"  WebUI:   {url}")
     print(_("  Dados:   {p}", p=store.home))
     if args.host not in ("127.0.0.1", "localhost", "::1"):
-        print(_("  ⚠  Escutando fora do localhost: qualquer pessoa na sua rede poderá usar o ASTA e suas chaves de API."))
+        print(_("  Rede:    só aparelhos pareados por QR code entram (o computador local não precisa parear)."))
+        _print_mobile_qr(app, port)
+    else:
+        print(_("  Celular: rode «asta mobile» para usar o ASTA no celular ou tablet (QR code)."))
     print(_("  Pare com Ctrl+C.") + "\n")
     if not args.no_browser:
         threading.Timer(0.8, lambda: webbrowser.open(url)).start()
@@ -485,6 +500,13 @@ def main(argv=None) -> int:
         p.add_argument("--no-browser", action="store_true", help=_("não abrir o navegador"))
         p.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
         p.add_argument("--no-update", action="store_true", help=_("não atualiza/instala nada ao abrir (também ASTA_NO_UPDATE=1)"))
+    run.add_argument("--mobile", action="store_true", help=_("libera o uso pelo celular/tablet na sua rede (só aparelhos pareados por QR code)"))
+    parser.add_argument("--mobile", action="store_true", help=argparse.SUPPRESS)
+    mob = sub.add_parser("mobile", help=_("inicia o ASTA liberado para celular/tablet e mostra o QR code de pareamento"))
+    mob.add_argument("--port", type=int, default=8787, help=_("porta (padrão 8787)"))
+    mob.add_argument("--no-browser", action="store_true", help=_("não abrir o navegador"))
+    mob.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
+    mob.add_argument("--no-update", action="store_true", help=_("não atualiza/instala nada ao abrir (também ASTA_NO_UPDATE=1)"))
     upd = sub.add_parser("update", help=_("atualiza o Python, o ASTA, as bibliotecas dele e (opcional) o Rust para a versão mais recente"))
     upd.add_argument("--core", action="store_true", help=_("atualiza só o ASTA (e pip/setuptools/wheel), sem o Python do sistema nem as bibliotecas opcionais"))
     upd.add_argument("--no-python", action="store_true", help=_("não atualiza o Python do sistema (atualiza o ASTA, o pip e as bibliotecas)"))
@@ -523,6 +545,10 @@ def main(argv=None) -> int:
     if args.cmd == "version":
         print(__version__)
         return 0
+    if args.cmd == "mobile":
+        args.host, args.mobile = "0.0.0.0", True
+    elif getattr(args, "mobile", False):
+        args.host = "0.0.0.0"
     done = _auto_update(args, list(argv) if argv is not None else sys.argv[1:])
     if done is not None:
         return done

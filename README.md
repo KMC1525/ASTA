@@ -103,6 +103,7 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 | `asta` | opens the WebUI (it also updates/installs everything first when due; skip with `--no-update`) |
 | **`asta update`** | updates **Python, ASTA, all its libraries and Rust** to the latest versions by running the official installer (`--no-python`, `--core`, `--extras docs,media`, `--rust yes\|no`, `--force`) |
 | **`asta folder`** | **opens ASTA's local data folder** (`~/.asta`: chats, projects, media, models, settings) in your file manager (`--print` only prints the path, `--app` opens the installed program folder) |
+| **`asta mobile`** | **opens ASTA to your phone/tablet** and shows the pairing QR code (only paired devices get in) |
 | `asta libs` | installs/updates the optional libraries (`docs`, `media`, `local`) |
 | `asta models list\|install` | the pre-installed local models |
 | `asta native setup` | installs/updates Rust and recompiles the fast core (also `install`, `update`, `build`, `status`) |
@@ -110,6 +111,23 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 | `asta version` · `asta --help` | version · all options |
 
 The terminal texts follow your computer's language (Portuguese or English; `ASTA_LANG=pt\|en` forces one).
+
+## Mobile and tablet
+
+ASTA runs on your computer; your phone or tablet is a **window** into it. The mobile app is ASTA itself installed on the device (a PWA: home-screen icon, full screen, no app store), so it works on **Android and Apple (iOS/iPadOS)**, on **any chip** — ARM64 (Snapdragon, Apple A/M, MediaTek, Exynos, Tensor) and x86 — and on **smartphones, foldables, tablets**, Chromebooks and the like. The interface adapts by itself to the device type, orientation, fold state and screen size.
+
+<img src="docs/mobile-guide-qr.svg" alt="QR code of this guide" width="140" align="right">
+
+**Install by QR code**
+1. On the computer, run **`asta mobile`** (or open *Configuration → Mobile and tablet*). A pairing **QR code** appears in the terminal and in that screen.
+2. Keep the phone/tablet on the **same Wi-Fi** and point its camera at the QR code. The device is **paired** and ASTA opens.
+3. Install it: on Android tap **Install**; on iPhone/iPad tap **Share → Add to Home Screen**.
+
+> The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
+
+**Safety:** `asta mobile` opens ASTA to your network, but **only paired devices get in** (the computer itself never needs to pair). *Generate new code* in *Configuration → Mobile and tablet* unpairs every device. Behind a proxy or tunnel, pairing is required too.
+
+**Updates:** the app tells you when the ASTA on your computer has a new version and **asks whether to update now or later**. The check is a tiny request, so it works on **Wi-Fi and mobile data** as long as the device can reach the computer. Offline start-up and the install-as-app dialog need HTTPS or localhost (a browser rule); over plain `http://` on the local network, iPhone/iPad can still add it to the home screen and Android can add a shortcut.
 
 ## Getting started
 

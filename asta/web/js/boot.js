@@ -33,3 +33,36 @@
   window.ASTA_APPLY_UI(cached || {});
   if (mq && mq.addEventListener) mq.addEventListener('change', function () { if ((window.ASTA_UI || {}).theme === 'auto') window.ASTA_APPLY_UI(window.ASTA_UI); });
 })();
+
+// Aparelho e tela: phone | foldable | tablet | desktop (+ orientação, layout por largura, plataforma, app instalado). Roda antes da primeira pintura e a cada mudança de tela
+// (girar, dobrar/desdobrar, redimensionar). O CSS (mobile.css) e o app (mobile.js) leem só estes atributos do <html>.
+(function () {
+  var mm = function (q) { try { return !!(window.matchMedia && window.matchMedia(q).matches); } catch (e) { return false; } };
+  function classify() {
+    var ua = navigator.userAgent || '', plat = navigator.platform || '', touch = (navigator.maxTouchPoints || 0) > 0;
+    var coarse = mm('(pointer: coarse)') || (touch && !mm('(hover: hover)'));
+    var ipad = /iPad/.test(ua) || (plat === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1);   // iPadOS se apresenta como Mac
+    var w = window.innerWidth, hgt = window.innerHeight, shortSide = Math.min(screen.width || w, screen.height || hgt);
+    var spanning = mm('(horizontal-viewport-segments: 2)') || mm('(vertical-viewport-segments: 2)') || mm('(spanning: single-fold-vertical)') || mm('(spanning: single-fold-horizontal)');
+    var foldUa = /SM-F\d|Fold|Flip|Pixel Fold|Razr|Surface Duo|Mate X|Find N|Magic V/i.test(ua);
+    var device = 'desktop';
+    if (coarse || ipad) {
+      if (spanning || foldUa) device = 'foldable';
+      else if (ipad || /Tablet|Tab |SM-T|Nexus 7|Nexus 9|Kindle|Silk/i.test(ua) || shortSide >= 600) device = 'tablet';
+      else device = 'phone';
+    }
+    var r = document.documentElement;
+    r.dataset.device = device;
+    r.dataset.orient = w >= hgt ? 'landscape' : 'portrait';
+    r.dataset.layout = w < 600 ? 'compact' : (w < 1000 ? 'medium' : 'expanded');
+    r.dataset.fold = device === 'foldable' ? (spanning ? 'spanned' : (w >= 600 ? 'open' : 'closed')) : '';
+    r.dataset.platform = /Android/i.test(ua) ? 'android' : (/iPhone|iPad|iPod/.test(ua) || ipad ? 'ios' : 'other');
+    r.dataset.standalone = (mm('(display-mode: standalone)') || window.navigator.standalone === true) ? 'yes' : 'no';
+    window.ASTA_DEVICE = { device: device, layout: r.dataset.layout, orient: r.dataset.orient, fold: r.dataset.fold, platform: r.dataset.platform, standalone: r.dataset.standalone === 'yes', width: w, height: hgt, dpr: window.devicePixelRatio || 1 };
+  }
+  window.ASTA_CLASSIFY = classify;
+  classify();
+  window.addEventListener('resize', classify);
+  window.addEventListener('orientationchange', classify);
+  ['(horizontal-viewport-segments: 2)', '(display-mode: standalone)'].forEach(function (q) { try { var m = window.matchMedia(q); (m.addEventListener ? m.addEventListener('change', classify) : m.addListener && m.addListener(classify)); } catch (e) { /* sem suporte */ } });
+})();
