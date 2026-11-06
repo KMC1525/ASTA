@@ -64,4 +64,4 @@ Cada mundo guarda um *snapshot* do motor na hora em que foi gerado (por isso o Z
 
 - Todo texto que o terminal mostra (CLI e mensagens do `preinstalled`/`native`) usa `_("frase em português {campo}", campo=...)`; a tradução inglesa fica em `asta/term_en.py` (mesma chave, mesmos `{campos}`). Um teste confere que nenhuma mensagem ficou sem tradução. Não use `_` como variável de laço nesses módulos.
 - Os instaladores (`install.sh`, `install.ps1`) têm o seu próprio `L pt en`; toda mensagem `say/note/die` (`Say/Note/Die`) precisa ser bilíngue — o teste confere.
-- O Rust vive em `asta native setup` (`asta/native/__init__.py`): nunca instale nada sem permissão (`ASTA_RUST=ask|yes|no`).
+- O Rust vive em `asta native setup` (`asta/native/__init__.py`): o padrão é automático (`ASTA_RUST=yes`, sem pergunta); `ask` pergunta e `no` pula.

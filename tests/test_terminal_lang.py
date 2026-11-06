@@ -132,6 +132,16 @@ class RustTests(unittest.TestCase):
         _, calls, _, _ = self.run_setup("yes", have=True)
         self.assertEqual(calls, ["update", "build"])                                  # já tem Rust: só atualiza e recompila
 
+    def test_default_is_automatic_no_question(self):
+        for have in (False, True):
+            code, calls, asked, _ = self.run_setup(None, have=have)                  # sem escolha: faz sozinho, como as bibliotecas e os modelos
+            self.assertEqual(asked, [])
+            self.assertEqual(calls, (["install"] if not have else []) + ["update", "build"])
+        with mock.patch.dict(os.environ, {"ASTA_RUST": ""}):
+            with mock.patch.object(native, "setup", return_value=0) as su:
+                cli.main(["native", "setup"])
+                self.assertEqual(su.call_args[0][0], "yes")
+
     def test_ask_respects_the_answer_and_never_installs_without_a_terminal(self):
         code, calls, asked, _ = self.run_setup("ask", have=False, answer=True)
         self.assertEqual(calls, ["install", "update", "build"])
@@ -201,6 +211,7 @@ class InstallerScriptTests(unittest.TestCase):
         self.assertEqual([b for b in bare if re.search(r"[A-Za-zÀ-ÿ]{4,}", b) and "export PATH" not in b], [])
         self.assertIn("asta\" native setup", sh)
         self.assertIn("ASTA_RUST", sh)
+        self.assertIn('ASTA_RUST="${ASTA_RUST:-yes}"', sh)                              # automático por padrão
         self.assertNotIn("command -v cargo", sh)                                      # a lógica do Rust agora vive no `asta native setup`
 
     def test_sh_messages_are_printed_in_the_detected_language(self):
@@ -216,6 +227,7 @@ class InstallerScriptTests(unittest.TestCase):
         self.assertIn("Get-UICulture", ps)
         self.assertIn("ASTA_RUST", ps)
         self.assertIn("& $asta native setup", ps)
+        self.assertIn("$env:ASTA_RUST = 'yes'", ps)
         self.assertNotIn("Get-Command cargo", ps)
         calls = re.findall(r"\b(Say|Note|Die) (\S.{0,3})", ps)
         self.assertTrue(calls)

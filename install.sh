@@ -18,9 +18,8 @@
 #                                       pelo gerenciador de pacotes do sistema (apt, dnf, yum, pacman, zypper, apk, Homebrew).
 #                                       keep: nunca mexe no Python do sistema.
 #   ASTA_FORCE=1                        reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
-#   ASTA_RUST=ask|yes|no                Rust (deixa o ASTA mais rápido e leve): ask (padrão) PERGUNTA no terminal antes de instalar o Rust (e, se ele já existe, atualiza e
-#                                       recompila o núcleo); yes instala/atualiza sem perguntar; no pula. Sem terminal, nunca instala sem permissão.
-#   ASTA_LANG=pt|en                     idioma dos textos (padrão: o idioma do computador).
+#   ASTA_RUST=yes|ask|no                Rust (deixa o ASTA mais rápido e leve): yes (padrão) instala o Rust se faltar, atualiza e recompila o núcleo do ASTA, sozinho (na pasta do
+#                                       usuário, sem sudo); ask pergunta no terminal; no pula.
 # O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o gerenciador de pacotes tiver versão nova, o ambiente
 # (venv) é reaproveitado, o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
 # Argumentos: sh -s -- --run            inicia o ASTA ao terminar.
@@ -207,8 +206,8 @@ case "${ASTA_MODELS:-ask}" in
 esac
 
 # 7) Rust (opcional, deixa o ASTA mais rápido e leve): instala o Rust se faltar, atualiza se já existir e recompila o núcleo do ASTA.
-#    ASTA_RUST=ask (padrão: pergunta no terminal; sem terminal só atualiza o que já existe, nunca instala sem permissão) | yes | no.
-ASTA_RUST="${ASTA_RUST:-ask}" "$APP_DIR/venv/bin/asta" native setup || note "$(L "Rust: não foi possível concluir agora (opcional; o ASTA usa Python). Tente depois:  asta native setup" "Rust: could not finish right now (optional; ASTA uses Python). Try later:  asta native setup")"
+#    ASTA_RUST=yes (padrão: automático, como as bibliotecas e os modelos) | ask (pergunta no terminal) | no (pula).
+ASTA_RUST="${ASTA_RUST:-yes}" "$APP_DIR/venv/bin/asta" native setup || note "$(L "Rust: não foi possível concluir agora (opcional; o ASTA usa Python). Tente depois:  asta native setup" "Rust: could not finish right now (optional; ASTA uses Python). Try later:  asta native setup")"
 
 if [ "$MODELS_FAILED" = "1" ]; then
   note "$(L "⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install" "⚠ Some pre-installed models were not downloaded (see above). ASTA already works; to try again: asta models install")"

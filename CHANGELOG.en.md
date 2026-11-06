@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.8.1] — 2026-11-06
+
+### Changed
+- **Rust is now installed/updated automatically**, without asking, like the other code and libraries: `install.sh`, `install.ps1`, `asta update` and `asta native setup` install Rust if missing (rustup, in the user folder, no sudo), update it if present and recompile the core. This also applies without a terminal. `ASTA_RUST=no` (or `--rust no`) skips it and `ASTA_RUST=ask` asks again. If something fails (no internet, no compiler), it continues without Rust — ASTA works the same in Python.
+
 ## [0.8.0] — 2026-11-06
 
 ### Added
@@ -723,7 +728,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.8.0...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/KMC1525/ASTA/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/KMC1525/ASTA/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/KMC1525/ASTA/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0

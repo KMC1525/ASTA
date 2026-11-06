@@ -12,8 +12,7 @@
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
 #                      $env:ASTA_FORCE = "1" → reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
-#                      $env:ASTA_RUST = "ask" (padrão: PERGUNTA no terminal antes de instalar o Rust; se ele já existe, atualiza e recompila o núcleo do ASTA)
-#                                         | "yes" (instala/atualiza sem perguntar) | "no" (pula). Sem terminal, nunca instala sem permissão.
+#                      $env:ASTA_RUST = "yes" (padrão: instala o Rust se faltar, atualiza e recompila o núcleo do ASTA, sozinho, na pasta do usuário) | "ask" (pergunta) | "no" (pula)
 #                      $env:ASTA_LANG = "pt" | "en" → idioma dos textos (padrão: o idioma do computador).
 # O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o winget tiver versão nova, o ambiente (venv) é reaproveitado,
 # o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
@@ -184,8 +183,8 @@ else {
   if ($LASTEXITCODE -ne 0) { $modelsFailed = $true }
 }
 # 7) Rust (opcional, deixa o ASTA mais rápido e leve): instala o Rust se faltar, atualiza se já existir e recompila o núcleo do ASTA.
-#    $env:ASTA_RUST = "ask" (padrão: pergunta no terminal; sem terminal só atualiza o que já existe, nunca instala sem permissão) | "yes" | "no".
-if (-not $env:ASTA_RUST) { $env:ASTA_RUST = 'ask' }
+#    $env:ASTA_RUST = "yes" (padrão: automático, como as bibliotecas e os modelos) | "ask" (pergunta no terminal) | "no" (pula).
+if (-not $env:ASTA_RUST) { $env:ASTA_RUST = 'yes' }
 $prevEap = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
 & $asta native setup
 if ($LASTEXITCODE -ne 0) { Note (L 'Rust: não foi possível concluir agora (opcional; o ASTA usa Python). Tente depois:  asta native setup' 'Rust: could not finish right now (optional; ASTA uses Python). Try later:  asta native setup') }

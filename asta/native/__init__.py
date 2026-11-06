@@ -212,16 +212,15 @@ def _build_hint() -> str:
     return _("No Linux o Rust precisa de um compilador C (gcc/cc). Ex.: sudo apt install build-essential   (ou o equivalente da sua distribuição) — depois rode:  asta native setup")
 
 
-def setup(mode: str = "ask", ask: Any = None) -> int:
-    """Instala/atualiza o Rust e recompila o núcleo do ASTA. `mode`: "yes" (faz tudo), "no" (não mexe) ou "ask" (pergunta no terminal; sem terminal só
-    atualiza se o Rust já existe e NUNCA instala sem permissão). Devolve 0 em geral (o núcleo é opcional: o ASTA funciona igual em Python)."""
+def setup(mode: str = "yes", ask: Any = None) -> int:
+    """Instala/atualiza o Rust e recompila o núcleo do ASTA. `mode`: "yes" (padrão: instala/atualiza e recompila sozinho), "no" (não mexe) ou "ask" (pergunta no terminal). Devolve 0 em geral (o núcleo é opcional: o ASTA funciona igual em Python)."""
     from ..termi18n import _
 
-    mode = (mode or "ask").strip().lower()
+    mode = (mode or "yes").strip().lower()
     if mode in ("no", "none", "0", "skip", "nao", "não", "n"):
         print(_("Rust: pulado (ASTA_RUST=no)."))
         return 0
-    mode = "yes" if mode in ("yes", "y", "1", "all", "sim", "s", "true") else "ask"
+    mode = "ask" if mode == "ask" else "yes"   # padrão: automático (como as bibliotecas e os modelos); "ask" só se pedido
     have = bool(find_tool("cargo"))
     if mode == "ask":
         answer = ask(_("Atualizar o Rust e recompilar o núcleo do ASTA (mais rápido e leve)?") if have else
