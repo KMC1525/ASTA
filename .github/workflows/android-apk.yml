@@ -51,8 +51,8 @@ jobs:
           TAG="v${{ steps.ver.outputs.v }}"
           if [ "${{ github.event_name }}" = "release" ]; then TAG="${{ github.event.release.tag_name }}"; fi
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" mobile-app/ASTA-mobile.apk --clobber
+            gh release upload "$TAG" ASTA-mobile.apk --clobber
           else
-            gh release create "$TAG" mobile-app/ASTA-mobile.apk --target "${{ github.sha }}" --title "ASTA $TAG" --latest \
+            gh release create "$TAG" ASTA-mobile.apk --target "${{ github.sha }}" --title "ASTA $TAG" --latest \
               --notes "App Android do ASTA (APK). Baixe, permita instalar apps desconhecidos uma vez, abra e escaneie o QR code de pareamento do seu ASTA (asta mobile). / Android app (APK): download, allow unknown apps once, open it and scan your ASTA pairing QR code (asta mobile). Changelog: CHANGELOG.md"
           fi
