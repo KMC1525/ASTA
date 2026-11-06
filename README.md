@@ -267,6 +267,8 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 - **Export:** **Full** (MP4), **Video only** or **Audio only** (M4A/MP3/WAV) at 480p/720p/1080p.
 - Honest limits: quality depends on your media providers (Demo is synthetic); a 90-minute feature means hundreds of shots (hours of work, and cost with paid providers); the browser preview approximates filters with CSS — the ffmpeg export is the reference.
 
+- **Timeline like Kdenlive**: media bin, **clip monitor** (in/out marks, *Insert*/*Overwrite*) beside the project monitor, properties panel, tracks with razor/ripple/snap, collapsible tracks, a bottom **zoom slider**, and an **audio mixer** (dB faders per track, live meters, master volume — applied to the preview and the export).
+
 ## Rebuild — rebuild an existing game in plain HTML/CSS/JS
 
 *Home → Rebuild.* Attach a game you already have (a **ZIP** or the loose files) and ASTA rebuilds its **structure** as a new game that runs in any browser with no engine, no installer and no external libraries. **This version supports only two engines:**

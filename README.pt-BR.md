@@ -267,6 +267,8 @@ O *Studio* (logo abaixo de Canvas) gera, edita e revisa vídeos com um **pipelin
 - **Exportação:** **Completo** (MP4), **Somente vídeo** ou **Somente áudio** (M4A/MP3/WAV) em 480p/720p/1080p.
 - Limites honestos: a qualidade depende dos seus provedores de mídia (o Demo é sintético); um longa de 90 minutos são centenas de planos (horas de trabalho, e custo com provedores pagos); o preview do navegador aproxima os filtros com CSS — a exportação do ffmpeg é a referência.
 
+- **Timeline como o Kdenlive**: biblioteca de mídias, **monitor do clipe** (marcas de entrada/saída, *Inserir*/*Sobrescrever*) ao lado do monitor do projeto, painel de propriedades, trilhas com lâmina/ripple/ímã, trilhas recolhíveis, **zoom deslizante** embaixo e **mixer de áudio** (faders em dB por trilha, medidores ao vivo, volume geral — valem na prévia e na exportação).
+
 ## Rebuild — reconstrua um jogo existente em HTML/CSS/JS puro
 
 *Início → Rebuild.* Anexe um jogo que você já tem (um **ZIP** ou os arquivos soltos) e o ASTA reconstrói a **estrutura** dele como um jogo novo que roda em qualquer navegador, sem engine, instalador nem bibliotecas externas. **Esta versão suporta só dois motores:**

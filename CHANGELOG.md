@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.13.0] — 2026-11-06
+
+### Melhorado — Timeline do Studio (inspirada no Kdenlive)
+- **Mixer de áudio**: um fader por trilha de vídeo e de áudio, em **dB** (−60 a +6; dois cliques voltam a 0 dB; dá para digitar o valor), botão de mudo, **medidor de nível ao vivo** durante a reprodução e o **volume geral (Principal)**. O volume de cada trilha e o geral valem **na prévia e na exportação** (multiplicam o volume dos clipes) e ficam salvos no projeto.
+- **Monitor do clipe** ao lado do monitor do projeto: um clique numa mídia da lista a mostra ali; marque **entrada (I) e saída (O)** e use **Inserir** (no cursor, empurrando o que vem depois) ou **Sobrescrever** (sem mexer nos outros clipes).
+- **Barra de baixo** com a posição/duração e um **controle de zoom** deslizante; **trilhas recolhíveis** (seta no cabeçalho). Botões na barra de ferramentas mostram/escondem o monitor do clipe e o mixer.
+
 ## [0.12.7] — 2026-11-06
 
 ### Adicionado — Studio

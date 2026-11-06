@@ -100,6 +100,11 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
     ff = shutil.which("ffmpeg")
     if not ff:
         raise ProviderError("O Editor precisa do ffmpeg para exportar o vídeo. Instale-o (https://ffmpeg.org) e tente de novo.")
+    # Mixer do Studio: o volume de cada trilha e o volume geral multiplicam o volume dos clipes (sem essas chaves, nada muda)
+    tvol = {t["id"]: float(t.get("volume", 1.0)) for t in tl.get("tracks", []) if isinstance(t, dict)}
+    master = float(tl.get("master", 1.0))
+    if master != 1.0 or any(v != 1.0 for v in tvol.values()):
+        tl = dict(tl, clips=[dict(c, volume=round(float(c.get("volume", 1.0)) * tvol.get(c.get("track"), 1.0) * master, 4)) for c in tl.get("clips", [])])
     W, H = _even(width), _even(height)
     tracks = {t["id"]: t for t in tl["tracks"]}
     order = {t["id"]: i for i, t in enumerate(tl["tracks"])}

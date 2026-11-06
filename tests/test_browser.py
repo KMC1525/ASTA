@@ -315,6 +315,9 @@ class BrowserTests(unittest.TestCase):
     def test_29_studio_manual_timeline_without_generating(self):
         self.run_script("studio_manual_ui.js")
 
+    def test_30_studio_timeline_mixer_clip_monitor_zoom_bar_and_collapsible_tracks(self):
+        self.run_script("studio_mixer_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -120,8 +120,34 @@ class StoreTests(TmpCase):
         self.assertIsNone(st.studio.get("../x"))
 
 
+class MixerSchemaTests(unittest.TestCase):
+    def test_track_volume_and_master_are_normalized_and_default_to_unity(self):
+        t = S.normalize_timeline({"tracks": [{"id": "a", "kind": "audio", "volume": 1.5}, {"id": "b", "kind": "audio", "volume": 9}, {"id": "c", "kind": "audio", "volume": "x"}, {"id": "d", "kind": "video", "collapsed": True}], "master": 0.5})
+        self.assertEqual([x["volume"] for x in t["tracks"]], [1.5, 2.0, 1.0, 1.0])
+        self.assertEqual((t["master"], [x["collapsed"] for x in t["tracks"]]), (0.5, [False, False, False, True]))
+        d = S.normalize_timeline({})
+        self.assertEqual(d["master"], 1.0)
+        self.assertTrue(all(x["volume"] == 1.0 for x in d["tracks"]))
+
+
 @needs_ff
 class RenderTests(TmpCase):
+    def test_mixer_track_volume_and_master_scale_the_exported_audio(self):
+        m = make_media(self.tmp)
+        res = lambda c: {"path": m["music"], "kind": "audio", "duration": 40}  # noqa: E731
+
+        def loud(**kw):
+            tl = S.normalize_timeline({"tracks": [{"id": "t_a1", "kind": "audio", "name": "A1", "volume": kw.get("track", 1.0)}], "master": kw.get("master", 1.0),
+                                       "clips": [{"id": "a", "track": "t_a1", "asset": "m", "start": 0, "dur": 3, "volume": 1.0}]})
+            out = self.tmp / f"v{len(list(self.tmp.glob('v*.wav')))}.wav"
+            render_timeline(tl, 320, 180, 12, "#000000", res, out, mode="audio")
+            r = subprocess.run(["ffmpeg", "-hide_banner", "-i", str(out), "-af", "volumedetect", "-f", "null", "-"], capture_output=True, text=True)
+            return float(re.search(r"mean_volume: (-?[\d.]+) dB", r.stderr).group(1))
+        base, half_track, half_master = loud(), loud(track=0.5), loud(master=0.5)
+        self.assertAlmostEqual(base - half_track, 6.0, delta=0.6)     # metade do volume = -6 dB
+        self.assertAlmostEqual(base - half_master, 6.0, delta=0.6)
+        self.assertAlmostEqual(base - loud(track=0.5, master=0.5), 12.0, delta=0.8)   # os dois se multiplicam
+
     def test_modes_speed_mute_and_grades(self):
         m = make_media(self.tmp)
         res = lambda c: {"path": m["game"] if c["asset"] == "v" else m["music"], "kind": "video" if c["asset"] == "v" else "audio", "duration": 40}  # noqa: E731

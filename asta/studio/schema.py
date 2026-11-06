@@ -82,7 +82,7 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
         if tid in ids:
             continue
         ids.add(tid)
-        tracks.append({"id": tid, "kind": kind, "name": text(t.get("name"), tid.upper(), 12), "muted": bool(t.get("muted")), "hidden": bool(t.get("hidden")), "locked": bool(t.get("locked"))})
+        tracks.append({"id": tid, "kind": kind, "name": text(t.get("name"), tid.upper(), 12), "muted": bool(t.get("muted")), "hidden": bool(t.get("hidden")), "locked": bool(t.get("locked")), "volume": round(num(t.get("volume"), 1.0, 0.0, 2.0), 3), "collapsed": bool(t.get("collapsed"))})
     if not tracks:
         tracks = default_tracks()
     kinds = {t["id"]: t["kind"] for t in tracks}
@@ -114,11 +114,11 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
         if isinstance(m, dict):
             markers.append({"t": round(num(m.get("t"), 0, 0, 86400), 3), "label": text(m.get("label"), "", 40)})
     duration = round(max([c["start"] + c["dur"] for c in clips] + [0.0]), 3)
-    return {"tracks": tracks, "clips": clips, "markers": markers, "duration": duration}
+    return {"tracks": tracks, "clips": clips, "markers": markers, "duration": duration, "master": round(num(raw.get("master"), 1.0, 0.0, 2.0), 3)}
 
 
 def default_tracks() -> List[Dict[str, Any]]:
-    mk = lambda i, k, n: {"id": i, "kind": k, "name": n, "muted": False, "hidden": False, "locked": False}  # noqa: E731
+    mk = lambda i, k, n: {"id": i, "kind": k, "name": n, "muted": False, "hidden": False, "locked": False, "volume": 1.0, "collapsed": False}  # noqa: E731
     return [mk("t_t1", "text", "T1"), mk("t_v2", "video", "V2"), mk("t_v1", "video", "V1"), mk("t_a1", "audio", "A1"), mk("t_a2", "audio", "A2"), mk("t_a3", "audio", "A3")]
 
 

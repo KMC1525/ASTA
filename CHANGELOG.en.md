@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-11-06
+
+### Improved — Studio timeline (Kdenlive-inspired)
+- **Audio mixer**: one fader per video and audio track, in **dB** (−60 to +6; double-click returns to 0 dB; you can type the value), a mute button, a **live level meter** during playback and the **master volume (Main)**. Each track's volume and the master apply **in the preview and in the export** (they multiply the clips' volume) and are saved with the project.
+- **Clip monitor** next to the project monitor: one click on a media item shows it there; mark **in (I) and out (O)** and use **Insert** (at the cursor, pushing what comes after) or **Overwrite** (without touching the other clips).
+- **Bottom bar** with position/duration and a sliding **zoom control**; **collapsible tracks** (arrow in the header). Toolbar buttons show/hide the clip monitor and the mixer.
+
 ## [0.12.7] — 2026-11-06
 
 ### Added — Studio
