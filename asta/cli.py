@@ -386,6 +386,39 @@ def _native(args: argparse.Namespace) -> int:
     return 0
 
 
+def _folder(args: argparse.Namespace) -> int:
+    """`asta folder`: abre a pasta dos dados locais do ASTA (conversas, projetos, mídias, modelos, configurações) no gerenciador de arquivos.
+    `--print` só mostra o caminho; `--app` abre a pasta do programa instalado em vez da dos dados."""
+    from pathlib import Path
+
+    from .util import asta_home
+
+    if getattr(args, "home", None):
+        os.environ["ASTA_HOME"] = args.home
+    if getattr(args, "app", False):
+        target = _managed_app_dir() or Path(__file__).resolve().parent
+    else:
+        target = Path(asta_home())
+    try:
+        target.mkdir(parents=True, exist_ok=True)
+    except OSError:
+        pass
+    print(target)
+    if getattr(args, "print", False):
+        return 0
+    try:
+        if os.name == "nt":
+            os.startfile(str(target))  # type: ignore[attr-defined]
+        elif sys.platform == "darwin":
+            subprocess.run(["open", str(target)], check=True)
+        else:
+            subprocess.run(["xdg-open", str(target)], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    except (OSError, subprocess.SubprocessError):
+        print(_("Não consegui abrir o gerenciador de arquivos aqui; abra o caminho acima manualmente."))
+        return 1
+    return 0
+
+
 def _doctor(_args: argparse.Namespace) -> int:
     from .util import asta_home, hardware_info
 
@@ -468,6 +501,10 @@ def main(argv=None) -> int:
     nat = sub.add_parser("native", help=_("Rust e núcleo rápido do ASTA: status | build | install | update | setup"))
     nat.add_argument("action", choices=("status", "build", "install", "update", "setup"), nargs="?", default="status")
     nat.add_argument("--rust", choices=("ask", "yes", "no"), default="", help=_("com setup: yes = faz sozinho (padrão), ask = pergunta, no = pula (também ASTA_RUST)"))
+    fol = sub.add_parser("folder", help=_("abre a pasta dos dados locais do ASTA no seu computador"))
+    fol.add_argument("--print", action="store_true", help=_("só mostra o caminho, sem abrir"))
+    fol.add_argument("--app", action="store_true", help=_("abre a pasta do programa instalado em vez da dos dados"))
+    fol.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     sub.add_parser("doctor", help=_("mostra diagnóstico do ambiente"))
     sub.add_parser("version", help=_("mostra a versão"))
     args = parser.parse_args(argv)
@@ -479,6 +516,8 @@ def main(argv=None) -> int:
         return _libs(args)
     if args.cmd == "native":
         return _native(args)
+    if args.cmd == "folder":
+        return _folder(args)
     if args.cmd == "doctor":
         return _doctor(args)
     if args.cmd == "version":

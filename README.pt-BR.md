@@ -89,6 +89,7 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
 
 Instalação manual: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
+**`asta folder`** abre a pasta dos dados locais do ASTA (`~/.asta`: conversas, projetos, mídias, modelos, configurações) no seu gerenciador de arquivos (`--print` só mostra o caminho, `--app` abre a pasta do programa instalado).
 Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `asta update` atualiza o **Python, o ASTA e todas as bibliotecas dele** rodando o instalador oficial (`--no-python` mantém o Python do sistema, `--core` atualiza só o ASTA e o `pip`/`setuptools`/`wheel`, `--extras docs,media` escolhe as bibliotecas; um ASTA instalado à mão com `pip` atualiza tudo menos o Python do sistema) · `asta libs` instala/atualiza só as bibliotecas, `sh install.sh --python-only` só o Python e as ferramentas dele · `asta doctor` mostra o diagnóstico do seu hardware e dos componentes opcionais. As bibliotecas são atualizadas junto com as dependências delas, então os recursos do Canvas e dos modelos locais ficam em dia.
 
 </details>

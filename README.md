@@ -89,6 +89,7 @@ The WebUI opens at `http://localhost:8787`. To update, run the install command a
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | where the program and the `asta` command live |
 
 Manual install: `pip install "asta @ https://github.com/KMC1525/ASTA/archive/refs/heads/main.zip"`.
+**`asta folder`** opens ASTA's local data folder (`~/.asta`: chats, projects, media, models, settings) in your file manager (`--print` only prints the path, `--app` opens the installed program folder instead).
 Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta update` upgrades **Python, ASTA and all its libraries** by running the official installer (`--no-python` keeps the system Python, `--core` updates only ASTA and `pip`/`setuptools`/`wheel`, `--extras docs,media` chooses libraries; an ASTA installed by hand with `pip` updates everything except the system Python) · `asta libs` installs/upgrades just the libraries, `sh install.sh --python-only` just Python and its tools · `asta doctor` prints a diagnosis of your hardware and optional components. Libraries are upgraded together with their own dependencies, so the Canvas and local-model features stay current.
 
 </details>

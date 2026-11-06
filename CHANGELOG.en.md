@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.8.5] — 2026-11-06
+
+### Added
+- **`asta folder`**: opens ASTA's local data folder (`~/.asta`, or `--home`/`ASTA_HOME`) in the computer's file manager (Windows: Explorer; macOS: Finder; Linux: `xdg-open`). It creates the folder if it does not exist yet and prints the path. `--print` only prints the path; `--app` opens the installed program folder. Without a file manager (e.g. a headless server) it warns and shows the path. Text in Portuguese/English following the computer.
+
 ## [0.8.4] — 2026-11-06
 
 ### Changed
@@ -744,7 +749,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.8.4...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.8.5...HEAD
+[0.8.5]: https://github.com/KMC1525/ASTA/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/KMC1525/ASTA/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/KMC1525/ASTA/compare/v0.8.2...v0.8.3
 [0.8.2]: https://github.com/KMC1525/ASTA/compare/v0.8.1...v0.8.2

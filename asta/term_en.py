@@ -116,4 +116,8 @@ EN = {
     "ativado como provedor de imagem padrão do Canvas": "enabled as the Canvas default image provider",
     "desligado por ASTA_NO_NATIVE": "turned off by ASTA_NO_NATIVE",
     "biblioteca não compilada (opcional: `asta native setup` instala o Rust e compila)": "library not compiled (optional: `asta native setup` installs Rust and compiles it)",
+    "Não consegui abrir o gerenciador de arquivos aqui; abra o caminho acima manualmente.": "Could not open the file manager here; open the path above manually.",
+    "abre a pasta dos dados locais do ASTA no seu computador": "opens ASTA's local data folder on your computer",
+    "só mostra o caminho, sem abrir": "only prints the path, without opening it",
+    "abre a pasta do programa instalado em vez da dos dados": "opens the installed program folder instead of the data folder",
 }

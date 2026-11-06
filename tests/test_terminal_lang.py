@@ -237,3 +237,28 @@ class InstallerScriptTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class FolderCommandTests(unittest.TestCase):
+    def test_folder_opens_the_data_folder_and_print_only_prints(self):
+        import contextlib
+        import io
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as d:
+            home = Path(d) / "dados"
+            out = io.StringIO()
+            with mock.patch.object(cli.subprocess, "run") as run, contextlib.redirect_stdout(out), mock.patch.object(cli.sys, "platform", "linux"), mock.patch.object(cli.os, "name", "posix"):
+                self.assertEqual(cli.main(["folder", "--home", str(home)]), 0)
+                self.assertEqual(run.call_args[0][0], ["xdg-open", str(home)])
+            self.assertTrue(home.is_dir())                                   # cria se ainda não existir
+            self.assertIn(str(home), out.getvalue())
+            with mock.patch.object(cli.subprocess, "run") as run, contextlib.redirect_stdout(io.StringIO()) as o2:
+                self.assertEqual(cli.main(["folder", "--print", "--home", str(home)]), 0)
+                run.assert_not_called()
+            self.assertEqual(o2.getvalue().strip(), str(home))
+            with mock.patch.object(cli.subprocess, "run", side_effect=OSError("sem xdg-open")), contextlib.redirect_stdout(io.StringIO()):
+                self.assertEqual(cli.main(["folder", "--home", str(home)]), 1)   # sem gerenciador de arquivos: avisa e devolve erro
+            with mock.patch.object(cli.sys, "platform", "darwin"), mock.patch.object(cli.os, "name", "posix"), mock.patch.object(cli.subprocess, "run") as run, contextlib.redirect_stdout(io.StringIO()):
+                cli.main(["folder", "--home", str(home)])
+                self.assertEqual(run.call_args[0][0][0], "open")
