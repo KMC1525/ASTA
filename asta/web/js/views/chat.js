@@ -28,12 +28,19 @@ export default async function render(root, ctx) {
   const updating = ctx.project || null;
   const st = { levels: [['off', 'Desligado'], ['slow', 'Slow'], ['medium', 'Medium'], ['high', 'High'], ['xhigh', 'Extra high'], ['ultra', 'Ultra']], tool: toolFromCtx || '', web: false, sideOpen: false, current: null, chats: [] };
   const tabs = []; let tab = null;   // abas: cada uma é uma conversa com a própria resposta em andamento (segue chegando mesmo com outra aba na frente)
-  const mkTab = (chatId = '') => ({ chatId, chat: null, busy: false, ctrl: null, runP: null, gen: 0, live: null, stick: true, list: h('div', { class: 'chx-list' }), banner: h('div', { class: 'chx-banner' }), draft: '', top: 0 });
+  const mkTab = (chatId = '') => {
+    const tb = { chatId, chat: null, busy: false, ctrl: null, runP: null, gen: 0, live: null, stick: true, list: h('div', { class: 'chx-list' }), banner: h('div', { class: 'chx-banner' }), draft: '', top: 0 };
+    tb.box = h('div', { class: 'chx-scroll' }, h('div', { class: 'chx-col' }, tb.list));   // cada aba tem a própria rolagem (na tela dividida as duas ficam visíveis)
+    tb.box.addEventListener('scroll', () => { tb.stick = nearBottom(tb); if (tb === tab && tb.stick) newPill.classList.add('hidden'); });
+    return tb;
+  };
+  // tela dividida (estilo Firefox): duas abas lado a lado; a caixa de texto vale para a que tem o foco (borda destacada)
+  let split = null, splitOn = false;   // split = [abaA, abaB] (ficam juntas na barra); splitOn = está sendo mostrada agora
+  const visible = (tb) => tb === tab || (splitOn && split && split.includes(tb));
 
   // ------------------------------------------------------------------ peças
   const hero = h('div', { class: 'chx-hero' });                   // estado vazio: título + caixa no centro
-  const col = h('div', { class: 'chx-col' });                     // a lista de mensagens da aba da frente entra aqui
-  const scrollBox = h('div', { class: 'chx-scroll' }, col);
+  const panes = h('div', { class: 'chx-panes' });                 // a(s) rolagem(ns) das mensagens: uma aba, ou duas na tela dividida
   const strip = h('div', { class: 'chx-tabs hidden', role: 'tablist', 'aria-label': t('Abas do Chat') });
   const dock = h('div', { class: 'chx-dock' });                   // caixa de texto embaixo (quando já há conversa)
   const topTitle = h('div', { class: 'chx-title' });
@@ -123,8 +130,8 @@ export default async function render(root, ctx) {
   }
 
   // ------------------------------------------------------------------ conversa
-  const nearBottom = () => scrollBox.scrollHeight - scrollBox.scrollTop - scrollBox.clientHeight < 140;
-  const scroll = (force) => { if (!tab) return; if (force || tab.stick) { scrollBox.scrollTop = scrollBox.scrollHeight; tab.stick = true; newPill.classList.add('hidden'); } else newPill.classList.remove('hidden'); };
+  const nearBottom = (tb) => tb.box.scrollHeight - tb.box.scrollTop - tb.box.clientHeight < 140;
+  const scroll = (force, tb) => { tb = tb || tab; if (!tb) return; if (force || tb.stick) { tb.box.scrollTop = tb.box.scrollHeight; tb.stick = true; if (tb === tab) newPill.classList.add('hidden'); } else if (tb === tab) newPill.classList.remove('hidden'); };
   const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
   const lsSet = (k, v) => { try { if (v == null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (e) { /* ok */ } };
   const tabTitle = (tb) => (tb.chat && tb.chat.title) || t('Novo chat');
@@ -133,28 +140,67 @@ export default async function render(root, ctx) {
 
   // ------------------------------------------------------------------ abas
   const saveTabs = () => {
-    lsSet(TABS_KEY, JSON.stringify({ ids: tabs.map((x) => (x.chat ? x.chat.id : '')), active: Math.max(0, tabs.indexOf(tab)) }));
+    lsSet(TABS_KEY, JSON.stringify({ ids: tabs.map((x) => (x.chat ? x.chat.id : '')), active: Math.max(0, tabs.indexOf(tab)), split: split ? split.map((x) => tabs.indexOf(x)) : null, splitOn }));
     lsSet(LAST_KEY, tab && tab.chat ? tab.chat.id : null);
   };
   function paintTabs() {
     strip.classList.toggle('hidden', tabs.length < 2);
-    fill(strip, ...tabs.map((tb) => h('div', { class: 'chx-tab' + (tb === tab ? ' on' : '') + (tb.busy ? ' busy' : ''), role: 'tab', 'aria-selected': String(tb === tab), tabindex: '0', title: tabTitle(tb),
-      onclick: () => activate(tb), onauxclick: (e) => { if (e.button === 1) closeTab(tb); }, onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(tb); } } },
-    tb.busy ? h('span', { class: 'spinner' }) : null, h('span', { class: 'tt' }, tabTitle(tb)),
-    h('button', { class: 'x', type: 'button', title: t('Fechar aba'), 'aria-label': t('Fechar aba'), onclick: (e) => { e.stopPropagation(); closeTab(tb); } }, '×'))),
+    fill(strip, ...tabs.map((tb) => {
+      const grp = split && split.includes(tb);
+      return h('div', { class: 'chx-tab' + (tb === tab ? ' on' : '') + (tb.busy ? ' busy' : '') + (grp ? ' grp' + (split[0] === tb ? ' g1' : ' g2') + (splitOn ? ' live' : '') : ''), role: 'tab', 'aria-selected': String(tb === tab), tabindex: '0', title: tabTitle(tb),
+        onclick: () => { if (strip.dataset.drag === '1') return; activate(tb); }, onauxclick: (e) => { if (e.button === 1) closeTab(tb); }, oncontextmenu: (e) => { e.preventDefault(); openTabMenu(e, tb); },
+        onkeydown: (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); activate(tb); } else if (e.key === 'ContextMenu' || (e.shiftKey && e.key === 'F10')) { e.preventDefault(); openTabMenu(e, tb); } } },
+      grp ? icon('columns', 13) : null, tb.busy ? h('span', { class: 'spinner' }) : null, h('span', { class: 'tt' }, tabTitle(tb)),
+      h('button', { class: 'x', type: 'button', title: t('Fechar aba'), 'aria-label': t('Fechar aba'), onclick: (e) => { e.stopPropagation(); closeTab(tb); } }, '×'));
+    }),
     h('button', { class: 'chx-tab-new', type: 'button', title: t('Nova aba de chat') + ' (Alt+N)', 'aria-label': t('Nova aba de chat'), onclick: () => openNewTab() }, icon('plus', 14)));
+    const on = strip.querySelector('.chx-tab.on');   // a aba da frente sempre aparece, mesmo com muitas abas abertas
+    if (on) { const l = on.offsetLeft - 40, r = on.offsetLeft + on.offsetWidth + 40; if (l < strip.scrollLeft) strip.scrollLeft = Math.max(0, l); else if (r > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = r - strip.clientWidth; }
   }
-  function activate(tb) {
-    if (tab && tab !== tb) { tab.draft = composer.text(); tab.top = scrollBox.scrollTop; }
+  // botão direito numa aba (estilo Firefox): dividir a tela com outra aba, abrir uma aba nova ao lado, desfazer a divisão, fechar
+  function openTabMenu(e, tb) {
+    const at = h('div', { style: { position: 'fixed', left: e.clientX + 'px', top: e.clientY + 'px', width: '1px', height: '1px' } });
+    document.body.appendChild(at);
+    const item = (ic, label, fn, cls) => h('div', { class: 'opt' + (cls ? ' ' + cls : ''), role: 'menuitem', onclick: () => { pop.close(); fn(); } }, icon(ic, 15), h('div', null, label));
+    const others = tabs.filter((x) => x !== tb && !(split && split.includes(x)));
+    const inSplit = split && split.includes(tb);
+    const pop = popover(at, h('div', { class: 'toolmenu tabmenu', role: 'menu' },
+      inSplit ? item('x', t('Desfazer a tela dividida'), () => unsplit()) : null,
+      !inSplit ? item('columns', t('Dividir a tela com uma aba nova'), () => splitWith(tb, null)) : null,
+      !inSplit && others.length ? h('div', { class: 'mp-title' }, t('Dividir a tela com…')) : null,
+      ...(!inSplit ? others.slice(0, 8).map((x) => item('send', tabTitle(x).slice(0, 40), () => splitWith(tb, x))) : []),
+      h('div', { class: 'mp-sep' }), item('plus', t('Nova aba'), () => openNewTab()), item('x', t('Fechar aba'), () => closeTab(tb))), () => at.remove());
+  }
+  function splitWith(a, b) {
+    if (!b) { b = mkTab(); tabs.splice(tabs.indexOf(a) + 1, 0, b); }
+    else { tabs.splice(tabs.indexOf(b), 1); tabs.splice(tabs.indexOf(a) + 1, 0, b); }   // as duas ficam lado a lado na barra
+    split = [a, b]; splitOn = true;
+    activate(b);
+  }
+  function unsplit() { split = null; splitOn = false; if (tab) activate(tab); }
+  // painéis: uma aba, ou as duas da tela dividida (clicar num painel dá o foco a ele)
+  function paintPanes() {
+    const showSplit = splitOn && split && split.every((x) => tabs.includes(x)) && split.includes(tab);
+    panes.classList.toggle('split', !!showSplit);
+    if (!showSplit) { splitOn = false; panes.replaceChildren(tab.box); return; }
+    const pane = (tb) => {
+      const el = h('div', { class: 'chx-pane' + (tb === tab ? ' focus' : ''), 'data-pane': tabs.indexOf(tb) }, h('div', { class: 'chx-pane-h' }, h('span', { class: 'tt' }, tabTitle(tb)), tb.busy ? h('span', { class: 'spinner' }) : null), tb.box);
+      el.addEventListener('pointerdown', () => { if (tb !== tab) activate(tb, true); });
+      return el;
+    };
+    panes.replaceChildren(...split.map(pane));
+  }
+  function activate(tb, fromPane) {
+    if (tab && tab !== tb) { tab.draft = composer.text(); tab.top = tab.box.scrollTop; }
     const changed = tab !== tb;
     tab = tb;
-    col.replaceChildren(tb.list);
+    if (split && split.includes(tb)) splitOn = true; else splitOn = false;   // abrir uma aba fora do par mostra só ela; o par continua na barra
     if (changed) composer.setText(tb.draft || '');
     composer.setBusy(tb.busy, stop);
     st.sideOpen = lsGet(SIDE_KEY) !== '0' && wideEnough() && groupsOf(tb).length > 0;
-    paintActs(tb); paintHero(); paintTabs(); paintSide(); saveTabs();
-    requestAnimationFrame(() => { scrollBox.scrollTop = tb.stick ? scrollBox.scrollHeight : tb.top; });
-    composer.focus();
+    paintPanes(); paintActs(tb); paintHero(); paintTabs(); paintSide(); saveTabs();
+    requestAnimationFrame(() => { for (const x of (splitOn && split ? split : [tb])) x.box.scrollTop = x.stick ? x.box.scrollHeight : x.top; });
+    if (!fromPane) composer.focus();
   }
   function openNewTab() {   // reaproveita uma aba vazia (não adianta ter duas em branco)
     const empty = tabs.find((x) => isEmpty(x) && !x.busy);
@@ -165,8 +211,10 @@ export default async function render(root, ctx) {
     await haltTab(tb);
     const i = tabs.indexOf(tb); if (i < 0) return;
     tabs.splice(i, 1);
+    const wasSplit = !!(split && split.includes(tb));
+    if (wasSplit) { split = null; splitOn = false; }   // fechar uma das duas desfaz a divisão
     if (!tabs.length) tabs.push(mkTab());
-    if (tb === tab) activate(tabs[Math.min(i, tabs.length - 1)]); else { paintTabs(); saveTabs(); }
+    if (tb === tab) activate(tabs[Math.min(i, tabs.length - 1)]); else if (wasSplit) activate(tab, true); else { paintTabs(); saveTabs(); }
   }
   function closeTabsOf(chatId) { tabs.filter((x) => x.chat && x.chat.id === chatId).forEach((x) => closeTab(x)); }
   async function haltTab(tb) { if (tb.busy) { stopTab(tb); try { await tb.runP; } catch (e) { /* ok */ } } }
@@ -247,7 +295,7 @@ export default async function render(root, ctx) {
   function paintHero() {
     if (!tab) return;   // as abas ainda estão sendo restauradas
     const hadFocus = document.activeElement === composer.ta, selS = composer.ta.selectionStart, selE = composer.ta.selectionEnd;
-    const empty = isEmpty(tab);
+    const empty = isEmpty(tab) && !splitOn;   // na tela dividida não há tela inicial: cada painel mostra a própria conversa
     wrap.classList.toggle('empty', empty);
     topTitle.textContent = tabTitle(tab);
     if (empty) {
@@ -257,10 +305,10 @@ export default async function render(root, ctx) {
         composer.el, below, tab.banner,
         h('div', { class: 'suggest' }, (st.tool && updating ? [] : hints).map((x) => h('button', { type: 'button', onclick: () => { composer.setText(x); composer.focus(); } }, x.length > 62 ? x.slice(0, 60) + '…' : x))),
         engineNote());
-      dock.replaceChildren(); scrollBox.classList.add('hidden'); hero.classList.remove('hidden');
+      dock.replaceChildren(); panes.classList.add('hidden'); hero.classList.remove('hidden');
     } else {
       dock.replaceChildren(h('div', { class: 'chx-col' }, tab.banner, composer.el, below, engineNote(true)));
-      hero.replaceChildren(); hero.classList.add('hidden'); scrollBox.classList.remove('hidden');
+      hero.replaceChildren(); hero.classList.add('hidden'); panes.classList.remove('hidden');
     }
     // mover a caixa de texto de lugar (tela inicial → rodapé) tira o foco dela: devolve, para a pessoa seguir digitando
     if (hadFocus) { composer.ta.focus(); try { composer.ta.setSelectionRange(selS, selE); } catch (e) { /* ok */ } }
@@ -303,7 +351,8 @@ export default async function render(root, ctx) {
       const fresh = await api('/api/chats/' + tb.chat.id);
       if (gen !== tb.gen || tb.busy) return;   // enquanto buscava, a aba mudou de conversa ou mandou outra pergunta
       tb.chat = fresh; tb.list.replaceChildren(...fresh.messages.map(msgEl)); tb.banner.replaceChildren(); paintActs(tb);
-      if (tb === tab) { paintHero(); paintSide(); scroll(true); }
+      if (tb === tab) { paintHero(); paintSide(); }
+      if (visible(tb)) scroll(true, tb);
       paintTabs();
     } catch (e) { /* ok */ }
   }
@@ -317,11 +366,11 @@ export default async function render(root, ctx) {
     ctl.buf = '';
     ctl.body = h('div', { class: 'md' }, h('span', { class: 'dots' }, h('i'), h('i'), h('i')));
     ctl.el = h('div', { class: 'cmsg ai typing' }, h('div', { class: 'who' }, icon('sparkle', 14), h('span', null, modelLabel(st.current))), ctl.body, h('div', { class: 'cacts' }));
-    ctl.tb.list.appendChild(ctl.el); if (ctl.tb === tab) scroll();
+    ctl.tb.list.appendChild(ctl.el); if (visible(ctl.tb)) scroll(false, ctl.tb);
   }
   function drawStream(ctl) {   // no máximo um desenho por quadro: respostas rápidas não travam a tela e o texto selecionado não pisca
     if (ctl.raf) return;
-    ctl.raf = requestAnimationFrame(() => { ctl.raf = 0; if (ctl.el && ctl.body) { renderMarkdown(ctl.body, ctl.buf, { cite: ctl.cite }); if (ctl.tb === tab) scroll(); } });
+    ctl.raf = requestAnimationFrame(() => { ctl.raf = 0; if (ctl.el && ctl.body) { renderMarkdown(ctl.body, ctl.buf, { cite: ctl.cite }); if (visible(ctl.tb)) scroll(false, ctl.tb); } });
   }
   const cancelDraw = (ctl) => { if (ctl.raf) { cancelAnimationFrame(ctl.raf); ctl.raf = 0; } };
 
@@ -351,7 +400,7 @@ export default async function render(root, ctx) {
       cancelDraw(ctl);
       tb.chat.messages.push(ev.message); tb.live = null;
       if (ctl.el) ctl.el.remove();
-      const el = msgEl(ev.message); tb.list.appendChild(el); ctl.el = null; ctl.body = null; paintActs(tb); if (front()) { paintSide(); scroll(); }
+      const el = msgEl(ev.message); tb.list.appendChild(el); ctl.el = null; ctl.body = null; paintActs(tb); if (front()) paintSide(); if (visible(tb)) scroll(false, tb);
     } else if (ev.type === 'suggest') {
       tb.banner.replaceChildren(h('div', { class: 'csuggest' }, icon('sparkle', 15), h('span', { class: 'grow' }, t('Parece que você quer criar: {n}. Quer ligar essa ferramenta?', { n: t(TOOL_LABEL[ev.tool]) })),
         h('button', { class: 'btn sm primary', type: 'button', onclick: () => { activate(tb); setTool(ev.tool, ev.prompt); } }, icon(TOOL_ICON[ev.tool], 13), t('Ligar {n}', { n: t(TOOL_LABEL[ev.tool]) })),
@@ -447,12 +496,22 @@ export default async function render(root, ctx) {
   }
 
   // ------------------------------------------------------------------ montagem
-  scrollBox.addEventListener('scroll', () => { if (!tab) return; tab.stick = nearBottom(); if (tab.stick) newPill.classList.add('hidden'); });
+  // a barra de abas desliza para os lados: roda do mouse, arrastar com o mouse/dedo e o gesto horizontal do touchpad (rolagem nativa)
+  strip.addEventListener('wheel', (e) => { if (strip.scrollWidth > strip.clientWidth && Math.abs(e.deltaY) > Math.abs(e.deltaX)) { e.preventDefault(); strip.scrollLeft += e.deltaY; } }, { passive: false });
+  let drag = null;
+  strip.addEventListener('pointerdown', (e) => { if (e.button !== 0 || e.target.closest('button')) return; drag = { x: e.clientX, left: strip.scrollLeft, moved: false }; });
+  window.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    const dx = e.clientX - drag.x;
+    if (!drag.moved && Math.abs(dx) < 6) return;
+    drag.moved = true; strip.dataset.drag = '1'; strip.classList.add('dragging'); strip.scrollLeft = drag.left - dx;
+  });
+  window.addEventListener('pointerup', () => { if (drag && drag.moved) setTimeout(() => { strip.dataset.drag = ''; }, 0); strip.classList.remove('dragging'); drag = null; });
   wrap.addEventListener('keydown', (e) => { if (e.key === 'Escape' && tab && tab.busy) { e.preventDefault(); stop(); } });   // Esc também para a resposta
   const top = h('div', { class: 'chx-top' }, topTitle, h('span', { class: 'grow' }), sourcesBtn,
     h('button', { class: 'btn ghost sm', type: 'button', id: 'chat-history', title: t('Conversas anteriores'), onclick: (e) => openHistory(e.currentTarget) }, icon('library', 15), t('Histórico')),
     h('button', { class: 'btn ghost sm', type: 'button', id: 'chat-new', title: t('Nova aba de chat') + ' (Alt+N)', onclick: () => openNewTab() }, icon('plus', 15), t('Nova aba')));
-  main.append(top, strip, hero, scrollBox, newPill, dock);
+  main.append(top, strip, hero, panes, newPill, dock);
   wrap.append(main, side);
   root.replaceChildren(wrap);
   const savedWeb = lsGet(WEB_KEY);
@@ -474,6 +533,10 @@ export default async function render(root, ctx) {
   const activeIdx = Math.min(Math.max(0, (saved && saved.active) || 0), tabs.length - 1);
   tab = tabs[activeIdx];
   if (wantNew) { const e = tabs.find((x) => isEmpty(x) && !x.busy); tab = e || (tabs.push(mkTab()), tabs[tabs.length - 1]); }
+  if (saved && Array.isArray(saved.split) && saved.split.length === 2 && ids.length === restored.length && restored.every(Boolean)) {   // a tela dividida volta como estava (só se nenhuma aba sumiu)
+    const pair = saved.split.map((i) => tabs[i]);
+    if (pair.every(Boolean) && pair[0] !== pair[1]) { split = pair; if (saved.splitOn && !wantNew && pair.includes(tab)) splitOn = true; }
+  }
   activate(tab);
   if (toolFromCtx) await setTool(toolFromCtx, ctx.prompt || '');
   else if (ctx.prompt) composer.setText(ctx.prompt);

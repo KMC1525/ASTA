@@ -22,7 +22,7 @@ exports.run = async function run(name, fn) {
     return page;
   };
   try { await fn({ base, api, open, check, browser, expectError }); }
-  catch (e) { result.errors.push(`${name} falhou: ${e.message}`); }
+  catch (e) { const m = String(e.stack || '').match(/_ui\.js:(\d+)/); result.errors.push(`${name} falhou: ${e.message}` + (m ? ` (linha ${m[1]} do teste)` : '')); }
   await browser.close();
   console.log(JSON.stringify(result));
 };

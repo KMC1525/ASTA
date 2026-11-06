@@ -278,6 +278,18 @@ class BrowserTests(unittest.TestCase):
         (d / "mv.zip").write_bytes(F.zip_bytes(F.mv_project()))
         self.run_script("sections_inline_ui.js", {"ASTA_REBUILD_MV": str(d / "mv.zip")})
 
+    def test_23_tab_strip_slides_sideways_and_right_click_splits_the_view_in_two(self):
+        from tests.test_lmstudio import FakeLMStudio
+
+        fake = FakeLMStudio(reply=lambda n, body: [f"Resposta {n}"], delay=0.1)
+        try:
+            self.run_script("chat_split_ui.js", {"ASTA_FAKE_LM": fake.url})
+        finally:
+            fake.close()
+            from asta.providers import lmstudio
+
+            lmstudio.forget()
+
 
 if __name__ == "__main__":
     unittest.main()

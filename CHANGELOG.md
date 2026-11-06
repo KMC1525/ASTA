@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.6.2] — 2026-11-06
+
+### Adicionado
+- **Barra de abas do Chat que desliza para os lados**: com muitas abas, role com a **roda do mouse**, **arraste** a barra com o mouse/dedo ou use o gesto horizontal do touchpad; a aba da frente sempre fica visível. Clicar logo após arrastar não troca de aba sem querer.
+- **Tela dividida, estilo Firefox — duas abas na mesma tela, lado a lado.** **Botão direito numa aba** → *Dividir a tela com uma aba nova* ou *Dividir a tela com…* (escolhe uma das outras abas). As duas abas viram um **grupo** na barra (ícone de colunas, borda tracejada entre elas) e aparecem em dois painéis, cada um com a própria rolagem e a resposta chegando em tempo real. A caixa de texto vale para o **painel com foco** (borda de destaque em cima; clique num painel para dar o foco a ele). Clicar numa aba de fora do grupo mostra só ela e o grupo continua na barra; clicar no grupo volta à tela dividida. *Desfazer a tela dividida* (botão direito) ou fechar uma das duas abas desfaz a divisão; a divisão volta depois de recarregar a página.
+
+### Testes
+- `tests/browser/chat_split_ui.js`: barra rolável (roda e arrastar), menu do botão direito, painéis lado a lado, foco e envio por painel, grupo na barra, aba fora do par, recarregar, desfazer, divisão com aba nova e fechar uma das duas. O teste `chat_stream_ui.js` ficou mais robusto (esperava a primeira resposta terminar antes de apagar a conversa).
+
 ## [0.6.1] — 2026-11-06
 
 ### Alterado
@@ -651,7 +660,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1

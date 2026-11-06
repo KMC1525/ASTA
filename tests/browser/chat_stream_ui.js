@@ -81,7 +81,7 @@ run('chat_stream', async ({ open, api, check, expectError }) => {
 
   // ---- 7. conversa apagada em outra aba: o próximo envio abre uma nova e funciona
   await page.locator('#chat-new').click(); await page.waitForTimeout(300);
-  await ta.fill('conversa que vai ser apagada'); await ta.press('Enter'); await idle();
+  await ta.fill('conversa que vai ser apagada'); await ta.press('Enter'); await page.waitForSelector('.cmsg.ai .md', { timeout: 15000 }); await idle(); await page.waitForTimeout(300);
   const oldId = await page.evaluate(() => localStorage.getItem('asta.chat'));
   await api('/api/chats/' + oldId, { method: 'DELETE' });
   await ta.fill('depois de apagada'); await ta.press('Enter');

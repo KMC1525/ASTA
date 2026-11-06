@@ -905,4 +905,7 @@ export default {
   "Uma equipe de agentes de IA (Perfilador → Polidor → Auditor) revisa só o TEXTO do jogo em etapas curtas, feita para modelos locais pequenos. A estrutura nunca muda. Sem IA configurada, só a limpeza automática roda.": "A team of AI agents (Profiler → Polisher → Auditor) proofreads only the game's TEXT in short steps, built for small local models. The structure never changes. Without AI configured, only the automatic cleanup runs.",
   'Carregando…': 'Loading…',
   'Criar um novo': 'Create a new one',
+  "Desfazer a tela dividida": "Undo split view",
+  "Dividir a tela com uma aba nova": "Split the view with a new tab",
+  "Dividir a tela com…": "Split the view with…",
 };

@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.6.2] — 2026-11-06
+
+### Added
+- **Chat tab strip that slides sideways**: with many tabs, scroll with the **mouse wheel**, **drag** the strip with mouse/finger or use the touchpad's horizontal gesture; the front tab is always kept in view. Clicking right after a drag does not switch tabs by accident.
+- **Split view, Firefox style — two tabs on the same screen, side by side.** **Right-click a tab** → *Split the view with a new tab* or *Split the view with…* (pick one of the other tabs). The two tabs become a **group** in the strip (columns icon, dashed border between them) and show in two panes, each with its own scroll and live streaming. The text box applies to the **focused pane** (highlight border on top; click a pane to focus it). Clicking a tab outside the group shows only that tab while the group stays in the strip; clicking the group returns to the split view. *Undo split view* (right-click) or closing either tab undoes the split; the split comes back after reloading the page.
+
+### Tests
+- `tests/browser/chat_split_ui.js`: scrollable strip (wheel and drag), right-click menu, side-by-side panes, focus and sending per pane, group in the strip, tab outside the pair, reload, undo, split with a new tab and closing one of the two. `chat_stream_ui.js` became more robust (it waited for the first answer to finish before deleting the conversation).
+
 ## [0.6.1] — 2026-11-06
 
 ### Changed
@@ -653,7 +662,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.1...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.2...HEAD
+[0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
