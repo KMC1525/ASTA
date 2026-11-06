@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.3] — 2026-11-06
+
+### Corrigido — Canvas
+- **«Erro inesperado: … requires the Torchvision library»** ao gerar imagem com modelos locais como o Qwen-Image: agora a mensagem diz o que fazer (`pip install torchvision`, ou `asta libs --extras media`) e a **torchvision entrou nas bibliotecas de mídia** (instaladores e `asta update` passam a instalá-la).
+- **Menu «…» do nó (Gerar de novo, Duplicar, Apagar) aparecia longe do botão** quando a interface estava ampliada (escala ≠ 100%). O posicionamento dos menus flutuantes agora mede a escala no próprio navegador e fica colado no botão; vale também para o seletor de modelo do Chat e demais menus.
+
 ## [0.12.2] — 2026-11-06
 
 ### Alterado

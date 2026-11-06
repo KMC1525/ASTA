@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.3] — 2026-11-06
+
+### Fixed — Canvas
+- **"Unexpected error: … requires the Torchvision library"** when generating images with local models such as Qwen-Image: the message now says what to do (`pip install torchvision`, or `asta libs --extras media`) and **torchvision joined the media libraries** (installers and `asta update` now install it).
+- **The node's "…" menu (Generate again, Duplicate, Delete) showed up far from the button** when the interface was enlarged (scale ≠ 100%). Floating menus are now positioned by measuring the scale in the browser itself and stick to the button; this also covers the Chat model picker and the other menus.
+
 ## [0.12.2] — 2026-11-06
 
 ### Changed

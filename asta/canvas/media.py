@@ -973,7 +973,14 @@ def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
             _PLAN.update(plan)
             if plan.get("prefetch") and plan.get("files"):
                 _native.prefetch(plan["files"])   # leitura paralela: o from_pretrained acha os pesos já em RAM
-            _LOCAL_CACHE[key] = loader()
+            try:
+                _LOCAL_CACHE[key] = loader()
+            except ProviderError:
+                raise
+            except Exception as exc:  # noqa: BLE001
+                if "torchvision" in str(exc).lower():  # ex.: processadores de visão do Qwen-Image/Qwen3-VL pedem a torchvision
+                    raise ProviderError("Este modelo precisa da biblioteca torchvision, que não está instalada. Instale com:  pip install torchvision  (ou rode: asta libs --extras media) e tente de novo; depois de instalar, reinicie o ASTA.") from None
+                raise
             if plan:
                 _native.record("media", cap=cap, model=model, strategy=plan.get("strategy"), weights=plan.get("weights"), slicing=plan.get("slicing"), tiling=plan.get("tiling"))
         return _LOCAL_CACHE[key]

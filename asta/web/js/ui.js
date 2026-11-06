@@ -183,10 +183,19 @@ export function popover(anchor, content, onClose) {
   document.body.appendChild(pop);
   // posiciona acima do botão (ou abaixo, se não couber) e reposiciona quando o conteúdo cresce (listas carregadas depois)
   const place = () => {
-    const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, hgt = pop.offsetHeight;
-    pop.style.left = Math.max(8, Math.min(innerWidth - w - 8, r.left)) + 'px';
+    // O .pop usa `zoom: var(--z)` (escala da interface) e navegadores diferentes medem left/top ora na escala do elemento, ora na da página: mede quantos px VISUAIS
+    // vale 1px de `left`/`top` neste navegador e corrige, assim o menu fica colado no botão em qualquer escala.
+    pop.style.left = '0px'; pop.style.top = '0px';
+    const b0 = pop.getBoundingClientRect();
+    pop.style.left = '100px'; pop.style.top = '100px';
+    const b1 = pop.getBoundingClientRect();
+    const kx = (b1.left - b0.left) / 100 || 1, ky = (b1.top - b0.top) / 100 || 1;
+    const r = anchor.getBoundingClientRect(), w = b1.width, hgt = b1.height;
+    const x = Math.max(8, Math.min(innerWidth - w - 8, r.left));
     const top = r.top - hgt - 8 > 8 ? r.top - hgt - 8 : r.bottom + 8;
-    pop.style.top = Math.max(8, Math.min(innerHeight - hgt - 8, top)) + 'px';
+    const y = Math.max(8, Math.min(innerHeight - hgt - 8, top));
+    pop.style.left = (x - b0.left) / kx + 'px';
+    pop.style.top = (y - b0.top) / ky + 'px';
   };
   place();
   let ro = null;

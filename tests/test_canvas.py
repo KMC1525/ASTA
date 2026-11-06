@@ -867,6 +867,18 @@ class LocalHFTests(unittest.TestCase):
         self.assertEqual((by["x/m-nf4"]["kind"], by["x/m-fp8"]["kind"], by["x/m-gguf"]["kind"]), ("int4", "fp8", "GGUF"))
         self.assertTrue(by["x/m-nf4"]["loadable"] and not by["x/m-gguf"]["loadable"] and not by["x/m-awq"]["loadable"])
 
+    def test_missing_torchvision_gets_a_clear_install_message(self):
+        M._LOCAL_CACHE.clear()
+        def loader():
+            raise ImportError("Qwen3VLVideoProcessor requires the Torchvision library but it was not found in your environment.")
+        with self.assertRaises(ProviderError) as cm:
+            M._local_load("image", "Qwen/Qwen-Image-2.1", loader)
+        self.assertIn("pip install torchvision", str(cm.exception))
+        self.assertNotIn("Qwen/Qwen-Image-2.1", M._LOCAL_CACHE)
+        with self.assertRaises(ValueError):   # outros erros passam como estavam
+            M._local_load("image", "a/b", lambda: (_ for _ in ()).throw(ValueError("outro")))
+        M._LOCAL_CACHE.clear()
+
     def test_missing_libraries_explain_how_to_install(self):
         with mock.patch.dict(sys.modules, {"torch": None, "diffusers": None, "transformers": None}):
             M._LOCAL_CACHE.clear()

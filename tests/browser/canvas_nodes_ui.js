@@ -2,6 +2,16 @@
 const { run, until } = require('./_common.js');
 run('canvas_nodes', async ({ api, open, check }) => {
   const page = await open({ width: 1500, height: 950 });
+  // menu «…» do nó fica colado no botão mesmo com a interface ampliada (escala 125%)
+  await api('/api/settings', { method: 'PUT', body: { ui: { scale: 125 } } }); await page.reload(); await page.waitForSelector('#side nav');
+  const cv0 = await api('/api/canvases', { method: 'POST', body: { name: 'Menu' } });
+  await api('/api/canvases/' + cv0.id, { method: 'PUT', body: { nodes: [{ id: 'a', type: 'text', x: 200, y: 200, params: { text: 'oi' } }], edges: [] } });
+  await page.evaluate((id) => { location.hash = '#/canvas/edit/' + id; }, cv0.id); await page.waitForSelector('.cv-node', { timeout: 15000 });
+  const dots = page.locator('.cv-node .hd button, .cv-node .hd .btn').last(); await dots.click(); await page.waitForSelector('.pop', { timeout: 5000 });
+  const gap = await page.evaluate(() => { const a = document.querySelector('.cv-node .hd').querySelectorAll('button'); const b = a[a.length - 1].getBoundingClientRect(), p = document.querySelector('.pop').getBoundingClientRect(); return { inside: p.left >= 0 && p.right <= innerWidth + 1, flush: p.right >= innerWidth - 10, dx: Math.abs(p.left - b.left), dy: Math.min(Math.abs(p.bottom - b.top), Math.abs(p.top - b.bottom)) }; });
+  check('menu-do-no:colado-no-botao-com-escala-125', gap.inside && gap.dy < 20 && (gap.dx < 20 || gap.flush));   // alinhado ao botão (ou encostado na borda direita, se faltar espaço)
+  await page.keyboard.press('Escape'); await page.mouse.click(5, 5);
+  await api('/api/settings', { method: 'PUT', body: { ui: { scale: 100 } } }); await page.reload(); await page.waitForSelector('#side nav');
   const cv = await api('/api/canvases', { method: 'POST', body: { name: 'Nós novos' } });
   await page.evaluate((id) => { location.hash = '#/canvas/edit/' + id; }, cv.id); await page.waitForSelector('.cv-pal', { timeout: 15000 });
   const heads = await page.locator('.cv-pal h4').allInnerTexts();
