@@ -16,6 +16,7 @@ Tudo é JSON/arquivos comuns dentro de ASTA_HOME (padrão ~/.asta):
     projects/<id>/v<N>/package/...      (pasta do jogo, também servida em /play/<id>/)
     projects/<id>/v<N>/world.zip | game.zip
     projects/<id>/saves/default.json    (estado persistente do jogo)
+    studio/<id>/project.json            um projeto do Studio (vídeo único ou série)
     canvases/<id>/canvas.json           um Canvas (nós, conexões, ativos)
     canvases/<id>/assets/<arquivo>      mídias geradas ou enviadas
     uploads/<id>/                       (anexos aguardando uso)
@@ -218,6 +219,9 @@ class Store:
         self.avatar_portraits_dir = self.home / "avatars" / "portraits"
         self.avatar_memory_dir = self.home / "avatar_memory"
         self.canvases = CanvasStore(self.home / "canvases")
+        from .studio.store import StudioStore
+
+        self.studio = StudioStore(self.home / "studio")
         self.projects_dir = self.home / "projects"
         self.uploads_dir = self.home / "uploads"
         self.models_dir = self.home / "models"

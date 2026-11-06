@@ -69,9 +69,33 @@ def _run(cmd: List[str], ctl: Ctl, timeout: int = 3600) -> Tuple[int, str]:
         return proc.returncode, err.read().decode("utf-8", "replace")[-1500:]
 
 
+GRADES = {  # filtros de cor dos clipes (Studio): trechos de filtro do ffmpeg aplicados antes da composição
+    "bw": "hue=s=0", "warm": "colorbalance=rs=.12:gs=.02:bs=-.12:rm=.1:bm=-.1", "cool": "colorbalance=rs=-.1:bs=.15:bm=.06",
+    "vivid": "eq=saturation=1.45:contrast=1.08", "vhs": "eq=saturation=1.3:contrast=0.95,noise=alls=12:allf=t,gblur=sigma=0.6",
+    "cinematic": "eq=contrast=1.12:saturation=0.9,colorbalance=rs=.05:bs=.08:rh=.04:bh=-.04", "phonk": "eq=contrast=1.3:saturation=0.45:brightness=-0.03,noise=alls=10:allf=t,vignette=PI/4",
+}
+
+
+def _tempo(speed: float) -> str:
+    """Cadeia de `atempo` (cada passo só aceita 0,5–2×)."""
+    parts: List[str] = []
+    s = speed
+    while s > 2.0:
+        parts.append("atempo=2.0")
+        s /= 2.0
+    while s < 0.5:
+        parts.append("atempo=0.5")
+        s /= 0.5
+    parts.append(f"atempo={s:.4f}")
+    return ",".join(parts)
+
+
 def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: str, resolve: Callable[[Dict[str, Any]], Optional[Resolved]], out_path: Path,
-                    ctl: Optional[Ctl] = None) -> List[str]:
-    """Renderiza `tl` em `out_path`. Devolve avisos (clipes ignorados, legendas sem fonte…). Levanta ProviderError se não der."""
+                    ctl: Optional[Ctl] = None, mode: str = "full") -> List[str]:
+    """Renderiza `tl` em `out_path`. Devolve avisos (clipes ignorados, legendas sem fonte…). Levanta ProviderError se não der.
+
+    `mode`: "full" (vídeo + áudio), "video" (sem áudio) ou "audio" (só o áudio; o formato vem da extensão: .m4a, .mp3 ou .wav).
+    Os clipes podem ter `speed` (velocidade), `mute` (silenciar o clipe) e `filter` (cor); sem essas chaves o comportamento é o de sempre."""
     ctl = ctl or Ctl()
     ff = shutil.which("ffmpeg")
     if not ff:
@@ -97,24 +121,36 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
     total = max([c["start"] + c["dur"] for _, c, _ in items] + [0.0])
     if total <= 0:
         raise ProviderError("A linha do tempo está vazia — adicione clipes ao Editor (ou ligue nós a ele e use \"Montar automaticamente\").")
-    total = round(min(total, 3600.0), 3)
+    total = round(min(total, 6 * 3600.0), 3)
+    video_on, audio_on = mode != "audio", mode != "video"
 
     def attempt(with_text: bool, normalize: bool) -> Tuple[int, str, List[str]]:
         warn: List[str] = []
-        args: List[str] = [ff, "-y", "-loglevel", "error", "-f", "lavfi", "-i", f"color=c=0x{bg.lstrip('#') or '000000'}:s={W}x{H}:r={fps}:d={total}"]
+        args: List[str] = [ff, "-y", "-loglevel", "error"]
+        if video_on:
+            args += ["-f", "lavfi", "-i", f"color=c=0x{bg.lstrip('#') or '000000'}:s={W}x{H}:r={fps}:d={total}"]
         filters: List[str] = []
         label = "[0:v]"
-        n_in = 1
+        n_in = 1 if video_on else 0
         audio_labels: List[str] = []
         texts: List[Tuple[Dict[str, Any], Dict[str, Any]]] = []
         tmpdir = tempfile.TemporaryDirectory()
         try:
             for t, c, r in items:
                 if r is None:
-                    if with_text and not t["hidden"]:
+                    if with_text and not t["hidden"] and video_on:
                         texts.append((t, c))
                     continue
                 dur, start = c["dur"], c["start"]
+                speed = float(c.get("speed") or 1.0) if r["kind"] in ("video", "audio") else 1.0
+                can_sound = audio_on and not t["muted"] and not c.get("mute") and c["volume"] > 0
+                if r["kind"] == "video" and t["kind"] == "video" and not video_on:  # só o áudio: o vídeo nem entra no grafo
+                    if can_sound and not t["hidden"] and has_audio(r["path"]):
+                        k = n_in
+                        n_in += 1
+                        args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur * speed:.3f}", "-i", str(r["path"])]
+                        audio_labels.append(_audio_chain(filters, k, c, dur, start))
+                    continue
                 if r["kind"] in ("image", "video") and t["kind"] == "video" and not t["hidden"]:
                     k = n_in
                     n_in += 1
@@ -122,8 +158,8 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                         args += ["-loop", "1", "-framerate", str(fps), "-t", f"{dur:.3f}", "-i", str(r["path"])]
                         chain = f"[{k}:v]setpts=PTS-STARTPTS"
                     else:
-                        args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur:.3f}", "-i", str(r["path"])]
-                        chain = f"[{k}:v]setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration={dur:.3f},trim=duration={dur:.3f},setpts=PTS-STARTPTS"
+                        args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur * speed:.3f}", "-i", str(r["path"])]
+                        chain = f"[{k}:v]setpts=(PTS-STARTPTS)/{speed:.4f},fps={fps},tpad=stop_mode=clone:stop_duration={dur:.3f},trim=duration={dur:.3f},setpts=PTS-STARTPTS"
                     sw, sh = _even(W * c["scale"]), _even(H * c["scale"])
                     if c["fit"] == "stretch":
                         chain += f",scale={sw}:{sh}"
@@ -131,6 +167,9 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                         chain += f",scale={sw}:{sh}:force_original_aspect_ratio=increase,crop={sw}:{sh}"
                     else:
                         chain += f",scale={sw}:{sh}:force_original_aspect_ratio=decrease"
+                    grade = GRADES.get(c.get("filter") or "")
+                    if grade:
+                        chain += "," + grade
                     chain += ",setsar=1,format=rgba"
                     if c["opacity"] < 0.999:
                         chain += f",colorchannelmixer=aa={c['opacity']}"
@@ -144,17 +183,18 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                     nxt = f"[o{k}]"
                     filters.append(f"{label}[v{k}]overlay=x='(W-w)/2+({c['x']}*W/2)':y='(H-h)/2+({c['y']}*H/2)':enable='between(t,{start:.3f},{start + dur:.3f})':eof_action=pass{nxt}")
                     label = nxt
-                    if r["kind"] == "video" and not t["muted"] and c["volume"] > 0 and has_audio(r["path"]):
+                    if r["kind"] == "video" and can_sound and has_audio(r["path"]):
+                        # o vídeo já é uma entrada: o áudio dele é lido da mesma entrada, só que com o próprio corte/velocidade
                         audio_labels.append(_audio_chain(filters, k, c, dur, start))
-                elif r["kind"] in ("audio", "video") and t["kind"] == "audio" and not t["muted"] and c["volume"] > 0:
+                elif r["kind"] in ("audio", "video") and t["kind"] == "audio" and can_sound:
                     if r["kind"] == "video" and not has_audio(r["path"]):
                         warn.append("Um vídeo na trilha de áudio não tem som — ignorado.")
                         continue
                     k = n_in
                     n_in += 1
-                    args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur:.3f}", "-i", str(r["path"])]
+                    args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur * speed:.3f}", "-i", str(r["path"])]
                     audio_labels.append(_audio_chain(filters, k, c, dur, start))
-                elif r["kind"] == "audio" and t["kind"] == "video" and not t["muted"] and c["volume"] > 0:  # áudio solto numa trilha de vídeo: toca normalmente
+                elif r["kind"] == "audio" and t["kind"] == "video" and can_sound:  # áudio solto numa trilha de vídeo: toca normalmente
                     k = n_in
                     n_in += 1
                     args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur:.3f}", "-i", str(r["path"])]
@@ -174,8 +214,8 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                 nxt = f"[x{i}]"
                 filters.append(f"{label}drawtext={':'.join(opts)}{nxt}")
                 label = nxt
-            maps = ["-map", label]
-            codec = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(fps)]
+            maps = ["-map", label] if video_on else []
+            codec = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(fps)] if video_on else ["-vn"]
             if audio_labels:
                 if len(audio_labels) == 1:
                     filters.append(f"{audio_labels[0]}apad=whole_dur={total:.3f}[aout]")
@@ -184,19 +224,23 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                     tail = "" if normalize else f",volume={len(audio_labels)}"
                     filters.append("".join(audio_labels) + f"{mix}{tail},apad=whole_dur={total:.3f}[aout]")
                 maps += ["-map", "[aout]"]
-                codec += ["-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2"]
-            else:
+                suffix = out_path.suffix.lower()
+                codec += (["-c:a", "pcm_s16le", "-ar", "44100", "-ac", "2"] if suffix == ".wav" else ["-c:a", "libmp3lame", "-b:a", "192k", "-ar", "44100", "-ac", "2"] if suffix == ".mp3"
+                          else ["-c:a", "aac", "-b:a", "160k", "-ar", "44100", "-ac", "2"])
+            elif video_on:
                 codec += ["-an"]
-            if not filters:
+            else:
+                raise ProviderError("Não há áudio na timeline para exportar (todos os clipes e trilhas de áudio estão silenciados ou vazios).")
+            if video_on and not filters:
                 filters.append(f"{label}null[vfinal]")
                 maps[1] = "[vfinal]"
-            args += ["-filter_complex", ";".join(filters)] + maps + codec + ["-t", f"{total:.3f}", "-movflags", "+faststart", str(out_path)]
+            args += ["-filter_complex", ";".join(filters)] + maps + codec + ["-t", f"{total:.3f}"] + (["-movflags", "+faststart"] if video_on else []) + [str(out_path)]
             code, err = _run(args, ctl)
             return code, err, warn
         finally:
             tmpdir.cleanup()
 
-    has_text = any(r is None for _, _, r in items)
+    has_text = video_on and any(r is None for _, _, r in items)
     code, err, extra = attempt(True, True)
     if code != 0 and "normalize" in err:
         code, err, extra = attempt(True, False)
@@ -210,7 +254,11 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
 
 
 def _audio_chain(filters: List[str], k: int, c: Dict[str, Any], dur: float, start: float) -> str:
-    chain = f"[{k}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo,atrim=duration={dur:.3f},asetpts=PTS-STARTPTS"
+    chain = f"[{k}:a]aresample=44100,aformat=sample_fmts=fltp:channel_layouts=stereo"
+    speed = float(c.get("speed") or 1.0)
+    if abs(speed - 1.0) > 0.001:
+        chain += "," + _tempo(speed)
+    chain += f",atrim=duration={dur:.3f},asetpts=PTS-STARTPTS"
     if abs(c["volume"] - 1) > 0.01:
         chain += f",volume={c['volume']}"
     if c["fade_in"] > 0:

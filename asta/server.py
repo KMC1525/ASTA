@@ -26,6 +26,7 @@ from .providers import ProviderError, build_provider, describe_presets, provider
 from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
 from .routes_canvas import CanvasRoutes
+from .routes_studio import StudioRoutes
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
@@ -193,6 +194,8 @@ class App:
         self.game_routes.register()
         self.canvas_routes = CanvasRoutes(self)
         self.canvas_routes.register()
+        self.studio_routes = StudioRoutes(self)
+        self.studio_routes.register()
         self.preinstalled_routes = PreinstalledRoutes(self)
         self.preinstalled_routes.register()
 
