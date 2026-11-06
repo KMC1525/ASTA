@@ -270,6 +270,14 @@ class BrowserTests(unittest.TestCase):
         (d / "lixo.zip").write_bytes(F.zip_bytes({"leiame.txt": b"oi"}))
         self.run_script("rebuild_ui.js", {"ASTA_REBUILD_MV": str(d / "mv.zip"), "ASTA_REBUILD_RPY": str(d / "vn.zip"), "ASTA_REBUILD_BAD": str(d / "lixo.zip")})
 
+    def test_22_every_section_creates_inside_its_own_page_without_going_to_the_chat(self):
+        from tests import rebuild_fixtures as F
+
+        d = self.tmp / "rb2"
+        d.mkdir(exist_ok=True)
+        (d / "mv.zip").write_bytes(F.zip_bytes(F.mv_project()))
+        self.run_script("sections_inline_ui.js", {"ASTA_REBUILD_MV": str(d / "mv.zip")})
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -4,6 +4,7 @@ import { go, presetOf, state } from '../main.js';
 import { avatarPic, REL_LABEL } from '../avatar_ui.js';
 import { gradient, h, icon, popover, select, seg, toast } from '../ui.js';
 import { openChat } from './avatars.js';
+import { createComposer } from './composer.js';
 import { clearJob, renderRun, saveJob, savedJob } from './run.js';
 import { GENRE_LABEL } from './steps.js';
 
@@ -27,10 +28,11 @@ export const HINTS = () => {
 };
 
 // Retoma a execução de uma criação em andamento (a tela de acompanhamento) quando o usuário volta ao Chat. Devolve true se retomou.
-export async function resumeIfRunning(root, ctx) {
+export async function resumeIfRunning(root, ctx, section) {
   if (ctx.fresh) clearJob();
   const saved = savedJob();
-  if (saved && !ctx.project) {
+  if (section && saved && (saved.from || '') !== section) return false;   // numa seção, só retoma o que foi iniciado nela
+  if (saved && (!ctx.project || section)) {
     try { const j = await api('/api/jobs/' + saved.id); if (j) { resume(root, saved); return true; } } catch (e) { clearJob(); }
   }
   return false;
@@ -40,11 +42,16 @@ function conflict(root, e, kind, info) {
   if (e.status === 409 && e.data && e.data.job_id) { const i = Object.assign({}, info, { id: e.data.job_id, kind }); saveJob(i); resume(root, i); return true; }
   return false;
 }
+// Seção de onde a criação foi iniciada ('' = tela Chat). O compositor embutido das seções (mountCreator) liga isto durante o clique em Run.
+let ORIGIN = '';
+let FROM = '';   // seção da criação que está sendo acompanhada: os botões «Novo…»/«Tentar de novo» voltam para ela em vez de ir ao Chat
+const again = (section, mode, ctx) => (FROM ? go(FROM, {}) : go('main', Object.assign({ fresh: true, mode }, ctx || {})));
 async function startJob(root, url, body, kind, extra, toastFn) {
+  const from = ORIGIN;
   try {
     const r = await api(url, { method: 'POST', body });
-    const info = Object.assign({ id: r.job_id, kind }, extra); saveJob(info); resume(root, info);
-  } catch (e) { if (!conflict(root, e, kind, extra)) toastFn(e.message); throw e; }
+    const info = Object.assign({ id: r.job_id, kind, from }, extra); saveJob(info); resume(root, info);
+  } catch (e) { if (!conflict(root, e, kind, Object.assign({ from }, extra))) toastFn(e.message); throw e; }
 }
 
 // ------------------------------------------------------------------ modo: Mundo 3D
@@ -156,9 +163,10 @@ async function canvasTool(root, project, carry, composer) {
 
 // ------------------------------------------------------------------ execução + resultado
 function resume(root, info) {
-  const retry = () => go('main', { fresh: true, mode: info.kind === 'game' ? 'game' : info.kind, project: info.project, prompt: info.prompt });
+  FROM = info.from || '';
+  const retry = () => (FROM ? go(FROM, {}) : go('main', { fresh: true, mode: info.kind === 'game' ? 'game' : info.kind, project: info.project, prompt: info.prompt }));
   if (info.kind === 'avatar') return renderRun(root, info.id, info, { title: t('Criando seus avatares…'), doneTitle: t('Avatares prontos!'), retry, done: avatarDone });
-  if (info.kind === 'rebuild') return renderRun(root, info.id, info, { title: t('Reconstruindo o jogo…'), doneTitle: t('Jogo reconstruído!'), retry: () => go('main', { fresh: true, mode: 'rebuild' }), done: rebuildDone });
+  if (info.kind === 'rebuild') return renderRun(root, info.id, info, { title: t('Reconstruindo o jogo…'), doneTitle: t('Jogo reconstruído!'), retry: () => again('rebuild', 'rebuild'), done: rebuildDone });
   if (info.kind === 'game') return renderRun(root, info.id, info, { title: info.project ? t('Atualizando o jogo…') : t('Criando o seu jogo…'), doneTitle: t('Jogo pronto!'), retry, done: gameDone });
   return renderRun(root, info.id, info, { title: info.project ? t('Atualizando o mundo…') : t('Criando o seu mundo…'), doneTitle: t('Mundo pronto!'), retry, done: worldDone });
 }
@@ -173,9 +181,9 @@ async function worldDone(ev) {
       h('div', { class: 'row' },
         h('a', { class: 'btn primary', href: '/play/' + ev.project_id + '/', target: '_blank', rel: 'noopener' }, icon('play', 15), t('Jogar')),
         h('a', { class: 'btn', href: '/api/projects/' + ev.project_id + '/download' }, icon('download', 15), t('Baixar ZIP')),
-        h('button', { class: 'btn', onclick: () => go('main', { project: { id: ev.project_id, name: ev.title, current: ev.version, kind: 'world' } }) }, icon('refresh', 15), t('Atualizar este mundo')),
+        h('button', { class: 'btn', onclick: () => again('', 'world', { project: { id: ev.project_id, name: ev.title, current: ev.version, kind: 'world' } }) }, icon('refresh', 15), t('Atualizar este mundo')),
         h('button', { class: 'btn ghost', onclick: () => go('library', { highlight: ev.project_id }) }, t('Ver na biblioteca')),
-        h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'world' }) }, t('Novo mundo')))));
+        h('button', { class: 'btn ghost', onclick: () => again('', 'world') }, t('Novo mundo')))));
 }
 
 // aviso legal do Rebuild (vem do servidor, nos dois idiomas)
@@ -202,7 +210,7 @@ async function rebuildDone(ev) {
         h('a', { class: 'btn primary', href: '/play/' + ev.project_id + '/', target: '_blank', rel: 'noopener' }, icon('play', 15), t('Jogar')),
         h('a', { class: 'btn', href: '/api/projects/' + ev.project_id + '/download' }, icon('download', 15), t('Baixar ZIP')),
         h('button', { class: 'btn ghost', onclick: () => go('games', { highlight: ev.project_id }) }, t('Ver na biblioteca')),
-        h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'rebuild' }) }, t('Reconstruir outro jogo')))));
+        h('button', { class: 'btn ghost', onclick: () => again('', 'rebuild') }, t('Reconstruir outro jogo')))));
 }
 
 async function gameDone(ev) {
@@ -215,9 +223,9 @@ async function gameDone(ev) {
       h('div', { class: 'row' },
         h('a', { class: 'btn primary', href: '/play/' + ev.project_id + '/', target: '_blank', rel: 'noopener' }, icon('play', 15), t('Jogar')),
         h('a', { class: 'btn', href: '/api/projects/' + ev.project_id + '/download' }, icon('download', 15), t('Baixar ZIP')),
-        h('button', { class: 'btn', onclick: () => go('main', { project: { id: ev.project_id, name: ev.title, current: ev.version, kind: 'game2d' } }) }, icon('refresh', 15), t('Atualizar este jogo')),
+        h('button', { class: 'btn', onclick: () => again('', 'game', { project: { id: ev.project_id, name: ev.title, current: ev.version, kind: 'game2d' } }) }, icon('refresh', 15), t('Atualizar este jogo')),
         h('button', { class: 'btn ghost', onclick: () => go('games', { highlight: ev.project_id }) }, t('Ver na biblioteca')),
-        h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'game' }) }, t('Novo jogo')))));
+        h('button', { class: 'btn ghost', onclick: () => again('', 'game') }, t('Novo jogo')))));
 }
 
 async function avatarDone(ev) {
@@ -232,7 +240,7 @@ async function avatarDone(ev) {
       h('div', { class: 'row nw', style: { gap: '6px', justifyContent: 'center', marginTop: 'auto' } }, h('button', { class: 'btn sm primary', onclick: () => openChat([a.id]) }, icon('send', 13), t('Conversar')), h('a', { class: 'btn sm', href: '#/avatars/edit/' + a.id }, icon('edit', 13), t('Editar')))))),
     h('div', { class: 'row' },
       list.length > 1 ? h('button', { class: 'btn primary', onclick: () => openChat(list.map((a) => a.id)) }, icon('characters', 15), t('Conversa em grupo')) : null,
-      h('a', { class: 'btn', href: '#/avatars' }, t('Ver todos os avatares')), h('button', { class: 'btn ghost', onclick: () => go('main', { fresh: true, mode: 'avatar' }) }, t('Criar mais')))));
+      h('a', { class: 'btn', href: '#/avatars' }, t('Ver todos os avatares')), h('button', { class: 'btn ghost', onclick: () => again('', 'avatar') }, t('Criar mais')))));
 }
 
 // ferramentas de criação do Chat (os ativadores): cada uma devolve a configuração do compositor — placeholder, opções, o que o Run faz
@@ -251,6 +259,34 @@ async function rebuildTool(root, project, carry, composer) {
   };
   return Object.assign(cfg, { below: h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px', maxWidth: '560px', marginInline: 'auto' } },
     t("Aceita Ren'Py (scripts .rpy) e RPG Maker 2000 → MZ, em ZIP. Reconstrói a estrutura (mapas, eventos, diálogos, escolhas…) em HTML, CSS e JS puros; a arte e o áudio originais não são copiados. Só para uso pessoal — um aviso legal aparece ao final.")) });
+}
+
+// Compositor embutido nas seções (Mundos, Avatars, Jogos 2D, Rebuild): a mesma ferramenta de criação do Chat, sem precisar ir até lá.
+// `section` = rota da seção (para voltar a ela depois); `project` = atualizar um mundo/jogo existente. Devolve { el, setProject(p), focus() }.
+export async function mountCreator(root, { mode, section, project }) {
+  const el = h('div', { class: 'card creator', id: 'creator' });
+  const body = h('div');
+  let proj = project || null, composer = null;
+  const mk = async () => {
+    body.replaceChildren(h('div', { class: 'muted small' }, t('Carregando…')));
+    composer = createComposer({ placeholder: '', sendLabel: t('Run'), sendTitle: t('Executar'), tools: [] });
+    let cfg;
+    try { cfg = await TOOL_BUILDERS[mode](root, proj, '', composer); } catch (e) { body.replaceChildren(h('div', { class: 'errbox' }, e.message)); return; }
+    composer.configure({ placeholder: cfg.placeholder, tools: cfg.tools || [], extraReady: cfg.extraReady || null, allowEmpty: !!cfg.allowEmpty,
+      onSend: (x) => { ORIGIN = section; try { return cfg.onSend(x); } finally { ORIGIN = ''; } } });
+    body.replaceChildren(composer.el, cfg.below || null);
+  };
+  const head = h('div', { class: 'row', style: { marginBottom: '8px' } });
+  const paintHead = () => {
+    const [newT, updT] = TITLES[mode] || ['', ''];
+    head.replaceChildren(h('b', null, proj ? t(updT || newT) + ' — ' + proj.name : t(newT)), h('span', { class: 'grow' }),
+      proj ? h('button', { class: 'btn ghost sm', type: 'button', onclick: () => api0(null) }, '× ' + t('Criar um novo')) : null);
+  };
+  const api0 = async (p) => { proj = p; paintHead(); await mk(); };
+  el.append(head, body);
+  paintHead();
+  await mk();
+  return { el, setProject: async (p) => { await api0(p); el.scrollIntoView({ block: 'center' }); if (composer) composer.focus(); }, focus: () => { el.scrollIntoView({ block: 'center' }); if (composer) composer.focus(); } };
 }
 
 export const TOOL_BUILDERS = { world: worldTool, avatar: avatarTool, game: gameTool, canvas: canvasTool, rebuild: rebuildTool };

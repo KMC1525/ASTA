@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { go, state } from '../main.js';
 import { accordion, checkbox, field, fmtDate, gradient, h, icon, range, select, seg, toast } from '../ui.js';
+import { mountCreator, resumeIfRunning } from './home.js';
 import renderCharacters, { figureSVG } from './characters.js';
 import renderWorldbuilding from './worldbuilding.js';
 
@@ -25,6 +26,8 @@ export default async function render(root, ctx) {
 }
 
 async function renderWorlds(root, ctx) {
+  if (await resumeIfRunning(root, ctx, 'worlds')) return;   // criação iniciada aqui e ainda rodando
+  const creator = await mountCreator(root, { mode: 'world', section: 'worlds' });   // o compositor do Chat, dentro da seção
   const projects = await api('/api/projects?kind=world');
   const libChars = await api('/api/characters');
   let sel = ctx.select || (projects[0] && projects[0].id) || null, proj = null, w = null, swaps = {};
@@ -58,7 +61,7 @@ async function renderWorlds(root, ctx) {
   }
 
   function paintEditor() {
-    if (!proj || !w) { editor.replaceChildren(h('div', { class: 'empty' }, h('h3', null, t('Nenhum mundo para configurar')), h('p', null, t('Gere um mundo no Chat (ferramenta Mundo 3D); depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.')), h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true }) }, icon('sparkle', 15), t('Criar um mundo')))); return; }
+    if (!proj || !w) { editor.replaceChildren(h('div', { class: 'empty' }, h('h3', null, t('Nenhum mundo para configurar')), h('p', null, t('Descreva um mundo no campo acima e aperte Run; depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.')), h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true }) }, icon('sparkle', 15), t('Criar um mundo')))); return; }
     const env = w.environment, au = w.audio, mu = au.music, ux = w.ux, hud = ux.hud;
     const tier = w.quality.target === 'auto' ? (state.hardware.tier || 'medium') : w.quality.target;
     const maxSize = (w.quality.tiers[tier] || {}).max_size || 800;
@@ -110,7 +113,7 @@ async function renderWorlds(root, ctx) {
       h('div', { class: 'row', style: { marginBottom: '16px' } }, h('h2', { style: { margin: 0, fontSize: '20px', fontWeight: 600 } }, proj.name, ' ', h('span', { class: 'badge' }, 'v' + proj.current)), h('span', { class: 'grow' }),
         h('a', { class: 'btn sm', href: '/play/' + proj.id + '/', target: '_blank', rel: 'noopener' }, icon('play', 13), t('Jogar')),
         h('a', { class: 'btn sm', href: '/api/projects/' + proj.id + '/download' }, icon('download', 13), 'ZIP'),
-        h('button', { class: 'btn sm', onclick: () => go('main', { project: { id: proj.id, name: proj.name, current: proj.current } }) }, icon('refresh', 13), t('Atualizar com IA'))),
+        h('button', { class: 'btn sm', onclick: () => creator.setProject({ id: proj.id, name: proj.name, current: proj.current, kind: 'world' }) }, icon('refresh', 13), t('Atualizar com IA'))),
       accordion(t('Geral'), general, true), accordion(t('Ambiente'), environment, true), accordion(t('Estruturas'), worldAcc, false),
       accordion(t('Personagens e NPCs'), npcs, false, h('span', { class: 'badge', style: { marginLeft: '8px' } }, w.npcs.length)),
       accordion(t('Áudio'), audio, false), accordion(t('Interface e jogo'), iface, false), accordion(t('Qualidade e hardware'), quality, false),
@@ -120,6 +123,7 @@ async function renderWorlds(root, ctx) {
 
   root.replaceChildren(h('div', { class: 'page' },
     h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Mundos')), h('p', null, t('Configure e personalize os mundos gerados: ambiente, NPCs, áudio, interface e qualidade.')))),
+    creator.el,
     h('div', { class: 'split' }, listEl, editor)));
   await load(sel);
 }

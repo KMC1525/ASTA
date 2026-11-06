@@ -5,6 +5,7 @@ import { avatarPic, REL_LABEL } from '../avatar_ui.js';
 import { confirmDialog, debounce, fmtBytes, fmtDate, gradient, h, icon, modal, popover, tagsInput, toast } from '../ui.js';
 import { GGUF_KINDS } from '../model_labels.js';
 import { openChat } from './avatars.js';
+import { mountCreator, resumeIfRunning } from './home.js';
 import { GENRE_LABEL } from './steps.js';
 
 const norm = (s) => String(s || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -17,6 +18,8 @@ export default (root, ctx) => renderLibrary(root, ctx, {});
 
 // Biblioteca de tudo que você criou, mais os modelos de IA locais instalados. opts: { kinds: [...], title, subtitle, create: [label, fn], emptyTitle, emptyText }
 export async function renderLibrary(root, ctx, opts) {
+  if (opts.section && await resumeIfRunning(root, ctx, opts.section)) return;   // uma criação iniciada nesta seção: mostra o acompanhamento
+  const creator = opts.createMode ? await mountCreator(root, { mode: opts.createMode, section: opts.section || '' }) : null;   // o mesmo compositor do Chat, aqui dentro
   const kinds = opts.kinds || ['world', 'game2d', 'avatar', 'canvas', 'model'];
   const fetchAll = () => Promise.all([
     kinds.some((k) => k === 'world' || k === 'game2d') ? api('/api/projects') : [], kinds.includes('avatar') ? api('/api/avatars') : [], kinds.includes('canvas') ? api('/api/canvases') : [],
@@ -124,7 +127,7 @@ export async function renderLibrary(root, ctx, opts) {
     const foot = k === 'avatar' ? [h('button', { class: 'btn sm primary', onclick: () => openChat([p.id]) }, icon('send', 13), t('Conversar')), h('a', { class: 'btn sm', href: '#/avatars/edit/' + p.id }, icon('edit', 13), t('Editar'))]
       : k === 'canvas' ? [h('a', { class: 'btn sm primary', href: '#/canvas/edit/' + p.id }, icon('canvas', 13), t('Abrir'))]
         : [h('a', { class: 'btn sm primary', href: '/play/' + p.id + '/', target: '_blank', rel: 'noopener' }, icon('play', 13), t('Jogar')),
-          h('button', { class: 'btn sm', title: t('Atualizar com IA — o mesmo jogo, várias vezes'), onclick: () => go('main', { project: { id: p.id, name: p.name, current: p.current, kind: k } }) }, icon('refresh', 13), t('Atualizar')),
+          h('button', { class: 'btn sm', title: t('Atualizar com IA — o mesmo jogo, várias vezes'), onclick: () => (creator && !opts.noUpdate ? creator.setProject({ id: p.id, name: p.name, current: p.current, kind: k }) : go('main', { project: { id: p.id, name: p.name, current: p.current, kind: k } })) }, icon('refresh', 13), t('Atualizar')),
           k === 'world' ? h('button', { class: 'btn sm ghost', title: t('Configurar mundo'), onclick: () => go('worlds', { select: p.id }) }, icon('edit', 13)) : null,
           h('a', { class: 'btn sm ghost', title: t('Baixar ZIP'), href: '/api/projects/' + p.id + '/download' }, icon('download', 13))];
     if (selecting) thumb.append(selectBox(p));
@@ -162,12 +165,13 @@ export async function renderLibrary(root, ctx, opts) {
     grid.replaceChildren(...(shown.length ? shown.map(card) : [h('div', { class: 'empty', style: { gridColumn: '1/-1' } },
       items.length ? [h('h3', null, t('Nada encontrado')), h('p', null, t('Tente outra busca ou remova filtros de tags.'))] :
         [h('h3', null, opts.emptyTitle || t('Sua biblioteca está vazia')), h('p', null, opts.emptyText || t('Tudo que você cria no ASTA — mundos 3D, avatars, jogos 2D e canvases — fica salvo aqui e dá para atualizar quantas vezes quiser.')),
-          h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true, mode: opts.createMode }) }, icon('sparkle', 15), opts.createLabel || t('Criar o primeiro'))])]));
+          h('button', { class: 'btn primary', onclick: () => (creator ? creator.focus() : go('main', { fresh: true, mode: opts.createMode })) }, icon('sparkle', 15), opts.createLabel || t('Criar o primeiro'))])]));
   }
 
   root.replaceChildren(h('div', { class: 'page' },
     h('div', { class: 'page-h' }, h('div', null, h('h1', null, opts.title || t('Biblioteca')), h('p', null, opts.subtitle || t('Tudo que você criou e os modelos de IA locais instalados.'))),
-      opts.createMode ? h('button', { class: 'btn primary', onclick: () => go('main', { fresh: true, mode: opts.createMode }) }, icon('plus', 15), opts.createLabel || t('Novo')) : null),
+      opts.createMode ? h('button', { class: 'btn primary', onclick: () => (creator ? creator.setProject(null) : go('main', { fresh: true, mode: opts.createMode })) }, icon('plus', 15), opts.createLabel || t('Novo')) : null),
+    creator ? creator.el : null,
     h('div', { class: 'row' }, h('div', { class: 'search' }, icon('search', 17), input), selectBtn, h('span', { class: 'dim small' }, t('{n} item(ns)', { n: items.length }))),
     bar,
     typebar, tagbar, grid));

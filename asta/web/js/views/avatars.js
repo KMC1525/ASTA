@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { go } from '../main.js';
+import { mountCreator, resumeIfRunning } from './home.js';
 import { confirmDialog, download, fill, h, icon, popover, toast } from '../ui.js';
 import { avatarPic, MOOD_EMOJI, REL_LABEL } from '../avatar_ui.js';
 
@@ -22,6 +23,8 @@ export default async function render(root, ctx) {
 }
 
 async function renderList(root, ctx) {
+  if (await resumeIfRunning(root, ctx, 'avatars')) return;   // criação iniciada aqui e ainda rodando
+  const creator = await mountCreator(root, { mode: 'avatar', section: 'avatars' });   // o compositor do Chat, dentro da seção
   let [list, chats] = await Promise.all([api('/api/avatars'), api('/api/avatar-chats')]);
   const sel = new Set();
   const grid = h('div', { class: 'av-grid' }), bar = h('div', { class: 'selbar hidden' }), chatBox = h('div', { class: 'col' });
@@ -87,17 +90,17 @@ async function renderList(root, ctx) {
     grid.replaceChildren(...(list.length ? list.map(card) : [h('div', { class: 'empty', style: { gridColumn: '1/-1' } },
       h('h3', null, t('Crie seu primeiro avatar')),
       h('p', null, t('Amigos, namorados(as), companheiros e mentores com quem conversar por texto e voz. Crie com IA a partir de texto, imagens ou qualquer arquivo — um de cada vez ou vários juntos.')),
-      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn primary', onclick: () => go('main', { mode: 'avatar' }) }, icon('sparkle', 15), t('Criar com IA')),
+      h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn primary', onclick: () => creator.focus() }, icon('sparkle', 15), t('Criar com IA')),
         h('button', { class: 'btn', onclick: () => { location.hash = '#/avatars/edit/new'; } }, icon('plus', 15), t('Novo avatar'))))]));
     chatBox.replaceChildren(...(chats.length ? chats.map(chatRow) : [h('div', { class: 'muted small' }, t('Nenhuma conversa ainda. Escolha um avatar e clique em Conversar.'))]));
   }
 
   root.replaceChildren(h('div', { class: 'page' },
     h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'Avatars'), h('p', null, t('Companheiros de conversa por texto e voz: um avatar ou vários conversando entre si.'))),
-      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => go('main', { mode: 'avatar' }) }, icon('sparkle', 15), t('Criar com IA')),
+      h('div', { class: 'row' }, h('button', { class: 'btn', onclick: () => creator.focus() }, icon('sparkle', 15), t('Criar com IA')),
         h('button', { class: 'btn', onclick: () => importInput.click() }, icon('upload', 15), t('Importar')), importInput,
         h('button', { class: 'btn primary', onclick: () => { location.hash = '#/avatars/edit/new'; } }, icon('plus', 15), t('Novo')))),
-    bar, grid,
+    creator.el, bar, grid,
     h('div', { class: 'card', style: { marginTop: '26px' } }, h('h3', null, t('Conversas')), chatBox)));
   paint();
 }

@@ -87,7 +87,7 @@ export default {
   'Dê um nome ao worldbuilding.': 'Give the worldbuilding a name.', 'Worldbuilding salvo': 'Worldbuilding saved', 'Descreva o tipo de mundo: cenário, tom, regras, época…': 'Describe the kind of world: setting, tone, rules, era…',
   'Criar worldbuilding com IA': 'Create worldbuilding with AI', 'Arquivo inválido': 'Invalid file', 'Regras gerais que valem para os mundos gerados. Cada uma é salva como um card.': 'General rules that apply to generated worlds. Each one is saved as a card.',
   'Nenhum mundo gerado ainda.': 'No worlds generated yet.', 'Ajustes manuais nas configurações do mundo.': 'Manual tweaks to the world settings.', 'Nova versão salva': 'New version saved',
-  'Nenhum mundo para configurar': 'No world to configure', 'Gere um mundo no Chat (ferramenta Mundo 3D); depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.': 'Generate a world in the Chat (3D world tool); then tweak weather, time, NPCs, audio and quality here.',
+  'Nenhum mundo para configurar': 'No world to configure', 'Descreva um mundo no campo acima e aperte Run; depois você ajusta clima, hora, NPCs, áudio e qualidade aqui.': 'Describe a world in the field above and press Run; then tweak weather, time, NPCs, audio and quality here.',
   'Criar um mundo': 'Create a world', 'Título': 'Title', 'Perspectiva inicial': 'Initial perspective', 'Descrição': 'Description',
   'Mais realista = sombras/estilo suave; menos = visual estilizado. O jogo sempre respeita o hardware.': 'More realistic = soft shading; less = stylized look. The game always respects the hardware.',
   'Bioma': 'Biome', 'Clima': 'Weather', 'Limite para o seu hardware ({t}): {m} m': 'Limit for your hardware ({t}): {m} m', 'Relevo': 'Relief', 'Hora inicial': 'Starting time', 'Duração do dia': 'Day length',
@@ -903,4 +903,6 @@ export default {
   "revertida (a estrutura mudou)": "reverted (the structure changed)",
   "Revisar o texto com IA": "Proofread the text with AI",
   "Uma equipe de agentes de IA (Perfilador → Polidor → Auditor) revisa só o TEXTO do jogo em etapas curtas, feita para modelos locais pequenos. A estrutura nunca muda. Sem IA configurada, só a limpeza automática roda.": "A team of AI agents (Profiler → Polisher → Auditor) proofreads only the game's TEXT in short steps, built for small local models. The structure never changes. Without AI configured, only the automatic cleanup runs.",
+  'Carregando…': 'Loading…',
+  'Criar um novo': 'Create a new one',
 };

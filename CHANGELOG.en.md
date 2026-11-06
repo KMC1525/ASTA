@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.6.1] — 2026-11-06
+
+### Changed
+- **Every section creates inside its own page, without forcing you to go to the Chat.** Worlds, Avatars, 2D games and Rebuild now have, at the top, the same composer as the Chat (text, attachments, tool options and Run) — with progress and the result shown in the section. In Worlds, 2D games and Rebuild, the "New…" and "Create with AI" buttons lead to the section's composer; "Update" (on a game or world) puts the composer in update mode (with "× Create a new one" to leave it). Result buttons ("New game", "Try again"…) return to the section the creation started from; creating from the Chat is unchanged. Coming back to a section with one of its creations in progress resumes the progress view. Canvas already created in its own page (the "New canvas" modal).
+- The empty state of the Worlds editor points to the section's composer instead of the Chat.
+
+### Tests
+- `tests/browser/sections_inline_ui.js`: each section creates and shows the result without leaving it (the hash never becomes `#/main`), "Update" in update mode, Rebuild with the legal notice, and the Chat still works.
+
 ## [0.6.0] — 2026-11-06
 
 ### Added
@@ -644,7 +653,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0

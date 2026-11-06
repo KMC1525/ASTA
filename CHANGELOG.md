@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.6.1] — 2026-11-06
+
+### Alterado
+- **Todas as seções criam dentro da própria página, sem obrigar a ir ao Chat.** Mundos, Avatars, Jogos 2D e Rebuild ganharam, no topo, o mesmo compositor do Chat (texto, anexos, opções da ferramenta e Run) — com o acompanhamento e o resultado aparecendo na seção. Em Mundos, Jogos 2D e Rebuild, os botões «Novo…» e «Criar com IA» levam ao compositor da seção; «Atualizar» (num jogo ou mundo) coloca o compositor em modo atualização (com «× Criar um novo» para sair). Os botões do resultado («Novo jogo», «Tentar de novo»…) voltam para a seção de onde a criação partiu; criar pelo Chat continua igual. Voltar a uma seção com uma criação dela em andamento retoma o acompanhamento. O Canvas já criava na própria página (modal «Novo canvas»).
+- A tela vazia do editor de Mundos aponta para o compositor da seção, e não mais para o Chat.
+
+### Testes
+- `tests/browser/sections_inline_ui.js`: cada seção cria e mostra o resultado sem sair dela (hash nunca vira `#/main`), «Atualizar» em modo atualização, Rebuild com aviso legal, e o Chat continua funcionando.
+
 ## [0.6.0] — 2026-11-06
 
 ### Adicionado
@@ -642,7 +651,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.1...HEAD
+[0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
