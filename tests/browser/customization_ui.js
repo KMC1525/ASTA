@@ -13,6 +13,7 @@ run('customization', async ({ open, api, check, base, browser }) => {
 
   // ---- tema
   check('cust:padrao-escuro', (await attr('data-theme')) === 'dark');
+  await page.locator('.tabs button[data-tab="appearance"]').click(); await page.waitForTimeout(400);
   await page.locator('.themecard[data-theme="light"]').click(); await page.waitForTimeout(500);
   check('cust:tema-claro-no-html', (await attr('data-theme')) === 'light');
   check('cust:fundo-claro', (await page.evaluate(() => getComputedStyle(document.body).backgroundColor)) === 'rgb(246, 246, 244)');
@@ -51,7 +52,8 @@ run('customization', async ({ open, api, check, base, browser }) => {
   check('cust:reduzir-animacoes', (await attr('data-motion')) === 'reduce' && (await page.evaluate(() => getComputedStyle(document.querySelector('.btn')).transitionDuration)).startsWith('1e-06'));
   await page.locator('select').filter({ has: page.locator('option', { hasText: 'Reduce animations' }) }).selectOption('auto'); await page.waitForTimeout(200);
 
-  // ---- barra lateral e tela inicial
+  // ---- barra lateral e tela inicial (aba «Seções e atalhos»)
+  await page.locator('.tabs button[data-tab="sections"]').click(); await page.waitForTimeout(400);
   await page.locator('label.check', { hasText: '2D games' }).locator('input').uncheck(); await page.waitForTimeout(500);
   check('cust:barra-sem-jogos', (await page.locator('#side nav a[href="#/games"]').count()) === 0 && (await page.locator('#side nav a[href="#/avatars"]').count()) === 1);
   check('cust:principal-e-config-nunca-somem', (await page.locator('#side nav a[href="#/main"]').count()) === 1 && (await page.locator('#side nav a[href="#/config"]').count()) === 1);
@@ -114,10 +116,11 @@ run('customization', async ({ open, api, check, base, browser }) => {
 
   // ---- exportar e restaurar
   await go('#/config');
-  await page.locator('.tabs button', { hasText: 'Appearance' }).click(); await page.waitForTimeout(400);
+  await page.locator('.tabs button[data-tab="data"]').click(); await page.waitForTimeout(400);
   const [dl] = await Promise.all([page.waitForEvent('download'), page.locator('.btn', { hasText: 'Export settings' }).click()]);
   const path = await dl.path(); const body = require('fs').readFileSync(path, 'utf8');
   check('cust:exporta-json-sem-segredos', JSON.parse(body).schema === 'asta.settings.v1' && !/"api_key"|"token"|"hf"/.test(body));
+  await page.locator('.tabs button[data-tab="appearance"]').click(); await page.waitForTimeout(400);
   await page.locator('.themecard[data-theme="light"]').click(); await page.waitForTimeout(300);
   await page.locator('.btn', { hasText: 'Reset appearance defaults' }).click(); await page.waitForSelector('.modal');
   await page.locator('.modal .btn.danger').click(); await page.waitForTimeout(1500);

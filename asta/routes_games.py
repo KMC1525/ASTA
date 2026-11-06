@@ -43,7 +43,7 @@ class GameRoutes:
             raise HttpError(400, "Anexe o ZIP do jogo (ou os arquivos de dados/scripts) para reconstruí-lo.")
 
         def work(job: Job) -> None:
-            RebuildPipeline(self.store, job.emit, lambda: job.cancelled).run({"attachment_ids": ids, "refine": body.get("refine") is not False})
+            RebuildPipeline(self.store, job.emit, lambda: job.cancelled).run({"attachment_ids": ids, "refine": (body["refine"] is not False) if "refine" in body else bool((self.store.get_settings().get("rebuild") or {}).get("refine", True))})
 
         job = self.app.jobs.start("game_rebuild", work)
         req.json({"job_id": job.id})

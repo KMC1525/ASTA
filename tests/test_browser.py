@@ -299,6 +299,9 @@ class BrowserTests(unittest.TestCase):
         m = make_media(d)
         self.run_script("studio_ui.js", {"ASTA_AE_VIDEO": str(m["game"]), "ASTA_AE_MUSIC": str(m["music"])})
 
+    def test_25_config_sections_groups_defaults_and_reset(self):
+        self.run_script("config_sections_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -5,6 +5,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.9.0] — 2026-11-06
+
+### Alterado
+- **Configuração reorganizada**: 16 abas em 4 grupos — **Geral** (Aparência, Seções e atalhos), **IA e modelos** (Provedores, Mídia, Voz, Modelos locais), **Seções** (Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Rebuild) e **Sistema** (Desempenho, Dados e backup, Sistema). Cada aba de seção tem um cabeçalho com link para abrir a seção e o botão «Restaurar padrões desta seção».
+- «Criativo» foi dividida em **Avatars** e **Jogos 2D**; a aba Aparência ficou só com tema, leitura/conforto e idioma; a de Sistema só com hardware e versão. Os links antigos (`tab=creative`) continuam funcionando.
+
+### Adicionado
+- **Padrões por seção** (valem sempre que você cria algo novo): **Studio** (tipo de projeto, duração, estilo, formato, idioma, movimento, revisões, voz, legendas, música, qualidade/áudio da exportação, estilo e duração da edição automática), **Rebuild** (revisão por IA ligada/desligada e limite de chamadas ao modelo), **Canvas** (modelo inicial).
+- **Seções e atalhos**: o que aparece na barra lateral (incluindo Studio e Rebuild), a página inicial, atalhos de teclado e tecla de envio, com botões de salto para a aba de cada seção.
+- **Dados e backup**: pasta de dados (e o comando `asta folder`), exportar/importar configurações (agora com os padrões de Studio, Rebuild, Canvas e Desempenho) e «Restaurar tudo ao padrão». **Desempenho** mostra o estado do núcleo Rust.
+- O servidor guarda `studio`, `rebuild` e `canvas` nas configurações; entram em exportar/importar e restaurar (nunca `chat`, que guarda chaves da busca).
+
 ## [0.8.6] — 2026-11-06
 
 ### Alterado

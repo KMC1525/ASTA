@@ -41,7 +41,7 @@ class RebuildPipeline(Runner):
         self.provider = build_provider(settings, pid, self.store.models_dir)
         self.gen = {"temperature": 0.2, "max_tokens": 1800, "content": "free"}
         self.language = prompts.lang_name(spec.get("language") or "pt-BR")
-        ref = R.Refiner(self._agent, self._step, self._check, self.warnings.append)
+        ref = R.Refiner(self._agent, self._step, self._check, self.warnings.append, max_calls=max(5, min(200, int((settings.get("rebuild") or {}).get("max_calls") or R.MAX_CALLS))))
         try:
             stats = ref.run(spec, info)
         except Exception as exc:  # noqa: BLE001  (o modelo caiu/credencial: a conversão determinística já está pronta e segue)

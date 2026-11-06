@@ -13,5 +13,9 @@ export function isSendKey(e) {
 export const sendHint = () => (ui().send_key === 'ctrl_enter' ? 'Ctrl+Enter' : 'Enter');
 
 // Abas da Configuração (a paleta de comandos também leva a cada uma)
-export const CONFIG_TABS = [['providers', 'Provedores'], ['media', 'Mídia'], ['chat', 'Chat'], ['generation', 'Geração'], ['creative', 'Avatars e jogos'], ['voice', 'Voz'], ['local', 'Modelos locais'], ['appearance', 'Aparência'], ['system', 'Sistema']];
+export const CONFIG_GROUPS = [['general', 'Geral'], ['ai', 'IA e modelos'], ['sections', 'Seções'], ['system', 'Sistema']];
+export const CONFIG_TABS = [['appearance', 'Aparência', 'general'], ['sections', 'Seções e atalhos', 'general'],
+  ['providers', 'Provedores', 'ai'], ['media', 'Mídia', 'ai'], ['voice', 'Voz', 'ai'], ['local', 'Modelos locais', 'ai'],
+  ['chat', 'Chat', 'sections'], ['generation', 'Mundos 3D', 'sections'], ['avatars', 'Avatars', 'sections'], ['games', 'Jogos 2D', 'sections'], ['canvas', 'Canvas', 'sections'], ['studio', 'Studio', 'sections'], ['rebuild', 'Rebuild', 'sections'],
+  ['performance', 'Desempenho', 'system'], ['data', 'Dados e backup', 'system'], ['system', 'Sistema', 'system']];
 export const DRAFT_PREFIX = 'asta.draft.';  // rascunhos do chat dos avatares (por conversa, na sessão do navegador)

@@ -111,7 +111,10 @@ function follow(host, jobId, o) {
 // ------------------------------------------------------------------------------------------ lista + criação
 async function renderList(root, ctx, meta) {
   const projects = await api('/api/studio/projects');
-  const m = { kind: 'single', dtype: 'shorts', target: 60, aspect: '9:16', style: 'realistic', style_custom: '', language: getLang() === 'pt' ? 'pt-BR' : 'en', motion: 'auto', captions: true, music: true, revisions: 1, voice: '', name: '' };
+  const D = (state.settings && state.settings.studio) || {};   /* padrões de Configuração → Studio */
+  const dflt = meta.durations.find((d) => d.id === D.duration_type) || meta.durations[0];
+  const m = { kind: D.kind === 'series' ? 'series' : 'single', dtype: dflt.id, target: D.target_seconds || dflt.default, aspect: D.aspect && D.aspect !== 'auto' ? D.aspect : dflt.aspect, aspectTouched: !!(D.aspect && D.aspect !== 'auto'), style: D.style || 'realistic', style_custom: D.style_custom || '',
+    language: D.language && D.language !== 'auto' ? D.language : (getLang() === 'pt' ? 'pt-BR' : 'en'), motion: D.motion || 'auto', captions: D.captions !== false, music: D.music !== false, revisions: Number.isInteger(D.revisions) ? D.revisions : 1, voice: D.voice || '', name: '' };
   const mode = { v: ctx.mode === 'autoedit' ? 'autoedit' : 'new' };
 
   // ---- novo projeto
@@ -138,7 +141,7 @@ async function renderList(root, ctx, meta) {
     h('div', { class: 'st-name' }, nameIn), composer.el);
 
   // ---- edição automática
-  const ae = { style: 'gameplay', target: 0, aspect: '16:9', bpm: 0, name: '' };
+  const ae = { style: D.autoedit_style || 'gameplay', target: D.autoedit_target || 0, aspect: '16:9', bpm: 0, name: '' };
   const aeHost = h('div'), aeBpm = h('input', { type: 'number', min: 60, max: 240, placeholder: 'BPM', id: 'ae-bpm', oninput: (e) => { ae.bpm = parseInt(e.target.value || '0', 10) || 0; } });
   const aeTarget = h('input', { type: 'number', min: 0, max: 21600, placeholder: t('auto'), id: 'ae-target', oninput: (e) => { ae.target = parseInt(e.target.value || '0', 10) || 0; } });
   const aeComposer = createComposer({ placeholder: t('Anexe os vídeos, imagens e áudios (vários) e diga o que quer: momentos, ritmo, tom, o que destacar…'), sendLabel: t('Editar'), sendTitle: t('Monta a edição automaticamente'), tools: [], onSend: () => runAuto() });
@@ -297,7 +300,8 @@ async function renderProject(root, ctx, meta, sub) {
   // ---------------------------------------------------------------- exportar
   function paintExport() {
     const ep = epOf();
-    const x = { mode: 'full', quality: '720p', format: 'm4a' };
+    const SD = (state.settings && state.settings.studio) || {};
+    const x = { mode: 'full', quality: SD.export_quality || '720p', format: SD.audio_format || 'm4a' };
     const out = h('div', { class: 'st-exp-out', id: 'st-exp-out' }), listEl = h('div', { class: 'st-exports', id: 'st-exports' });
     const modeBox = chips(['full', 'video', 'audio'].map((k) => [k, t(EXPORT_LABEL[k][0]), t(EXPORT_LABEL[k][1])]), x.mode, (v) => { x.mode = v; q.classList.toggle('hidden', v === 'audio'); f.classList.toggle('hidden', v !== 'audio'); }, 'modes');
     const q = h('div', null, h('label', { class: 'f' }, t('Qualidade')), select(meta.quality.map((v) => [v, v]), x.quality, (v) => { x.quality = v; }));

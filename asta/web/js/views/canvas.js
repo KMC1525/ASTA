@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { t } from '../i18n.js';
-import { go } from '../main.js';
+import { go, state } from '../main.js';
 import { confirmDialog, fill, fmtDate, h, icon, modal, popover, toast } from '../ui.js';
 
 // Sub-rotas: #/canvas (lista de canvases) · #/canvas/edit/<id> (editor)
@@ -25,7 +25,7 @@ async function renderList(root) {
 
   async function create(preset) {
     const meta = await api('/api/canvas-templates');
-    let tpl = preset || 'text_image';
+    let tpl = preset || (state.settings.canvas && state.settings.canvas.template) || 'text_image';
     const name = h('input', { placeholder: t('Nome do canvas') });
     const prompt = h('textarea', { placeholder: t('Ideia inicial (opcional): ela vira o primeiro prompt do modelo.'), rows: 2, style: { minHeight: '60px' } });
     const tpls = h('div', { class: 'cv-tpls' });

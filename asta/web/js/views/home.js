@@ -246,9 +246,9 @@ async function avatarDone(ev) {
 // ferramentas de criação do Chat (os ativadores): cada uma devolve a configuração do compositor — placeholder, opções, o que o Run faz
 // Rebuild: reconstrói um jogo Ren'Py / RPG Maker (ZIP anexado) nos motores 2D do ASTA — sem IA; o aviso legal aparece no fim.
 async function rebuildTool(root, project, carry, composer) {
-  const m = { refine: true };
+  const m = { refine: !(state.settings.rebuild && state.settings.rebuild.refine === false) };
   const refineBox = h('label', { class: 'tool', title: t('Uma equipe de agentes de IA (Perfilador → Polidor → Auditor) revisa só o TEXTO do jogo em etapas curtas, feita para modelos locais pequenos. A estrutura nunca muda. Sem IA configurada, só a limpeza automática roda.') },
-    h('input', { type: 'checkbox', checked: true, onchange: (e) => { m.refine = e.target.checked; } }), ' ', t('Revisar o texto com IA'));
+    h('input', { type: 'checkbox', checked: m.refine, onchange: (e) => { m.refine = e.target.checked; } }), ' ', t('Revisar o texto com IA'));
   const cfg = {
     placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [refineBox],
     onSend: async ({ ids }) => {

@@ -76,6 +76,15 @@ class StudioRoutes:
     def _meta_of(b: Dict[str, Any]) -> Dict[str, Any]:
         return {k: b[k] for k in META_FIELDS if k in b}
 
+    def _defaults(self) -> Dict[str, Any]:
+        d = dict((self.store.get_settings().get("studio") or {}))
+        out: Dict[str, Any] = {k: d[k] for k in ("kind", "duration_type", "target_seconds", "style", "style_custom", "language", "motion", "captions", "music", "revisions", "voice") if k in d}
+        if d.get("aspect") not in (None, "", "auto"):
+            out["aspect"] = d["aspect"]
+        if out.get("language") == "auto":
+            out.pop("language")
+        return out
+
     # ------------------------------------------------------------------ catálogo e projetos
     def r_meta(self, req) -> None:
         d = S.describe()
@@ -90,6 +99,8 @@ class StudioRoutes:
     def r_create(self, req) -> None:
         b = self._body(req)
         meta = self._meta_of(b)
+        for k, v in self._defaults().items():  # o que não veio no pedido usa o padrão de Configuração → Studio
+            meta.setdefault(k, v)
         meta["premise"] = text(b.get("premise") or b.get("prompt"), "", 4000)
         p = self.ss.create({**meta, "prompt": text(b.get("prompt"), "", 8000)})
         req.json(p, 201)
@@ -196,7 +207,7 @@ class StudioRoutes:
         running = self.app.jobs.running("studio-autoedit")
         if running:
             raise HttpError(409, json.dumps({"job_id": running.id}))
-        body = {"attachment_ids": ids, "prompt": text(b.get("prompt"), "", 4000), "style": b.get("style"), "target_seconds": b.get("target_seconds") or 0, "aspect": b.get("aspect"),
+        body = {"attachment_ids": ids, "prompt": text(b.get("prompt"), "", 4000), "style": b.get("style") or (self.store.get_settings().get("studio") or {}).get("autoedit_style"), "target_seconds": b.get("target_seconds") if b.get("target_seconds") is not None else (self.store.get_settings().get("studio") or {}).get("autoedit_target") or 0, "aspect": b.get("aspect"),
                 "bpm": b.get("bpm") or 0, "name": text(b.get("name"), "", 100), "project_id": pid, "language": text(b.get("language"), "pt-BR", 12)}
 
         def work(job: Job) -> None:

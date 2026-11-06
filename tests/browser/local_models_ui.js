@@ -3,7 +3,7 @@ const { run } = require('./_common.js');
 run('local-models', async ({ open, check }) => {
   const page = await open();
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForTimeout(400);
-  await page.locator('.tabs button').nth(1).click(); await page.waitForTimeout(600);
+  await page.locator('.tabs button[data-tab="media"]').click(); await page.waitForTimeout(600);
   const card = page.locator('.prov:has(.nm:has-text("Hugging Face local"))');
   await card.locator('.hd').click();
   check('local:aviso-de-que-nada-baixa-sozinho', (await card.innerText()).toLowerCase().includes('only downloads after your choice'));

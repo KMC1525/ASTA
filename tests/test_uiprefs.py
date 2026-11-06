@@ -111,6 +111,27 @@ class ExportImportTests(ServerCase):
         self.assertNotIn("evil", s["active"])
         self.assertNotIn("sk-", json.dumps(r))  # a resposta nunca devolve segredos
 
+    def test_section_defaults_exist_reset_export_and_apply(self):
+        """Studio, Rebuild, Canvas e Desempenho têm padrões próprios: entram no backup, no «restaurar» e valem ao criar algo."""
+        s = self.store.get_settings()
+        self.assertEqual((s["studio"]["duration_type"], s["rebuild"]["refine"], s["canvas"]["template"]), ("shorts", True, "text_image"))
+        self.assertEqual(self.c.json("PUT", "/api/settings", {"studio": {"style": "anime", "aspect": "1:1", "language": "en", "revisions": 0, "autoedit_style": "documentary"},
+                                                              "rebuild": {"max_calls": 25}})[0], 200)
+        st, p = self.c.json("POST", "/api/studio/projects", {"name": "A", "prompt": "x"})
+        self.assertEqual((st, p["style"], p["aspect"], p["language"], p["revisions"]), (201, "anime", "1:1", "en", 0))
+        st, p = self.c.json("POST", "/api/studio/projects", {"name": "B", "prompt": "x", "style": "cartoon"})
+        self.assertEqual(p["style"], "cartoon")  # o que veio no pedido manda
+        data = json.loads(self.c.req("GET", "/api/settings/export")[2])
+        self.assertEqual(data["settings"]["studio"]["style"], "anime")
+        self.assertEqual(data["settings"]["rebuild"]["max_calls"], 25)
+        self.assertEqual(self.c.json("POST", "/api/settings/import", {"schema": "asta.settings.v1", "settings": {"studio": {"style": "realistic"}, "canvas": {"template": "x"}}})[0], 200)
+        self.assertEqual(self.store.get_settings()["studio"]["style"], "realistic")
+        self.assertEqual(self.store.get_settings()["studio"]["duration_type"], "shorts")  # campo ausente continua no padrão
+        for sec in ("studio", "rebuild", "canvas", "performance"):
+            self.assertEqual(self.c.json("POST", "/api/settings/reset", {"section": sec})[0], 200, sec)
+        self.assertEqual(self.store.get_settings()["rebuild"]["max_calls"], 40)
+        self.assertEqual(self.c.json("POST", "/api/settings/reset", {"section": "chat"})[0], 400)  # chat guarda chaves da busca
+
     def test_import_rejects_files_that_are_not_exports(self):
         for bad in ({"settings": {}}, {"schema": "outro", "settings": {}}, {"schema": "asta.settings.v1"}, ["x"], "texto"):
             self.assertEqual(self.c.json("POST", "/api/settings/import", bad)[0], 400, bad)

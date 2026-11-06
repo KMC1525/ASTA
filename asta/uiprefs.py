@@ -78,8 +78,8 @@ def normalize_ui(data: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- exportar / importar configurações (sem segredos)
 
 EXPORT_SCHEMA = "asta.settings.v1"
-EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "active")
-RESETTABLE = ("ui", "generation", "characters", "avatars", "games")  # voz tem chaves de API: não entra no "restaurar padrões"
+EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance", "active")
+RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
 _PROVIDER_FIELDS = ("base_url", "model", "vision", "n_ctx")  # nunca `api_key`
 
 
@@ -99,7 +99,7 @@ def import_patch(payload: Any) -> Dict[str, Any]:
         raise ValueError("Este arquivo não é uma exportação de configurações do ASTA.")
     src = payload["settings"]
     patch: Dict[str, Any] = {}
-    for key in ("generation", "characters", "avatars", "games"):
+    for key in ("generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance"):
         if isinstance(src.get(key), dict):
             patch[key] = src[key]
     if src.get("language") in LANGS:

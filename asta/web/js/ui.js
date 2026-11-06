@@ -34,6 +34,7 @@ const ICONS = {
   library: '<path d="M4 4h4v16H4zM10 4h4v16h-4z"/><path d="m16.4 5.2 3.8-.9 3 15-3.8.9z" transform="translate(-1 0)"/>',
   config: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   send: '<path d="M12 19V5M5 12l7-7 7 7"/>',
+  arrow: '<path d="M5 12h14M13 6l6 6-6 6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   x: '<path d="M6 6l12 12M18 6 6 18"/>',
   check: '<path d="m5 12 5 5 9-10"/>',

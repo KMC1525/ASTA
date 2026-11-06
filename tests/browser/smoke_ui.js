@@ -14,7 +14,7 @@ run('smoke', async ({ open, check }) => {
       await page.locator('.tabs button').nth(i).click(); await page.waitForTimeout(350);
       check(`${label}:config-aba-${i}`, (await page.locator('.errbox').count()) === 0);
     }
-    check(`${label}:abas-de-config`, tabs === 9);
+    check(`${label}:abas-de-config`, tabs === 16);
     await page.close();
   }
   const nav = await open();

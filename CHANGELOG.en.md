@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-11-06
+
+### Changed
+- **Configuration reorganized**: 16 tabs in 4 groups — **General** (Appearance, Sections and shortcuts), **AI and models** (Providers, Media, Voice, Local models), **Sections** (Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Rebuild) and **System** (Performance, Data and backup, System). Each section tab has a header with a link to open the section and a "Reset this section's defaults" button.
+- "Creative" was split into **Avatars** and **2D games**; Appearance now holds only theme, reading/comfort and language; System only hardware and version. Old links (`tab=creative`) keep working.
+
+### Added
+- **Per-section defaults** (applied whenever you create something new): **Studio** (project type, duration, style, aspect, language, motion, revisions, voice, captions, music, export quality/audio format, auto-edit style and duration), **Rebuild** (AI review on/off and the model-call limit), **Canvas** (starting template).
+- **Sections and shortcuts**: what shows in the sidebar (including Studio and Rebuild), the start page, keyboard shortcuts and send key, with jump buttons to each section's tab.
+- **Data and backup**: data folder (and the `asta folder` command), export/import settings (now including the Studio, Rebuild, Canvas and Performance defaults) and "Reset everything to default". **Performance** shows the Rust core status.
+- The server stores `studio`, `rebuild` and `canvas` in the settings; they are part of export/import and reset (never `chat`, which holds search keys).
+
 ## [0.8.6] — 2026-11-06
 
 ### Changed

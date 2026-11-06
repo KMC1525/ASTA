@@ -1,20 +1,37 @@
 import { api, events } from '../api.js';
 import { t } from '../i18n.js';
-import { refreshState, renderSide, saveSettings, state } from '../main.js';
+import { go, refreshState, renderSide, saveSettings, state } from '../main.js';
 import { accentSwatches, themeCards } from '../appearance.js';
-import { CONFIG_TABS, ui } from '../prefs.js';
+import { CONFIG_GROUPS, CONFIG_TABS, ui } from '../prefs.js';
 import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
 import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 
 export default async function render(root, ctx) {
-  let tab = ctx.tab || 'providers';
-  const body = h('div'), tabs = h('div', { class: 'tabs' });
+  let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers');   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
+  const body = h('div'), tabs = h('div', { class: 'tabs cfgtabs' });
   const TABS = CONFIG_TABS;
-  const paintTabs = () => tabs.replaceChildren(...TABS.map(([id, l]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l))));
-  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); const fn = { providers, media, chat, generation, creative, voice, local, appearance, system }[tab]; body.replaceChildren(await fn()); };
-  root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Provedores de IA, mídia, voz e modelos locais: configure uma vez e use em tudo.')))), tabs, body));
+  const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
+    ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
+  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, system };
+  const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
+  root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
 }
+
+// peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
+const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
+const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', rebuild: 'Rebuild' };
+function secHead(tab, resets) {
+  const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
+    if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
+    try { for (const sec of resets) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); toast(t('Padrões restaurados'), 'ok'); go('config', { tab }); } catch (e) { toast(e.message, 'err'); }
+  } }, icon('refresh', 13), t('Restaurar padrões desta seção')) : null;
+  return h('div', { class: 'cfg-sechead' }, h('span', { class: 'muted small' }, t('Os padrões abaixo valem sempre que você cria algo nesta seção.')), h('span', { class: 'grow' }),
+    SEC_ROUTE[tab] ? h('a', { class: 'btn sm', href: '#/' + SEC_ROUTE[tab], onclick: () => { state.ctx = {}; } }, icon('arrow', 13), t('Abrir {s}', { s: t(SEC_LABEL[tab]) })) : null, reset);
+}
+const saveRow = (fn) => h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn primary', type: 'button', id: 'cfg-save', onclick: async () => { try { await fn(); toast(t('Salvo'), 'ok'); } catch (e) { toast(e.message, 'err'); } } }, icon('check', 15), t('Salvar')));
+const numInput = (obj, key, min, max, step) => h('input', { type: 'number', min, max, step: step || 1, value: obj[key], oninput: (e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) obj[key] = v; } });
 
 // ---------------------------------------------------------------------------------- provedores
 async function providers() {
@@ -132,7 +149,7 @@ function lmStudioBox(p, draft, getModelInput) {
 // ---------------------------------------------------------------------------------- geração
 async function generation() {
   const g = JSON.parse(JSON.stringify(state.settings.generation)), c = JSON.parse(JSON.stringify(state.settings.characters));
-  const wrap = h('div', null,
+  const wrap = h('div', null, secHead('generation', ['generation', 'characters']),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Geração dos mundos')),
       h('div', { class: 'grid2' }, field(t('Perspectiva padrão'), seg([['first', t('1ª pessoa')], ['third', t('3ª pessoa')]], g.perspective, (v) => { g.perspective = v; })),
         field(t('Conteúdo'), seg([['free', t('Livre (SFW + NSFW)')], ['sfw', 'SFW']], g.content, (v) => { g.content = v; }), t('“Livre”: o ASTA não adiciona filtros próprios. O provedor escolhido ainda pode ter os dele. Conteúdo sexual envolvendo menores nunca é permitido.'))),
@@ -176,7 +193,7 @@ async function chat() {
       results.replaceChildren(h('div', { class: 'ok small' }, '✓ ' + t('Funcionando — motor: {n}', { n: r.engine })), ...r.sources.map((x) => h('div', { class: 'small' }, h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title), h('span', { class: 'dim' }, ' — ' + x.host))));
     } catch (e) { results.replaceChildren(h('div', { class: 'errbox' }, e.message)); }
   };
-  return h('div', null,
+  return h('div', null, secHead('chat', null),
     h('p', { class: 'muted', style: { marginTop: 0 } }, t('Ajustes da tela Chat. O modelo e o provedor se escolhem no botão ao lado do Run; aqui ficam o tamanho das respostas, a memória da conversa, o tempo de pensamento e a busca na web.')),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Respostas')),
       h('div', { class: 'grid2' },
@@ -350,16 +367,7 @@ async function local() {
 async function appearance() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const card = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, title), ...kids);
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
-  const hidden = new Set(U().sidebar_hidden);
-  const importInput = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: async (e) => {
-    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
-    try {
-      const r = await api('/api/settings/import', { method: 'POST', body: JSON.parse(await f.text()) });
-      toast(t('Configurações importadas: {n}.', { n: r.imported.join(', ') }), 'ok'); await refreshState(); location.reload();
-    } catch (er) { toast(er instanceof SyntaxError ? t('Este arquivo não é um JSON válido.') : er.message, 'err'); }
-  } });
+  const card = cfgCard;
   return h('div', null,
     card(t('Tema'), themeCards(U().theme, (v) => save({ theme: v })),
       h('div', { class: 'field', style: { marginTop: '16px', marginBottom: 0 } }, h('label', { class: 'f' }, t('Cor de destaque')), accentSwatches(U().accent, (v) => save({ accent: v }, true)),
@@ -371,44 +379,153 @@ async function appearance() {
       h('div', { class: 'grid2' },
         field(t('Fonte'), seg([['system', t('Sistema')], ['serif', t('Serifada')], ['mono', t('Monoespaçada')]], U().font, (v) => save({ font: v }))),
         field(t('Texto do chat dos avatares'), seg([['small', t('Pequeno')], ['medium', t('Médio')], ['large', t('Grande')]], U().chat_size, (v) => save({ chat_size: v })))),
-      field(t('Animações'), select([['auto', t('Automático (segue o sistema)')], ['reduce', t('Reduzir animações')], ['full', t('Sempre animar')]], U().motion, (v) => save({ motion: v })), t('“Reduzir” desliga transições e animações — bom para sensibilidade a movimento.'))),
-    card(t('Uso'),
-      h('div', { class: 'grid2' },
-        field(t('Idioma da interface'), select([['auto', t('Automático (navegador)')], ['pt-BR', 'Português (Brasil)'], ['en', 'English']], state.settings.language, async (v) => { await saveSettings({ language: v }); location.reload(); })),
-        field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
-          t('Com Enter, use Shift+Enter para quebrar a linha; com Ctrl+Enter, o Enter quebra a linha. Vale para o chat e para a caixa de criação.'))),
-      field(t('Tela inicial'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })),
-        t('Qual tela abre quando você entra no ASTA.')),
-      checkbox(t('Atalhos de teclado (Alt+1…7, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
+      field(t('Animações'), select([['auto', t('Automático (segue o sistema)')], ['reduce', t('Reduzir animações')], ['full', t('Sempre animar')]], U().motion, (v) => save({ motion: v })), t('“Reduzir” desliga transições e animações — bom para quem sente enjoo com movimento ou usa um computador mais fraco.'))),
+    card(t('Idioma'),
+      field(t('Idioma da interface'), select([['auto', t('Automático (navegador)')], ['pt-BR', 'Português (Brasil)'], ['en', 'English']], state.settings.language, async (v) => { await saveSettings({ language: v }); location.reload(); }),
+        t('Os textos do terminal (asta, asta update, instaladores) seguem o idioma do computador; para forçar um, use ASTA_LANG=pt ou ASTA_LANG=en.'))),
+    card(t('Padrões da aparência'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta o tema, as cores e o conforto de leitura ao original. Suas chaves, avatares e projetos não mudam.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', onclick: () => window.ASTA_WELCOME && window.ASTA_WELCOME() }, t('Rever as boas-vindas')), h('span', { class: 'grow' }),
+        h('button', { class: 'btn sm danger', onclick: async () => { if (await confirmDialog(t('Voltar a aparência e as preferências de uso ao padrão? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar'))) { await api('/api/settings/reset', { method: 'POST', body: { section: 'ui' } }); await refreshState(); location.reload(); } } }, t('Restaurar padrões da aparência')))));
+}
+
+// ---------------------------------------------------------------------------------- seções e atalhos
+async function sections() {
+  const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
+  const U = () => ui();
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const hidden = new Set(U().sidebar_hidden);
+  const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
+  return h('div', null,
+    cfgCard(t('Barra lateral'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
+      h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
+    cfgCard(t('Tela inicial'),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+    cfgCard(t('Teclado'),
+      checkbox(t('Atalhos de teclado (Alt+1…9, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
+      field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
+        t('Com Enter, use Shift+Enter para quebrar a linha; com Ctrl+Enter, o Enter quebra a linha. Vale para o chat e para a caixa de criação.')),
       h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })) }, t('Ver atalhos')),
         h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })) }, icon('search', 13), t('Abrir a busca (Ctrl+K)')))),
-    card(t('Barra lateral'),
-      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
-      h('div', { class: 'row', style: { gap: '18px' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
-    card(t('Backup e padrões'),
-      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Leve suas preferências para outro computador. A exportação nunca inclui chaves de API nem tokens.')),
+    cfgCard(t('Configurações de cada seção'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
+      h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('generation', 'Mundos 3D', 'perspectiva, conteúdo, realismo, NPCs'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
+        jump('games', 'Jogos 2D', 'tamanho, revisão, criatividade'), jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
+        jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
+}
+
+// ---------------------------------------------------------------------------------- canvas
+async function canvasTab() {
+  let tpls = [];
+  try { tpls = (await api('/api/canvas-templates')).templates || []; } catch (e) { /* sem a lista, só o padrão */ }
+  const cv = JSON.parse(JSON.stringify(state.settings.canvas || { template: 'text_image' }));
+  const opts = (tpls.length ? tpls : [{ id: 'text_image', label: 'Texto → Imagem' }]).map((x) => [x.id, t(x.label)]);
+  return h('div', null, secHead('canvas', ['canvas']),
+    cfgCard(t('Novos canvases'), field(t('Modelo inicial'), select(opts, cv.template, (v) => { cv.template = v; }), t('O modelo que vem marcado ao criar um canvas novo. Os provedores de imagem, vídeo, som e voz ficam em Mídia.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: () => go('config', { tab: 'media' }) }, icon('config', 13), t('Provedores de mídia')))),
+    saveRow(() => saveSettings({ canvas: cv })));
+}
+
+// ---------------------------------------------------------------------------------- studio
+async function studioTab() {
+  const meta = await api('/api/studio/meta');
+  const st = JSON.parse(JSON.stringify(state.settings.studio));
+  const dt = () => meta.durations.find((d) => d.id === st.duration_type) || meta.durations[0];
+  const mi = h('input', { type: 'number', min: 0, max: 360, id: 'cs-min', value: Math.floor(st.target_seconds / 60) }), si = h('input', { type: 'number', min: 0, max: 59, id: 'cs-sec', value: Math.round(st.target_seconds % 60) });
+  const setT = () => { st.target_seconds = Math.max(meta.limits.min_seconds, Math.min(meta.limits.max_seconds, (parseInt(mi.value || '0', 10) || 0) * 60 + (parseInt(si.value || '0', 10) || 0))); };
+  mi.addEventListener('input', setT); si.addEventListener('input', setT);
+  const custom = h('textarea', { rows: 2, id: 'cs-style-custom', placeholder: t('Descreva o visual: ex. aquarela suave, cores pastel, traço de lápis…'), oninput: (e) => { st.style_custom = e.target.value; } }, st.style_custom);
+  const cb = (label, key) => checkbox(label, st[key] !== false, (v) => { st[key] = v; });
+  const styleSel = select(meta.styles.map((x) => [x.id, t(x.label)]), st.style, (v) => { st.style = v; custom.classList.toggle('hidden', v !== 'custom'); });
+  custom.classList.toggle('hidden', st.style !== 'custom');
+  return h('div', null, secHead('studio', ['studio']),
+    cfgCard(t('Projeto novo'),
+      h('div', { class: 'grid2' }, field(t('Tipo de projeto'), seg([['single', t('Único')], ['series', t('Série')]], st.kind, (v) => { st.kind = v; })),
+        field(t('Tipo de duração'), select(meta.durations.map((d) => [d.id, t(d.label) + ' — ' + t(d.hint)]), st.duration_type, (v) => { st.duration_type = v; }))),
+      field(t('Duração padrão'), h('div', { class: 'st-time' }, mi, h('span', null, 'min'), si, h('span', null, 's')), t('Cada projeto novo começa com esta duração; dá para mudar na hora de criar.')),
+      h('div', { class: 'grid2' }, field(t('Estilo visual'), styleSel), field(t('Formato'), select([['auto', t('Automático (pelo tipo de duração)')]].concat(meta.aspects.map((a) => [a, a])), st.aspect, (v) => { st.aspect = v; })))
+      , custom,
+      field(t('Idioma dos vídeos'), select([['auto', t('Igual ao da interface')], ['pt-BR', 'Português (BR)'], ['en', 'English']], st.language, (v) => { st.language = v; }))),
+    cfgCard(t('Geração'),
+      h('div', { class: 'grid2' }, field(t('Movimento dos planos'), select([['auto', t('Leve: imagem com zoom e pan (Ken Burns)')], ['video', t('Modelo de vídeo em cada plano (mais lento e caro)')]], st.motion, (v) => { st.motion = v; })),
+        field(t('Revisão de cada cena'), select([[0, t('Sem revisão')], [1, t('1 rodada de correção')], [2, t('2 rodadas de correção')]], st.revisions, (v) => { st.revisions = parseInt(v, 10); }))),
+      field(t('Voz da narração (id/nome do provedor)'), h('input', { value: st.voice, placeholder: t('automático'), oninput: (e) => { st.voice = e.target.value.trim(); } })),
+      h('div', { class: 'row', style: { gap: '18px' } }, cb(t('Legendas'), 'captions'), cb(t('Música de fundo'), 'music'))),
+    cfgCard(t('Exportação'),
+      h('div', { class: 'grid2' }, field(t('Qualidade do vídeo'), select(meta.quality.map((q) => [q, q]), st.export_quality, (v) => { st.export_quality = v; })),
+        field(t('Formato do áudio'), select(meta.audio_formats.map((q) => [q, q.toUpperCase()]), st.audio_format, (v) => { st.audio_format = v; })))),
+    cfgCard(t('Edição automática'),
+      h('div', { class: 'grid2' }, field(t('Estilo padrão'), select(meta.edit_styles.map((x) => [x.id, t(x.label)]), st.autoedit_style, (v) => { st.autoedit_style = v; })),
+        field(t('Duração alvo (segundos; 0 = automática)'), numInput(st, 'autoedit_target', 0, 21600, 5)))),
+    saveRow(async () => { setT(); await saveSettings({ studio: st }); }));
+}
+
+// ---------------------------------------------------------------------------------- rebuild
+async function rebuildTab() {
+  const rb = JSON.parse(JSON.stringify(state.settings.rebuild));
+  return h('div', null, secHead('rebuild', ['rebuild']),
+    cfgCard(t('Revisão do texto por IA'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Depois de reconstruir, o Perfilador, o Polidor e o Auditor revisam só o TEXTO do jogo (erros de digitação, pontuação, nomes genéricos), sem mudar a estrutura. Sem IA configurada, só a limpeza automática roda.')),
+      checkbox(t('Revisar o texto com IA (marcado por padrão no Rebuild)'), rb.refine !== false, (v) => { rb.refine = v; }),
+      field(t('Limite de chamadas ao modelo por reconstrução'), numInput(rb, 'max_calls', 5, 200, 5), t('Menos chamadas = mais rápido e barato; com modelos locais pequenos, 20 a 40 costuma bastar.'))),
+    cfgCard(t('O que o Rebuild lê'),
+      h('p', { class: 'muted small', style: { margin: 0 } }, t("Ren'Py (scripts .rpy) e RPG Maker 2000, 2003, XP, VX, VX Ace, MV e MZ. Só a estrutura é reconstruída; a arte e o áudio originais nunca são lidos nem copiados. Só para uso pessoal: não publique o resultado na Steam nem em outras plataformas."))),
+    saveRow(() => saveSettings({ rebuild: rb })));
+}
+
+// ---------------------------------------------------------------------------------- desempenho (modo leve + Rust)
+async function performance() {
+  const pf = Object.assign({ mode: 'auto', idle_unload_min: 10 }, state.settings.performance || {});
+  const nat = state.native || {};
+  const hw = state.hardware;
+  const cmd = (label, text) => h('div', { class: 'field' }, h('label', { class: 'f' }, label), h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13))));
+  return h('div', null, secHead('performance', ['performance']),
+    cfgCard(t('Desempenho'),
+      h('div', { class: 'grid2' },
+        field(t('Modo'), select([['auto', t('Automático (conforme o hardware)')], ['light', t('Leve — menos RAM/VRAM')], ['balanced', t('Equilibrado')], ['max', t('Máximo')]], pf.mode, async (v) => { pf.mode = v; await saveSettings({ performance: pf }); toast(t('Salvo'), 'ok'); }),
+          t('Leve: limita a janela de contexto, comprime o cache de atenção, descarrega modelos ociosos e usa menos memória de vídeo nos modelos de imagem/vídeo.')),
+        field(t('Descarregar modelos ociosos após (min)'), h('input', { type: 'number', min: 0, max: 1440, value: pf.idle_unload_min, onchange: async (e) => { pf.idle_unload_min = Math.max(0, parseInt(e.target.value || '0', 10)); await saveSettings({ performance: pf }); toast(t('Salvo'), 'ok'); } }), t('0 = nunca. No modo leve o limite é de até 3 min.'))),
+      h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('Seu hardware: {t}', { t: hw.tier }) + ' · ' + hw.cpus + ' CPU · ' + (hw.ram_gb ? hw.ram_gb + ' GB RAM' : '—') + ' · ' + (hw.gpu || t('não detectada (NVIDIA)')))),
+    cfgCard(t('Núcleo Rust'),
+      h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Núcleo Rust')), h('dd', null, nat.active ? h('span', { class: 'chip on' }, t('ativo')) : h('span', { class: 'muted' }, t('inativo — usando Python puro'))),
+        h('dt', null, 'Rust (cargo)'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)'))),
+      h('p', { class: 'muted small' }, t('O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Os instaladores e o “asta update” instalam e atualizam o Rust sozinhos; para fazer agora, rode no terminal:')),
+      cmd(t('Instalar/atualizar o Rust e compilar o núcleo'), 'asta native setup')));
+}
+
+// ---------------------------------------------------------------------------------- dados e backup
+async function data() {
+  const cmd = (label, text) => h('div', { class: 'field' }, h('label', { class: 'f' }, label), h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13))));
+  const importInput = h('input', { type: 'file', accept: '.json,application/json', class: 'hidden', onchange: async (e) => {
+    const f = e.target.files[0]; e.target.value = ''; if (!f) return;
+    try {
+      const r = await api('/api/settings/import', { method: 'POST', body: JSON.parse(await f.text()) });
+      toast(t('Configurações importadas: {n}.', { n: r.imported.join(', ') }), 'ok'); await refreshState(); location.reload();
+    } catch (er) { toast(er instanceof SyntaxError ? t('Este arquivo não é um JSON válido.') : er.message, 'err'); }
+  } });
+  return h('div', null,
+    cfgCard(t('Seus dados'),
+      h('dl', { class: 'kv', style: { marginTop: 0 } }, h('dt', null, t('Pasta de dados')), h('dd', { class: 'mono small' }, state.home)),
+      h('p', { class: 'muted small' }, t('Conversas, projetos, mídias, modelos e configurações ficam só no seu computador. O ASTA, ao atualizar, nunca mexe nesta pasta.')),
+      cmd(t('Abrir a pasta no seu computador (terminal)'), 'asta folder')),
+    cfgCard(t('Backup das configurações'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Leve suas preferências (aparência, padrões de cada seção, desempenho) para outro computador. A exportação nunca inclui chaves de API nem tokens.')),
       h('div', { class: 'row' },
         h('button', { class: 'btn sm', onclick: async () => { const r = await fetch('/api/settings/export'); download('asta-configuracoes.json', await r.text()); toast(t('Configurações exportadas (sem chaves de API).'), 'ok'); } }, icon('download', 13), t('Exportar configurações')),
-        h('button', { class: 'btn sm', onclick: () => importInput.click() }, icon('upload', 13), t('Importar configurações')), importInput,
-        h('button', { class: 'btn sm', onclick: () => window.ASTA_WELCOME && window.ASTA_WELCOME() }, t('Rever as boas-vindas')),
-        h('span', { class: 'grow' }),
-        h('button', { class: 'btn sm danger', onclick: async () => { if (await confirmDialog(t('Voltar a aparência e as preferências de uso ao padrão? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar'))) { await api('/api/settings/reset', { method: 'POST', body: { section: 'ui' } }); await refreshState(); location.reload(); } } }, t('Restaurar padrões da aparência')))));
+        h('button', { class: 'btn sm', onclick: () => importInput.click() }, icon('upload', 13), t('Importar configurações')), importInput)),
+    cfgCard(t('Restaurar tudo'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
+      h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
+        if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+      } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 
 async function system() {
   const hw = state.hardware;
   const cmd = (label, text) => h('div', { class: 'field' }, h('label', { class: 'f' }, label), h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13))));
-  const pf = Object.assign({ mode: 'auto', idle_unload_min: 10 }, state.settings.performance || {});
-  const nat = state.native || {};
-  const perfCard = h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Desempenho')),
-    h('div', { class: 'grid2' },
-      field(t('Modo'), select([['auto', t('Automático (conforme o hardware)')], ['light', t('Leve — menos RAM/VRAM')], ['balanced', t('Equilibrado')], ['max', t('Máximo')]], pf.mode, async (v) => { pf.mode = v; await saveSettings({ performance: pf }); toast(t('Salvo'), 'ok'); }),
-        t('Leve: limita a janela de contexto, comprime o cache de atenção, descarrega modelos ociosos e usa menos memória de vídeo nos modelos de imagem/vídeo.')),
-      field(t('Descarregar modelos ociosos após (min)'), h('input', { type: 'number', min: 0, max: 1440, value: pf.idle_unload_min, onchange: async (e) => { pf.idle_unload_min = Math.max(0, parseInt(e.target.value || '0', 10)); await saveSettings({ performance: pf }); toast(t('Salvo'), 'ok'); } }), t('0 = nunca. No modo leve o limite é de até 3 min.'))),
-    h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Núcleo Rust')), h('dd', null, nat.active ? h('span', { class: 'chip on' }, t('ativo')) : h('span', { class: 'muted' }, t('inativo — usando Python puro'))),
-      h('dt', null, 'cargo'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)'))),
-    h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Para ativar: rode “asta native setup” no terminal (instala/atualiza o Rust com a sua permissão e compila o núcleo). Sem ele, tudo funciona igual em Python.')));
-  return h('div', null, perfCard,
+  return h('div', null,
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Seu hardware')),
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Sistema')), h('dd', null, hw.os + ' · ' + hw.arch), h('dt', null, 'CPU'), h('dd', null, t('{n} núcleos', { n: hw.cpus })),
         h('dt', null, 'RAM'), h('dd', null, hw.ram_gb ? hw.ram_gb + ' GB' : '—'), h('dt', null, 'GPU'), h('dd', null, hw.gpu || t('não detectada (NVIDIA)')),
@@ -550,10 +667,10 @@ function localModels(p, draft) {
 }
 
 // ---------------------------------------------------------------------------------- avatars e jogos 2D
-async function creative() {
-  const av = JSON.parse(JSON.stringify(state.settings.avatars)), g = JSON.parse(JSON.stringify(state.settings.games));
-  const num = (obj, key, min, max, step) => h('input', { type: 'number', min, max, step: step || 1, value: obj[key], oninput: (e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) obj[key] = v; } });
-  return h('div', null,
+async function avatars() {
+  const av = JSON.parse(JSON.stringify(state.settings.avatars));
+  const num = numInput;
+  return h('div', null, secHead('avatars', ['avatars']),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Avatars')),
       h('div', { class: 'grid2' },
         field(t('Conteúdo padrão ao criar avatars'), seg([['sfw', 'SFW'], ['nsfw', 'NSFW']], av.content, (v) => { av.content = v; }), t('Cada avatar tem a própria escolha. NSFW só vale para personagens adultos: menores de idade são sempre SFW e nunca viram par romântico.')),
@@ -563,9 +680,16 @@ async function creative() {
       h('div', { class: 'grid2' }, field(t('Memória de curto prazo (turnos)'), num(av, 'history_turns', 2, 80)), field(t('Memórias de longo prazo por avatar'), num(av, 'memory_limit', 5, 200))),
       h('div', { class: 'row' }, checkbox(t('Em grupo, os avatars conversam entre si sem você pedir'), av.auto_talk, (v) => { av.auto_talk = v; }), checkbox(t('Responder também por voz'), av.voice_reply, (v) => { av.voice_reply = v; })),
       h('div', { class: 'grid2' }, field(t('Máximo de falas seguidas entre avatars'), num(av, 'auto_talk_max', 1, 40), t('Depois disso eles esperam uma mensagem sua.')), field(t('Segundos entre falas autônomas'), num(av, 'auto_talk_delay', 1, 60)))),
+    saveRow(() => saveSettings({ avatars: av })));
+}
+
+async function games() {
+  const g = JSON.parse(JSON.stringify(state.settings.games));
+  const num = numInput;
+  return h('div', null, secHead('games', ['games']),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Jogos 2D')),
       h('div', { class: 'grid2' }, field(t('Tamanho padrão do jogo'), seg([['short', t('Curto')], ['medium', t('Médio')], ['long', t('Longo')]], g.length, (v) => { g.length = v; })),
         field(t('Rodadas de revisão'), select([['0', t('Nenhuma (mais rápido)')], ['1', '1'], ['2', '2']], String(g.revisions), (v) => { g.revisions = parseInt(v, 10); }), t('O agente Revisor pode pedir correções.'))),
       h('div', { class: 'grid2' }, field(t('Criatividade (temperatura)'), range(0, 1.5, 0.05, g.temperature, (v) => { g.temperature = v; })), field(t('Máximo de tokens por agente'), num(g, 'max_tokens', 1000, 32000, 500)))),
-    h('div', { class: 'row', style: { justifyContent: 'flex-end' } }, h('button', { class: 'btn primary', onclick: async () => { await saveSettings({ avatars: av, games: g }); toast(t('Salvo'), 'ok'); } }, icon('check', 15), t('Salvar'))));
+    saveRow(() => saveSettings({ games: g })));
 }

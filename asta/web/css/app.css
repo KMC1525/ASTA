@@ -279,6 +279,13 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 .swatches input[type=color]::-webkit-color-swatch-wrapper{padding:0}.swatches input[type=color]::-webkit-color-swatch{border:0;border-radius:50%}
 .swatches input[type=color]::-moz-color-swatch{border:0;border-radius:50%}
 
-/* a Configuração tem nove abas: página um pouco mais larga e as abas quebram de linha em vez de esconder as últimas */
+/* a Configuração tem 16 abas em 4 grupos: página um pouco mais larga e as abas quebram de linha em vez de esconder as últimas */
 .page.narrow.cfg{max-width:940px}
-.page.cfg .tabs{flex-wrap:wrap;overflow-x:visible}
+.page.cfg .tabs{flex-wrap:wrap;overflow-x:visible;align-items:center;row-gap:2px}
+.cfgtabs .tg{font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);opacity:.8;padding:0 6px 0 12px;flex-basis:auto}
+.cfgtabs .tg:first-child{padding-left:0}
+.cfgtabs button{padding:8px 10px}
+.cfg-sechead{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:14px}
+.cfg-jumps{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin-top:10px}
+.cfg-jump{display:flex;flex-direction:column;align-items:flex-start;gap:3px;text-align:left;background:var(--panel2,var(--panel));border:1px solid var(--line);border-radius:10px;padding:10px 12px;cursor:pointer;color:var(--text)}
+.cfg-jump:hover{border-color:var(--strong)}.cfg-jump span{font-size:12px;color:var(--muted)}
