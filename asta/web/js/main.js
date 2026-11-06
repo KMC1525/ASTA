@@ -8,7 +8,7 @@ import { h, icon, toast } from './ui.js';
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['rebuild', 'Rebuild', 'refresh'], ['canvas', 'Canvas', 'canvas'],
+  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'], ['rebuild', 'Rebuild', 'refresh'],
   ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {

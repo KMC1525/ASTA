@@ -16,7 +16,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - **Modo de desempenho** (*Configuração → Sistema → Desempenho*; `settings.performance`): Automático (pelo hardware), Leve, Equilibrado, Máximo. No Leve: janela de contexto limitada (valor definido pelo usuário sempre vence), `mmap` e lote menor, flash attention + cache KV de 8 bits, **descarga automática de modelos ociosos** (padrão 10 min; até 3 min no Leve) e, nos modelos locais de imagem/vídeo, fatias de atenção/VAE e descarga para a CPU. Opções que a versão instalada do llama-cpp-python não conhece são puladas.
 
 ### Alterado
-- **Nova seção «Rebuild» na barra lateral** (entre Jogos 2D e Canvas): lista só os jogos reconstruídos e tem o botão «Reconstruir um jogo». Pode ser ocultada em Configuração → Aparência como as demais; os atalhos Alt+N seguem a nova ordem.
+- **Nova seção «Rebuild» na barra lateral** (logo abaixo de Canvas): lista só os jogos reconstruídos e tem o botão «Reconstruir um jogo». Pode ser ocultada em Configuração → Aparência como as demais; os atalhos Alt+N seguem a nova ordem (Biblioteca e Configuração passam para Alt+7 e Alt+8).
 - `asta doctor` mostra o núcleo Rust e o modo de desempenho. O pacote inclui o código-fonte do núcleo (`native/Cargo.toml`, `native/src/*.rs`).
 - Roadmap: «reescrever o backend em Rust» virou «levar mais trechos críticos para o núcleo Rust».
 

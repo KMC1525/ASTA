@@ -18,7 +18,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Performance mode** (*Configuration → System → Performance*; `settings.performance`): Automatic (by hardware), Light, Balanced, Maximum. Light: capped context window (a user-set value always wins), `mmap` and a smaller batch, flash attention + 8-bit KV cache, **automatic unloading of idle models** (default 10 min; at most 3 min in Light) and, for local image/video models, attention/VAE slicing and CPU offload. Options the installed llama-cpp-python does not know are skipped.
 
 ### Changed
-- **New "Rebuild" section in the sidebar** (between 2D games and Canvas): lists only rebuilt games and has a "Rebuild a game" button. It can be hidden in Configuration → Appearance like the others; Alt+N shortcuts follow the new order.
+- **New "Rebuild" section in the sidebar** (right below Canvas): lists only rebuilt games and has a "Rebuild a game" button. It can be hidden in Configuration → Appearance like the others; Alt+N shortcuts follow the new order.
 - `asta doctor` shows the Rust core and the performance mode. The package ships the core's source (`native/Cargo.toml`, `native/src/*.rs`).
 - Roadmap: "rewrite the backend in Rust" became "move more hot paths to the Rust core".
 
