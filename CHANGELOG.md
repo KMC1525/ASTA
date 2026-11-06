@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.6] — 2026-11-06
+
+### Melhorado — Edição automática em camadas
+- **A edição automática não emenda tudo na mesma trilha.** Quando há um vídeo principal comprido e material curto (memes, reações, fotos, b-roll), o principal corre sozinho na **V1** e o curto vai para a **V2**: em **Gameplay** e **Tutorial** como janelinhas (*picture-in-picture*) que alternam os cantos; em **Documentário** e **Vlog** como planos de cobertura em tela cheia enquanto o som do principal continua. As sobreposições se espalham pela duração, sem encostar umas nas outras. Música e narração seguem nas trilhas A2/A1 e títulos na T1. Com vários vídeos de tamanho parecido a edição continua em sequência na V1, e os estilos de batida (Phonk, Clipe musical), Trailer e Fotos não usam camadas.
+- Corrigido: quando faltavam poucos décimos de segundo para o alvo, a edição acrescentava um corte inteiro e passava da duração; e, com poucos picos de volume, o Gameplay repetia o mesmo trecho em vez de usar o resto do vídeo.
+
 ## [0.12.5] — 2026-11-06
 
 ### Adicionado

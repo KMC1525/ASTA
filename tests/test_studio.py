@@ -353,7 +353,7 @@ class PlanQualityTests(unittest.TestCase):
 
     @staticmethod
     def inv(**extra):
-        v = {"id": "v", "name": "v", "kind": "video", "dur": 120.0, "has_audio": True, "loud": [(100.0, -5.0), (30.0, -8.0), (60.0, -9.0), (10.0, -12.0), (80.0, -13.0), (45.0, -14.0)] * 1, "changes": [20.0, 50.0, 90.0], "silences": [(5.0, 9.0), (40.0, 44.0)]}
+        v = {"id": "v", "name": "v", "kind": "video", "dur": 120.0, "has_audio": True, "loud": [(100.0, -5.0), (30.0, -8.0), (60.0, -9.0), (10.0, -12.0), (80.0, -13.0), (45.0, -14.0), (20.0, -15.0), (70.0, -16.0), (90.0, -17.0), (110.0, -18.0), (5.0, -19.0), (55.0, -20.0)], "changes": [20.0, 50.0, 90.0], "silences": [(5.0, 9.0), (40.0, 44.0)]}
         v.update(extra)
         return [v, {"id": "p", "name": "p", "kind": "image", "dur": 0.0, "has_audio": False, "loud": [], "changes": [], "silences": []},
                 {"id": "m", "name": "musica", "kind": "audio", "dur": 60.0, "has_audio": True, "loud": [], "changes": [], "silences": []}]
@@ -380,9 +380,33 @@ class PlanQualityTests(unittest.TestCase):
         roles = {"v": "footage", "p": "broll", "m": "music"}
         e = AE.plan_edl("documentary", self.inv(), roles, 60, {}, 0, 3, "t")
         ids = [g["asset"] for g in e["segments"]]
-        self.assertIn("p", ids)
         self.assertNotEqual(ids[0], "p")
+        self.assertEqual(ids.count("p"), 0)   # com um vídeo principal comprido, a foto não entra na V1: vira cobertura na V2
+        self.assertTrue(e["overlays"] and all(o["asset"] == "p" and o["mode"] == "cutaway" for o in e["overlays"]))
         self.assertTrue(all(g["scale"] >= 1.0 for g in e["segments"]))
+
+    def test_layers_short_material_goes_to_V2_and_the_main_footage_stays_alone_on_V1(self):
+        main = {"id": "v", "name": "v", "kind": "video", "dur": 120.0, "has_audio": True, "loud": [(float(x), -10.0) for x in range(5, 115, 9)], "changes": [], "silences": []}
+        meme = {"id": "m", "name": "meme", "kind": "video", "dur": 3.0, "has_audio": True, "loud": [], "changes": [], "silences": []}
+        pic = {"id": "p", "name": "p", "kind": "image", "dur": 0.0, "has_audio": False, "loud": [], "changes": [], "silences": []}
+        roles = {"v": "footage", "m": "broll", "p": "broll"}
+        g = AE.plan_edl("gameplay", [main, meme, pic], roles, 60, {}, 0, 1, "t")
+        self.assertTrue(all(s["asset"] == "v" for s in g["segments"]))              # a V1 é só o principal
+        ov = g["overlays"]
+        self.assertTrue(ov and {o["mode"] for o in ov} == {"pip"} and all(o["scale"] < 0.5 for o in ov))   # janelinhas nos cantos
+        self.assertEqual({o["asset"] for o in ov} <= {"m", "p"}, True)
+        starts = sorted((o["start"], o["start"] + o["dur"]) for o in ov)
+        self.assertTrue(all(a[1] <= b[0] for a, b in zip(starts, starts[1:])))      # sem sobreposição entre elas
+        self.assertTrue(all(0 <= a < g["total"] for a, _ in starts))
+        d = AE.plan_edl("documentary", [main, pic], {"v": "footage", "p": "broll"}, 60, {}, 0, 1, "t")
+        self.assertTrue(d["overlays"] and {o["mode"] for o in d["overlays"]} == {"cutaway"} and d["overlays"][0]["scale"] == 1.0)
+        # vários vídeos de tamanho parecido: continuam em sequência na V1 (nada de camadas à toa)
+        a, b = dict(main, id="a", dur=30.0), dict(main, id="b", dur=28.0)
+        s = AE.plan_edl("gameplay", [a, b], {"a": "footage", "b": "footage"}, 40, {}, 0, 1, "t")
+        self.assertEqual(s["overlays"], [])
+        self.assertEqual({x["asset"] for x in s["segments"]}, {"a", "b"})
+        # estilos sem camadas (batida) não sobrepõem
+        self.assertEqual(AE.plan_edl("phonk", [main, meme], {"v": "footage", "m": "broll"}, 30, {}, 140, 1, "t")["overlays"], [])
 
     def test_silence_cuts_keep_a_breathing_pad(self):
         pad = AE.EDIT_STYLES["vlog"]["pad"]
@@ -472,6 +496,27 @@ class AutoEditTests(TmpCase):
         sil = tools.silences(self.media["game"])
         for c in [c for c in e["timeline"]["clips"] if c["track"] == "t_v1"]:           # tutorial remove pausas: nenhum corte começa dentro de um silêncio longo
             self.assertFalse(any(s + 0.3 < c["in"] < en - 0.3 for s, en in sil), (c["in"], sil[:4]))
+
+    @needs_ff
+    def test_layered_edit_puts_memes_on_V2_and_renders_them_over_the_main_video(self):
+        from asta.studio.export import export_episode
+
+        meme = self.tmp / "meme_reacao.mp4"
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=d=3:s=160x120:r=24", "-f", "lavfi", "-i", "sine=f=500:d=3", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest", str(meme)], check=True)
+        self.media["meme"] = meme
+        r, p, e, ev = self.edit("gameplay", ("game", "music", "meme", "pic"), target_seconds=30)
+        tl = e["timeline"]
+        tracks = {t["id"]: t["name"] for t in tl["tracks"]}
+        by = {}
+        for c in tl["clips"]:
+            by.setdefault(tracks[c["track"]], []).append(c)
+        names = {a["id"]: a["name"] for a in p["assets"]}
+        self.assertTrue(all("game" in names[c["asset"]] for c in by["V1"]))           # a V1 é só o vídeo principal
+        self.assertTrue(by.get("V2"), tracks)                                         # memes e foto em outra camada
+        self.assertTrue(all(c["scale"] < 0.5 for c in by["V2"]))
+        self.assertIn("A2", by)                                                       # a música continua na própria trilha
+        out = export_episode(self.store, p["id"], e["id"], "video", "480p")
+        self.assertTrue(out)
 
     def test_roles_can_be_chosen_by_the_text_agents_and_bad_answers_are_ignored(self):
         self.store.save_settings({"active": {"generation": "openai"}})

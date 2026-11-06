@@ -31,11 +31,11 @@ from . import tools
 EDIT_STYLES: Dict[str, Dict[str, Any]] = {
     "gameplay": {"label": "Gameplay", "hint": "Melhores momentos (picos de volume), cortes rápidos e zoom nos destaques", "pace": (2.5, 6.0), "use": "loud", "fade": 0.0, "punch": 1.12, "punch_every": 3,
                  "grade": "vivid", "orig_vol": 1.0, "music_vol": 0.15, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": False,
-                 "hook": True, "chrono": True, "dedupe": True, "sfx_zoom": True,
+                 "hook": True, "chrono": True, "dedupe": True, "sfx_zoom": True, "layers": "pip",
                  "craft": "Abra com o melhor momento (gancho no 1º segundo); depois conte em ordem cronológica, cortando tempo morto; zoom só nos picos; música baixa para o áudio do jogo mandar."},
     "documentary": {"label": "Documentário", "hint": "Cortes longos e calmos, transições suaves, narração em destaque e música discreta", "pace": (5.0, 12.0), "use": "sequential", "fade": 0.5, "punch": 1.0, "punch_every": 0,
                     "grade": "cinematic", "orig_vol": 0.8, "music_vol": 0.14, "voice_vol": 1.0, "default_target": 180, "silence": True, "titles": True,
-                    "cutaway": 2, "dedupe": True, "pan": True, "pad": 0.25,
+                    "cutaway": 2, "dedupe": True, "pan": True, "pad": 0.25, "layers": "cutaway",
                     "craft": "Planos longos e calmos; entre cada 2 planos principais entra um plano de cobertura (b-roll); movimento lento de câmera nas imagens; música discreta que abaixa quando há narração."},
     "phonk": {"label": "Edit Phonk", "hint": "Cortes na batida, câmera lenta/rápida, zoom, filtro granulado e música no talo", "pace": None, "use": "grid", "fade": 0.0, "punch": 1.18, "punch_every": 2, "grade": "phonk",
               "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 30, "silence": False, "titles": False, "bpm": 140, "ramps": True,
@@ -47,11 +47,11 @@ EDIT_STYLES: Dict[str, Dict[str, Any]] = {
                 "craft": "Começa devagar e acelera até cortes bem curtos no clímax; cartelas de texto curtas; termina com uma cartela final com o título."},
     "vlog": {"label": "Vlog", "hint": "Corta o tempo morto, ritmo médio, cores quentes e música leve", "pace": (3.0, 8.0), "use": "sequential", "fade": 0.15, "punch": 1.0, "punch_every": 0, "grade": "warm",
              "orig_vol": 1.0, "music_vol": 0.1, "voice_vol": 1.0, "default_target": 120, "silence": True, "titles": False,
-             "cutaway": 3, "dedupe": True, "pad": 0.12, "pan": True,
+             "cutaway": 3, "dedupe": True, "pad": 0.12, "pan": True, "layers": "cutaway",
              "craft": "Jump cuts: corta pausas e hesitações deixando uma folga mínima na fala; um plano de cobertura a cada 3 cortes; cores quentes e música bem baixa."},
     "tutorial": {"label": "Tutorial", "hint": "Remove pausas, cortes longos e claros, sem efeitos", "pace": (8.0, 20.0), "use": "sequential", "fade": 0.0, "punch": 1.0, "punch_every": 0, "grade": "none",
                  "orig_vol": 1.0, "music_vol": 0.06, "voice_vol": 1.0, "default_target": 300, "silence": True, "titles": True,
-                 "dedupe": True, "pad": 0.2, "cutaway": 4,
+                 "dedupe": True, "pad": 0.2, "cutaway": 4, "layers": "pip",
                  "craft": "Clareza antes de estilo: tira pausas longas sem cortar a frase, cortes longos, sem efeitos, cartelas de passo, música quase inaudível."},
     "music_video": {"label": "Clipe musical", "hint": "Cortes no compasso da música, cores vivas", "pace": None, "use": "grid", "fade": 0.0, "punch": 1.08, "punch_every": 4, "grade": "vivid",
                     "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 90, "silence": False, "titles": False, "bpm": 120,
@@ -125,6 +125,10 @@ def _windows(a: Dict[str, Any], style: Dict[str, Any], lo: float, hi: float, dir
                 out.append((max(0.0, t - pace * 0.4), min(dur, t + pace * 0.6)))
         cuts = a.get("changes", [])
         out += [(max(0.0, c - 0.2), min(dur, c - 0.2 + pace)) for c in cuts]
+        t = 0.0
+        while t < dur - 0.3:  # sem picos/cortes suficientes: o resto do vídeo, em ordem, completa o material (só entra depois dos melhores momentos)
+            out.append((t, min(dur, t + pace)))
+            t += pace
     elif use in ("sequential",):
         bounds = [0.0] + [c for c in a.get("changes", []) if 0 < c < dur] + [dur]
         keep: List[Tuple[float, float]] = []
@@ -169,6 +173,16 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
     voice = [a for a in inv if roles.get(a["id"]) == "voiceover"]
     if not footage:
         raise ValueError("Não encontrei vídeo ou imagem para editar — anexe pelo menos uma filmagem ou foto.")
+    # Camadas: com um vídeo principal comprido e material curto (memes, reações, fotos, b-roll), o principal corre sozinho na V1 e o curto vira sobreposição na V2
+    # (janela flutuante «pip» ou plano de cobertura em tela cheia enquanto o som do principal continua) — em vez de tudo emendado na mesma trilha.
+    overlay_pool: List[Dict[str, Any]] = []
+    vids = [a for a in footage if a["kind"] == "video"]
+    if st.get("layers") and vids:
+        main = max(vids, key=lambda a: a["dur"])
+        short = [a for a in footage if a is not main and (a["kind"] == "image" or a["dur"] <= max(6.0, main["dur"] * 0.5))]
+        if short and main["dur"] >= 8.0:
+            overlay_pool = short
+            footage = [a for a in footage if a not in short]
     pace = st["pace"]
     fast = {"fast": 0.7, "slow": 1.4}.get(directives.get("pace"), 1.0)
     beat = 60.0 / float(bpm or st.get("bpm") or 120)
@@ -213,7 +227,7 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
         return any(u[0] == a["id"] and min(e0, u[2]) - max(s0, u[1]) > 0.5 * max(0.1, e0 - s0) for u in used)
 
     guard = 0
-    while t < target - 0.05 and guard < 4000:
+    while t < target - 0.4 and guard < 4000:   # sobra menos de 0,4 s: para (um corte inteiro a mais estouraria a duração)
         guard += 1
         if not cand:
             break
@@ -283,7 +297,33 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
             titles.append({"text": c[:90], "start": round(at, 2), "dur": 2.8 if i == 0 else 2.2})
     if st.get("endcard") and title and total > 6:
         titles.append({"text": title[:90], "start": round(max(0.0, total - 2.4), 2), "dur": 2.3})  # trailer: cartela final
-    return {"segments": segs, "total": total, "music": music, "voice": voice, "titles": titles, "style": style_id}
+    overlays = _plan_overlays(st, overlay_pool, total, rnd)
+    return {"segments": segs, "total": total, "music": music, "voice": voice, "titles": titles, "overlays": overlays, "style": style_id}
+
+
+def _plan_overlays(st: Dict[str, Any], pool: List[Dict[str, Any]], total: float, rnd: random.Random) -> List[Dict[str, Any]]:
+    """Sobreposições da V2: espalhadas pela duração, sem encostar umas nas outras. «pip»: janela pequena num canto (alterna os cantos); «cutaway»: tela cheia por cima da V1."""
+    if not pool or total < 6.0:
+        return []
+    mode = st.get("layers", "pip")
+    n = max(1, min(len(pool) * 2, int(total // (9.0 if mode == "cutaway" else 7.0))))
+    slot = (total - 2.0) / n
+    corners = [(0.52, -0.5), (-0.52, -0.5), (0.52, 0.5), (-0.52, 0.5)]
+    out: List[Dict[str, Any]] = []
+    for i in range(n):
+        a = pool[i % len(pool)]
+        dur = round(min(3.0 if a["kind"] == "image" else a["dur"], slot - 0.6, 6.0 if mode == "pip" else 5.0), 2)
+        if dur < 0.8:
+            continue
+        start = round(1.0 + i * slot + rnd.uniform(0.0, max(0.0, slot - dur - 0.3)), 2)
+        o = {"asset": a["id"], "in": 0.0, "dur": dur, "start": start, "mode": mode, "fade": 0.15, "volume": 0.9 if a["kind"] == "video" else 0.0, "mute": a["kind"] != "video"}
+        if mode == "pip":
+            cx, cy = corners[i % 4]
+            o.update(scale=0.38, x=cx, y=cy)
+        else:
+            o.update(scale=1.0, x=0.0, y=0.0)
+        out.append(o)
+    return out
 
 
 # ---------------------------------------------------------------------------------------------------- pipeline
@@ -439,6 +479,12 @@ class AutoEditPipeline(Runner):
                               "mute": s["mute"] or a["kind"] == "image", "volume": s["volume"], "fade_in": s["fade_in"], "fade_out": s["fade_out"], "scale": s["scale"], "x": s.get("x", 0.0), "y": s.get("y", 0.0), "filter": s["filter"], "fit": "cover"})
                 t += s["dur"]
             total = t
+            for i, o in enumerate(edl.get("overlays", [])):
+                if o["start"] >= total:
+                    continue
+                a = by[o["asset"]]
+                clips.append({"id": f"ov{i}", "track": tr["V2"], "asset": o["asset"], "label": a["name"][:40], "start": o["start"], "dur": round(min(o["dur"], total - o["start"]), 3), "in": o["in"],
+                              "mute": o["mute"], "volume": o["volume"], "fade_in": o["fade"], "fade_out": o["fade"], "scale": o["scale"], "x": o["x"], "y": o["y"], "fit": "contain" if o["mode"] == "pip" else "cover"})
             vt = 0.0
             for i, v in enumerate(edl["voice"]):
                 if vt >= total:

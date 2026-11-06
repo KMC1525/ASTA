@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.6] — 2026-11-06
+
+### Improved — Layered automatic editing
+- **Automatic editing no longer glues everything on the same track.** When there is a long main video and short material (memes, reactions, photos, b-roll), the main one runs alone on **V1** and the short material goes to **V2**: in **Gameplay** and **Tutorial** as small picture-in-picture windows alternating corners; in **Documentary** and **Vlog** as full-screen cutaways while the main video's sound keeps playing. Overlays are spread over the duration without touching each other. Music and narration stay on A2/A1 and titles on T1. With several videos of similar length the edit stays in sequence on V1, and the beat styles (Phonk, Music video), Trailer and Photos use no layers.
+- Fixed: when a few tenths of a second were left to the target the edit added a whole extra cut and overshot the duration; and, with few volume peaks, Gameplay repeated the same stretch instead of using the rest of the video.
+
 ## [0.12.5] — 2026-11-06
 
 ### Added
