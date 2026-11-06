@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.8.0] — 2026-11-06
+
+### Adicionado
+- **Rust opcional nos instaladores, no `asta` e no `asta update`.** Novo comando **`asta native setup`**: instala o Rust (rustup, perfil mínimo, toolchain estável, **na pasta do usuário, sem sudo**) se faltar, **atualiza** (`rustup update`) se já existir e **recompila** o núcleo rápido do ASTA — o mesmo núcleo (`asta_core`) e as bibliotecas que o `cargo` baixar, se um dia houver. Também `asta native install`, `asta native update`, `asta native build` e `asta native status`. O `install.sh`, o `install.ps1` e o `asta update` rodam esta etapa no fim (depois das bibliotecas e dos modelos) e **perguntam** no terminal (`ASTA_RUST=ask`, o padrão; instalar = padrão «não», atualizar o que já existe = padrão «sim»); `ASTA_RUST=yes` (ou `asta update --rust yes`) faz sem perguntar e `ASTA_RUST=no` pula. **Sem terminal o Rust nunca é instalado sem permissão** (só atualiza se já existe). Funciona também com `curl … | sh` (a pergunta lê o terminal de verdade). O `cargo`/`rustup` recém-instalados são achados mesmo fora do PATH (`~/.cargo/bin`, `CARGO_HOME`). Se faltar o compilador do sistema, o ASTA diz o que instalar (Linux: `build-essential`; macOS: `xcode-select --install`; Windows: Ferramentas de Build do Visual Studio). Tudo é opcional e nunca derruba a instalação.
+- **Textos do terminal no idioma do computador.** Tudo o que o terminal mostra — `asta`, `asta update`, `asta libs`, `asta models`, `asta native`, `asta doctor`, `--help` e os **instaladores** (`install.sh`, `install.ps1`) — aparece em **português ou inglês**, conforme o idioma do sistema (`LC_ALL`/`LC_MESSAGES`/`LANGUAGE`/`LANG`; macOS: idioma preferido; Windows: idioma da interface); qualquer outro idioma cai no inglês. `ASTA_LANG=pt|en` força um. O `asta` repassa o idioma ao instalador, então os dois falam igual. Novos: `asta/termi18n.py` e `asta/term_en.py`.
+
+### Alterado
+- O passo do Rust dos instaladores não depende mais de o `cargo` já estar no PATH: a lógica vive no `asta native setup` (uma só para Linux, macOS e Windows). `asta doctor` mostra a versão do Rust e o idioma do terminal; o cartão de Desempenho (Configuração → Sistema) aponta para o `asta native setup`.
+
+### Testes
+- `tests/test_terminal_lang.py`: detecção de idioma (variantes do português, prioridade das variáveis, `ASTA_LANG`, `C`/`POSIX`), toda mensagem do código tem tradução (e os mesmos `{campos}`), saída e `--help` por idioma, o instalador recebe o idioma e a escolha do Rust, `native setup` (sim/não/pergunta/sem terminal/falhas), `find_tool`, comandos `native` e `--rust`, `install.sh` (sintaxe, detecção de idioma, toda mensagem bilíngue) e `install.ps1` (mensagens bilíngues). Os testes de terminal existentes fixam `ASTA_LANG=pt`.
+
+### Limites conhecidos
+- O `install.ps1` foi escrito com cuidado e conferido por testes de estrutura, mas **não foi executado num Windows de verdade** nesta sessão (não há PowerShell aqui); o `install.sh` foi executado e testado. No Windows, compilar o núcleo exige as Ferramentas de Build do Visual Studio (o ASTA avisa).
+
 ## [0.7.1] — 2026-11-06
 
 ### Corrigido
@@ -706,7 +721,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.7.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/KMC1525/ASTA/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/KMC1525/ASTA/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3

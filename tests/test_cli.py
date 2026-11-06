@@ -236,7 +236,7 @@ class PythonInstallerTests(unittest.TestCase):
     def install(self, **env):
         import subprocess
 
-        e = {"PATH": str(self.bin), "HOME": str(self.tmp / "home"), "ASTA_APP_DIR": str(self.tmp / "app"), "ASTA_BIN_DIR": str(self.tmp / "ubin"), "ASTA_STEP": "python",
+        e = {"PATH": str(self.bin), "HOME": str(self.tmp / "home"), "ASTA_APP_DIR": str(self.tmp / "app"), "ASTA_BIN_DIR": str(self.tmp / "ubin"), "ASTA_LANG": "pt", "ASTA_STEP": "python",
              "PIP_NO_INDEX": "1", "PIP_DISABLE_PIP_VERSION_CHECK": "1", **env}
         (self.tmp / "home").mkdir(exist_ok=True)
         r = subprocess.run(["/bin/sh", str(self.ROOT / "install.sh")], capture_output=True, text=True, env=e, timeout=300)
@@ -336,13 +336,13 @@ class PythonInstallerTests(unittest.TestCase):
 
         code, out = self.run_full("0.2.9", models=None)  # sem ASTA_MODELS: o ASTA pergunta (sim/não) no terminal
         self.assertEqual(code, 0, out)
-        self.assertEqual(asta_calls(), ["models install --ask"])
+        self.assertEqual(asta_calls(), ["models install --ask", "native setup"])   # e, no fim, o Rust (pergunta/atualiza)
         self.stub_log.unlink()
         self.run_full("0.2.9", models="all")  # escolha explícita: baixa sem perguntar
-        self.assertEqual(asta_calls(), ["models install"])
+        self.assertEqual(asta_calls(), ["models install", "native setup"])
         self.stub_log.unlink()
         code, out = self.run_full("0.2.9", models="none")
-        self.assertEqual(asta_calls(), [])
+        self.assertEqual(asta_calls(), ["native setup"])   # o Rust é uma etapa à parte: ASTA_RUST=no a pula
         self.assertIn("pulados", out)
 
     def test_python_only_flag_stops_before_installing_asta(self):
@@ -350,7 +350,7 @@ class PythonInstallerTests(unittest.TestCase):
 
         self.with_python()
         r = subprocess.run(["/bin/sh", str(self.ROOT / "install.sh"), "--python-only"], capture_output=True, text=True,
-                           env={"PATH": str(self.bin), "HOME": str(self.tmp / "home"), "ASTA_APP_DIR": str(self.tmp / "app"), "ASTA_PYTHON": "keep", "PIP_NO_INDEX": "1"})
+                           env={"PATH": str(self.bin), "HOME": str(self.tmp / "home"), "ASTA_APP_DIR": str(self.tmp / "app"), "ASTA_LANG": "pt", "ASTA_PYTHON": "keep", "PIP_NO_INDEX": "1"})
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)
         self.assertIn("prontos", r.stdout)
         self.assertNotIn("Baixando e instalando ASTA", r.stdout)

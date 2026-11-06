@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import hf
 from .providers.base import ProviderError
+from .termi18n import _
 
 CATALOG: List[Dict[str, Any]] = [
     {
@@ -179,7 +180,7 @@ def install(store: Any, entry_id: str, token: str = "", progress: Optional[Calla
     done_bytes = 0
     total = sum(f["size"] for f in todo)
     for f in todo:
-        log(f"Baixando {Path(f['file']).name} ({f['size'] / 1024 ** 3:.1f} GB) de {f['repo']} …")
+        log(_("Baixando {f} ({g:.1f} GB) de {r} …", f=Path(f["file"]).name, g=f["size"] / 1024 ** 3, r=f["repo"]))
 
         def prog(d: int, t: int, base: int = done_bytes) -> None:
             if progress:
@@ -215,12 +216,12 @@ def install_selected(store: Any, which: str = "all", token: str = "", log: Calla
     baixado se o usuário disser que sim; a recusa fica guardada e o ASTA não pergunta de novo (`asta models install` sem `--ask` baixa quando quiser)."""
     which = (which or "all").strip().lower()
     if which in ("none", "no", "0"):
-        log("Modelos pré-instalados: nada a baixar (ASTA_MODELS=none).")
+        log(_("Modelos pré-instalados: nada a baixar (ASTA_MODELS=none)."))
         return 0
     names = [x.strip() for x in which.replace(";", ",").split(",") if x.strip()]
     chosen = [e for e in CATALOG if "all" in names or e["kind"] in names or e["id"] in names]
     if not chosen:
-        log("Modelos desconhecidos: use all, none, text, image ou os ids do catálogo.")
+        log(_("Modelos desconhecidos: use all, none, text, image ou os ids do catálogo."))
         return 2
     if ask is not None:
         missing = [e for e in chosen if not installed(store.models_dir, e)]
@@ -228,29 +229,29 @@ def install_selected(store: Any, which: str = "all", token: str = "", log: Calla
         pending = [e for e in missing if e["id"] not in refused]
         approved = False
         if missing and not pending:
-            log("Modelos pré-instalados: você preferiu não baixar (para baixar quando quiser: asta models install).")
+            log(_("Modelos pré-instalados: você preferiu não baixar (para baixar quando quiser: asta models install)."))
         if pending:
             lines = "\n".join(f"  • {e['label']} ({hf.GGUF_KINDS[e['kind']]['label'].lower()}, {e['quant']}) — {sum(f['size'] for f in _files(e)) / 1024 ** 3:.1f} GB" for e in pending)
-            answer = ask(f"O ASTA pode baixar agora os modelos de IA pré-instalados (precisam de espaço em disco e de internet):\n{lines}\nBaixar agora?")
+            answer = ask(_("O ASTA pode baixar agora os modelos de IA pré-instalados (precisam de espaço em disco e de internet):\n{l}\nBaixar agora?", l=lines))
             if answer is None:
-                log("Modelos pré-instalados: não há um terminal para perguntar, então não baixei nada. Para baixar: asta models install   (ou ASTA_MODELS=all no instalador).")
+                log(_("Modelos pré-instalados: não há um terminal para perguntar, então não baixei nada. Para baixar: asta models install   (ou ASTA_MODELS=all no instalador)."))
             elif answer:
                 approved = True
                 set_declined(store.home, [x for x in refused if x not in {e["id"] for e in pending}])
             else:
                 set_declined(store.home, refused + [e["id"] for e in pending])
-                log("Ok, não vou baixar os modelos pré-instalados. Quando quiser: asta models install")
+                log(_("Ok, não vou baixar os modelos pré-instalados. Quando quiser: asta models install"))
         chosen = [e for e in chosen if installed(store.models_dir, e) or (approved and e in pending)]  # o que já existe só é conferido/configurado
     failed = 0
     for e in chosen:
         try:
             if installed(store.models_dir, e):
-                log(f"{e['label']} ({e['quant']}): já instalado.")
+                log(_("{n} ({q}): já instalado.", n=e["label"], q=e["quant"]))
                 apply(store, e)
                 continue
             r = install(store, e["id"], token, log=log)
-            log(f"{e['label']} ({e['quant']}): pronto" + (f" — {'; '.join(r['notes'])}" if r["notes"] else "") + ".")
+            log(_("{n} ({q}): pronto", n=e["label"], q=e["quant"]) + (f" — {'; '.join(_(x) for x in r['notes'])}" if r["notes"] else "") + ".")
         except ProviderError as exc:
             failed += 1
-            log(f"⚠  {e['label']}: não foi possível instalar ({exc}). Tente de novo com:  asta models install")
+            log(_("⚠  {n}: não foi possível instalar ({e}). Tente de novo com:  asta models install", n=e["label"], e=exc))
     return 1 if failed else 0

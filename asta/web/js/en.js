@@ -879,7 +879,7 @@ export default {
   'ativo': 'active',
   'inativo — usando Python puro': 'inactive — using pure Python',
   'encontrado': 'found',
-  'O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Para ativar: instale o Rust (rustup.rs) e rode “asta native build”. Sem ele, tudo funciona igual em Python.': 'The Rust core speeds up Canvas audio synthesis and uses far less memory. To enable it: install Rust (rustup.rs) and run “asta native build”. Without it, everything works the same in Python.',
+  'O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Para ativar: rode “asta native setup” no terminal (instala/atualiza o Rust com a sua permissão e compila o núcleo). Sem ele, tudo funciona igual em Python.': 'The Rust core speeds up Canvas audio synthesis and uses far less memory. To enable it: run “asta native setup” in the terminal (it installs/updates Rust with your permission and compiles the core). Without it, everything works the same in Python.',
   "Reconstrua jogos Ren'Py e RPG Maker (2000 a MZ) em HTML/CSS/JS puro, com a mesma estrutura do original. Só para uso pessoal.": "Rebuild Ren'Py and RPG Maker (2000 to MZ) games in plain HTML/CSS/JS, with the same structure as the original. Personal use only.",
   "Reconstruir um jogo": "Rebuild a game",
   "Reconstrua seu primeiro jogo": "Rebuild your first game",

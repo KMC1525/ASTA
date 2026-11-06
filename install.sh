@@ -18,6 +18,9 @@
 #                                       pelo gerenciador de pacotes do sistema (apt, dnf, yum, pacman, zypper, apk, Homebrew).
 #                                       keep: nunca mexe no Python do sistema.
 #   ASTA_FORCE=1                        reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
+#   ASTA_RUST=ask|yes|no                Rust (deixa o ASTA mais rápido e leve): ask (padrão) PERGUNTA no terminal antes de instalar o Rust (e, se ele já existe, atualiza e
+#                                       recompila o núcleo); yes instala/atualiza sem perguntar; no pula. Sem terminal, nunca instala sem permissão.
+#   ASTA_LANG=pt|en                     idioma dos textos (padrão: o idioma do computador).
 # O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o gerenciador de pacotes tiver versão nova, o ambiente
 # (venv) é reaproveitado, o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
 # Argumentos: sh -s -- --run            inicia o ASTA ao terminar.
@@ -32,11 +35,25 @@ RUN=0
 PYONLY=0
 for arg in "$@"; do [ "$arg" = "--run" ] && RUN=1; [ "$arg" = "--python-only" ] && PYONLY=1; done
 
+# Idioma dos textos = idioma do computador (pt ou en). ASTA_LANG=pt|en força. Vale também para o `asta` chamado daqui (ele lê ASTA_LANG).
+detect_lang() {
+  for v in "${ASTA_LANG:-}" "${LC_ALL:-}" "${LC_MESSAGES:-}" "${LANGUAGE:-}" "${LANG:-}"; do
+    case "$v" in ""|C|POSIX|C.*) continue ;; pt*|PT*) echo pt; return ;; *) echo en; return ;; esac
+  done
+  if [ "$(uname -s)" = "Darwin" ] && command -v defaults >/dev/null 2>&1; then
+    case "$(defaults read -g AppleLanguages 2>/dev/null | tr -d '() ",\n' | cut -c1-2)" in pt) echo pt; return ;; esac
+  fi
+  echo en
+}
+ASTA_L="$(detect_lang)"
+export ASTA_LANG="$ASTA_L"
+L() { if [ "$ASTA_L" = "pt" ]; then printf '%s' "$1"; else printf '%s' "$2"; fi; }
+
 say()  { printf '\033[1m%s\033[0m\n' "$*"; }
 note() { printf '  %s\n' "$*"; }
 die()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
-say "ASTA — instalação/atualização"
+say "$(L "ASTA — instalação/atualização" "ASTA — install/update")"
 
 # 1) Python 3.9+ — instala se faltar e atualiza (com o pip, o venv e as ferramentas de empacotamento) usando o gerenciador
 #    de pacotes do sistema. Pode pedir a sua senha (sudo). ASTA_PYTHON=keep: nunca mexe no Python do sistema.
@@ -88,18 +105,18 @@ PYMODE="${ASTA_PYTHON:-auto}"
 if find_python; then
   if [ "$PYMODE" != "keep" ]; then
     PYBEFORE="$($PY --version 2>&1)"
-    note "Python já instalado ($PYBEFORE) — verificando se há versão mais nova …"
-    pkg_python upgrade >/dev/null || note "Não foi possível atualizar o Python automaticamente (sem gerenciador de pacotes ou permissão); seguindo com o atual."
+    note "$(L "Python já instalado ($PYBEFORE) — verificando se há versão mais nova …" "Python already installed ($PYBEFORE) — checking for a newer version …")"
+    pkg_python upgrade >/dev/null || note "$(L "Não foi possível atualizar o Python automaticamente (sem gerenciador de pacotes ou permissão); seguindo com o atual." "Could not update Python automatically (no package manager or permission); continuing with the current one.")"
     find_python || true   # a atualização pode ter trazido uma versão mais nova
-    if [ "$($PY --version 2>&1)" != "$PYBEFORE" ]; then note "Python atualizado: $PYBEFORE → $($PY --version 2>&1)"; else note "Python já está na versão mais recente disponível."; fi
+    if [ "$($PY --version 2>&1)" != "$PYBEFORE" ]; then note "$(L "Python atualizado: $PYBEFORE → $($PY --version 2>&1)" "Python updated: $PYBEFORE → $($PY --version 2>&1)")"; else note "$(L "Python já está na versão mais recente disponível." "Python is already at the latest available version.")"; fi
   fi
 else
-  [ "$PYMODE" = "keep" ] && die "Python 3.9 ou superior não encontrado. Instale com: $(python_hint)"
-  note "Python 3.9+ não encontrado — instalando …"
+  [ "$PYMODE" = "keep" ] && die "$(L "Python 3.9 ou superior não encontrado. Instale com: $(python_hint)" "Python 3.9 or newer not found. Install with: $(python_hint)")"
+  note "$(L "Python 3.9+ não encontrado — instalando …" "Python 3.9+ not found — installing …")"
   pkg_python install >/dev/null || true
-  find_python || die "Não consegui instalar o Python 3.9+ automaticamente. Instale com: $(python_hint)"
+  find_python || die "$(L "Não consegui instalar o Python 3.9+ automaticamente. Instale com: $(python_hint)" "Could not install Python 3.9+ automatically. Install with: $(python_hint)")"
 fi
-note "Python: $($PY --version 2>&1)"
+note "$(L "Python: $($PY --version 2>&1)" "Python: $($PY --version 2>&1)")"
 
 # 2) ambiente isolado (não suja o Python do sistema). Se o Python foi atualizado para uma versão mais nova, o ambiente é recriado.
 mkdir -p "$APP_DIR"
@@ -108,27 +125,27 @@ VENVPY="$APP_DIR/venv/bin/python"
 if [ -e "$APP_DIR/venv" ]; then
   VV="$("$VENVPY" -c 'import sys; print("%d.%d" % sys.version_info[:2])' 2>/dev/null || true)"
   if [ -z "$VV" ] || "$PY" -c 'import sys; a, b = (tuple(map(int, v.split("."))) for v in sys.argv[1:3]); sys.exit(0 if a < b else 1)' "$VV" "$PYV"; then
-    note "Recriando o ambiente para o Python $PYV (antes: ${VV:-quebrado}) — as bibliotecas serão reinstaladas …"
+    note "$(L "Recriando o ambiente para o Python $PYV (antes: ${VV:-quebrado}) — as bibliotecas serão reinstaladas …" "Recreating the environment for Python $PYV (before: ${VV:-broken}) — the libraries will be reinstalled …")"
     rm -rf "$APP_DIR/venv"
   fi
 fi
 if [ -x "$VENVPY" ]; then
-  note "Ambiente já existe ($APP_DIR/venv) — reaproveitando."
+  note "$(L "Ambiente já existe ($APP_DIR/venv) — reaproveitando." "Environment already exists ($APP_DIR/venv) — reusing it.")"
 else
-  note "Criando ambiente em $APP_DIR/venv …"
+  note "$(L "Criando ambiente em $APP_DIR/venv …" "Creating environment in $APP_DIR/venv …")"
   "$PY" -m venv "$APP_DIR/venv" >/dev/null 2>&1 || {
     rm -rf "$APP_DIR/venv"
     # Debian/Ubuntu: o módulo venv vem num pacote separado
     if [ "$PYMODE" != "keep" ] && pkg_python install >/dev/null 2>&1 && "$PY" -m venv "$APP_DIR/venv" >/dev/null 2>&1; then :; else
       rm -rf "$APP_DIR/venv"
-      die "Não foi possível criar o ambiente virtual. No Debian/Ubuntu instale: sudo apt install python3-venv"
+      die "$(L "Não foi possível criar o ambiente virtual. No Debian/Ubuntu instale: sudo apt install python3-venv" "Could not create the virtual environment. On Debian/Ubuntu install: sudo apt install python3-venv")"
     fi
   }
 fi
 # ferramentas do Python (pip, setuptools, wheel) sempre na versão mais recente
 "$VENVPY" -m pip install --upgrade --quiet --disable-pip-version-check pip setuptools wheel >/dev/null 2>&1 \
-  || note "⚠ Não foi possível atualizar o pip/setuptools/wheel agora (sem internet?); seguindo."
-if [ "${ASTA_STEP:-}" = "python" ] || [ "$PYONLY" = "1" ]; then say "✓ Python $PYV e ferramentas (pip, setuptools, wheel) prontos."; exit 0; fi
+  || note "$(L "⚠ Não foi possível atualizar o pip/setuptools/wheel agora (sem internet?); seguindo." "⚠ Could not update pip/setuptools/wheel right now (no internet?); continuing.")"
+if [ "${ASTA_STEP:-}" = "python" ] || [ "$PYONLY" = "1" ]; then say "$(L "✓ Python $PYV e ferramentas (pip, setuptools, wheel) prontos." "✓ Python $PYV and tools (pip, setuptools, wheel) ready.")"; exit 0; fi
 
 # 3) instala / atualiza
 SPEC="asta"
@@ -158,11 +175,11 @@ sys.exit(0 if t(sys.argv[1]) <= t(sys.argv[2]) else 1)' "$REMOTE" "$OLD"; then
   fi
 fi
 if [ "$SKIP_ASTA" = "1" ]; then
-  note "ASTA $OLD já instalado e na versão mais recente — nada a baixar."
+  note "$(L "ASTA $OLD já instalado e na versão mais recente — nada a baixar." "ASTA $OLD already installed and up to date — nothing to download.")"
 else
-  note "Baixando e instalando ASTA …"
+  note "$(L "Baixando e instalando ASTA …" "Downloading and installing ASTA …")"
   "$APP_DIR/venv/bin/python" -m pip install --upgrade --disable-pip-version-check --quiet --no-cache-dir "$REQ" \
-    || die "Falha ao instalar. Verifique sua conexão e tente de novo."
+    || die "$(L "Falha ao instalar. Verifique sua conexão e tente de novo." "Installation failed. Check your connection and try again.")"
 fi
 NEW="$("$APP_DIR/venv/bin/python" -I -c 'import asta; print(asta.__version__)')"
 
@@ -173,45 +190,41 @@ ln -sf "$APP_DIR/venv/bin/asta" "$BIN_DIR/asta"
 # 5) bibliotecas do ASTA (todas, a menos que ASTA_EXTRAS diga outra coisa). A lista vem da versão recém-instalada.
 LIBS_FAILED=0
 case "$EXTRAS" in
-  none|core) note "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$EXTRAS)." ;;
-  *) say "Bibliotecas do ASTA: instalo o que falta e atualizo o que tiver versão mais nova (a primeira vez pode demorar e baixar vários GB) …"
+  none|core) note "$(L "Bibliotecas opcionais: puladas (ASTA_EXTRAS=$EXTRAS)." "Optional libraries: skipped (ASTA_EXTRAS=$EXTRAS).")" ;;
+  *) say "$(L "Bibliotecas do ASTA: instalo o que falta e atualizo o que tiver versão mais nova (a primeira vez pode demorar e baixar vários GB) …" "ASTA libraries: installing what is missing and updating what has a newer version (the first time can take long and download several GB) …")"
      if [ -n "$EXTRAS" ]; then ASTA_EXTRAS="$EXTRAS" "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1
      else "$APP_DIR/venv/bin/asta" libs || LIBS_FAILED=1; fi ;;
 esac
 
-if [ -z "$OLD" ]; then say "✓ ASTA $NEW instalado."; elif [ "$OLD" = "$NEW" ]; then say "✓ ASTA $NEW já estava atualizado."; else say "✓ ASTA atualizado: $OLD → $NEW."; fi
+if [ -z "$OLD" ]; then say "$(L "✓ ASTA $NEW instalado." "✓ ASTA $NEW installed.")"; elif [ "$OLD" = "$NEW" ]; then say "$(L "✓ ASTA $NEW já estava atualizado." "✓ ASTA $NEW was already up to date.")"; else say "$(L "✓ ASTA atualizado: $OLD → $NEW." "✓ ASTA updated: $OLD → $NEW.")"; fi
 # 6) modelos locais pré-instalados (texto e imagem). Sem ASTA_MODELS, o ASTA PERGUNTA no terminal (sim/não) antes de baixar; o que já está na pasta é pulado
 MODELS_FAILED=0
 case "${ASTA_MODELS:-ask}" in
-  none|no|0) note "Modelos pré-instalados: pulados (ASTA_MODELS=${ASTA_MODELS})." ;;
+  none|no|0) note "$(L "Modelos pré-instalados: pulados (ASTA_MODELS=${ASTA_MODELS})." "Pre-installed models: skipped (ASTA_MODELS=${ASTA_MODELS}).")" ;;
   ask) "$APP_DIR/venv/bin/asta" models install --ask || MODELS_FAILED=1 ;;
-  *) say "Modelos locais pré-instalados: baixo só o que ainda não está na pasta (vários GB na primeira vez) …"
+  *) say "$(L "Modelos locais pré-instalados: baixo só o que ainda não está na pasta (vários GB na primeira vez) …" "Pre-installed local models: downloading only what is not in the folder yet (several GB the first time) …")"
      "$APP_DIR/venv/bin/asta" models install || MODELS_FAILED=1 ;;
 esac
 
-# 7) núcleo Rust opcional (mais rápido e leve): só se o cargo existir; nunca é obrigatório nem faz o instalador falhar
-if command -v cargo >/dev/null 2>&1; then
-  say "Compilando o núcleo Rust opcional …"
-  "$APP_DIR/venv/bin/asta" native build >/dev/null 2>&1 && say "✓ Núcleo Rust ativo." || note "Núcleo Rust não compilado (opcional; o ASTA usa Python). Tente depois:  asta native build"
-else
-  note "Dica: instale o Rust (https://rustup.rs) e rode  asta native build  para deixar o ASTA mais rápido e leve."
-fi
+# 7) Rust (opcional, deixa o ASTA mais rápido e leve): instala o Rust se faltar, atualiza se já existir e recompila o núcleo do ASTA.
+#    ASTA_RUST=ask (padrão: pergunta no terminal; sem terminal só atualiza o que já existe, nunca instala sem permissão) | yes | no.
+ASTA_RUST="${ASTA_RUST:-ask}" "$APP_DIR/venv/bin/asta" native setup || note "$(L "Rust: não foi possível concluir agora (opcional; o ASTA usa Python). Tente depois:  asta native setup" "Rust: could not finish right now (optional; ASTA uses Python). Try later:  asta native setup")"
 
 if [ "$MODELS_FAILED" = "1" ]; then
-  note "⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install"
+  note "$(L "⚠ Alguns modelos pré-instalados não foram baixados (veja acima). O ASTA já funciona; para tentar de novo: asta models install" "⚠ Some pre-installed models were not downloaded (see above). ASTA already works; to try again: asta models install")"
 fi
 if [ "$LIBS_FAILED" = "1" ]; then
-  note "⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs"
+  note "$(L "⚠ Algumas bibliotecas opcionais não foram instaladas (veja acima). O ASTA já funciona; para tentar de novo: asta libs" "⚠ Some optional libraries were not installed (see above). ASTA already works; to try again: asta libs")"
 fi
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) note "Adicione ao seu PATH para usar o comando 'asta':"
-     note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile   (e abra um novo terminal)"
-     note "Até lá, abra a WebUI com o caminho completo:  $BIN_DIR/asta" ;;
+  *) note "$(L "Adicione ao seu PATH para usar o comando 'asta':" "Add this to your PATH to use the 'asta' command:")"
+     note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile   $(L "(e abra um novo terminal)" "(and open a new terminal)")"
+     note "$(L "Até lá, abra a WebUI com o caminho completo:  $BIN_DIR/asta" "Until then, open the WebUI with the full path:  $BIN_DIR/asta")" ;;
 esac
 echo
-note "Para abrir a WebUI:   asta"
-note "Para atualizar:       rode este mesmo comando de novo (ou: asta update) — atualiza o ASTA e as bibliotecas dele"
+note "$(L "Para abrir a WebUI:   asta" "To open the WebUI:   asta")"
+note "$(L "Para atualizar:       rode este mesmo comando de novo (ou: asta update) — atualiza o ASTA e as bibliotecas dele" "To update:            run this same command again (or: asta update) — it updates ASTA, its libraries and (optionally) Rust")"
 echo
 
 if [ "$RUN" = "1" ]; then exec "$APP_DIR/venv/bin/asta"; fi

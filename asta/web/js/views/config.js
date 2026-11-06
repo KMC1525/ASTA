@@ -407,7 +407,7 @@ async function system() {
       field(t('Descarregar modelos ociosos após (min)'), h('input', { type: 'number', min: 0, max: 1440, value: pf.idle_unload_min, onchange: async (e) => { pf.idle_unload_min = Math.max(0, parseInt(e.target.value || '0', 10)); await saveSettings({ performance: pf }); toast(t('Salvo'), 'ok'); } }), t('0 = nunca. No modo leve o limite é de até 3 min.'))),
     h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Núcleo Rust')), h('dd', null, nat.active ? h('span', { class: 'chip on' }, t('ativo')) : h('span', { class: 'muted' }, t('inativo — usando Python puro'))),
       h('dt', null, 'cargo'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)'))),
-    h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Para ativar: instale o Rust (rustup.rs) e rode “asta native build”. Sem ele, tudo funciona igual em Python.')));
+    h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Para ativar: rode “asta native setup” no terminal (instala/atualiza o Rust com a sua permissão e compila o núcleo). Sem ele, tudo funciona igual em Python.')));
   return h('div', null, perfCard,
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Seu hardware')),
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Sistema')), h('dd', null, hw.os + ' · ' + hw.arch), h('dt', null, 'CPU'), h('dd', null, t('{n} núcleos', { n: hw.cpus })),

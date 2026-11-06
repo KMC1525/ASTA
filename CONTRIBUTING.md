@@ -59,3 +59,9 @@ Cada mundo guarda um *snapshot* do motor na hora em que foi gerado (por isso o Z
 - Todo agente de IA do Studio (`pipeline.py`, `autoedit.py`) precisa de um equivalente determinístico (`rulebased.py` / `plan_edl`): o modo Demo e as respostas inválidas não podem impedir a entrega.
 - O renderizador é o do Canvas (`canvas/render.py`) com os campos extras `speed`/`mute`/`filter` e o parâmetro `mode` (`full|video|audio`); mantenha o comportamento antigo quando essas chaves não existem.
 - Testes: `tests/test_studio.py` (usa `ffmpeg` e é pulado sem ele) e `tests/browser/studio_ui.js`. Mídias sintéticas vêm de `make_media()`.
+
+## Textos do terminal (`asta/termi18n.py`, `asta/term_en.py`)
+
+- Todo texto que o terminal mostra (CLI e mensagens do `preinstalled`/`native`) usa `_("frase em português {campo}", campo=...)`; a tradução inglesa fica em `asta/term_en.py` (mesma chave, mesmos `{campos}`). Um teste confere que nenhuma mensagem ficou sem tradução. Não use `_` como variável de laço nesses módulos.
+- Os instaladores (`install.sh`, `install.ps1`) têm o seu próprio `L pt en`; toda mensagem `say/note/die` (`Say/Note/Die`) precisa ser bilíngue — o teste confere.
+- O Rust vive em `asta native setup` (`asta/native/__init__.py`): nunca instale nada sem permissão (`ASTA_RUST=ask|yes|no`).

@@ -70,14 +70,14 @@ def load(force: bool = False) -> Any:
             try:
                 lib = ctypes.CDLL(str(path))
                 if lib.asta_abi_version() != ABI:
-                    _REASON = f"{path.name}: versão da interface diferente (recompile com `asta native build`)"
+                    _REASON = f"{path.name}: versão da interface diferente (recompile com `asta native setup`)"
                     continue
                 _bind(lib)
                 _LIB, _REASON = lib, str(path)
                 return lib
             except (OSError, AttributeError) as exc:
                 _REASON = f"{path.name}: {exc}"
-        _REASON = _REASON or "biblioteca não compilada (opcional: `asta native build`, precisa do Rust)"
+        _REASON = _REASON or "biblioteca não compilada (opcional: `asta native setup` instala o Rust e compila)"
         return None
 
 
@@ -85,19 +85,102 @@ def available() -> bool:
     return load() is not None
 
 
+def find_tool(name: str) -> Optional[str]:
+    """O caminho de `cargo`/`rustup`: no PATH, ou na pasta do rustup (~/.cargo/bin; CARGO_HOME) — o rustup recém-instalado ainda não está no PATH desta sessão."""
+    exe = shutil.which(name)
+    if exe:
+        return exe
+    home = Path(os.environ.get("CARGO_HOME") or Path.home() / ".cargo")
+    for cand in (home / "bin" / name, home / "bin" / (name + ".exe")):
+        if cand.is_file():
+            return str(cand)
+    return None
+
+
 def status() -> Dict[str, Any]:
     lib = load()
-    return {"active": lib is not None, "reason": _REASON, "cargo": bool(shutil.which("cargo")), "path": _REASON if lib is not None else ""}
+    return {"active": lib is not None, "reason": _REASON, "cargo": bool(find_tool("cargo")), "rustup": bool(find_tool("rustup")), "path": _REASON if lib is not None else ""}
+
+
+def rust_version() -> str:
+    cargo = find_tool("cargo")
+    if not cargo:
+        return ""
+    try:
+        return subprocess.run([cargo, "--version"], capture_output=True, text=True, timeout=20).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
+
+
+def install_rust() -> int:
+    """Instala o Rust (rustup, perfil mínimo, toolchain estável) na pasta do usuário — sem sudo. Devolve 0 se o `cargo` ficou disponível."""
+    import tempfile
+    import urllib.request
+
+    from ..termi18n import _
+
+    if find_tool("cargo"):
+        return 0
+    print(_("Instalando o Rust (rustup, perfil mínimo) na sua pasta de usuário …"))
+    try:
+        if os.name == "nt":
+            import platform
+
+            arch = "aarch64" if platform.machine().lower() in ("arm64", "aarch64") else ("i686" if platform.architecture()[0] == "32bit" else "x86_64")
+            with urllib.request.urlopen(f"https://win.rustup.rs/{arch}", timeout=60) as r:
+                data = r.read()
+            with tempfile.NamedTemporaryFile("wb", suffix=".exe", delete=False) as fh:
+                fh.write(data)
+                exe = fh.name
+            cmd = [exe, "-y", "--profile", "minimal", "--default-toolchain", "stable"]
+        else:
+            with urllib.request.urlopen("https://sh.rustup.rs", timeout=60) as r:
+                data = r.read()
+            with tempfile.NamedTemporaryFile("wb", suffix=".sh", delete=False) as fh:
+                fh.write(data)
+                exe = fh.name
+            cmd = ["sh", exe, "-y", "--profile", "minimal", "--default-toolchain", "stable"]
+        res = subprocess.run(cmd)
+    except Exception as exc:  # noqa: BLE001  (sem internet, antivírus, sem permissão…)
+        print(_("Não consegui baixar/instalar o Rust agora ({e}). Instale pelo https://rustup.rs e rode:  asta native setup", e=str(exc)[:160]))
+        return 1
+    finally:
+        try:
+            os.unlink(exe)
+        except Exception:  # noqa: BLE001
+            pass
+    if res.returncode != 0 or not find_tool("cargo"):
+        print(_("A instalação do Rust não terminou. Instale pelo https://rustup.rs e rode:  asta native setup"))
+        return 1
+    print(_("Rust instalado: {v}", v=rust_version()))
+    return 0
+
+
+def update_rust() -> int:
+    """Atualiza o Rust (toolchain estável) com o rustup. Rust instalado por outro meio (gerenciador de pacotes) é atualizado por ele."""
+    from ..termi18n import _
+
+    rustup = find_tool("rustup")
+    if not rustup:
+        print(_("O Rust deste computador não foi instalado pelo rustup: atualize-o pelo mesmo meio em que o instalou (ex.: gerenciador de pacotes). Sigo com a versão atual: {v}", v=rust_version() or "?"))
+        return 0
+    print(_("Atualizando o Rust (rustup update stable) …"))
+    res = subprocess.run([rustup, "update", "stable", "--no-self-update"] if os.name != "nt" else [rustup, "update", "stable"])
+    if res.returncode != 0:
+        print(_("Não consegui atualizar o Rust agora (sem internet?); sigo com a versão atual."))
+    return 0
 
 
 def build(verbose: bool = True) -> int:
     """Compila o núcleo com o `cargo` e instala em ~/.asta/native. Devolve o código de saída (0 = ok)."""
-    cargo = shutil.which("cargo")
+    from ..termi18n import _
+
+    cargo = find_tool("cargo")
     if not cargo:
-        print("O Rust (cargo) não está instalado. É opcional: o ASTA funciona igual em Python, só mais devagar na síntese de áudio.\nInstale pelo https://rustup.rs e rode de novo:  asta native build")
+        print(_("O Rust (cargo) não está instalado. É opcional: o ASTA funciona igual em Python, só mais devagar na síntese de áudio.\nInstale com:  asta native install   (ou pelo https://rustup.rs)"))
         return 1
     if not (SRC / "Cargo.toml").is_file():
-        print("Código-fonte do núcleo não encontrado nesta instalação.")
+        print(_("Código-fonte do núcleo não encontrado nesta instalação."))
         return 1
     dest = native_dir()
     dest.mkdir(parents=True, exist_ok=True)
@@ -106,17 +189,56 @@ def build(verbose: bool = True) -> int:
     if res.returncode != 0:
         if not verbose:
             print((res.stderr or "")[-800:])
-        print("Não foi possível compilar o núcleo (o ASTA segue em Python).")
+        print(_("Não foi possível compilar o núcleo (o ASTA segue em Python)."))
         return res.returncode
     built = dest / "target" / "release" / _libname()
     if not built.is_file():
-        print("Compilou, mas não achei a biblioteca gerada.")
+        print(_("Compilou, mas não achei a biblioteca gerada."))
         return 1
     shutil.copyfile(built, dest / _libname())
     shutil.rmtree(dest / "target", ignore_errors=True)  # só a biblioteca fica (a pasta de compilação ocupa centenas de MB)
     load(force=True)
-    print("Núcleo em Rust ativo:", status()["path"] if available() else status()["reason"])
+    print(_("Núcleo em Rust ativo:"), status()["path"] if available() else status()["reason"])
     return 0 if available() else 1
+
+
+def _build_hint() -> str:
+    from ..termi18n import _
+
+    if os.name == "nt":
+        return _("No Windows o Rust precisa das «Ferramentas de Build do Visual Studio» (carga «Desenvolvimento para desktop com C++»): https://visualstudio.microsoft.com/visual-cpp-build-tools/ — depois rode:  asta native setup")
+    if sys.platform == "darwin":
+        return _("No macOS o Rust precisa das ferramentas de linha de comando da Apple. Instale com:  xcode-select --install   — depois rode:  asta native setup")
+    return _("No Linux o Rust precisa de um compilador C (gcc/cc). Ex.: sudo apt install build-essential   (ou o equivalente da sua distribuição) — depois rode:  asta native setup")
+
+
+def setup(mode: str = "ask", ask: Any = None) -> int:
+    """Instala/atualiza o Rust e recompila o núcleo do ASTA. `mode`: "yes" (faz tudo), "no" (não mexe) ou "ask" (pergunta no terminal; sem terminal só
+    atualiza se o Rust já existe e NUNCA instala sem permissão). Devolve 0 em geral (o núcleo é opcional: o ASTA funciona igual em Python)."""
+    from ..termi18n import _
+
+    mode = (mode or "ask").strip().lower()
+    if mode in ("no", "none", "0", "skip", "nao", "não", "n"):
+        print(_("Rust: pulado (ASTA_RUST=no)."))
+        return 0
+    mode = "yes" if mode in ("yes", "y", "1", "all", "sim", "s", "true") else "ask"
+    have = bool(find_tool("cargo"))
+    if mode == "ask":
+        answer = ask(_("Atualizar o Rust e recompilar o núcleo do ASTA (mais rápido e leve)?") if have else
+                     _("Instalar o Rust (perto de 300 MB, na sua pasta de usuário) para deixar o ASTA mais rápido e leve?"), default=have) if ask else None
+        if answer is None:
+            if not have:
+                print(_("Rust: não há um terminal para perguntar, então não instalei nada. Para instalar: asta native setup --rust yes   (ou ASTA_RUST=yes no instalador)."))
+                return 0
+        elif not answer:
+            print(_("Ok, sem Rust por agora. Quando quiser:  asta native setup"))
+            return 0
+    if not have and install_rust() != 0:
+        return 0
+    update_rust()
+    if build() != 0:
+        print(_build_hint())
+    return 0
 
 
 # --------------------------------------------------------------------------- funções (nativas, com equivalente em Python)
