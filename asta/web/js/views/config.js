@@ -520,8 +520,14 @@ async function performance() {
       h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('Seu hardware: {t}', { t: hw.tier }) + ' · ' + hw.cpus + ' CPU · ' + (hw.ram_gb ? hw.ram_gb + ' GB RAM' : '—') + ' · ' + (hw.gpu || t('não detectada (NVIDIA)')))),
     cfgCard(t('Núcleo Rust'),
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Núcleo Rust')), h('dd', null, nat.active ? h('span', { class: 'chip on' }, t('ativo')) : h('span', { class: 'muted' }, t('inativo — usando Python puro'))),
-        h('dt', null, 'Rust (cargo)'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)'))),
-      h('p', { class: 'muted small' }, t('O núcleo Rust acelera a síntese de áudio do Canvas e usa bem menos memória. Os instaladores e o “asta update” instalam e atualizam o Rust sozinhos; para fazer agora, rode no terminal:')),
+        h('dt', null, 'Rust (cargo)'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)')),
+        h('dt', null, t('Carga de modelos locais')), h('dd', { id: 'nat-models' }, nat.models ? h('span', { class: 'chip on' }, t('otimizada')) : h('span', { class: 'muted' }, t('padrão (recompile o núcleo: asta native setup)'))),
+        h('dt', null, t('Processador')), h('dd', null, (nat.cores ? t('{p} núcleos físicos · {l} threads', { p: nat.cores[0], l: nat.cores[1] }) : '—') + ((nat.features || []).length ? ' · ' + nat.features.join(' ').toUpperCase() : '')),
+        nat.last && nat.last.llm ? h('dt', null, t('Último modelo de texto')) : null,
+        nat.last && nat.last.llm ? h('dd', { id: 'nat-llm' }, nat.last.llm.model + ' · ' + t('contexto {c}', { c: nat.last.llm.n_ctx }) + ' · ' + (nat.last.llm.n_gpu_layers === -1 ? t('tudo na GPU') : nat.last.llm.n_gpu_layers > 0 ? t('{n} camadas na GPU', { n: nat.last.llm.n_gpu_layers }) : t('na CPU')) + ' · ' + t('{n} threads', { n: nat.last.llm.n_threads }) + (nat.last.llm.kv_q8 ? ' · ' + t('cache em 8 bits') : '')) : null,
+        nat.last && nat.last.media ? h('dt', null, t('Último modelo de mídia')) : null,
+        nat.last && nat.last.media ? h('dd', { id: 'nat-media' }, nat.last.media.model + ' · ' + ({ gpu: t('tudo na GPU'), model_offload: t('descarga do modelo'), sequential_offload: t('descarga sequencial (pouca VRAM)'), cpu: t('na CPU') }[nat.last.media.strategy] || '—')) : null),
+      h('p', { class: 'muted small' }, t('O núcleo Rust acelera a síntese de áudio do Canvas, lê o cabeçalho dos modelos locais (GGUF e safetensors) e escolhe contexto, camadas na GPU, threads e descarga conforme a memória livre, além de pré-carregar os pesos em paralelo. Os instaladores e o “asta update” instalam e atualizam o Rust sozinhos; para fazer agora, rode no terminal:')),
       cmd(t('Instalar/atualizar o Rust e compilar o núcleo'), 'asta native setup')));
 }
 

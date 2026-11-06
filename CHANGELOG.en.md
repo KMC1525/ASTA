@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.0] — 2026-11-06
+
+### Improved — Rust core v2 (local model loading and inference)
+- **Headers without loading weights**: GGUF and safetensors reading in Rust (architecture, layers, training context, dominant quantization, parameters, attention-cache cost per token).
+- **Planner from the hardware free right now** (RAM, VRAM, physical cores, Apple unified memory): GPU layers, the context window that fits (with an 8-bit attention cache when needed), threads = physical cores, batches, `mlock`, prefetch and prompt cache. A context set by the user is never overridden (it only warns).
+- **Media (image, video, sound, voice)**: plan from the real weight size — all on GPU, model offload, sequential offload (low VRAM) or CPU, with attention/VAE slicing.
+- **Parallel prefetch** of the weights into the system cache before loading (several threads + `posix_fadvise` on Linux).
+- **Prompt cache** (llama-cpp) sized from the spare RAM.
+- Hardware: physical/logical cores, AVX2/AVX-512/NEON, total/available RAM (respecting container limits) — also in Python when the core is missing. Configuration → Performance shows the state and the last plan.
+- The same math exists in Python; tests check Rust × Python (including 200 random scenarios). Old libraries (interface 1) still serve audio; `asta update` rebuilds the new one.
+
 ## [0.11.0] — 2026-11-06
 
 ### Added — Canvas

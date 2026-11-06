@@ -70,7 +70,8 @@ def _native_status() -> dict:
         from . import native
 
         st = native.status()
-        return {"active": st["active"], "cargo": st["cargo"]}
+        si = native.sys_info()
+        return {"active": st["active"], "cargo": st["cargo"], "models": st.get("models", False), "last": st.get("last", {}), "cores": [si.get("physical"), si.get("logical")], "features": si.get("features", [])}
     except Exception:  # noqa: BLE001
         return {"active": False, "cargo": False}
 

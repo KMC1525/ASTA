@@ -28,6 +28,7 @@ import wave
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
+from .. import native as _native
 from .. import perf as _perf
 from ..util import hardware_info
 from ..providers import http
@@ -907,27 +908,53 @@ _MEDIA_IDLE = _perf.IdleUnloader(_media_unload)
 PERF: Dict[str, Any] = {}  # settings["performance"], preenchido pela rota/engine antes de gerar
 
 
+_PLAN: Dict[str, Any] = {}   # plano de carga do modelo que está sendo carregado (núcleo Rust): estratégia de GPU/descarga, fatias de atenção e VAE
+
+
+def _media_plan(model: str) -> Dict[str, Any]:
+    """Plano de carga a partir do tamanho REAL dos pesos baixados e da memória livre agora. Qualquer falha devolve {} (comportamento antigo)."""
+    try:
+        from . import localmodels as lm
+
+        snap = lm._snapshot(model)
+        weights = _native.dir_weight_bytes(snap) if snap else 0
+        if not weights:
+            return {}
+        mem = _perf.memory_state()
+        mode = _perf.MODE_NUM[_perf.profile(PERF, hardware_info())["mode"]]
+        plan = _native.plan_media(weights, mem["vram_free"], mem["ram_avail"], mem["unified"], mode)
+        plan.update(weights=weights, files=_native.weight_files(snap))
+        return plan
+    except Exception:  # noqa: BLE001
+        return {}
+
+
 def _slim(pipe: Any, dev: str) -> Any:
-    """Modo leve: fatias de atenção/VAE e (na GPU) descarrega para a CPU o que não está em uso."""
+    """Coloca o modelo no dispositivo seguindo o plano: tudo na GPU, descarga do modelo, descarga sequencial (cabe em pouca VRAM) ou CPU; fatias de atenção/VAE quando o plano pede.
+    Sem plano (tamanho desconhecido), vale o modo de desempenho como antes."""
+    plan = dict(_PLAN)
     prof = _perf.profile(PERF, hardware_info())
-    if not prof["media_offload"]:
-        return pipe.to(dev)
-    for fn in ("enable_attention_slicing", "enable_vae_slicing", "enable_vae_tiling"):
-        try:
-            getattr(pipe, fn)()
-        except Exception:  # noqa: BLE001
-            pass
-    if dev == "cuda":
-        try:
-            pipe.enable_model_cpu_offload()
-            return pipe
-        except Exception:  # noqa: BLE001
-            pass
+    if not plan.get("strategy"):
+        plan = {"strategy": "model_offload" if prof["media_offload"] and dev == "cuda" else "gpu", "slicing": prof["media_offload"], "tiling": prof["media_offload"]}
+    for flag, fns in (("slicing", ("enable_attention_slicing", "enable_vae_slicing")), ("tiling", ("enable_vae_tiling",))):
+        if plan.get(flag):
+            for fn in fns:
+                try:
+                    getattr(pipe, fn)()
+                except Exception:  # noqa: BLE001
+                    pass
+    if dev == "cuda" and plan["strategy"] in ("model_offload", "sequential_offload"):
+        for fn in (("enable_sequential_cpu_offload", "enable_model_cpu_offload") if plan["strategy"] == "sequential_offload" else ("enable_model_cpu_offload",)):
+            try:
+                getattr(pipe, fn)()
+                return pipe
+            except Exception:  # noqa: BLE001
+                pass
     return pipe.to(dev)
 
 
 def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
-    """Mantém só um modelo local na memória por vez (hardware modesto)."""
+    """Mantém só um modelo local na memória por vez (hardware modesto). Antes de carregar: plano (núcleo Rust) e pré-carga paralela dos pesos para o cache do sistema."""
     _MEDIA_IDLE.touch(_perf.profile(PERF, hardware_info())["idle_s"])
     with _LOCAL_LOCK:
         key = (cap, model)
@@ -941,7 +968,14 @@ def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
                     torch.cuda.empty_cache()
             except ImportError:
                 pass
+            plan = _media_plan(model)
+            _PLAN.clear()
+            _PLAN.update(plan)
+            if plan.get("prefetch") and plan.get("files"):
+                _native.prefetch(plan["files"])   # leitura paralela: o from_pretrained acha os pesos já em RAM
             _LOCAL_CACHE[key] = loader()
+            if plan:
+                _native.record("media", cap=cap, model=model, strategy=plan.get("strategy"), weights=plan.get("weights"), slicing=plan.get("slicing"), tiling=plan.get("tiling"))
         return _LOCAL_CACHE[key]
 
 

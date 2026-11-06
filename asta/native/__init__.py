@@ -19,7 +19,7 @@ from array import array
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-ABI = 1
+ABI = 2   # versão da interface desta versão do ASTA; bibliotecas antigas (1) ainda servem para o áudio, só sem os recursos de modelos locais
 SRC = Path(__file__).resolve().parent
 _LIB: Any = None
 _TRIED = False
@@ -52,6 +52,18 @@ def _bind(lib: Any) -> None:
     lib.asta_fade_out.argtypes = [dp, ctypes.c_size_t, ctypes.c_size_t]
     lib.asta_pcm16.argtypes = [dp, ctypes.c_size_t, cp, ctypes.c_double]
     lib.asta_mul.argtypes = [dp, dp, ctypes.c_size_t, dp]
+    if lib.asta_abi_version() >= 2:  # v0.12: modelos locais (cabeçalhos, hardware, planejador, pré-carga)
+        u8p, sz, u64, u32, i64 = ctypes.c_char_p, ctypes.c_size_t, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_int64
+        lib.asta_sys_info.argtypes = [ctypes.c_void_p, sz]
+        lib.asta_sys_info.restype = i64
+        lib.asta_model_info.argtypes = [u8p, sz, ctypes.c_void_p, sz]
+        lib.asta_model_info.restype = i64
+        lib.asta_prefetch.argtypes = [u8p, sz, u32]
+        lib.asta_prefetch.restype = i64
+        lib.asta_plan_llm.argtypes = [u64, i64, i64, i64, i64, u32, i64, u64, u64, u32, u32, u32, u32, ctypes.c_void_p, sz]
+        lib.asta_plan_llm.restype = i64
+        lib.asta_plan_media.argtypes = [u64, u64, u64, u32, u32, ctypes.c_void_p, sz]
+        lib.asta_plan_media.restype = i64
 
 
 def load(force: bool = False) -> Any:
@@ -69,7 +81,7 @@ def load(force: bool = False) -> Any:
                 continue
             try:
                 lib = ctypes.CDLL(str(path))
-                if lib.asta_abi_version() != ABI:
+                if lib.asta_abi_version() not in (1, ABI):
                     _REASON = f"{path.name}: versão da interface diferente (recompile com `asta native setup`)"
                     continue
                 _bind(lib)
@@ -99,7 +111,8 @@ def find_tool(name: str) -> Optional[str]:
 
 def status() -> Dict[str, Any]:
     lib = load()
-    return {"active": lib is not None, "reason": _REASON, "cargo": bool(find_tool("cargo")), "rustup": bool(find_tool("rustup")), "path": _REASON if lib is not None else ""}
+    return {"active": lib is not None, "reason": _REASON, "cargo": bool(find_tool("cargo")), "rustup": bool(find_tool("rustup")), "path": _REASON if lib is not None else "",
+            "models": lib is not None and hasattr(lib, "asta_plan_llm"), "last": dict(LAST)}
 
 
 def rust_version() -> str:
@@ -339,3 +352,373 @@ def pcm16(samples: Any, limit: float = 0.85) -> bytes:
 def _swap(a: "array[int]") -> bytes:  # pragma: no cover  (máquinas big-endian)
     a.byteswap()
     return a.tobytes()
+
+
+# --------------------------------------------------------------------------- modelos locais (v0.12): hardware, cabeçalhos, planejador e pré-carga
+# Cada função usa o Rust quando existe e tem o equivalente em Python (mesmas contas, conferidas nos testes).
+import json  # noqa: E402
+import struct  # noqa: E402
+
+MIB = 1048576.0
+
+
+def _call_json(fn: Any, *args: Any) -> Optional[Dict[str, Any]]:
+    """Chama uma função do núcleo que devolve JSON no buffer; aumenta o buffer se preciso. None se deu erro."""
+    cap = 4096
+    for _try in range(2):
+        buf = ctypes.create_string_buffer(cap)
+        n = fn(*args, buf, cap)
+        if n < 0:
+            return None
+        if n <= cap:
+            try:
+                return json.loads(buf.raw[:n].decode("utf-8"))
+            except ValueError:
+                return None
+        cap = int(n) + 16
+    return None
+
+
+def _lib2() -> Any:
+    lib = load()
+    return lib if lib is not None and hasattr(lib, "asta_plan_llm") else None
+
+
+def sys_info() -> Dict[str, Any]:
+    """Núcleos lógicos/físicos, extensões da CPU e memória (total/disponível, respeitando o limite de contêiner)."""
+    lib = _lib2()
+    if lib is not None:
+        r = _call_json(lib.asta_sys_info)
+        if r:
+            return r
+    logical = os.cpu_count() or 1
+    phys, feats, total, avail = logical, [], 0, 0
+    try:
+        seen = set()
+        for i in range(logical):
+            seen.add(Path(f"/sys/devices/system/cpu/cpu{i}/topology/thread_siblings_list").read_text().strip())
+        phys = len(seen) or logical
+    except OSError:
+        phys = logical // 2 if logical >= 4 else logical
+    try:
+        flags = next((ln.split(":", 1)[1].split() for ln in Path("/proc/cpuinfo").read_text().splitlines() if ln.startswith(("flags", "Features"))), [])
+        feats = [f for f in ("sse4_2", "avx", "avx2", "fma", "f16c", "avx512f", "avx512bw", "avx512vl", "neon", "asimd") if f in flags]
+        feats = [{"sse4_2": "sse4.2", "asimd": "neon"}.get(f, f) for f in feats]
+    except OSError:
+        pass
+    try:
+        mem = {ln.split(":")[0]: int(ln.split()[1]) * 1024 for ln in Path("/proc/meminfo").read_text().splitlines() if ln.split()[1:2]}
+        total, avail = mem.get("MemTotal", 0), mem.get("MemAvailable", mem.get("MemFree", 0))
+        for pth in ("/sys/fs/cgroup/memory.max", "/sys/fs/cgroup/memory/memory.limit_in_bytes"):
+            try:
+                v = int(Path(pth).read_text().strip())
+                if 0 < v < total:
+                    total, avail = v, min(avail, v)
+            except (OSError, ValueError):
+                pass
+    except (OSError, ValueError, IndexError):
+        pass
+    if not total:
+        try:
+            total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
+            avail = int(total * 0.6)
+        except (AttributeError, ValueError, OSError):
+            pass
+    import platform
+
+    return {"logical": logical, "physical": min(phys, logical), "features": feats, "arch": platform.machine().lower(), "os": platform.system().lower(), "ram_total": total, "ram_avail": min(avail, total), "ram_exact": bool(total)}
+
+
+# ----- cabeçalhos
+_GGML = {0: "F32", 1: "F16", 2: "Q4_0", 3: "Q4_1", 6: "Q5_0", 7: "Q5_1", 8: "Q8_0", 9: "Q8_1", 10: "Q2_K", 11: "Q3_K", 12: "Q4_K", 13: "Q5_K", 14: "Q6_K", 15: "Q8_K", 16: "IQ2_XXS",
+         17: "IQ2_XS", 18: "IQ3_XXS", 19: "IQ1_S", 20: "IQ4_NL", 21: "IQ3_S", 22: "IQ2_S", 23: "IQ4_XS", 24: "I8", 25: "I16", 26: "I32", 27: "I64", 28: "F64", 29: "IQ1_M", 30: "BF16"}
+_SCALAR = {0: ("<B", 1), 1: ("<b", 1), 2: ("<H", 2), 3: ("<h", 2), 4: ("<I", 4), 5: ("<i", 4), 6: ("<f", 4), 7: ("<B", 1), 10: ("<Q", 8), 11: ("<q", 8), 12: ("<d", 8)}
+_ST_BYTES = {"F64": 8, "I64": 8, "U64": 8, "F32": 4, "I32": 4, "U32": 4, "F16": 2, "BF16": 2, "I16": 2, "U16": 2, "I8": 1, "U8": 1, "BOOL": 1, "F8_E4M3": 1, "F8_E5M2": 1}
+
+
+def _py_gguf(path: str, size: int) -> Optional[Dict[str, Any]]:
+    try:
+        with open(path, "rb", buffering=1 << 20) as f:
+            if f.read(4) != b"GGUF":
+                return None
+            u32 = lambda: struct.unpack("<I", f.read(4))[0]  # noqa: E731
+            u64 = lambda: struct.unpack("<Q", f.read(8))[0]  # noqa: E731
+            version = u32()
+            if version not in (2, 3):
+                return None
+            n_t, n_kv = u64(), u64()
+            if n_kv > 1_000_000 or n_t > 10_000_000:
+                return None
+
+            def gstr() -> str:
+                n = u64()
+                if n > (1 << 24):
+                    raise ValueError
+                return f.read(n).decode("utf-8", "replace")
+            m = {"arch": "", "name": "", "ctx": 0, "layers": 0, "embd": 0, "heads": 0, "heads_kv": 0, "ff": 0, "key_len": 0, "file_type": 0, "vocab": 0, "experts": 0}
+            for _i in range(n_kv):
+                key, t = gstr(), u32()
+                if t == 8:
+                    v = gstr()
+                    if key == "general.architecture":
+                        m["arch"] = v
+                    elif key == "general.name":
+                        m["name"] = v
+                elif t == 9:
+                    et, ln = u32(), u64()
+                    if key == "tokenizer.ggml.tokens":
+                        m["vocab"] = ln
+                    if et == 8:
+                        for _j in range(ln):
+                            n = u64()
+                            if n > (1 << 24):
+                                return None
+                            f.seek(n, 1)
+                    else:
+                        f.seek(_SCALAR[et][1] * ln, 1)
+                else:
+                    fmt, n = _SCALAR[t]
+                    v = int(struct.unpack(fmt, f.read(n))[0])
+                    for suf, k in ((".context_length", "ctx"), (".block_count", "layers"), (".embedding_length", "embd"), (".attention.head_count", "heads"), (".attention.head_count_kv", "heads_kv"),
+                                   (".feed_forward_length", "ff"), (".attention.key_length", "key_len"), (".expert_count", "experts")):
+                        if key.endswith(suf):
+                            m[k] = v
+                            break
+                    else:
+                        if key == "general.file_type":
+                            m["file_type"] = v
+            by, params = {}, 0.0
+            for _i in range(n_t):
+                n = u64()
+                if n > 4096:
+                    return None
+                f.seek(n, 1)
+                nd = u32()
+                if nd > 8:
+                    return None
+                el = 1.0
+                for _d in range(nd):
+                    el *= float(u64())
+                ty = u32()
+                u64()
+                params += el
+                by[ty] = by.get(ty, 0.0) + el
+        dom = max(by.items(), key=lambda kv: kv[1])[0] if by else 0
+        heads = max(m["heads"], 1)
+        heads_kv = m["heads_kv"] if m["heads_kv"] > 0 else heads
+        head_dim = m["key_len"] if m["key_len"] > 0 else (m["embd"] // heads if m["embd"] > 0 else 0)
+        return {"format": "gguf", "version": version, "bytes": size, "arch": m["arch"], "name": m["name"], "ctx_train": m["ctx"], "layers": m["layers"], "embd": m["embd"], "heads": m["heads"],
+                "heads_kv": heads_kv, "ff": m["ff"], "experts": m["experts"], "vocab": m["vocab"], "tensors": n_t, "params": params, "quant": _GGML.get(dom, "?"), "file_type": m["file_type"],
+                "kv_bytes_per_token": 2 * max(m["layers"], 0) * heads_kv * head_dim * 2}
+    except (OSError, struct.error, KeyError, ValueError):
+        return None
+
+
+def _py_safetensors(path: str, size: int) -> Optional[Dict[str, Any]]:
+    try:
+        with open(path, "rb") as f:
+            n = struct.unpack("<Q", f.read(8))[0]
+            if n == 0 or n > (1 << 28) or n + 8 > size:
+                return None
+            head = json.loads(f.read(n).decode("utf-8"))
+    except (OSError, struct.error, ValueError):
+        return None
+    if not isinstance(head, dict):
+        return None
+    params, tensors, dts = 0.0, 0, {}
+    for k, t in head.items():
+        if k == "__metadata__" or not isinstance(t, dict):
+            continue
+        el = 1.0
+        for d in t.get("shape") or []:
+            el *= float(d)
+        dt = t.get("dtype", "F16")
+        params += el
+        tensors += 1
+        dts[dt] = dts.get(dt, 0.0) + el
+    dom = max(dts.items(), key=lambda kv: kv[1])[0] if dts else "?"
+    return {"format": "safetensors", "bytes": size, "tensors": tensors, "params": params, "dtype": dom, "weight_bytes": sum(_ST_BYTES.get(d, 2) * e for d, e in dts.items())}
+
+
+def model_info(path: Any) -> Optional[Dict[str, Any]]:
+    """Cabeçalho do modelo (GGUF ou safetensors) sem carregar os pesos: tamanho, arquitetura, camadas, contexto de treino, quantização e custo do cache de atenção por token. None se o arquivo não existe."""
+    p = str(path)
+    if not os.path.isfile(p):
+        return None
+    lib = _lib2()
+    if lib is not None:
+        r = _call_json(lambda buf, cap: lib.asta_model_info(p.encode("utf-8"), len(p.encode("utf-8")), buf, cap))
+        if r:
+            return r
+    size = os.path.getsize(p)
+    low = p.lower()
+    info = _py_gguf(p, size) if low.endswith(".gguf") else _py_safetensors(p, size) if low.endswith(".safetensors") else (_py_gguf(p, size) or _py_safetensors(p, size))
+    return info or {"format": "unknown", "bytes": size}
+
+
+# ----- planejador
+def _floor_to(v: float, q: float) -> float:
+    return math.floor(v / q) * q
+
+
+def plan_llm(weights: int, layers: int, kv_per_token: int, ctx_train: int, ctx_want: int, explicit: bool, ctx_cap: int, ram_avail: int, vram_free: int, unified: bool, phys: int, logical: int, mode: int) -> Dict[str, Any]:
+    """Parâmetros de carga de um LLM GGUF para a memória livre agora. mode: 0 leve, 1 equilibrado, 2 máximo."""
+    lib = _lib2()
+    if lib is not None:
+        r = _call_json(lambda buf, cap: lib.asta_plan_llm(int(weights), int(layers), int(kv_per_token), int(ctx_train), int(ctx_want), int(explicit), int(ctx_cap), int(ram_avail), int(vram_free), int(unified), int(phys), int(logical), int(mode), buf, cap))
+        if r:
+            return r
+    inf = math.inf
+    w, n_layers = float(weights), float(max(layers, 1))
+    layer_bytes = w / n_layers
+    kvpt = float(kv_per_token) if kv_per_token > 0 else 131072.0
+    ram, vram = float(ram_avail), float(vram_free)
+    has_gpu = vram > 0.0
+    want = float(ctx_want) if ctx_want > 0 else 4096.0
+    probe = min(want, 8192.0)
+    notes = []
+    usable_vram = vram * 0.90 - 600.0 * MIB
+    ngl = 0.0
+    if has_gpu and usable_vram > 0.0:
+        per_layer = layer_bytes + kvpt * probe / n_layers * (0.53 if mode == 0 else 1.0)
+        ngl = min(math.floor(usable_vram / per_layer), n_layers)
+        if ngl < 1.0:
+            ngl = 0.0
+    all_gpu = ngl >= n_layers
+    frac_gpu = 1.0 if all_gpu else ngl / n_layers
+    ram_budget = max(ram * 0.80 - ngl * layer_bytes, 0.0) if unified else ram * 0.80
+    cpu_weights = w * 0.15 if all_gpu else (n_layers - ngl) * layer_bytes + w * 0.05
+
+    def ctx_for(scale: float) -> float:
+        gpu_left, cpu_left = usable_vram - ngl * layer_bytes, ram_budget - cpu_weights
+        tg = gpu_left / (kvpt * scale * frac_gpu) if frac_gpu > 0.0 else inf
+        tc = cpu_left / (kvpt * scale * (1.0 - frac_gpu)) if frac_gpu < 1.0 else inf
+        m = min(tg, tc)
+        if ctx_train > 0:
+            m = min(m, float(ctx_train))
+        if ctx_cap > 0:
+            m = min(m, float(ctx_cap))
+        return _floor_to(max(m, 0.0), 256.0) if math.isfinite(m) else want
+    kv_q8 = mode == 0
+    ctx_max = ctx_for(0.53 if kv_q8 else 1.0)
+    if not kv_q8 and ctx_max < want:
+        q = ctx_for(0.53)
+        if q > ctx_max:
+            kv_q8, ctx_max = True, q
+            notes.append("cache de atenção em 8 bits para caber mais contexto")
+    ctx = want if explicit else min(want, ctx_max)
+    if ctx < 512.0:
+        ctx = 512.0
+        notes.append("pouca memória livre: contexto mínimo")
+    if explicit and want > ctx_max and ctx_max > 0.0:
+        notes.append(f"o contexto pedido ({int(want)}) passa do que cabe na memória livre ({int(ctx_max)})")
+    p = float(max(phys, 1))
+    lg = float(max(logical, max(phys, 1)))
+    threads = min(p, 4.0) if all_gpu else (p - 1.0 if p >= 8.0 else p)
+    threads_batch = threads if all_gpu else (lg - 1.0 if lg > p and lg >= 8.0 else threads)
+    n_batch = 128.0 if mode == 0 else 512.0 if (all_gpu or mode == 2) else 256.0
+    n_ubatch = 128.0 if mode == 0 else min(512.0, n_batch)
+    flash = mode != 2 or has_gpu or kv_q8
+    mlock = mode == 2 and not has_gpu and ram > w * 2.0 + kvpt * ctx
+    prefetch = w < ram * 0.70
+    ram_after = ram - cpu_weights - kvpt * ctx * (1.0 - frac_gpu)
+    cache_bytes = 256.0 * MIB if mode == 0 else min(ram_after * 0.10, 1024.0 * MIB) if ram_after > 4096.0 * MIB else 0.0
+    return {"n_ctx": int(ctx), "ctx_max": int(ctx_max), "n_gpu_layers": -1 if all_gpu else int(ngl), "gpu_layers_fit": int(ngl), "n_threads": int(threads), "n_threads_batch": int(threads_batch),
+            "n_batch": int(n_batch), "n_ubatch": int(n_ubatch), "kv_q8": kv_q8, "flash": flash, "mlock": mlock, "prefetch": prefetch, "cache_bytes": int(cache_bytes), "notes": notes}
+
+
+def plan_media(weights: int, vram_free: int, ram_avail: int, unified: bool, mode: int) -> Dict[str, Any]:
+    """Como carregar um modelo de imagem/vídeo/áudio: gpu | model_offload | sequential_offload | cpu (+ fatias de atenção/VAE)."""
+    lib = _lib2()
+    if lib is not None:
+        r = _call_json(lambda buf, cap: lib.asta_plan_media(int(weights), int(vram_free), int(ram_avail), int(unified), int(mode), buf, cap))
+        if r:
+            return r
+    w, vram, ram, gib = float(weights), float(vram_free), float(ram_avail), 1024.0 * MIB
+    if vram <= 0.0:
+        strategy, slicing, tiling = "cpu", (w > ram * 0.40 or mode == 0), mode == 0
+    else:
+        need, usable = w * 1.25 + 1.5 * gib, vram * 0.92
+        strategy = "gpu" if (mode != 0 and need <= usable) else "model_offload" if (w * 0.55 + 1.0 * gib <= usable) else "sequential_offload"
+        slicing, tiling = (mode == 0 or need > usable * 0.75), (mode == 0 or need > usable * 0.60)
+    host_ok = w < ram * 0.5 if unified else w < ram * 0.70
+    return {"strategy": strategy, "slicing": slicing, "tiling": tiling, "prefetch": host_ok}
+
+
+# ----- pré-carga
+def prefetch(paths: Any, threads: int = 0) -> int:
+    """Lê os arquivos em paralelo para o cache do sistema (o carregamento do modelo depois acha tudo em RAM). Devolve os bytes lidos."""
+    if isinstance(paths, (str, os.PathLike)):
+        paths = [paths]
+    files = [str(p) for p in paths if os.path.isfile(str(p))]
+    if not files:
+        return 0
+    n = threads or min(8, max(2, (os.cpu_count() or 2)))
+    lib = _lib2()
+    total = 0
+    if lib is not None:
+        for p in files:
+            b = p.encode("utf-8")
+            r = lib.asta_prefetch(b, len(b), n)
+            total += max(0, int(r))
+        return total
+    def _read(p: str, i: int, parts: int) -> int:
+        size, got = os.path.getsize(p), 0
+        stripe = max(4 << 20, -(-size // parts))
+        try:
+            fd = os.open(p, os.O_RDONLY)
+        except OSError:
+            return 0
+        try:
+            if hasattr(os, "posix_fadvise"):
+                os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
+            off, end = i * stripe, min((i + 1) * stripe, size)
+            while off < end:
+                chunk = os.pread(fd, min(4 << 20, end - off), off) if hasattr(os, "pread") else b""
+                if not chunk:
+                    break
+                off += len(chunk)
+                got += len(chunk)
+        finally:
+            os.close(fd)
+        return got
+    from concurrent.futures import ThreadPoolExecutor
+
+    with ThreadPoolExecutor(max_workers=n) as ex:
+        for p in files:
+            total += sum(ex.map(lambda i, p=p: _read(p, i, n), range(n)))
+    return total
+
+
+# registro do último carregamento de modelo local (aparece em Configuração → Desempenho)
+LAST: Dict[str, Any] = {}
+
+
+def record(kind: str, **info: Any) -> None:
+    LAST[kind] = dict(info, at=int(__import__("time").time()))
+
+
+def dir_weight_bytes(path: Any) -> int:
+    """Soma dos arquivos de pesos (safetensors/bin/pt/ckpt/gguf) de uma pasta de modelo."""
+    total = 0
+    try:
+        for f in Path(str(path)).rglob("*"):
+            if f.suffix.lower() in (".safetensors", ".bin", ".pt", ".pth", ".ckpt", ".gguf") and (f.is_file() or f.is_symlink()):
+                try:
+                    total += os.path.getsize(f)
+                except OSError:
+                    pass
+    except OSError:
+        pass
+    return total
+
+
+def weight_files(path: Any) -> list:
+    out = []
+    try:
+        for f in Path(str(path)).rglob("*"):
+            if f.suffix.lower() in (".safetensors", ".bin", ".pt", ".pth", ".ckpt", ".gguf") and os.path.isfile(f):
+                out.append(str(f))
+    except OSError:
+        pass
+    return out

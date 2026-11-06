@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.0] — 2026-11-06
+
+### Melhorado — Núcleo Rust v2 (carga e inferência de modelos locais)
+- **Cabeçalhos sem carregar os pesos**: leitura de GGUF e safetensors em Rust (arquitetura, camadas, contexto de treino, quantização dominante, parâmetros, custo do cache de atenção por token).
+- **Planejador por hardware livre agora** (RAM, VRAM, núcleos físicos, memória unificada da Apple): camadas na GPU, janela de contexto que cabe (com cache de atenção em 8 bits quando precisa), threads = núcleos físicos, lotes, `mlock`, pré-carga e cache de prompt. O contexto definido pelo usuário nunca é contrariado (só avisa).
+- **Mídia (imagem, vídeo, som, voz)**: plano pelo tamanho real dos pesos — tudo na GPU, descarga do modelo, descarga sequencial (pouca VRAM) ou CPU, com fatias de atenção/VAE.
+- **Pré-carga paralela** dos pesos para o cache do sistema antes de carregar (várias threads + `posix_fadvise` no Linux).
+- **Cache de prompt** (llama-cpp) com tamanho decidido pela RAM sobrando.
+- Hardware: núcleos físicos/lógicos, AVX2/AVX-512/NEON, RAM total/disponível (respeitando limite de contêiner) — também em Python quando não há o núcleo. Configuração → Desempenho mostra o estado e o último plano.
+- O mesmo cálculo existe em Python; os testes conferem Rust × Python (inclusive 200 cenários aleatórios). Bibliotecas antigas (interface 1) continuam servindo o áudio; `asta update` recompila a nova.
+
 ## [0.11.0] — 2026-11-06
 
 ### Adicionado — Canvas

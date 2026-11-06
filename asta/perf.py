@@ -10,6 +10,9 @@ Os pesos continuam sendo mapeados do disco (mmap): só as páginas usadas ocupam
 """
 from __future__ import annotations
 
+import platform
+import shutil
+import subprocess
 import threading
 import time
 from typing import Any, Callable, Dict, Optional
@@ -76,3 +79,39 @@ class IdleUnloader:
             self._unload()
         except Exception:  # noqa: BLE001
             pass
+
+
+# --------------------------------------------------------------------------- memória livre agora (para o planejador do núcleo Rust)
+MODE_NUM = {"light": 0, "balanced": 1, "max": 2}
+_GPU_CACHE: Dict[str, Any] = {"t": 0.0, "v": (0, 0, False)}
+
+
+def gpu_memory(ram_total: int = 0, ram_avail: int = 0) -> tuple:
+    """(VRAM total, VRAM livre, memória unificada?) em bytes. NVIDIA: nvidia-smi. Apple Silicon: a GPU usa a RAM (≈65% dela). Sem GPU: zeros."""
+    now = time.time()
+    if now - _GPU_CACHE["t"] < 3.0:
+        return _GPU_CACHE["v"]
+    v: tuple = (0, 0, False)
+    smi = shutil.which("nvidia-smi")
+    if smi:
+        try:
+            out = subprocess.run([smi, "--query-gpu=memory.total,memory.free", "--format=csv,noheader,nounits"], capture_output=True, text=True, timeout=5).stdout.strip().splitlines()
+            if out:
+                tot, free = (int(float(x)) * 1048576 for x in out[0].split(","))
+                v = (tot, free, False)
+        except (OSError, subprocess.SubprocessError, ValueError):
+            pass
+    if v[0] == 0 and platform.system() == "Darwin" and "arm" in platform.machine().lower() and ram_total:
+        v = (int(ram_total * 0.65), int(min(ram_avail, ram_total) * 0.65), True)
+    _GPU_CACHE.update(t=now, v=v)
+    return v
+
+
+def memory_state() -> Dict[str, Any]:
+    """RAM/VRAM livres e núcleos agora (núcleo Rust quando há; senão Python)."""
+    from . import native
+
+    si = native.sys_info()
+    total, free, unified = gpu_memory(int(si.get("ram_total") or 0), int(si.get("ram_avail") or 0))
+    return {"ram_total": int(si.get("ram_total") or 0), "ram_avail": int(si.get("ram_avail") or 0), "vram_total": total, "vram_free": free, "unified": unified,
+            "phys": int(si.get("physical") or 1), "logical": int(si.get("logical") or 1), "features": si.get("features", [])}

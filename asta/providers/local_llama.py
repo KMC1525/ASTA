@@ -11,7 +11,7 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Tuple
 
-from .. import perf
+from .. import native, perf
 from ..util import hardware_info
 from .base import Provider, ProviderError, content_text, split_system
 
@@ -37,19 +37,41 @@ _PLAIN: set = set()   # modelos que ficaram mudos com as opções de economia (f
 
 
 def _load_llama(Llama: Any, base: Dict[str, Any], prof: Dict[str, Any]) -> Any:
-    """Carrega o modelo com as opções de economia do modo escolhido; versões antigas do llama-cpp-python que não as conhecem recebem só as básicas."""
+    """Carrega o modelo com as opções do plano (núcleo Rust: threads, lotes, cache de atenção, mlock…); versões antigas do llama-cpp-python que não conhecem alguma opção
+    recebem menos opções, até o carregamento básico."""
     extra: Dict[str, Any] = {"n_batch": prof["n_batch"], "use_mmap": True}
+    if prof.get("n_ubatch"):
+        extra["n_ubatch"] = prof["n_ubatch"]
+    if prof.get("n_threads_batch"):
+        extra["n_threads_batch"] = prof["n_threads_batch"]
+    if prof.get("mlock"):
+        extra["use_mlock"] = True
     if prof["flash"]:
         extra["flash_attn"] = True
     if prof["kv_q8"]:
         extra.update(type_k=8, type_v=8, flash_attn=True)  # 8 = GGML_TYPE_Q8_0 (cache de atenção pela metade; exige flash attention)
+    older = {k: v for k, v in extra.items() if k not in ("n_ubatch", "n_threads_batch", "use_mlock")}
     basic = {k: v for k, v in extra.items() if k in ("n_batch", "use_mmap")}
-    for kw in (extra, basic):
+    for kw in (extra, older, basic):
         try:
             return Llama(**base, **kw)
         except Exception:  # noqa: BLE001  (versão/backend sem essas opções: tenta com menos)
             continue
     return Llama(**base)
+
+
+def _plan(path: str, hw: Dict[str, Any], prof: Dict[str, Any], want_ctx: int, explicit: bool) -> Dict[str, Any]:
+    """Plano de carga com o núcleo Rust: lê o cabeçalho do GGUF e a memória livre agora. Qualquer falha cai no comportamento antigo (hardware_info)."""
+    try:
+        info = native.model_info(path) or {}
+        mem = perf.memory_state()
+        gpu_known = bool(hw.get("gpu")) or mem["unified"]
+        plan = native.plan_llm(int(info.get("bytes") or 0), int(info.get("layers") or 0), int(info.get("kv_bytes_per_token") or 0), int(info.get("ctx_train") or 0), int(want_ctx), explicit,
+                               0, mem["ram_avail"], mem["vram_free"] if gpu_known else 0, mem["unified"], mem["phys"], mem["logical"], perf.MODE_NUM[prof["mode"]])
+        plan["info"] = {k: info.get(k) for k in ("arch", "name", "quant", "layers", "ctx_train", "bytes", "params")}
+        return plan
+    except Exception:  # noqa: BLE001
+        return {}
 
 
 def context_size(configured: Any, model_name: str, tier: str) -> int:
@@ -124,17 +146,35 @@ class LocalLlamaProvider(Provider):
         prof = perf.profile(self.perf_cfg, hw)
         if path in _PLAIN:
             prof = dict(prof, flash=False, kv_q8=False)
-        ctx = perf.cap_context(context_size(self.n_ctx_cfg, Path(path).name, hw["tier"]), prof, explicit=bool(self.n_ctx_cfg))
-        key = f"{path}|{ctx}|{prof['mode']}|{int(prof['flash'])}{int(prof['kv_q8'])}"  # mudar a janela de contexto ou o modo recarrega o modelo
+        want = perf.cap_context(context_size(self.n_ctx_cfg, Path(path).name, hw["tier"]), prof, explicit=bool(self.n_ctx_cfg))
+        key = f"{path}|{want}|{prof['mode']}|{int(prof['flash'])}{int(prof['kv_q8'])}"  # a chave não usa a memória livre do momento (senão recarregaria o modelo a cada variação); mudar a janela de contexto ou o modo recarrega
+        plan = _plan(path, hw, prof, want, bool(self.n_ctx_cfg)) if key not in _CACHE else {}
+        ctx = int(plan.get("n_ctx") or want)
+        if plan:   # o plano manda nos parâmetros de carga; o modo "mudo" (flash/KV 8 bits) continua sendo respeitado
+            prof = dict(prof, n_batch=plan["n_batch"], n_ubatch=plan["n_ubatch"], n_threads_batch=plan["n_threads_batch"], mlock=plan["mlock"],
+                        flash=plan["flash"] and path not in _PLAIN, kv_q8=plan["kv_q8"] and path not in _PLAIN)
         with _LOCK:
             llm = _CACHE.get(key)
             if llm is None:
                 use_gpu = bool(hw.get("gpu")) or (hw["os"] == "Darwin" and "arm" in hw["arch"].lower())
-                base = dict(model_path=path, n_ctx=ctx, n_threads=max(1, hw["cpus"] - 1), n_gpu_layers=-1 if use_gpu else 0, verbose=False)
+                ngl = int(plan["n_gpu_layers"]) if plan and use_gpu else (-1 if use_gpu else 0)
+                threads = int(plan["n_threads"]) if plan else max(1, hw["cpus"] - 1)
+                base = dict(model_path=path, n_ctx=ctx, n_threads=threads, n_gpu_layers=ngl, verbose=False)
                 _CACHE.clear()  # mantém apenas um modelo na RAM (hardware leve)
                 gc.collect()
+                if plan.get("prefetch"):
+                    native.prefetch([path])   # leitura paralela para o cache do sistema: o mmap acha tudo em RAM (carga bem mais rápida em disco frio)
                 llm = _load_llama(Llama, base, prof)
+                if plan.get("cache_bytes"):
+                    try:   # cache de prompt: o prefixo repetido da conversa (sistema + histórico) não é recalculado a cada resposta
+                        from llama_cpp import LlamaRAMCache  # type: ignore
+
+                        llm.set_cache(LlamaRAMCache(capacity_bytes=int(plan["cache_bytes"])))
+                    except Exception:  # noqa: BLE001
+                        pass
                 _CACHE[key] = llm
+                native.record("llm", model=Path(path).name, n_ctx=ctx, n_gpu_layers=ngl, n_threads=threads, kv_q8=bool(prof["kv_q8"]), flash=bool(prof["flash"]), notes=plan.get("notes", []),
+                              quant=(plan.get("info") or {}).get("quant"), layers=(plan.get("info") or {}).get("layers"))
         _IDLE.touch(prof["idle_s"])
         return llm, path
 
