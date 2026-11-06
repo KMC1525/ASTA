@@ -1470,4 +1470,5 @@ export default {
   "Nenhum modelo encontrado para «{q}».": "No model found for “{q}”.",
   "configurar": "set up",
   "Limite do texto de cada resposta (mínimo 2.000). 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Com tempo de pensamento ligado, o pensamento vai além desse limite.": null,
+  "Imagens, vídeos e vozes com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo.": "Images, videos and voices with the same OpenRouter key (or login) as the chat. Use \u201cLoad models\u201d to see the current models of each type.",
 };

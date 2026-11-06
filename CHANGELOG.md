@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.5] — 2026-11-06
+
+### Adicionado
+- **OpenRouter no Studio e no Canvas (imagem, vídeo e voz).** Além do texto (roteiro, análise, edição automática), o OpenRouter agora é um provedor de **mídia**: imagens (`/images`), vídeos (`/videos`, com envio, consulta e download) e vozes (`/audio/speech`), com a mesma chave ou login do chat. No Studio, quem usa o OpenRouter no chat e não escolheu outro provedor de mídia já gera imagens, narração e (com «Modelo de vídeo em cada plano») clipes de vídeo pelo OpenRouter, sem configurar mais nada; a edição (timeline, cortes, exportação) segue no ffmpeg. Em Configuração → Mídia dá para escolher o OpenRouter por tipo e carregar os modelos atuais.
+
 ## [0.12.4] — 2026-11-06
 
 ### Testes — provedores em todas as seções

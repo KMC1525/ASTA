@@ -583,6 +583,104 @@ class GoogleMedia(MediaProvider):
         return f"conectado ({len(res.get('models', []))}+ modelos)"
 
 
+class OpenRouterMedia(MediaProvider):
+    """OpenRouter: imagens (POST /images), vídeos (POST /videos, assíncrono: envia, consulta e baixa) e voz (POST /audio/speech, formato da OpenAI) com a MESMA chave do OpenRouter.
+    Serve ao Studio e ao Canvas. Os modelos disponíveis mudam sempre: «Carregar modelos» lista os atuais."""
+
+    id, label = "openrouter", "OpenRouter"
+    caps = ("image", "video", "voice")
+    supports_refs = False
+
+    def _h(self) -> Dict[str, str]:
+        self.need_key()
+        return {"Authorization": f"Bearer {self.key}", "X-Title": "ASTA"}
+
+    def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
+        h = self._h()
+        model = self.model_for("image", model) or "google/gemini-2.5-flash-image"
+        body: Dict[str, Any] = {"model": model, "prompt": prompt + (f"\n\nEvite: {negative}" if negative else ""), "aspect_ratio": aspect_of(size)}
+        body.update(extra or {})
+        out: List[Media] = []
+        for _ in range(max(1, count)):
+            res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=300))
+            items = (res.get("data") if isinstance(res, dict) else None) or []
+            got = 0
+            for it in items:
+                b64 = it.get("b64_json") if isinstance(it, dict) else None
+                if b64:
+                    out.append(expect_media(base64.b64decode(b64), (it.get("media_type") or "image/png"), "image", self.label))
+                    got += 1
+                elif isinstance(it, dict) and it.get("url"):
+                    data, mime = http.get_bytes(it["url"], h, timeout=300)
+                    out.append(expect_media(data, mime, "image", self.label))
+                    got += 1
+            if not got:
+                err = res.get("error") if isinstance(res, dict) else None
+                raise ProviderError(f"{self.label}: nenhuma imagem devolvida" + (f" ({err.get('message', err) if isinstance(err, dict) else err})." if err else "."))
+            if len(out) >= count:
+                break
+        return out[:max(1, count)]
+
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+        h = self._h()
+        model = self.model_for("video", model) or "google/veo-3.1"
+        body: Dict[str, Any] = {"model": model, "prompt": prompt, "duration": int(duration), "aspect_ratio": aspect}
+        body.update(extra or {})
+        if image:
+            body["frame_images"] = [{"type": "image_url", "image_url": {"url": f"data:{image[1]};base64,{base64.b64encode(image[0]).decode('ascii')}"}, "frame_type": "first_frame"}]
+        try:
+            job = _retry(self.ctl, lambda: http.post_json(f"{self.base}/videos", body, h, timeout=120))
+        except ProviderError as exc:
+            if image and exc.status in (400, 422):  # o modelo não aceita imagem inicial: segue só com o texto
+                body.pop("frame_images", None)
+                self.ctl.note("Este modelo de vídeo não aceitou a imagem inicial: gerando só pelo texto.")
+                job = _retry(self.ctl, lambda: http.post_json(f"{self.base}/videos", body, h, timeout=120))
+            else:
+                raise
+        vid, poll = (job.get("id") if isinstance(job, dict) else None), (job.get("polling_url") if isinstance(job, dict) else None)
+        if not vid and not poll:
+            raise ProviderError(f"{self.label}: resposta inesperada ao criar o vídeo.")
+        poll = poll or f"{self.base}/videos/{vid}"
+        deadline = time.time() + 1800
+        while True:
+            self.ctl.check()
+            st = http.get_json(poll, h, timeout=60)
+            status = str((st or {}).get("status", "")).lower()
+            if status == "completed":
+                break
+            if status in ("failed", "cancelled", "expired"):
+                raise ProviderError(f"{self.label}: vídeo {status}" + (f" — {st.get('error')}" if st.get("error") else "."))
+            if time.time() > deadline:
+                raise ProviderError(f"{self.label}: o vídeo demorou demais (mais de 30 minutos).")
+            self.ctl.note("Gerando vídeo…")
+            self.ctl.sleep(self.poll(10))
+        vid = vid or st.get("id")
+        data, mime = http.get_bytes(f"{self.base}/videos/{vid}/content?index=0", {**h, "Accept": "video/*"}, timeout=900)
+        return expect_media(data, mime, "video", self.label)
+
+    def voice(self, text, *, voice="", speed=1.0, model="", extra=None, instructions=""):
+        h = self._h()
+        model = self.model_for("voice", model) or "openai/gpt-4o-mini-tts"
+        body: Dict[str, Any] = {"model": model, "input": text[:4000], "voice": voice or "alloy", "response_format": "mp3", "speed": speed}
+        body.update(extra or {})
+        data, mime = _retry(self.ctl, lambda: http.post_bytes(f"{self.base}/audio/speech", body, h, timeout=300))
+        return expect_media(data, mime or "audio/mpeg", "audio", self.label)
+
+    def list_models(self, cap: str) -> List[str]:
+        self.need_key()
+        if cap == "video":
+            res = http.get_json(f"{self.base}/videos/models", self._h(), timeout=30)
+            return sorted({m.get("id") for m in (res.get("data") or []) if isinstance(m, dict) and m.get("id")})
+        if cap == "image":
+            res = http.get_json(f"{self.base}/models?output_modalities=image", self._h(), timeout=30)
+            return sorted({m.get("id") for m in (res.get("data") or []) if isinstance(m, dict) and m.get("id")})
+        return list(MEDIA_PRESETS["openrouter"]["suggest"].get(cap, []))
+
+    def test(self) -> str:
+        res = http.get_json(f"{self.base}/auth/key", self._h(), timeout=30)
+        return "chave válida" + (f" ({(res.get('data') or {}).get('label')})" if isinstance(res, dict) and isinstance(res.get("data"), dict) and res["data"].get("label") else "")
+
+
 # --------------------------------------------------------------------------- Stability AI
 
 
@@ -1299,6 +1397,12 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "models": {"voice": "eleven_multilingual_v2", "stt": "scribe_v1"}, "suggest": {"voice": ["eleven_multilingual_v2", "eleven_turbo_v2_5", "eleven_v3"], "stt": ["scribe_v1"]},
         "hint": 'Vozes realistas (no nó Voz use o nome ou o ID da voz), efeitos sonoros e música (experimental).',
     },
+    "openrouter": {
+        "label": "OpenRouter", "kind": "openrouter", "caps": ["image", "video", "voice"], "base_url": "https://openrouter.ai/api/v1", "needs_key": True,
+        "docs": "https://openrouter.ai/keys", "models": {"image": "google/gemini-2.5-flash-image", "video": "google/veo-3.1", "voice": "openai/gpt-4o-mini-tts"},
+        "suggest": {"image": ["google/gemini-2.5-flash-image", "openai/gpt-image-1"], "video": ["google/veo-3.1"], "voice": ["openai/gpt-4o-mini-tts", "openai/tts-1"]},
+        "hint": "Imagens, vídeos e vozes com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo.",
+    },
     "google": {
         "label": "Google (Gemini / Veo)", "kind": "google", "caps": ["image", "video"], "base_url": "https://generativelanguage.googleapis.com/v1beta", "needs_key": True,
         "docs": "https://aistudio.google.com/apikey", "models": {"image": "gemini-2.5-flash-image", "video": "veo-3.0-fast-generate-001"},
@@ -1350,7 +1454,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
     },
 }
 
-_KINDS = {"demo": DemoMedia, "openai": OpenAIMedia, "elevenlabs": ElevenLabsMedia, "google": GoogleMedia, "stability": StabilityMedia, "replicate": ReplicateMedia,
+_KINDS = {"demo": DemoMedia, "openrouter": OpenRouterMedia, "openai": OpenAIMedia, "elevenlabs": ElevenLabsMedia, "google": GoogleMedia, "stability": StabilityMedia, "replicate": ReplicateMedia,
           "huggingface": HFInferenceMedia, "a1111": A1111Media, "local_hf": LocalHFMedia, "gguf_local": GGUFMedia, "voice_settings": VoiceSettingsMedia}
 
 

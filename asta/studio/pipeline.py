@@ -120,9 +120,17 @@ class StudioPipeline(Runner):
         return obj, fb
 
     # ------------------------------------------------------------------ mídia
+    def _media_pid(self, cap: str) -> str:
+        """Provedor de mídia de um tipo. Se o usuário nunca escolheu um (Demo) mas usa o OpenRouter no chat e ele já tem chave, o Studio usa o próprio OpenRouter para imagem,
+        vídeo e voz — assim o OpenRouter funciona no Studio sem configurar nada além da chave/login."""
+        pid = pick_provider(self.settings, cap)
+        if pid == "demo" and self.settings["active"].get("generation") == "openrouter" and ((self.settings.get("providers") or {}).get("openrouter") or {}).get("api_key"):
+            return "openrouter"
+        return pid
+
     def _provider(self, cap: str) -> Any:
         if cap not in self.media:
-            pid = pick_provider(self.settings, cap)
+            pid = self._media_pid(cap)
             self.media[cap] = (pid, build_media(self.settings, pid, self.ctl, self.store.models_dir))
         return self.media[cap][1]
 
@@ -372,7 +380,7 @@ class StudioPipeline(Runner):
         # planos
         if only in ("", "shots"):
             img, vid = self._provider("image"), None
-            use_video = p["motion"] == "video" and pick_provider(self.settings, "video") != "demo"
+            use_video = p["motion"] == "video" and self._media_pid("video") != "demo"
             if use_video:
                 vid = self._provider("video")
             for si, shot in enumerate(plan["shots"]):

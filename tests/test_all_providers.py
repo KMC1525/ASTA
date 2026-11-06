@@ -31,6 +31,8 @@ class Fake:
 
     def __init__(self):
         self.seen = []
+        self.polls = 0
+        self._media = {}
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -59,6 +61,22 @@ class Fake:
                 self.wfile.flush()
 
             def do_GET(self):
+                if "/videos/" in self.path and self.path.endswith("/content?index=0"):
+                    data = outer.media("video")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    return self.wfile.write(data)
+                if "/videos/job1" in self.path:
+                    outer.polls += 1
+                    return self._out({"id": "job1", "status": "completed" if outer.polls >= 2 else "in_progress"})
+                if self.path.endswith("/videos/models"):
+                    return self._out({"data": [{"id": "google/veo-3.1"}]})
+                if "output_modalities=image" in self.path:
+                    return self._out({"data": [{"id": "google/gemini-2.5-flash-image"}]})
+                if self.path.endswith("/auth/key"):
+                    return self._out({"data": {"label": "teste"}})
                 if self.path.endswith("/models"):
                     return self._out({"data": [{"id": "m"}], "models": [{"name": "m"}]})
                 self._out({"error": "nope"}, 404)
@@ -66,6 +84,19 @@ class Fake:
             def do_POST(self):
                 body = self._body()
                 outer.seen.append((self.path, self.headers.get("Authorization", ""), self.headers.get("x-api-key", ""), body))
+                if self.path.endswith("/api/v1/images"):
+                    import base64
+                    return self._out({"created": 1, "data": [{"b64_json": base64.b64encode(outer.media("image")).decode()}], "usage": {}})
+                if self.path.endswith("/api/v1/videos"):
+                    outer.polls = 0
+                    return self._out({"id": "job1", "polling_url": outer.url + "/api/v1/videos/job1", "status": "pending"})
+                if self.path.endswith("/api/v1/audio/speech"):
+                    data = outer.media("audio")
+                    self.send_response(200)
+                    self.send_header("Content-Type", "audio/mpeg")
+                    self.send_header("Content-Length", str(len(data)))
+                    self.end_headers()
+                    return self.wfile.write(data)
                 if self.path.endswith("/chat/completions"):
                     msgs = body.get("messages") or []
                     system = next((m["content"] for m in msgs if m["role"] == "system"), "")
@@ -91,6 +122,22 @@ class Fake:
         self.httpd.daemon_threads = True
         threading.Thread(target=self.httpd.serve_forever, daemon=True).start()
         self.url = f"http://127.0.0.1:{self.httpd.server_address[1]}"
+
+    def media(self, kind):
+        """Arquivos de verdade (ffmpeg) devolvidos pelas rotas de mídia do OpenRouter falso."""
+        if kind not in self._media:
+            import subprocess
+            d = Path(tempfile.mkdtemp(prefix="asta-fm-"))
+            ff = lambda *a: subprocess.run(["ffmpeg", "-y", "-loglevel", "error", *a], check=True)  # noqa: E731
+            if kind == "image":
+                ff("-f", "lavfi", "-i", "testsrc2=s=320x240", "-frames:v", "1", str(d / "o.png"))
+            elif kind == "video":
+                ff("-f", "lavfi", "-i", "testsrc2=d=2:s=320x240:r=24", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(d / "o.mp4"))
+            else:
+                ff("-f", "lavfi", "-i", "sine=f=220:d=2", "-c:a", "libmp3lame", str(d / "o.mp3"))
+            self._media[kind] = next(d.iterdir()).read_bytes()
+            shutil.rmtree(d, ignore_errors=True)
+        return self._media[kind]
 
     def close(self):
         self.httpd.shutdown()
@@ -291,6 +338,82 @@ class AllProvidersTests(ServerCase):
             prov = build_provider(self.store.get_settings(), pid)
             self.assertTrue(prov.chat(msgs, system="x").strip(), pid)
             self.assertNotIn("base64", json.dumps(self.fake.seen[-1][3]), pid)
+
+
+@unittest.skipUnless(HAVE_FF, "ffmpeg não instalado")
+class OpenRouterInStudioTests(AllProvidersTests):
+    """O OpenRouter gera e edita vídeos no Studio: roteiro e análise pelo chat, imagens, vozes e (opcional) clipes de vídeo pela API de mídia dele, e a montagem/edição no ffmpeg."""
+
+    def setUp(self):
+        self.use("openrouter")
+        self.store.save_settings({"media": {"urls": {"openrouter": self.fake.url + "/api/v1"}, "active": {"image": "demo", "video": "demo", "voice": "demo", "sound": "demo"}}})
+
+    def create(self, **kw):
+        body = {"name": "OR", "kind": "single", "duration_type": "shorts", "target_seconds": 12, "music": False, "prompt": "Um robô aprende a pintar. Ele pinta o céu.", **kw}
+        st, p = self.c.json("POST", "/api/studio/projects", body)
+        self.assertEqual(st, 201, p)
+        st, r = self.c.json("POST", f"/api/studio/projects/{p['id']}/episodes/{p['episodes'][0]['id']}/generate", {})
+        self.assertEqual(st, 200, r)
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        errs = [e for e in ev if e.get("type") == "error"]
+        self.assertFalse(errs, errs[:2])
+        self.assertTrue([e for e in ev if e.get("type") == "done"], ev[-3:])
+        return p["id"], p["episodes"][0]["id"], self.c.json("GET", f"/api/studio/projects/{p['id']}")[1]
+
+    def paths(self):
+        return [x[0] for x in self.fake.seen]
+
+    def test_studio_uses_openrouter_for_script_images_and_voice_without_extra_setup(self):
+        pid, eid, full = self.create()
+        paths = self.paths()
+        self.assertTrue(any(x.endswith("/chat/completions") for x in paths), "roteiro/análise pelo chat do OpenRouter")
+        self.assertTrue(any(x.endswith("/api/v1/images") for x in paths), "imagens pelo OpenRouter")
+        self.assertTrue(any(x.endswith("/api/v1/audio/speech") for x in paths), "narração pelo OpenRouter")
+        auth = {x[1] for x in self.fake.seen}
+        self.assertEqual(auth, {"Bearer sk-teste"})
+        ep = full["episodes"][0]
+        kinds = {a["kind"] for a in full["assets"]}
+        self.assertTrue({"image", "audio"} <= kinds, kinds)
+        self.assertGreater(len(ep["timeline"]["clips"]), 2)
+        # editar: dividir um clipe na timeline e exportar o vídeo final
+        clips = ep["timeline"]["clips"]
+        tl = ep["timeline"]
+        self.assertEqual(self.c.json("PUT", f"/api/studio/projects/{pid}/episodes/{eid}/timeline", {"timeline": tl})[0], 200)
+        st, r = self.c.json("POST", f"/api/studio/projects/{pid}/episodes/{eid}/export", {"mode": "full", "quality": "480p"})
+        self.assertEqual(st, 200, r)
+        ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        self.assertTrue([e for e in ev if e.get("type") == "done"], ev[-3:])
+
+    def test_studio_generates_video_clips_with_openrouter_video_models(self):
+        pid, eid, full = self.create(motion="video")
+        paths = self.paths()
+        self.assertTrue(any(x.endswith("/api/v1/videos") for x in paths), paths)   # clipes de vídeo pedidos ao OpenRouter
+        self.assertTrue(any(x.endswith("/videos/job1/content?index=0") or "videos/job1" in x for x in paths) or self.fake.polls >= 2, "consulta e download do vídeo")
+        self.assertIn("video", {a["kind"] for a in full["assets"]})
+
+    def test_explicit_media_choice_still_wins_over_the_openrouter_default(self):
+        self.store.save_settings({"media": {"active": {"image": "demo", "voice": "demo"}}, "active": {"generation": "anthropic"}})
+        self.use("anthropic")
+        self.fake.seen.clear()
+        self.create()
+        self.assertFalse(any(x.endswith("/api/v1/images") for x in self.paths()))   # outro provedor de texto: mídia continua no Demo
+
+    def test_media_provider_works_in_canvas_and_lists_models(self):
+        from asta.canvas import media as M
+
+        st = self.store.get_settings()
+        prov = M.build_media(st, "openrouter")
+        self.assertEqual(prov.list_models("image"), ["google/gemini-2.5-flash-image"])
+        self.assertEqual(prov.list_models("video"), ["google/veo-3.1"])
+        self.assertIn("chave válida", prov.test())
+        self.assertEqual(M.pick_provider(st, "image", "openrouter"), "openrouter")
+        self.assertEqual(M.pick_provider(st, "voice", "openrouter"), "openrouter")
+        with self.assertRaises(Exception):
+            M.pick_provider(st, "sound", "openrouter")   # não oferece som: erro claro
+
+
+for _n in [n for n in dir(AllProvidersTests) if n.startswith("test_") and n not in vars(OpenRouterInStudioTests)]:
+    setattr(OpenRouterInStudioTests, _n, None)   # herda só os auxiliares, não repete os testes da bateria geral
 
 
 class MediaProvidersCoverage(unittest.TestCase):
