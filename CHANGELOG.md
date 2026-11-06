@@ -5,6 +5,29 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.7.0] — 2026-11-06
+
+### Adicionado
+- **Studio — gere, edite e revise vídeos audiovisuais com IA** (nova seção, logo abaixo de Canvas). Tudo o que já existia continua igual; o Studio reaproveita os provedores de texto (Configuração → Provedores) e de mídia (Configuração → Mídia: imagem, vídeo, som, voz), inclusive o modo Demo offline e os modelos locais.
+  - **Tipos de duração:** **Shorts/Reels** (até 2 min), **Curta** (até 30 min) e **Longa** (até 90 min) — mais **Personalizada** (qualquer duração, até 6 h). A duração é fácil de ajustar: minutos + segundos, controle deslizante e atalhos (30 s, 1 min, 5 min, 1 h 30…); passar do limite do tipo muda o tipo sozinho. Cada tipo começa no seu padrão (formato 9:16 nos Shorts, 16:9 nos demais) e planeja cenas do tamanho certo (≈8 s, ≈40 s, ≈90 s).
+  - **Estilos:** Realista, Cartoon, Anime e Custom (você descreve o visual). O estilo entra em todos os prompts de imagem, junto com a aparência dos personagens da «bíblia» do projeto, para manter a continuidade.
+  - **Tipos de projeto:** **Único** (começa e termina num vídeo) e **Série** (vários episódios; cada episódio recebe a bíblia da série — personagens, mundo, tom, fatos — e os resumos dos anteriores, e ao terminar atualiza a bíblia e escreve o seu resumo).
+  - **Pipeline de geração cena a cena (multi-agente, multi-etapa):** o **Showrunner** escreve o roteiro (em atos, se forem muitas cenas) e, **para cada cena, um passo de cada vez antes de passar à próxima**: **recebe** (briefing + contexto + continuidade) → **analisa** (o Analista divide em planos, ajusta a narração à duração, define música e efeito) → **gera** (voz, imagens, movimento — Ken Burns leve ou o modelo de vídeo do provedor —, música e efeito) → **revisa** (verificações objetivas + Revisor de IA; se reprovar, aplica a correção e refaz só o que mudou) → **entrega** (coloca os clipes na timeline). A tela mostra o quadro de cenas ao vivo com os cinco passos de cada uma. Cena entregue fica salva: dá para **cancelar e continuar** de onde parou e **refazer uma cena sozinha** (a timeline se ajusta sem tirar o resto do lugar). Sem IA de texto (Demo) ou com resposta inválida, agentes determinísticos assumem.
+  - **Edição automática:** vários anexos (vídeos, imagens, áudios) + um prompt + um **estilo de edição** — **Gameplay** (momentos de ação pelos picos de volume, cortes rápidos, zoom nos destaques), **Documentário** (cortes longos, transições suaves, título, narração em destaque), **Edit Phonk** (cortes na batida, câmera lenta/rápida, zoom, filtro granulado, música no talo), **Trailer** (ritmo que acelera, cartelas), **Vlog** (corta o tempo morto), **Tutorial** (remove pausas), **Clipe musical** (cortes no compasso) e **Apresentação de fotos**. Pipeline: **Analista** (papel de cada arquivo: filmagem, b-roll, música, narração; mede trocas de cena, picos de volume e silêncios com o ffmpeg) → **Diretor** (ritmo, ordem, destaques, trechos a evitar, títulos) → **Revisor** → montagem na timeline. Funciona também dentro de um projeto (como novo episódio, numa série).
+  - **Timeline estilo Kdenlive:** bin de mídias (importar, arrastar para a timeline), **monitor** de preview com reprodução (vídeo, áudio, legendas, filtros e fades), **inspetor** de propriedades e trilhas (T1, V2, V1, A1–A3) com ferramentas de **cortar** (S ou lâmina C), **juntar** (J), **silenciar** (M), **excluir** e **excluir fechando o espaço**, duplicar, aparar no cursor, mover/aparar com **ímã** e modo **ripple**, texto, marcadores, velocidade (0,25×–4×), volume, fades, opacidade, escala/posição, ajuste (preencher/caber/esticar) e **filtros de cor** (P&B, quente, frio, vivo, VHS, cinema, phonk); travar/ocultar/silenciar trilhas, seleção por retângulo, menu de contexto, **desfazer/refazer**, zoom (Ctrl+roda) e **salvamento automático**.
+  - **Exportação:** **Completo** (vídeo + áudio, MP4), **Somente vídeo** e **Somente áudio** (M4A, MP3 ou WAV), em 480p/720p/1080p; as exportações ficam listadas com abrir/baixar/excluir.
+  - Novos: `asta/studio/` (esquema `asta.studio.v1`, armazenamento, pipeline, edição automática, exportação, ferramentas ffprobe/ffmpeg), rotas `/api/studio/*`, `asta/web/js/views/studio*.js`. O renderizador do Canvas ganhou clipes com **velocidade**, **mudo** e **filtros** e os modos **vídeo/áudio** (sem mudar nada para quem já usa).
+
+### Corrigido
+- O seletor de duração não embaralha mais os minutos e segundos enquanto você digita.
+
+### Limites conhecidos
+- A qualidade do vídeo final depende dos provedores de mídia escolhidos; no modo Demo as imagens, vozes e músicas são sintéticas. Vídeos muito longos (filmes de 90 min) geram centenas de planos e podem levar horas e custar bastante com provedores pagos — por isso a geração é retomável.
+- O preview do navegador aproxima filtros e fades com CSS; a exportação (ffmpeg) é a referência. A edição automática não transcreve fala (usa picos de volume, trocas de cena e silêncios).
+
+### Testes
+- `tests/test_studio.py` (esquema, armazenamento, render com modos/velocidade/mudo/filtros, pipeline cena a cena com retomada e refazer cena, planejamento em atos, agentes de texto e correções do Revisor, série, edição automática por estilo, API e exportação completo/vídeo/áudio) e `tests/browser/studio_ui.js`.
+
 ## [0.6.3] — 2026-11-06
 
 ### Corrigido
@@ -669,7 +692,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.3...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1

@@ -7,6 +7,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-11-06
+
+### Added
+- **Studio — generate, edit and review AI audiovisual videos** (new section, right below Canvas). Everything that existed stays as it was; Studio reuses the text providers (Configuration → Providers) and media providers (Configuration → Media: image, video, sound, voice), including the offline Demo mode and local models.
+  - **Duration types:** **Shorts/Reels** (up to 2 min), **Short film** (up to 30 min) and **Feature** (up to 90 min) — plus **Custom** (any duration, up to 6 h). The duration is easy to adjust: minutes + seconds, a slider and shortcuts (30 s, 1 min, 5 min, 1 h 30…); going past the type's limit switches the type by itself. Each type starts at its default (9:16 for Shorts, 16:9 for the others) and plans scenes of the right size (≈8 s, ≈40 s, ≈90 s).
+  - **Styles:** Realistic, Cartoon, Anime and Custom (you describe the look). The style goes into every image prompt, together with the characters' looks from the project "bible", to keep continuity.
+  - **Project types:** **Single** (starts and ends in one video) and **Series** (several episodes; each episode receives the series bible — characters, world, tone, facts — and the recaps of the previous ones, and when finished updates the bible and writes its own recap).
+  - **Scene-by-scene generation pipeline (multi-agent, multi-step):** the **Showrunner** writes the script (in acts when there are many scenes) and, **for each scene, one step at a time before moving on to the next**: **receive** (brief + context + continuity) → **analyze** (the Analyst splits it into shots, fits the narration to the duration, sets music and effect) → **generate** (voice, images, motion — light Ken Burns or the provider's video model —, music and effect) → **review** (objective checks + AI Reviewer; if rejected, applies the fix and redoes only what changed) → **deliver** (places the clips on the timeline). The screen shows the live scene board with each scene's five steps. A delivered scene is saved: you can **cancel and continue** from where it stopped and **redo a single scene** (the timeline adjusts without moving the rest). Without a text AI (Demo) or on an invalid answer, deterministic agents take over.
+  - **Automatic editing:** several attachments (videos, images, audio) + a prompt + an **editing style** — **Gameplay** (action moments from volume peaks, fast cuts, zoom on highlights), **Documentary** (long cuts, soft transitions, title, voice-over up front), **Phonk edit** (cuts on the beat, slow/fast motion, zoom, grainy filter, music at full blast), **Trailer** (accelerating pace, title cards), **Vlog** (cuts dead time), **Tutorial** (removes pauses), **Music video** (cuts on the bar) and **Photo slideshow**. Pipeline: **Analyst** (each file's role: footage, b-roll, music, voice-over; measures scene changes, volume peaks and silences with ffmpeg) → **Director** (pace, order, highlights, stretches to avoid, titles) → **Reviewer** → timeline assembly. It also works inside a project (as a new episode, in a series).
+  - **Kdenlive-style timeline:** media bin (import, drag to the timeline), preview **monitor** with playback (video, audio, captions, filters and fades), properties **inspector** and tracks (T1, V2, V1, A1–A3) with **cut** (S or razor C), **join** (J), **mute** (M), **delete** and **delete closing the gap**, duplicate, trim at the cursor, move/trim with **magnet** and **ripple** mode, text, markers, speed (0.25×–4×), volume, fades, opacity, scale/position, fit (fill/contain/stretch) and **color filters** (B&W, warm, cool, vivid, VHS, cinematic, phonk); lock/hide/mute tracks, marquee selection, context menu, **undo/redo**, zoom (Ctrl+wheel) and **autosave**.
+  - **Export:** **Full** (video + audio, MP4), **Video only** and **Audio only** (M4A, MP3 or WAV), at 480p/720p/1080p; exports are listed with open/download/delete.
+  - New: `asta/studio/` (schema `asta.studio.v1`, storage, pipeline, automatic editing, export, ffprobe/ffmpeg tools), `/api/studio/*` routes, `asta/web/js/views/studio*.js`. The Canvas renderer gained clips with **speed**, **mute** and **filters** and the **video/audio** modes (nothing changes for existing users).
+
+### Fixed
+- The duration field no longer scrambles minutes and seconds while you type.
+
+### Known limits
+- The final video quality depends on the chosen media providers; in Demo mode images, voices and music are synthetic. Very long videos (90-min features) generate hundreds of shots and can take hours and cost a lot with paid providers — that is why generation is resumable.
+- The browser preview approximates filters and fades with CSS; the export (ffmpeg) is the reference. Automatic editing does not transcribe speech (it uses volume peaks, scene changes and silences).
+
+### Tests
+- `tests/test_studio.py` (schema, storage, render with modes/speed/mute/filters, scene-by-scene pipeline with resume and redo-scene, planning in acts, text agents and Reviewer fixes, series, automatic editing per style, API and full/video/audio export) and `tests/browser/studio_ui.js`.
+
 ## [0.6.3] — 2026-11-06
 
 ### Fixed
@@ -671,7 +694,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.3...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
 [0.6.1]: https://github.com/KMC1525/ASTA/compare/v0.6.0...v0.6.1

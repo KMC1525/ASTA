@@ -290,6 +290,15 @@ class BrowserTests(unittest.TestCase):
 
             lmstudio.forget()
 
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg não instalado")
+    def test_24_studio_create_generate_scene_by_scene_timeline_export_and_autoedit(self):
+        from tests.test_studio import make_media
+
+        d = self.tmp / "studio"
+        d.mkdir(exist_ok=True)
+        m = make_media(d)
+        self.run_script("studio_ui.js", {"ASTA_AE_VIDEO": str(m["game"]), "ASTA_AE_MUSIC": str(m["music"])})
+
 
 if __name__ == "__main__":
     unittest.main()

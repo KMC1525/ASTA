@@ -198,6 +198,18 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 - **Templates** to start fast: Text → Image, Text → Image → Video, With project style, and a full scene (script → image → video + narration + sound, assembled in the Editor).
 - **Every file is yours**: a canvas is a folder (`canvas.json` + `assets/`) you can download as a ZIP.
 
+## Studio — AI audiovisual videos, scene by scene
+
+*Studio* (right below Canvas) generates, edits and reviews videos with a **multi-agent, multi-step pipeline**. It uses your text providers and your media providers (image, video, sound, voice — Demo works offline), and needs `ffmpeg`.
+
+- **Duration types:** **Shorts/Reels** (up to 2 min), **Short film** (up to 30 min), **Feature** (up to 90 min) and **Custom** (up to 6 h). The duration is fully adjustable (minutes + seconds, slider, shortcuts).
+- **Styles:** Realistic, Cartoon, Anime or **Custom** (you describe the look). **Projects:** **Single** (one video) or **Series** (episodes that share a "bible" — characters, world, tone — and recaps of earlier episodes).
+- **Generation, one scene at a time:** a Showrunner writes the script (in acts for long videos) and **each scene** goes through *receive → analyze → generate → review → deliver* before the next one starts. Delivered scenes are saved: cancel and **continue**, or **redo a single scene**. The live scene board shows the five steps of each scene.
+- **Automatic editing:** attach several videos/images/audio files + a prompt and pick an **editing style** — **Gameplay**, **Documentary**, **Phonk edit**, **Trailer**, **Vlog**, **Tutorial**, **Music video**, **Photo slideshow**. An Analyst, a Director and a Reviewer build the cuts (volume peaks, scene changes, silences, beat grid) and you refine them on the timeline.
+- **Kdenlive-style timeline:** media bin, preview monitor, inspector and tracks with **cut** (`S` / razor `C`), **join** (`J`), **mute** (`M`), delete / ripple delete, duplicate, trim, **magnet**, ripple mode, text, markers, speed, volume, fades, color filters, lock/hide/mute tracks, **undo/redo**, zoom and autosave.
+- **Export:** **Full** (MP4), **Video only** or **Audio only** (M4A/MP3/WAV) at 480p/720p/1080p.
+- Honest limits: quality depends on your media providers (Demo is synthetic); a 90-minute feature means hundreds of shots (hours of work, and cost with paid providers); the browser preview approximates filters with CSS — the ffmpeg export is the reference.
+
 ## Rebuild — rebuild an existing game in plain HTML/CSS/JS
 
 *Home → Rebuild.* Attach a game you already have (a **ZIP** or the loose files) and ASTA rebuilds its **structure** as a new game that runs in any browser with no engine, no installer and no external libraries. **This version supports only two engines:**
@@ -361,7 +373,7 @@ Browser tests (Chromium via Playwright) and the JavaScript engine tests run auto
 - Local multiplayer (several players in the same world).
 - AI-generated behavior scripts in a sandbox.
 - Export a world as a desktop/mobile app.
-- Ideas on the table (not scheduled): moving more hot paths to the Rust core and a "Studio" workspace view.
+- Ideas on the table (not scheduled): moving more hot paths to the Rust core; shared (multi-user) Studio projects.
 
 ## License and credits
 

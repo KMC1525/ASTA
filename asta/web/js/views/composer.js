@@ -75,6 +75,6 @@ export function createComposer(opts) {
     configure: (next) => { o = Object.assign({}, o, next); ta.placeholder = o.placeholder || ''; paintTools(); paintSend(); refresh(); },
     setBusy: (on, stop) => { busy = on ? { stop: stop || (() => {}) } : null; paintSend(); refresh(); },
     clearFiles: (ids) => { m.files = Array.isArray(ids) ? m.files.filter((f) => !ids.includes(f.id)) : []; paintFiles(); },   // sem argumento: todos; com ids: só os enviados
-    hasUploading: uploading,
+    hasUploading: uploading, fileIds: () => m.files.map((f) => f.id).filter(Boolean),
   };
 }

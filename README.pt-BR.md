@@ -198,6 +198,18 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 - **Modelos** para começar rápido: Texto → Imagem, Texto → Imagem → Vídeo, Com estilo do projeto e uma cena completa (roteiro → imagem → vídeo + narração + som, montada no Editor).
 - **Todos os arquivos são seus**: um canvas é uma pasta (`canvas.json` + `assets/`) que você pode baixar em ZIP.
 
+## Studio — vídeos audiovisuais com IA, cena a cena
+
+O *Studio* (logo abaixo de Canvas) gera, edita e revisa vídeos com um **pipeline multi-agente e multi-etapa**. Usa seus provedores de texto e de mídia (imagem, vídeo, som, voz — o Demo funciona offline) e precisa do `ffmpeg`.
+
+- **Tipos de duração:** **Shorts/Reels** (até 2 min), **Curta** (até 30 min), **Longa** (até 90 min) e **Personalizada** (até 6 h). A duração é totalmente ajustável (minutos + segundos, controle deslizante, atalhos).
+- **Estilos:** Realista, Cartoon, Anime ou **Custom** (você descreve o visual). **Projetos:** **Único** (um vídeo) ou **Série** (episódios que compartilham uma «bíblia» — personagens, mundo, tom — e os resumos dos episódios anteriores).
+- **Geração, uma cena de cada vez:** um Showrunner escreve o roteiro (em atos nos vídeos longos) e **cada cena** passa por *recebe → analisa → gera → revisa → entrega* antes de a próxima começar. Cenas entregues ficam salvas: cancele e **continue**, ou **refaça uma cena sozinha**. O quadro de cenas ao vivo mostra os cinco passos de cada uma.
+- **Edição automática:** anexe vários vídeos/imagens/áudios + um prompt e escolha um **estilo de edição** — **Gameplay**, **Documentário**, **Edit Phonk**, **Trailer**, **Vlog**, **Tutorial**, **Clipe musical**, **Apresentação de fotos**. Um Analista, um Diretor e um Revisor montam os cortes (picos de volume, trocas de cena, silêncios, grade de batidas) e você refina na timeline.
+- **Timeline estilo Kdenlive:** bin de mídias, monitor de preview, inspetor e trilhas com **cortar** (`S` / lâmina `C`), **juntar** (`J`), **silenciar** (`M`), excluir / excluir fechando o espaço, duplicar, aparar, **ímã**, modo ripple, texto, marcadores, velocidade, volume, fades, filtros de cor, travar/ocultar/silenciar trilhas, **desfazer/refazer**, zoom e salvamento automático.
+- **Exportação:** **Completo** (MP4), **Somente vídeo** ou **Somente áudio** (M4A/MP3/WAV) em 480p/720p/1080p.
+- Limites honestos: a qualidade depende dos seus provedores de mídia (o Demo é sintético); um longa de 90 minutos são centenas de planos (horas de trabalho, e custo com provedores pagos); o preview do navegador aproxima os filtros com CSS — a exportação do ffmpeg é a referência.
+
 ## Rebuild — reconstrua um jogo existente em HTML/CSS/JS puro
 
 *Início → Rebuild.* Anexe um jogo que você já tem (um **ZIP** ou os arquivos soltos) e o ASTA reconstrói a **estrutura** dele como um jogo novo que roda em qualquer navegador, sem engine, instalador nem bibliotecas externas. **Esta versão suporta só dois motores:**
@@ -361,7 +373,7 @@ Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript 
 - Multiplayer local (vários jogadores no mesmo mundo).
 - Scripts de comportamento gerados por IA em *sandbox*.
 - Exportar o mundo como aplicativo desktop/mobile.
-- Ideias na mesa (sem data): levar mais trechos críticos para o núcleo Rust e uma visão de trabalho "Studio".
+- Ideias na mesa (sem data): levar mais trechos críticos para o núcleo Rust; projetos do Studio compartilhados (vários usuários).
 
 ## Licença e créditos
 

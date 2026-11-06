@@ -1,0 +1,472 @@
+import { api } from '../api.js';
+import { t } from '../i18n.js';
+import { fill, h, icon, popover, toast } from '../ui.js';
+
+// Timeline de edição do Studio, inspirada no Kdenlive: bin de mídias, monitor de preview, inspetor de propriedades e trilhas com cortar, juntar, silenciar, mover, aparar…
+const FPS = 24;
+const FILTERS = [['none', 'Sem filtro'], ['bw', 'Preto e branco'], ['warm', 'Quente'], ['cool', 'Frio'], ['vivid', 'Vivo'], ['vhs', 'VHS'], ['cinematic', 'Cinema'], ['phonk', 'Phonk']];
+const FILTER_CSS = { none: '', bw: 'grayscale(1)', warm: 'sepia(.35) saturate(1.2)', cool: 'hue-rotate(15deg) saturate(1.1)', vivid: 'saturate(1.5) contrast(1.1)', vhs: 'saturate(1.3) contrast(.95) blur(.4px)',
+  cinematic: 'contrast(1.12) saturate(.9)', phonk: 'grayscale(.5) contrast(1.3) brightness(.95)' };
+const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
+const HEAD_W = 118;
+const uid = () => 'c_' + Math.random().toString(36).slice(2, 10);
+const clone = (x) => JSON.parse(JSON.stringify(x));
+const r3 = (x) => Math.round(x * 1000) / 1000;
+export const timecode = (s) => { s = Math.max(0, s); const m = Math.floor(s / 60), sec = Math.floor(s % 60), f = Math.floor((s % 1) * FPS); return String(m).padStart(2, '0') + ':' + String(sec).padStart(2, '0') + ':' + String(f).padStart(2, '0'); };
+export const fmtDur = (s) => { s = Math.round(s); const hh = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60; return hh ? `${hh}h ${String(m).padStart(2, '0')}min` : m ? `${m}min ${String(sec).padStart(2, '0')}s` : `${sec}s`; };
+
+export function mountTimeline(host, o) {
+  const pid = o.pid, eid = o.eid;
+  const S = { tl: clone(o.timeline), assets: {}, pps: 36, t: 0, sel: new Set(), tool: 'select', snap: true, ripple: false, playing: false, undo: [], redo: [], saveTimer: 0, saved: true, w0: 0, t0: 0, raf: 0, aspect: o.aspect || '16:9' };
+  const setAssets = (list) => { S.assets = {}; (list || []).forEach((a) => { S.assets[a.id] = a; }); };
+  setAssets(o.assets);
+  const media = (a) => `/api/studio/projects/${pid}/media/${a.file}`;
+  const thumb = (a) => (a.kind === 'image' ? media(a) : `/api/studio/projects/${pid}/thumb/${a.id}`);
+  const trackOf = (id) => S.tl.tracks.find((x) => x.id === id);
+  const clipById = (id) => S.tl.clips.find((c) => c.id === id);
+  const assetOf = (c) => S.assets[c.asset];
+  const end = (c) => c.start + c.dur;
+  const total = () => Math.max(0, ...S.tl.clips.map(end));
+  const selClips = () => S.tl.clips.filter((c) => S.sel.has(c.id));
+  const locked = (c) => { const tr = trackOf(c.track); return !tr || tr.locked; };
+  const isMedia = (c) => { const a = assetOf(c); return !!a && a.kind !== 'image'; };
+  const maxDur = (c) => { const a = assetOf(c); return a && a.kind !== 'image' && a.dur ? Math.max(0.1, (a.dur - c.in) / (c.speed || 1)) : 1e9; };
+
+  // ---------------------------------------------------------------- persistência e histórico
+  const status = h('span', { class: 'stl-status' });
+  const paintStatus = () => { status.textContent = S.saved ? t('Salvo') : t('Salvando…'); status.className = 'stl-status' + (S.saved ? '' : ' busy'); };
+  async function save() {
+    clearTimeout(S.saveTimer); S.saveTimer = 0;
+    try { await api(`/api/studio/projects/${pid}/episodes/${eid}/timeline`, { method: 'PUT', body: { timeline: S.tl } }); S.saved = true; if (o.onSaved) o.onSaved(S.tl); } catch (e) { toast(e.message, 'err'); }
+    paintStatus();
+  }
+  const scheduleSave = () => { S.saved = false; paintStatus(); clearTimeout(S.saveTimer); S.saveTimer = setTimeout(save, 700); };
+  const snap = () => JSON.stringify({ tracks: S.tl.tracks, clips: S.tl.clips, markers: S.tl.markers });
+  const pushUndo = () => { S.undo.push(snap()); if (S.undo.length > 120) S.undo.shift(); S.redo = []; };
+  function restore(json) { const d = JSON.parse(json); S.tl.tracks = d.tracks; S.tl.clips = d.clips; S.tl.markers = d.markers; S.sel = new Set([...S.sel].filter((id) => clipById(id))); renderAll(); scheduleSave(); }
+  const undo = () => { if (!S.undo.length) return; S.redo.push(snap()); restore(S.undo.pop()); };
+  const redo = () => { if (!S.redo.length) return; S.undo.push(snap()); restore(S.redo.pop()); };
+  function change(fn, keepSel) { pushUndo(); fn(); S.tl.clips.forEach((c) => { c.start = r3(Math.max(0, c.start)); c.dur = r3(Math.max(0.1, c.dur)); c.in = r3(Math.max(0, c.in)); }); if (!keepSel) S.sel = new Set([...S.sel].filter((id) => clipById(id))); renderAll(); scheduleSave(); }
+
+  // ---------------------------------------------------------------- edições
+  function splitAt(time, ids) {
+    const targets = (ids && ids.length ? S.tl.clips.filter((c) => ids.includes(c.id)) : S.tl.clips).filter((c) => !locked(c) && c.start + 0.04 < time && time < end(c) - 0.04);
+    if (!targets.length) { toast(t('Não há clipe sob o cursor para cortar.')); return; }
+    change(() => {
+      const added = [];
+      targets.forEach((c) => {
+        const left = c.dur, cut = r3(time - c.start);
+        const b = Object.assign(clone(c), { id: uid(), start: r3(time), dur: r3(left - cut), fade_in: 0 });
+        if (isMedia(c)) b.in = r3(c.in + cut * (c.speed || 1));
+        c.dur = cut; c.fade_out = 0;
+        S.tl.clips.push(b); added.push(b.id);
+      });
+      S.sel = new Set(added);
+    }, true);
+  }
+  function joinSel() {
+    const cs = selClips().filter((c) => !locked(c));
+    if (cs.length < 2) { toast(t('Selecione dois ou mais clipes para juntar.')); return; }
+    let merged = 0, closed = 0;
+    change(() => {
+      const byTrack = {};
+      cs.forEach((c) => { (byTrack[c.track] = byTrack[c.track] || []).push(c); });
+      Object.values(byTrack).forEach((list) => {
+        list.sort((a, b) => a.start - b.start);
+        let cur = list[0];
+        for (let i = 1; i < list.length; i++) {
+          const n = list[i], same = cur.asset && cur.asset === n.asset && Math.abs((cur.speed || 1) - (n.speed || 1)) < 1e-6 && Math.abs(n.start - end(cur)) < 0.06
+            && (!isMedia(cur) || Math.abs(n.in - (cur.in + cur.dur * (cur.speed || 1))) < 0.06) && !!cur.mute === !!n.mute && cur.filter === n.filter;
+          if (same) { cur.dur = r3(cur.dur + n.dur); cur.fade_out = n.fade_out; S.tl.clips.splice(S.tl.clips.indexOf(n), 1); S.sel.delete(n.id); merged++; }
+          else { const gap = n.start - end(cur); if (Math.abs(gap) > 0.01) { n.start = r3(end(cur)); closed++; } cur = n; }
+        }
+      });
+    }, true);
+    toast(merged ? t('{n} parte(s) juntada(s)', { n: merged }) + (closed ? ' · ' + t('{n} espaço(s) fechado(s)', { n: closed }) : '') : closed ? t('{n} espaço(s) fechado(s)', { n: closed }) : t('Já estão juntos.'));
+  }
+  function toggleMute() {
+    const cs = selClips().filter((c) => !locked(c));
+    if (!cs.length) { toast(t('Selecione clipes para silenciar.')); return; }
+    const all = cs.every((c) => c.mute);
+    change(() => cs.forEach((c) => { c.mute = !all; }), true);
+  }
+  function del(ripple) {
+    const cs = selClips().filter((c) => !locked(c));
+    if (!cs.length) return;
+    change(() => {
+      const ids = new Set(cs.map((c) => c.id));
+      if (ripple) {
+        const ranges = cs.map((c) => [c.start, end(c)]).sort((a, b) => a[0] - b[0]);
+        S.tl.clips = S.tl.clips.filter((c) => !ids.has(c.id));
+        const merged = [];
+        ranges.forEach((r) => { const l = merged[merged.length - 1]; if (l && r[0] <= l[1] + 1e-6) l[1] = Math.max(l[1], r[1]); else merged.push([...r]); });
+        S.tl.clips.forEach((c) => { let sh = 0; merged.forEach((r) => { if (c.start >= r[1] - 1e-6) sh += r[1] - r[0]; }); if (sh && !locked(c)) c.start = r3(c.start - sh); });
+      } else S.tl.clips = S.tl.clips.filter((c) => !ids.has(c.id));
+      S.sel.clear();
+    }, true);
+  }
+  function duplicate() {
+    const cs = selClips().filter((c) => !locked(c));
+    if (!cs.length) return;
+    change(() => { const add = cs.map((c) => Object.assign(clone(c), { id: uid(), start: r3(end(c)) })); S.tl.clips.push(...add); S.sel = new Set(add.map((c) => c.id)); }, true);
+  }
+  function trimTo(side) {   // [ e ]: apara o começo/fim dos clipes selecionados no cursor
+    const cs = selClips().filter((c) => !locked(c) && c.start < S.t && S.t < end(c));
+    if (!cs.length) return;
+    change(() => cs.forEach((c) => {
+      if (side === 'start') { const d = S.t - c.start; if (isMedia(c)) c.in = r3(c.in + d * (c.speed || 1)); c.start = r3(S.t); c.dur = r3(c.dur - d); } else c.dur = r3(S.t - c.start);
+    }), true);
+  }
+  function addMarker() { change(() => { S.tl.markers.push({ t: r3(S.t), label: '' }); S.tl.markers.sort((a, b) => a.t - b.t); }, true); }
+  function addText() {
+    const tr = S.tl.tracks.find((x) => x.kind === 'text' && !x.locked);
+    if (!tr) { toast(t('Não há trilha de texto livre.')); return; }
+    const c = { id: uid(), track: tr.id, asset: '', scene: '', label: '', start: r3(S.t), dur: 3, in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
+      text: t('Texto'), size: S.aspect === '9:16' ? 50 : 42, color: '#ffffff', bg: '#000000', pos: 'bottom' };
+    change(() => { S.tl.clips.push(c); S.sel = new Set([c.id]); }, true);
+  }
+  function addAsset(a, at, trackId) {
+    const kind = a.kind === 'audio' ? 'audio' : 'video';
+    const tr = (trackId && trackOf(trackId)) || S.tl.tracks.filter((x) => x.kind === kind && !x.locked).reverse()[0];
+    if (!tr) { toast(t('Não há trilha livre para esse tipo de mídia.')); return; }
+    const dur = a.kind === 'image' ? 4 : Math.max(0.5, a.dur || 4);
+    const c = { id: uid(), track: tr.id, asset: a.id, scene: '', label: a.name.slice(0, 40), start: r3(at == null ? S.t : at), dur, in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
+      text: '', size: 44, color: '#ffffff', bg: '', pos: 'bottom' };
+    change(() => { S.tl.clips.push(c); S.sel = new Set([c.id]); }, true);
+  }
+  const setProp = (k, v) => change(() => selClips().filter((c) => !locked(c)).forEach((c) => { c[k] = v; }), true);
+
+  // ---------------------------------------------------------------- DOM
+  const toolBtn = (id, ic, label, key, fn, extra) => h('button', { class: 'stl-btn', type: 'button', id: 'stl-' + id, title: label + (key ? ` (${key})` : ''), onclick: fn }, icon(ic, 15), extra || null);
+  const bar = h('div', { class: 'stl-bar' });
+  const bin = h('div', { class: 'stl-bin' }), inspector = h('div', { class: 'stl-insp' });
+  const monitor = h('div', { class: 'stl-mon ar-' + S.aspect.replace(':', '-') });
+  const layers = h('div', { class: 'stl-layers' }), capEl = h('div', { class: 'stl-cap' });
+  monitor.append(layers, capEl);
+  const tcEl = h('span', { class: 'stl-tc' }), playBtn = h('button', { class: 'stl-btn', type: 'button', id: 'stl-play', title: t('Reproduzir/pausar') + ' (Space)', onclick: () => togglePlay() });
+  const ruler = h('div', { class: 'stl-ruler' }), rows = h('div', { class: 'stl-rows' }), ph = h('div', { class: 'stl-ph' }), content = h('div', { class: 'stl-content' }, ruler, rows, ph);
+  const scroller = h('div', { class: 'stl-scroll' }, content);
+  const marquee = h('div', { class: 'stl-marquee hidden' });
+  content.append(marquee);
+  const root = h('div', { class: 'stl' }, bar, h('div', { class: 'stl-top' }, bin, h('div', { class: 'stl-mon-wrap' }, monitor, h('div', { class: 'stl-trans' },
+    h('button', { class: 'stl-btn', type: 'button', title: t('Início') + ' (Home)', onclick: () => seek(0) }, icon('skipback', 15)),
+    h('button', { class: 'stl-btn', type: 'button', title: t('Quadro anterior') + ' (←)', onclick: () => seek(S.t - 1 / FPS) }, icon('stepback', 15)), playBtn,
+    h('button', { class: 'stl-btn', type: 'button', title: t('Próximo quadro') + ' (→)', onclick: () => seek(S.t + 1 / FPS) }, icon('stepfwd', 15)),
+    h('button', { class: 'stl-btn', type: 'button', title: t('Fim') + ' (End)', onclick: () => seek(total()) }, icon('skipfwd', 15)), tcEl)), inspector), scroller);
+  fill(host, root);
+
+  function buildBar() {
+    const sep = () => h('span', { class: 'stl-sep' });
+    const toggle = (id, ic, label, key, get, set) => { const b = toolBtn(id, ic, label, key, () => { set(!get()); paintBar(); }); b.classList.toggle('on', get()); return b; };
+    const paintBar = () => {
+      fill(bar,
+        toolBtn('t-select', 'cursor', t('Selecionar'), 'V', () => { S.tool = 'select'; paintBar(); }), toolBtn('t-razor', 'razor', t('Lâmina: clique no clipe para cortar'), 'C', () => { S.tool = S.tool === 'razor' ? 'select' : 'razor'; paintBar(); }),
+        sep(), toolBtn('split', 'scissors', t('Cortar no cursor'), 'S', () => splitAt(S.t, [...S.sel])), toolBtn('join', 'join', t('Juntar clipes selecionados'), 'J', joinSel), toolBtn('mute', 'mute', t('Silenciar / reativar o som'), 'M', toggleMute),
+        toolBtn('del', 'trash', t('Excluir'), 'Del', () => del(false)), toolBtn('rdel', 'ripple', t('Excluir e fechar o espaço'), 'Shift+Del', () => del(true)), toolBtn('dup', 'copy', t('Duplicar'), 'Ctrl+D', duplicate),
+        sep(), toolBtn('trim-s', 'trimstart', t('Aparar o começo no cursor'), '[', () => trimTo('start')), toolBtn('trim-e', 'trimend', t('Aparar o fim no cursor'), ']', () => trimTo('end')),
+        toolBtn('text', 'type', t('Adicionar texto'), 'T', addText), toolBtn('marker', 'flag', t('Marcador no cursor'), 'K', addMarker),
+        sep(), toolBtn('undo', 'undo', t('Desfazer'), 'Ctrl+Z', undo), toolBtn('redo', 'redo', t('Refazer'), 'Ctrl+Shift+Z', redo),
+        sep(), toggle('snap', 'magnet', t('Ímã: gruda nas bordas dos clipes'), '', () => S.snap, (v) => { S.snap = v; }), toggle('ripple', 'ripple', t('Mover em cadeia (ripple)'), '', () => S.ripple, (v) => { S.ripple = v; }),
+        h('span', { class: 'grow' }), h('button', { class: 'stl-btn', type: 'button', title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)),
+        h('button', { class: 'stl-btn', type: 'button', title: t('Mais zoom') + ' (+)', onclick: () => zoom(1.35) }, icon('zoomin', 15)), h('button', { class: 'stl-btn', type: 'button', title: t('Ajustar à tela'), onclick: fit }, icon('fit', 15)),
+        status);
+      const tool = (id) => bar.querySelector('#stl-t-' + id); if (tool(S.tool)) tool(S.tool).classList.add('on');
+      content.classList.toggle('razor', S.tool === 'razor');
+    };
+    paintBar();
+  }
+
+  // ---------------------------------------------------------------- bin (mídias do projeto)
+  function paintBin() {
+    const list = Object.values(S.assets).sort((a, b) => (a.created < b.created ? 1 : -1));
+    const fileIn = h('input', { type: 'file', multiple: true, accept: 'image/*,video/*,audio/*', class: 'hidden' });
+    fileIn.addEventListener('change', async () => {
+      for (const f of fileIn.files) {
+        try { const r = await fetch(`/api/studio/projects/${pid}/media`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name), 'Content-Type': f.type || 'application/octet-stream' }, body: f }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'erro'); S.assets[j.id] = j; }
+        catch (e) { toast(f.name + ': ' + e.message, 'err'); }
+      }
+      fileIn.value = ''; paintBin();
+    });
+    fill(bin, h('div', { class: 'stl-bin-h' }, h('b', null, t('Mídias')), h('span', { class: 'grow' }), h('button', { class: 'stl-btn', type: 'button', id: 'stl-import', title: t('Importar mídias'), onclick: () => fileIn.click() }, icon('upload', 15)), fileIn),
+      h('div', { class: 'stl-bin-l' }, list.length ? list.map((a) => h('div', { class: 'stl-asset', draggable: 'true', title: a.name + ' — ' + t('arraste para a timeline ou dê dois cliques'), dataset: { id: a.id },
+        ondragstart: (e) => { e.dataTransfer.setData('text/asta-asset', a.id); }, ondblclick: () => addAsset(a) },
+      a.kind === 'audio' ? h('div', { class: 'th ico' }, icon('music', 18)) : h('div', { class: 'th', style: { backgroundImage: `url("${thumb(a)}")` } }), h('div', { class: 'nm' }, a.name), h('div', { class: 'du' }, a.kind === 'image' ? t('imagem') : fmtDur(a.dur || 0)))) : h('div', { class: 'muted small', style: { padding: '12px' } }, t('Sem mídias. Importe arquivos ou gere o episódio.'))));
+  }
+
+  // ---------------------------------------------------------------- régua e trilhas
+  const width = () => Math.max(scroller.clientWidth - HEAD_W, (total() + 12) * S.pps);
+  function paintRuler() {
+    const w = width();
+    const steps = [0.5, 1, 2, 5, 10, 15, 30, 60, 120, 300, 600, 1200, 1800, 3600];
+    const step = steps.find((s) => s * S.pps >= 70) || 3600;
+    const kids = [];
+    for (let x = 0; x <= w / S.pps; x += step) kids.push(h('div', { class: 'tick', style: { left: x * S.pps + 'px' } }, h('span', null, timecode(x).slice(0, step < 1 ? 8 : 5))));
+    S.tl.markers.forEach((m, i) => kids.push(h('div', { class: 'mk', style: { left: m.t * S.pps + 'px' }, title: (m.label || t('Marcador')) + ' · ' + timecode(m.t), onpointerdown: (e) => { e.stopPropagation(); seek(m.t); }, ondblclick: (e) => { e.stopPropagation(); change(() => S.tl.markers.splice(i, 1), true); } }, icon('flag', 11))));
+    fill(ruler, kids); ruler.style.width = w + 'px'; ruler.style.marginLeft = HEAD_W + 'px';
+  }
+  function clipEl(c, tr) {
+    const a = assetOf(c), k = tr.kind;
+    const style = { left: c.start * S.pps + 'px', width: Math.max(3, c.dur * S.pps) + 'px' };
+    if (a && a.kind !== 'audio' && c.dur * S.pps > 24) { style.backgroundImage = `url("${thumb(a)}")`; }
+    const el = h('div', { class: 'stl-clip k-' + k + (S.sel.has(c.id) ? ' sel' : '') + (c.mute ? ' muted' : '') + (tr.locked ? ' locked' : '') + (c.scene ? ' sc' : ''), dataset: { id: c.id }, style, title: (c.label || (a ? a.name : c.text)) + ' · ' + timecode(c.start) },
+      h('span', { class: 'hl', dataset: { h: 'l' } }), h('span', { class: 'hr', dataset: { h: 'r' } }),
+      h('div', { class: 'lb' }, c.mute ? icon('mute', 11) : null, k === 'text' ? (c.text || t('Texto')) : (c.label || (a ? a.name : '')),
+        (c.speed || 1) !== 1 ? h('span', { class: 'bd' }, (c.speed).toFixed(2).replace(/\.?0+$/, '') + '×') : null, c.filter && c.filter !== 'none' ? h('span', { class: 'bd' }, t(FILTERS.find((f) => f[0] === c.filter)[1])) : null));
+    return el;
+  }
+  function paintRows() {
+    fill(rows, S.tl.tracks.map((tr, idx) => h('div', { class: 'stl-row k-' + tr.kind, dataset: { track: tr.id } },
+      h('div', { class: 'stl-head' }, h('span', { class: 'nm' }, tr.name), h('span', { class: 'bt' },
+        h('button', { type: 'button', class: tr.muted ? 'on' : '', title: tr.kind === 'audio' ? t('Silenciar a trilha') : t('Silenciar o áudio dos vídeos desta trilha'), dataset: { act: 'mute' }, onclick: () => { pushUndo(); tr.muted = !tr.muted; renderAll(); scheduleSave(); } }, icon('mute', 12)),
+        tr.kind !== 'audio' ? h('button', { type: 'button', class: tr.hidden ? 'on' : '', title: t('Ocultar a trilha'), dataset: { act: 'hide' }, onclick: () => { pushUndo(); tr.hidden = !tr.hidden; renderAll(); scheduleSave(); } }, icon('eye', 12)) : null,
+        h('button', { type: 'button', class: tr.locked ? 'on' : '', title: t('Travar a trilha'), dataset: { act: 'lock' }, onclick: () => { pushUndo(); tr.locked = !tr.locked; renderAll(); scheduleSave(); } }, icon('lock', 12)))),
+      h('div', { class: 'stl-lane' + (tr.hidden ? ' hid' : ''), style: { width: width() + 'px' } }, S.tl.clips.filter((c) => c.track === tr.id).map((c) => clipEl(c, tr))))));
+  }
+  function paintPh() { ph.style.left = HEAD_W + S.t * S.pps + 'px'; ph.style.height = content.scrollHeight + 'px'; }
+  function renderAll() { paintRuler(); paintRows(); paintPh(); paintInspector(); paintTime(); updatePreview(true); content.style.width = HEAD_W + width() + 'px'; }
+
+  // ---------------------------------------------------------------- inspetor
+  function paintInspector() {
+    const cs = selClips();
+    if (!cs.length) { fill(inspector, h('div', { class: 'stl-bin-h' }, h('b', null, t('Propriedades'))), h('div', { class: 'muted small', style: { padding: '12px' } }, t('Selecione um clipe na timeline. Atalhos: S corta, J junta, M silencia, Del exclui, C lâmina, Space reproduz.'))); return; }
+    const c = cs[0], one = cs.length === 1, k = trackOf(c.track).kind, lk = cs.every((x) => !locked(x));
+    const num = (label, key, step, min, max, conv) => h('label', { class: 'pf' }, h('span', null, label), h('input', { type: 'number', step, min, max, value: conv ? conv.to(c[key]) : c[key], disabled: !lk, dataset: { k: key },
+      onchange: (e) => { let v = parseFloat(e.target.value); if (isNaN(v)) return; if (conv) v = conv.from(v); v = Math.min(max == null ? 1e9 : (conv ? conv.from(max) : max), Math.max(min == null ? -1e9 : (conv ? conv.from(min) : min), v)); setProp(key, r3(v)); } }));
+    const f = [];
+    f.push(h('div', { class: 'stl-bin-h' }, h('b', null, one ? (c.label || (assetOf(c) || {}).name || (k === 'text' ? t('Texto') : t('Clipe'))).slice(0, 26) : t('{n} clipes', { n: cs.length }))));
+    if (one) f.push(h('div', { class: 'pg' }, num(t('Início (s)'), 'start', 0.1, 0), num(t('Duração (s)'), 'dur', 0.1, 0.1), k !== 'text' && isMedia(c) ? num(t('Ponto de corte (s)'), 'in', 0.1, 0) : null));
+    if (k !== 'text') f.push(h('div', { class: 'pg' },
+      h('label', { class: 'pf' }, h('span', null, t('Velocidade')), h('select', { disabled: !lk, dataset: { k: 'speed' }, onchange: (e) => setProp('speed', parseFloat(e.target.value)) }, SPEEDS.map((s) => h('option', { value: s, selected: Math.abs(s - (c.speed || 1)) < 0.001 }, s + '×')))),
+      num(t('Volume (%)'), 'volume', 5, 0, 200, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }),
+      h('label', { class: 'pf ck' }, h('input', { type: 'checkbox', checked: !!c.mute, disabled: !lk, dataset: { k: 'mute' }, onchange: (e) => setProp('mute', e.target.checked) }), h('span', null, t('Silenciar este clipe'))),
+      num(t('Fade de entrada (s)'), 'fade_in', 0.1, 0, 30), num(t('Fade de saída (s)'), 'fade_out', 0.1, 0, 30)));
+    if (k === 'video') f.push(h('div', { class: 'pg' },
+      h('label', { class: 'pf' }, h('span', null, t('Filtro')), h('select', { disabled: !lk, dataset: { k: 'filter' }, onchange: (e) => setProp('filter', e.target.value) }, FILTERS.map(([v, l]) => h('option', { value: v, selected: v === (c.filter || 'none') }, t(l))))),
+      h('label', { class: 'pf' }, h('span', null, t('Ajuste')), h('select', { disabled: !lk, dataset: { k: 'fit' }, onchange: (e) => setProp('fit', e.target.value) }, [['cover', t('Preencher')], ['contain', t('Caber')], ['stretch', t('Esticar')]].map(([v, l]) => h('option', { value: v, selected: v === c.fit }, l)))),
+      num(t('Opacidade (%)'), 'opacity', 5, 0, 100, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }), num(t('Escala (%)'), 'scale', 5, 10, 400, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }),
+      num(t('Posição X'), 'x', 0.05, -1, 1), num(t('Posição Y'), 'y', 0.05, -1, 1)));
+    if (k === 'text') f.push(h('div', { class: 'pg' }, h('label', { class: 'pf wide' }, h('span', null, t('Texto')), h('textarea', { rows: 3, disabled: !lk, dataset: { k: 'text' }, onchange: (e) => setProp('text', e.target.value) }, c.text)),
+      num(t('Tamanho'), 'size', 2, 8, 300), h('label', { class: 'pf' }, h('span', null, t('Posição')), h('select', { disabled: !lk, dataset: { k: 'pos' }, onchange: (e) => setProp('pos', e.target.value) }, [['top', t('Topo')], ['center', t('Centro')], ['bottom', t('Base')]].map(([v, l]) => h('option', { value: v, selected: v === c.pos }, l)))),
+      h('label', { class: 'pf' }, h('span', null, t('Cor')), h('input', { type: 'color', value: c.color || '#ffffff', disabled: !lk, onchange: (e) => setProp('color', e.target.value) })),
+      h('label', { class: 'pf' }, h('span', null, t('Fundo')), h('input', { type: 'color', value: c.bg || '#000000', disabled: !lk, onchange: (e) => setProp('bg', e.target.value) }))));
+    fill(inspector, f);
+  }
+
+  // ---------------------------------------------------------------- preview (monitor)
+  const pool = new Map();   // id do clipe → elemento de mídia
+  const lastUse = new Map();
+  const fade = (c, tt) => { let f = 1; if (c.fade_in > 0) f = Math.min(f, (tt - c.start) / c.fade_in); if (c.fade_out > 0) f = Math.min(f, (end(c) - tt) / c.fade_out); return Math.max(0, Math.min(1, f)); };
+  function elFor(c, a) {
+    let el = pool.get(c.id);
+    if (!el || el.dataset.asset !== c.asset) {
+      el = a.kind === 'image' ? h('img', { src: media(a), draggable: 'false' }) : h(a.kind === 'video' ? 'video' : 'audio', Object.assign({ src: media(a), preload: 'auto', playsinline: true }, a.kind === 'video' ? { poster: thumb(a) } : {}));
+      el.dataset.asset = c.asset; pool.set(c.id, el);
+      if (pool.size > 24) { const old = [...lastUse.entries()].sort((x, y) => x[1] - y[1]).find(([id]) => pool.has(id) && !activeIds.has(id)); if (old) { const e = pool.get(old[0]); if (e.pause) e.pause(); e.remove(); pool.delete(old[0]); lastUse.delete(old[0]); } }
+    }
+    lastUse.set(c.id, performance.now());
+    return el;
+  }
+  let activeIds = new Set();
+  function updatePreview(seeked) {
+    const tt = S.t, act = new Set();
+    const tracks = S.tl.tracks;
+    const vtracks = tracks.map((tr, i) => [tr, i]).filter(([tr]) => tr.kind === 'video' && !tr.hidden);
+    const shown = [];
+    vtracks.forEach(([tr, i]) => {
+      const cs = S.tl.clips.filter((c) => c.track === tr.id && c.start <= tt + 1e-6 && tt < end(c)).sort((a, b) => b.start - a.start);
+      const c = cs[0], a = c && assetOf(c);
+      if (c && a && a.kind !== 'audio') {
+        act.add(c.id);
+        const el = elFor(c, a);
+        el.style.zIndex = String(100 - i); el.style.opacity = String((c.opacity ?? 1) * fade(c, tt));
+        el.style.objectFit = c.fit === 'stretch' ? 'fill' : c.fit || 'cover';
+        el.style.transform = `translate(${(c.x || 0) * 50}%, ${(c.y || 0) * 50}%) scale(${c.scale || 1})`; el.style.filter = FILTER_CSS[c.filter || 'none'] || '';
+        el.className = 'lyr';
+        shown.push(el);
+        if (el.tagName === 'VIDEO') { el.muted = !!(c.mute || tr.muted); el.volume = Math.max(0, Math.min(1, (c.volume ?? 1) * fade(c, tt))); sync(el, c, tt, seeked); }
+      }
+    });
+    S.tl.clips.forEach((c) => {
+      const tr = trackOf(c.track);
+      if (!tr || tr.kind !== 'audio' || tr.muted || c.mute || c.start > tt + 1e-6 || tt >= end(c)) return;
+      const a = assetOf(c); if (!a) return;
+      act.add(c.id);
+      const el = elFor(c, a); el.volume = Math.max(0, Math.min(1, (c.volume ?? 1) * fade(c, tt))); sync(el, c, tt, seeked);
+    });
+    // texto
+    const caps = S.tl.clips.filter((c) => { const tr = trackOf(c.track); return tr && tr.kind === 'text' && !tr.hidden && c.start <= tt + 1e-6 && tt < end(c); });
+    fill(capEl, caps.map((c) => h('div', { class: 'cp pos-' + c.pos, style: { color: c.color, background: c.bg ? c.bg + 'a6' : 'transparent', fontSize: Math.max(10, c.size * (monitor.clientWidth || 640) / (S.aspect === '9:16' ? 720 : 1280)) + 'px' } }, c.text)));
+    // elementos que saíram de cena
+    pool.forEach((el, id) => { if (!act.has(id)) { if (el.pause && !el.paused) el.pause(); if (el.parentNode === layers) el.remove(); } });
+    shown.forEach((el) => { if (el.parentNode !== layers) layers.appendChild(el); });
+    activeIds = act;
+  }
+  function sync(el, c, tt, seeked) {
+    if (!el.pause) return;
+    const target = (c.in || 0) + (tt - c.start) * (c.speed || 1);
+    el.playbackRate = Math.max(0.25, Math.min(4, c.speed || 1));
+    if (seeked || Math.abs(el.currentTime - target) > 0.35) { try { el.currentTime = target; } catch (e) { /* ainda sem metadados */ } }
+    if (S.playing) { if (el.paused) el.play().catch(() => {}); } else if (!el.paused) el.pause();
+  }
+  function paintTime() { tcEl.textContent = timecode(S.t) + ' / ' + timecode(total()); playBtn.replaceChildren(icon(S.playing ? 'pause' : 'play', 15)); }
+  function seek(tt) { S.t = Math.max(0, Math.min(tt, Math.max(total(), 0.001))); if (S.playing) { S.w0 = performance.now(); S.t0 = S.t; } paintPh(); paintTime(); updatePreview(true); }
+  function togglePlay() {
+    if (S.playing) { S.playing = false; cancelAnimationFrame(S.raf); paintTime(); updatePreview(false); return; }
+    if (S.t >= total() - 0.05) S.t = 0;
+    S.playing = true; S.w0 = performance.now(); S.t0 = S.t; paintTime(); updatePreview(true);
+    const tick = () => {
+      if (!S.playing) return;
+      S.t = S.t0 + (performance.now() - S.w0) / 1000;
+      if (S.t >= total()) { S.t = total(); S.playing = false; paintPh(); paintTime(); updatePreview(false); return; }
+      paintPh(); tcEl.textContent = timecode(S.t) + ' / ' + timecode(total()); updatePreview(false);
+      const x = HEAD_W + S.t * S.pps; if (x > scroller.scrollLeft + scroller.clientWidth - 40 || x < scroller.scrollLeft + HEAD_W) scroller.scrollLeft = Math.max(0, x - HEAD_W - 60);
+      S.raf = requestAnimationFrame(tick);
+    };
+    S.raf = requestAnimationFrame(tick);
+  }
+  function zoom(f) { const mid = (scroller.scrollLeft + scroller.clientWidth / 2 - HEAD_W) / S.pps; S.pps = Math.max(2, Math.min(400, S.pps * f)); renderAll(); scroller.scrollLeft = Math.max(0, mid * S.pps - scroller.clientWidth / 2 + HEAD_W); }
+  function fit() { S.pps = Math.max(2, Math.min(400, (scroller.clientWidth - HEAD_W - 40) / Math.max(5, total()))); renderAll(); scroller.scrollLeft = 0; }
+
+  // ---------------------------------------------------------------- mouse: selecionar, mover, aparar, lâmina, régua, soltar mídia
+  const timeAt = (clientX) => (clientX - content.getBoundingClientRect().left - HEAD_W) / S.pps;
+  function snapTime(val, ignore, edgeLen) {
+    if (!S.snap) return val;
+    const pts = [0, S.t, ...S.tl.markers.map((m) => m.t)];
+    S.tl.clips.forEach((c) => { if (!ignore.has(c.id)) { pts.push(c.start, end(c)); } });
+    const th = 8 / S.pps; let best = null;
+    for (const p of pts) {
+      for (const [v, off] of edgeLen == null ? [[val, 0]] : [[val, 0], [val + edgeLen, edgeLen]]) { const d = Math.abs(v - p); if (d <= th && (!best || d < best.d)) best = { d, adj: p - off }; }
+    }
+    return best ? best.adj : val;
+  }
+  let drag = null;
+  content.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 && e.button !== 2) return;
+    const rl = e.target.closest('.stl-ruler');
+    if (rl) { drag = { type: 'scrub' }; seek(timeAt(e.clientX)); content.setPointerCapture(e.pointerId); return; }
+    const hd = e.target.closest('.stl-head'); if (hd) return;
+    const ce = e.target.closest('.stl-clip');
+    if (!ce) {
+      if (e.target.closest('.stl-lane')) { if (!e.shiftKey) { S.sel.clear(); renderAll(); } const r = content.getBoundingClientRect(); drag = { type: 'marquee', x0: e.clientX - r.left, y0: e.clientY - r.top, base: new Set(S.sel) }; content.setPointerCapture(e.pointerId); }
+      return;
+    }
+    const c = clipById(ce.dataset.id); if (!c) return;
+    if (e.button === 2) { if (!S.sel.has(c.id)) { S.sel = new Set([c.id]); renderAll(); } return; }
+    if (S.tool === 'razor') { splitAt(timeAt(e.clientX), [c.id]); return; }
+    if (e.shiftKey) { if (S.sel.has(c.id)) S.sel.delete(c.id); else S.sel.add(c.id); renderAll(); return; }
+    if (!S.sel.has(c.id)) { S.sel = new Set([c.id]); renderAll(); }
+    if (locked(c)) return;
+    const handle = e.target.dataset && e.target.dataset.h;
+    const ids = new Set(S.sel);
+    drag = { type: handle ? 'trim-' + handle : 'move', id: c.id, x0: e.clientX, y0: e.clientY, ids, orig: selClips().map((x) => ({ id: x.id, start: x.start, dur: x.dur, in: x.in, track: x.track })), pushed: false,
+      after: S.ripple ? S.tl.clips.filter((x) => !ids.has(x.id) && x.start >= end(c) - 1e-6 && !locked(x)).map((x) => ({ id: x.id, start: x.start })) : [] };
+    content.setPointerCapture(e.pointerId);
+  });
+  content.addEventListener('pointermove', (e) => {
+    if (!drag) return;
+    if (drag.type === 'scrub') { seek(timeAt(e.clientX)); return; }
+    if (drag.type === 'marquee') {
+      const r = content.getBoundingClientRect(), x1 = e.clientX - r.left, y1 = e.clientY - r.top;
+      const l = Math.min(drag.x0, x1), tp = Math.min(drag.y0, y1), w = Math.abs(x1 - drag.x0), hh = Math.abs(y1 - drag.y0);
+      Object.assign(marquee.style, { left: l + 'px', top: tp + 'px', width: w + 'px', height: hh + 'px' }); marquee.classList.remove('hidden');
+      const sel = new Set(drag.base);
+      content.querySelectorAll('.stl-clip').forEach((el) => { const b = el.getBoundingClientRect(); const cl = b.left - r.left, ct = b.top - r.top; if (cl < l + w && cl + b.width > l && ct < tp + hh && ct + b.height > tp) sel.add(el.dataset.id); });
+      S.sel = sel; content.querySelectorAll('.stl-clip').forEach((el) => el.classList.toggle('sel', S.sel.has(el.dataset.id))); return;
+    }
+    const dt = (e.clientX - drag.x0) / S.pps;
+    if (!drag.pushed && Math.abs(e.clientX - drag.x0) + Math.abs(e.clientY - drag.y0) < 3) return;
+    if (!drag.pushed) { pushUndo(); drag.pushed = true; }
+    const prim = drag.orig.find((x) => x.id === drag.id), c = clipById(drag.id);
+    if (drag.type === 'move') {
+      let d = dt;
+      const ns = snapTime(Math.max(0, prim.start + d), drag.ids, prim.dur);
+      d = ns - prim.start;
+      const minStart = Math.min(...drag.orig.map((x) => x.start));
+      if (minStart + d < 0) d = -minStart;
+      drag.orig.forEach((x) => { const cc = clipById(x.id); cc.start = r3(x.start + d); });
+      if (drag.orig.length === 1) {   // trocar de trilha do mesmo tipo
+        const rowsEl = [...rows.children]; const y = e.clientY;
+        const hit = rowsEl.find((r) => { const b = r.getBoundingClientRect(); return y >= b.top && y < b.bottom; });
+        if (hit) { const tr = trackOf(hit.dataset.track); if (tr && !tr.locked && tr.kind === trackOf(prim.track).kind) c.track = tr.id; }
+      }
+    } else if (drag.type === 'trim-l') {
+      let ns = snapTime(Math.max(0, prim.start + dt), drag.ids);
+      let d = ns - prim.start;
+      const spd = c.speed || 1;
+      if (isMedia(c)) d = Math.max(d, -prim.in / spd);
+      d = Math.min(d, prim.dur - 0.1); if (prim.start + d < 0) d = -prim.start;
+      c.start = r3(prim.start + d); c.dur = r3(prim.dur - d); if (isMedia(c)) c.in = r3(prim.in + d * spd);
+    } else if (drag.type === 'trim-r') {
+      const ne = snapTime(prim.start + prim.dur + dt, drag.ids);
+      c.dur = r3(Math.min(Math.max(0.1, ne - prim.start), maxDur(Object.assign({}, c, { in: prim.in }))));
+      drag.after.forEach((x) => { clipById(x.id).start = r3(x.start + (c.dur - prim.dur)); });   // ripple: o que vem depois acompanha
+    }
+    renderAll();
+  });
+  const endDrag = () => {
+    if (!drag) return;
+    const d = drag; drag = null; marquee.classList.add('hidden');
+    if (d.pushed) {
+      scheduleSave(); renderAll();
+    } else if (d.type === 'marquee') renderAll();
+  };
+  content.addEventListener('pointerup', endDrag); content.addEventListener('pointercancel', endDrag);
+  content.addEventListener('contextmenu', (e) => {
+    const ce = e.target.closest('.stl-clip'); if (!ce) return; e.preventDefault();
+    const c = clipById(ce.dataset.id); if (!S.sel.has(c.id)) { S.sel = new Set([c.id]); renderAll(); }
+    const at = h('div', { style: { position: 'fixed', left: e.clientX + 'px', top: e.clientY + 'px', width: '1px', height: '1px' } }); document.body.appendChild(at);
+    const item = (ic, label, fn) => h('div', { class: 'opt', role: 'menuitem', onclick: () => { pop.close(); fn(); } }, icon(ic, 15), h('div', null, label));
+    const tt = timeAt(e.clientX);
+    const pop = popover(at, h('div', { class: 'toolmenu stl-menu', role: 'menu' }, item('scissors', t('Cortar aqui'), () => splitAt(tt, [c.id])), item('join', t('Juntar selecionados'), joinSel), item('mute', t('Silenciar / reativar o som'), toggleMute),
+      item('copy', t('Duplicar'), duplicate), item('ripple', t('Excluir e fechar o espaço'), () => del(true)), item('trash', t('Excluir'), () => del(false))), () => at.remove());
+  });
+  scroller.addEventListener('wheel', (e) => { if (e.ctrlKey || e.metaKey) { e.preventDefault(); zoom(e.deltaY < 0 ? 1.15 : 1 / 1.15); } }, { passive: false });
+  // soltar mídia do bin numa trilha
+  content.addEventListener('dragover', (e) => { if (e.dataTransfer.types.includes('text/asta-asset')) e.preventDefault(); });
+  content.addEventListener('drop', (e) => {
+    const id = e.dataTransfer.getData('text/asta-asset'); if (!id || !S.assets[id]) return; e.preventDefault();
+    const lane = e.target.closest('.stl-row'); const a = S.assets[id];
+    let trackId = lane && lane.dataset.track; const tr = trackId && trackOf(trackId);
+    if (tr && ((a.kind === 'audio') !== (tr.kind === 'audio') || tr.kind === 'text' || tr.locked)) trackId = '';
+    addAsset(a, Math.max(0, snapTime(timeAt(e.clientX), new Set())), trackId);
+  });
+
+  // ---------------------------------------------------------------- teclado
+  const onKey = (e) => {
+    if (!root.isConnected) { document.removeEventListener('keydown', onKey); return; }
+    const tg = e.target; if (tg && (tg.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(tg.tagName))) return;
+    if (e.altKey) return;
+    const k = e.key, ctrl = e.ctrlKey || e.metaKey;
+    const done = () => { e.preventDefault(); e.stopPropagation(); };
+    if (ctrl && k.toLowerCase() === 'z') { done(); if (e.shiftKey) redo(); else undo(); }
+    else if (ctrl && k.toLowerCase() === 'y') { done(); redo(); }
+    else if (ctrl && k.toLowerCase() === 'd') { done(); duplicate(); }
+    else if (ctrl && k.toLowerCase() === 'a') { done(); S.sel = new Set(S.tl.clips.map((c) => c.id)); renderAll(); }
+    else if (ctrl) return;
+    else if (k === ' ') { done(); togglePlay(); }
+    else if (k === 'ArrowLeft') { done(); seek(S.t - (e.shiftKey ? 1 : 1 / FPS)); }
+    else if (k === 'ArrowRight') { done(); seek(S.t + (e.shiftKey ? 1 : 1 / FPS)); }
+    else if (k === 'Home') { done(); seek(0); } else if (k === 'End') { done(); seek(total()); }
+    else if (k === 'Delete' || k === 'Backspace') { done(); del(e.shiftKey); }
+    else if (k === 's' || k === 'S') { done(); splitAt(S.t, [...S.sel]); }
+    else if (k === 'j' || k === 'J') { done(); joinSel(); }
+    else if (k === 'm' || k === 'M') { done(); toggleMute(); }
+    else if (k === 'c' || k === 'C') { done(); S.tool = S.tool === 'razor' ? 'select' : 'razor'; buildBar(); }
+    else if (k === 'v' || k === 'V') { done(); S.tool = 'select'; buildBar(); }
+    else if (k === 't' || k === 'T') { done(); addText(); }
+    else if (k === 'k' || k === 'K') { done(); addMarker(); }
+    else if (k === '[') { done(); trimTo('start'); } else if (k === ']') { done(); trimTo('end'); }
+    else if (k === '+' || k === '=') { done(); zoom(1.35); } else if (k === '-') { done(); zoom(1 / 1.35); }
+    else if (k === 'Escape') { S.sel.clear(); renderAll(); }
+  };
+  document.addEventListener('keydown', onKey);
+  window.addEventListener('beforeunload', () => { if (!S.saved) save(); });
+
+  buildBar(); paintBin(); renderAll(); paintStatus();
+  new ResizeObserver(() => { if (root.isConnected) { paintRuler(); paintRows(); paintPh(); } }).observe(scroller);
+  return {
+    save, S, destroy() { S.playing = false; cancelAnimationFrame(S.raf); document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
+    refreshAssets(list) { setAssets(list); paintBin(); renderAll(); },
+    api: { splitAt, joinSel, toggleMute, del, duplicate, addText, addMarker, undo, redo, seek, togglePlay, zoom, fit, total },
+  };
+}

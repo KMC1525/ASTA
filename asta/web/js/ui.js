@@ -73,6 +73,14 @@ const ICONS = {
   folder: '<path d="M3 6.5A1.5 1.5 0 0 1 4.5 5H9l2 2.5h8.5A1.5 1.5 0 0 1 21 9v8.5a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5v-11Z"/>',
   type: '<path d="M5 6V4h14v2M12 4v16M9 20h6"/>',
   columns: '<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M12 4v16"/>',
+  film: '<rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 9h4M3 15h4M17 9h4M17 15h4"/>',
+  skipback: '<path d="M6 5v14M19 5 9 12l10 7Z"/>', skipfwd: '<path d="M18 5v14M5 5l10 7-10 7Z"/>', stepback: '<path d="M15 6l-6 6 6 6"/>', stepfwd: '<path d="M9 6l6 6-6 6"/>',
+  pause: '<path d="M8 5v14M16 5v14"/>', cursor: '<path d="M5 3l14 8-6 2-2 6Z"/>', razor: '<path d="M4 20 20 4M7 4h3M4 7v3M14 20h3M20 14v3"/><path d="M12 12l-2.5 2.5"/>',
+  join: '<path d="M4 8h6v8H4zM14 8h6v8h-6z"/><path d="M10 12h4"/>', mute: '<path d="M4 9v6h4l5 4V5L8 9ZM17 9l5 6M22 9l-5 6"/>', ripple: '<path d="M4 6v12M20 6v12M8 12h8M8 12l3-3M8 12l3 3M16 12l-3-3M16 12l-3 3"/>',
+  trimstart: '<path d="M5 4v16M9 8h10v8H9z"/>', trimend: '<path d="M19 4v16M5 8h10v8H5z"/>', flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
+  undo: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/>', redo: '<path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h3"/>', magnet: '<path d="M6 3v8a6 6 0 0 0 12 0V3M6 8h4M14 8h4"/>',
+  zoomout: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6"/>', music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
+  eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   wand: '<path d="m4 20 11-11M14 6l1-2 1 2 2 1-2 1-1 2-1-2-2-1 2-1ZM18 14l.7-1.4L20 12l-1.3-.6L18 10l-.7 1.4L16 12l1.3.6L18 14Z"/>',
 };
 export function icon(name, size = 18) {

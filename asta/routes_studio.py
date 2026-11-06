@@ -29,6 +29,7 @@ class StudioRoutes:
         a("GET", r"/api/studio/projects", self.r_list)
         a("POST", r"/api/studio/projects", self.r_create)
         a("POST", r"/api/studio/autoedit", self.r_autoedit)
+        a("GET", r"/api/studio/projects/(?P<pid>[\w-]+)/job", self.r_job)
         a("GET", r"/api/studio/projects/(?P<pid>[\w-]+)", self.r_get)
         a("POST", r"/api/studio/projects/(?P<pid>[\w-]+)/meta", self.r_save_meta)
         a("DELETE", r"/api/studio/projects/(?P<pid>[\w-]+)", self.r_delete)
@@ -92,6 +93,15 @@ class StudioRoutes:
         meta["premise"] = text(b.get("premise") or b.get("prompt"), "", 4000)
         p = self.ss.create({**meta, "prompt": text(b.get("prompt"), "", 8000)})
         req.json(p, 201)
+
+    def r_job(self, req, pid: str) -> None:
+        """O job de geração/exportação em andamento do projeto (para a tela retomar o acompanhamento depois de recarregar)."""
+        self._project(pid)
+        j = self.app.jobs.running(f"studio:{pid}")
+        kind = "generate"
+        if not j:
+            j, kind = self.app.jobs.running(f"studio-export:{pid}"), "export"
+        req.json({"job_id": j.id if j else None, "kind": kind if j else ""})
 
     def r_get(self, req, pid: str) -> None:
         req.json(self._project(pid))

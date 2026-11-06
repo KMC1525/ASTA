@@ -23,7 +23,7 @@ export function installShell(app) {
   }
 
   function shortcutsHelp() {
-    const rows = [['Ctrl/⌘ + K', t('Abrir a paleta de comandos')], ['Alt + 1 … 8', t('Ir para cada tela da barra lateral')], ['Alt + B', t('Recolher/expandir a barra lateral')], ['Alt + T', t('Alternar tema claro/escuro')], ['Ctrl/⌘ + J  ·  Alt + N', t('Nova aba de chat (no Chat; também: digite /nova na caixa)')], ['Alt + W', t('Fechar a aba de chat atual')],
+    const rows = [['Ctrl/⌘ + K', t('Abrir a paleta de comandos')], ['Alt + 1 … 9', t('Ir para cada tela da barra lateral')], ['Alt + B', t('Recolher/expandir a barra lateral')], ['Alt + T', t('Alternar tema claro/escuro')], ['Ctrl/⌘ + J  ·  Alt + N', t('Nova aba de chat (no Chat; também: digite /nova na caixa)')], ['Alt + W', t('Fechar a aba de chat atual')],
       ['?', t('Mostrar esta ajuda')], [t('Enter / Ctrl+Enter'), t('Enviar mensagem (você escolhe em Configuração → Aparência)')], ['Shift + Enter', t('Quebrar a linha ao escrever')], ['Esc', t('Fechar janelas e a paleta')]];
     return modal(t('Atalhos de teclado'), h('dl', { class: 'shortcuts' }, rows.flatMap(([k, d]) => [h('dt', null, h('span', { class: 'kbd' }, k)), h('dd', null, d)])), [{ label: t('Fechar'), value: null, cls: 'primary' }]);
   }

@@ -52,3 +52,10 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 ## Versões e atualização dos mundos
 
 Cada mundo guarda um *snapshot* do motor na hora em que foi gerado (por isso o ZIP é portátil). Após atualizar o ASTA, use **Biblioteca → ⋯ → Reconstruir com o motor mais recente**.
+
+## Studio (`asta/studio`)
+
+- O documento do projeto (`asta.studio.v1`) é do servidor: cenas, ativos e episódios só mudam por jobs/rotas; o navegador salva só os metadados e a timeline (`PUT .../timeline`), assim o autosave do editor nunca apaga o que um job acabou de gerar.
+- Todo agente de IA do Studio (`pipeline.py`, `autoedit.py`) precisa de um equivalente determinístico (`rulebased.py` / `plan_edl`): o modo Demo e as respostas inválidas não podem impedir a entrega.
+- O renderizador é o do Canvas (`canvas/render.py`) com os campos extras `speed`/`mute`/`filter` e o parâmetro `mode` (`full|video|audio`); mantenha o comportamento antigo quando essas chaves não existem.
+- Testes: `tests/test_studio.py` (usa `ffmpeg` e é pulado sem ele) e `tests/browser/studio_ui.js`. Mídias sintéticas vêm de `make_media()`.
