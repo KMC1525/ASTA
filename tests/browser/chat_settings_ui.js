@@ -14,8 +14,9 @@ run('chat_settings', async ({ open, api, check }) => {
   check('config:aba-Chat-existe', tabNames.includes('Chat') && tabNames.length === 17);
   await page.locator('.tabs button', { hasText: /^Chat$/ }).click(); await page.waitForSelector('#cc-max_tokens', { timeout: 8000 });
   check('config:campos-do-chat', (await page.locator('#cc-max_tokens').count()) === 1 && (await page.locator('#cc-context_tokens').count()) === 1 && (await page.locator('.seg button', { hasText: 'Ultra' }).count()) === 1 && (await page.locator('.seg button', { hasText: 'Extra high' }).count()) === 1);
-  await page.locator('.card:has(#cc-max_tokens) .chip', { hasText: /^6K tokens$/ }).click();
-  check('config:atalho-de-tamanho-preenche', (await page.inputValue('#cc-max_tokens')) === '6000');
+  await page.locator('.card:has(#cc-max_tokens) .chip', { hasText: /^8K tokens$/ }).click();
+  check('config:atalho-de-tamanho-preenche', (await page.inputValue('#cc-max_tokens')) === '8000');
+  check('config:minimo-2k-no-campo', (await page.getAttribute('#cc-max_tokens', 'min')) === '2000');
   await page.fill('#cc-max_tokens', '3000');
   await page.locator('.card:has(#cc-context_tokens) .chip', { hasText: /^32K$/ }).click();
   await page.fill('#cc-instructions', 'Responda sempre em tópicos.');

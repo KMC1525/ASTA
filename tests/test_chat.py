@@ -72,6 +72,14 @@ class EngineTests(TmpCase):
         self.assertIn("ONLY when the user turns on a creation tool", call["system"])  # o assistente sabe que criar exige o ativador
         self.assertEqual(call["messages"], [{"role": "user", "content": "Qual a receita de bolo de cenoura?"}])
 
+    def test_every_reply_gets_at_least_2k_tokens_of_room(self):
+        for configured in (100, 0, 500, 1999, 2000, 4000):
+            self.store.save_settings({"chat": {"max_tokens": configured}})
+            chat = self.engine.create()
+            prov = Prov(["ok"])
+            self.run_send(chat["id"], "oi", prov)
+            self.assertEqual(prov.calls[0]["max_tokens"], max(2000, configured), configured)   # valores menores (antigos ou digitados) sobem para 2.000; maiores valem
+
     def test_history_is_sent_and_always_starts_with_the_user(self):
         chat = self.engine.create()
         self.run_send(chat["id"], "primeira", Prov("resposta 1"))

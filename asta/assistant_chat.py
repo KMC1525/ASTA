@@ -84,6 +84,9 @@ def _hold(vis: str) -> str:
     return vis
 
 
+MIN_REPLY_TOKENS = 2000  # toda resposta do Chat tem, no mínimo, 2K tokens de espaço (valores menores — antigos ou digitados — sobem para 2.000)
+
+
 class Visible:
     """Transforma os pedaços do modelo no texto que o usuário vê (sem o raciocínio `<think>…</think>`), em eventos `delta` (acrescenta) ou `reset` (troca tudo).
 
@@ -202,7 +205,7 @@ class AssistantChat:
     def _settings(self) -> Dict[str, Any]:
         s = self.store.get_settings()
         c = s.get("chat") or {}
-        return {"turns": int(num(c.get("history_turns"), 20, 1, 100)), "temperature": num(c.get("temperature"), 0.7, 0, 1.5), "max_tokens": int(num(c.get("max_tokens"), 2000, 64, 32000)),
+        return {"turns": int(num(c.get("history_turns"), 20, 1, 100)), "temperature": num(c.get("temperature"), 0.7, 0, 1.5), "max_tokens": int(num(c.get("max_tokens"), 2000, MIN_REPLY_TOKENS, 32000)),
                 "context_tokens": int(num(c.get("context_tokens"), 16000, 1000, 2000000)), "thinking": think.normalize(c.get("thinking")), "instructions": text(c.get("instructions"), "", 3000),
                 "content": "sfw" if (s.get("generation") or {}).get("content") == "sfw" else "free", "all": s}
 

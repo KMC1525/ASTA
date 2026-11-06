@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.12.2] — 2026-11-06
+
+### Alterado
+- **Chat: toda resposta tem, no mínimo, 2K tokens de espaço.** O tamanho das respostas (Configuração → Chat) tem piso de 2.000: valores menores, antigos ou digitados, sobem para 2.000 em cada envio; o campo e os atalhos (2K, 4K, 8K, 16K) respeitam o piso. Valores maiores continuam valendo.
+
 ## [0.12.1] — 2026-11-06
 
 ### Adicionado

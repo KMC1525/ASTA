@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.12.2] — 2026-11-06
+
+### Changed
+- **Chat: every reply gets at least 2K tokens of room.** The reply size (Configuration → Chat) has a floor of 2,000: smaller values, old or typed, are raised to 2,000 on every send; the field and shortcuts (2K, 4K, 8K, 16K) respect the floor. Larger values still apply.
+
 ## [0.12.1] — 2026-11-06
 
 ### Added
