@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.6.0] — 2026-11-06
+
+### Added
+- **Rebuild now has a multi-agent, multi-step pipeline to improve quality, especially with small local models.** The deterministic conversion (which keeps the original's structure) is unchanged; after it, AI agents proofread **only the text**, in short steps: **Profiler** (tone/setting and readable names for generic events and maps such as `EV012`/`Map003`) → **Polisher** (lines in batches of up to 6: typos, case, punctuation and stray symbols; never translates) → **Auditor** (undoes changes that altered the meaning) → final validation. New `asta/rebuild/refine.py`; `RebuildPipeline` now uses the same `Runner` as the other pipelines (agent logs go into the ZIP via `agent_logs`).
+  - **Built for small models:** inputs of a few hundred tokens, flat JSON output, low temperature, a failed batch is retried line by line, a cap of 40 calls per rebuild, and only lines that look problematic are sent.
+  - **The AI cannot break anything:** each returned line passes validators (`{x}`/`[x]` placeholders, numbers, length, line breaks, accent-free word similarity — translations and rewrites are refused) and names have their own validator; a **structural lock** compares the game's fingerprint without texts before and after and, if anything but text changed, restores the deterministic result. A model error/outage only produces a warning.
+  - **AI-free cleanup** (always runs): engine code leftovers (`\C[2]`, `\N[1]`, `{w}`, `{i}`…), broken accents (UTF-8 read as Latin-1) and double spaces.
+  - The Rebuild composer has a **Proofread the text with AI** option (on by default; `refine: false` in the API). Without an AI provider (Demo mode) the AI steps are skipped and only the cleanup runs. The result screen shows the review summary.
+
+### Known limits
+- Tested with a fake provider and synthetic projects; quality with real local models was not measured. The AI fixes text and names; it does not rewrite dialogue, translate or reorganize the structure (on purpose).
+
+### Tests
+- `tests/test_rebuild_refine.py`: cleanup, detection, validators, batches, line-by-line retry, Auditor, call cap, structural lock, visual novel, pipeline with/without a provider, `refine: false` and provider outage.
+
 ## [0.5.1] — 2026-11-06
 
 ### Added
@@ -629,7 +644,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.5.1...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5

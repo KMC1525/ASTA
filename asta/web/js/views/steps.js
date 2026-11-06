@@ -91,6 +91,9 @@ export const REBUILD = {
     attachments: ['Arquivos', 'Abre o ZIP e lê só os scripts e arquivos de dados (mídia nunca é lida)'],
     analyst: ['Leitura', 'Descobre o motor do jogo e lê mapas, eventos e roteiro'],
     designer: ['Reconstrução', 'Refaz a estrutura nos motores 2D do ASTA (HTML, CSS e JS puros)'],
+    profiler: ['Perfilador (IA)', 'Resume o tom do jogo e dá nomes legíveis a eventos e mapas com nome genérico'],
+    polisher: ['Polidor (IA)', 'Corrige erros de digitação e pontuação das falas, em lotes pequenos; nunca traduz nem muda a história'],
+    auditor: ['Auditor (IA)', 'Segunda opinião: desfaz o que mudou o sentido'],
     reviewer: ['Validação', 'Confere se dá para jogar do início ao fim'],
     package: ['Empacotamento', 'Monta o ZIP do jogo e salva na biblioteca'],
   },
@@ -98,7 +101,11 @@ export const REBUILD = {
     d = d || {};
     if (s === 'running') return t('trabalhando…');
     if (s === 'error') return d.message || '';
+    if (s === 'skipped' && ['profiler', 'polisher', 'auditor'].includes(id)) return t('Pulado');
     switch (id) {
+      case 'profiler': return d.tone ? t('tom: {x}', { x: d.tone }) + (d.named ? ' · ' + t('{n} nome(s) legível(is)', { n: d.named }) : '') : '';
+      case 'polisher': return t('{n} de {m} falas', { n: d.polished || 0, m: d.total || 0 });
+      case 'auditor': return d.rejected ? t('{n} mudança(s) desfeita(s)', { n: d.rejected }) : t('tudo certo');
       case 'attachments': return t('{n} arquivo(s) de dados', { n: d.count });
       case 'analyst': return (d.engine || '') + (d.title ? ' · “' + d.title + '”' : '');
       case 'designer': return GENRE_LABEL[d.genre] || '';

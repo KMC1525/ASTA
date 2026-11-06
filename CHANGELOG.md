@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.6.0] — 2026-11-06
+
+### Adicionado
+- **Rebuild com pipeline multi-agente e multi-etapa para melhorar a qualidade, principalmente com modelos locais pequenos.** A conversão determinística (que mantém a estrutura igual à do original) continua igual; depois dela, agentes de IA revisam **só o texto**, em etapas curtas: **Perfilador** (tom/cenário e nomes legíveis para eventos e mapas genéricos como `EV012`/`Map003`) → **Polidor** (falas em lotes de até 6: digitação, maiúsculas, pontuação e símbolos soltos; nunca traduz) → **Auditor** (desfaz mudanças que alteraram o sentido) → validação final. Novo `asta/rebuild/refine.py`; o `RebuildPipeline` agora usa o `Runner` dos demais pipelines (logs dos agentes vão no ZIP, em `agent_logs`).
+  - **Feito para modelos pequenos:** entradas de poucas centenas de tokens, saída em JSON plano, temperatura baixa, lote que falha é refeito fala por fala, teto de 40 chamadas por reconstrução, só as falas que parecem ter problema são enviadas.
+  - **A IA não pode estragar nada:** cada fala devolvida passa por validadores (marcadores `{x}`/`[x]`, números, tamanho, quebras de linha, semelhança de palavras sem acento — traduções e reescritas são recusadas) e nomes por um validador próprio; uma **trava estrutural** compara a «impressão digital» do jogo sem os textos antes e depois e, se algo além de texto mudou, devolve tudo ao resultado determinístico. Erro/queda do modelo só gera um aviso.
+  - **Limpeza sem IA** (sempre roda): restos de códigos do motor (`\C[2]`, `\N[1]`, `{w}`, `{i}`…), acentos quebrados (UTF-8 lido como Latin-1) e espaços duplicados.
+  - No compositor do Rebuild, a opção **Revisar o texto com IA** (ligada por padrão; também `refine: false` na API). Sem provedor de IA (modo Demo) as etapas de IA são puladas e só a limpeza roda. A tela de resultado mostra o resumo da revisão.
+
+### Limites conhecidos
+- Testado com um provedor falso e projetos sintéticos; a qualidade com modelos locais reais não foi medida. A IA corrige texto e nomes; não reescreve diálogos, não traduz e não reorganiza a estrutura (de propósito).
+
+### Testes
+- `tests/test_rebuild_refine.py`: limpeza, detecção, validadores, lotes, repetição fala a fala, Auditor, teto de chamadas, trava estrutural, visual novel, pipeline com/sem provedor, `refine: false` e provedor fora do ar.
+
 ## [0.5.1] — 2026-11-06
 
 ### Adicionado
@@ -627,7 +642,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.5.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/KMC1525/ASTA/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/KMC1525/ASTA/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/KMC1525/ASTA/compare/v0.4.5...v0.5.0
 [0.4.5]: https://github.com/KMC1525/ASTA/compare/v0.4.4...v0.4.5

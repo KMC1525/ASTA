@@ -181,6 +181,14 @@ async function worldDone(ev) {
 // aviso legal do Rebuild (vem do servidor, nos dois idiomas)
 const legalBox = (n) => { const x = n && (n[getLang() === 'pt' ? 'pt' : 'en'] || n.pt); return !x ? null : h('div', { class: 'legal', role: 'note' }, h('div', { class: 'lg-t' }, icon('warn', 16), x.title), h('p', null, x.intro), h('ul', null, x.points.map((p) => h('li', null, p))), h('p', { class: 'small dim' }, x.scope)); };
 
+function refineSummary(r) {
+  if (!r || (!r.calls && !r.cleaned)) return null;
+  const parts = [];
+  if (r.cleaned) parts.push(t('{n} texto(s) limpo(s)', { n: r.cleaned }));
+  if (r.calls) parts.push(t('{n} fala(s) revisada(s)', { n: r.polished || 0 }), t('{n} nome(s) legível(is)', { n: r.named || 0 }), t('{n} chamada(s) à IA', { n: r.calls }));
+  return h('p', { class: 'muted small', style: { margin: '0 0 12px' } }, '✦ ' + t('Revisão de texto:') + ' ' + parts.join(' · ') + (r.reverted ? ' · ' + t('revertida (a estrutura mudou)') : ''));
+}
+
 async function rebuildDone(ev) {
   let palette = {};
   try { palette = (await api('/api/projects/' + ev.project_id)).palette || {}; } catch (e) { /* ok */ }
@@ -188,6 +196,7 @@ async function rebuildDone(ev) {
     h('div', { class: 'body' }, h('h3', null, ev.title), h('p', { class: 'muted', style: { margin: '0 0 12px' } }, ev.description || ''),
       h('div', { class: 'row', style: { gap: '6px', marginBottom: '16px' } }, h('span', { class: 'chip on' }, GENRE_LABEL[ev.genre] || ev.genre), h('span', { class: 'chip' }, (ev.rebuild && ev.rebuild.engine_name) || ''), h('span', { class: 'badge' }, 'v' + ev.version)),
       ev.warnings && ev.warnings.length ? h('details', { class: 'muted small', style: { marginBottom: '12px' } }, h('summary', null, '⚠ ' + t('{n} aviso(s) da reconstrução', { n: ev.warnings.length })), h('ul', null, ev.warnings.slice(0, 12).map((w) => h('li', null, w)))) : null,
+      refineSummary(ev.refine),
       legalBox(ev.notice),
       h('div', { class: 'row', style: { marginTop: '14px' } },
         h('a', { class: 'btn primary', href: '/play/' + ev.project_id + '/', target: '_blank', rel: 'noopener' }, icon('play', 15), t('Jogar')),
@@ -229,12 +238,15 @@ async function avatarDone(ev) {
 // ferramentas de criação do Chat (os ativadores): cada uma devolve a configuração do compositor — placeholder, opções, o que o Run faz
 // Rebuild: reconstrói um jogo Ren'Py / RPG Maker (ZIP anexado) nos motores 2D do ASTA — sem IA; o aviso legal aparece no fim.
 async function rebuildTool(root, project, carry, composer) {
+  const m = { refine: true };
+  const refineBox = h('label', { class: 'tool', title: t('Uma equipe de agentes de IA (Perfilador → Polidor → Auditor) revisa só o TEXTO do jogo em etapas curtas, feita para modelos locais pequenos. A estrutura nunca muda. Sem IA configurada, só a limpeza automática roda.') },
+    h('input', { type: 'checkbox', checked: true, onchange: (e) => { m.refine = e.target.checked; } }), ' ', t('Revisar o texto com IA'));
   const cfg = {
-    placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [],
+    placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [refineBox],
     onSend: async ({ ids }) => {
       if (!ids.length) { toast0(t('Anexe o ZIP do jogo (ou os scripts/arquivos de dados) para reconstruí-lo.')); return; }
       composer.setSending(true);
-      try { await startJob(root, '/api/games/rebuild', { attachment_ids: ids }, 'rebuild', { prompt: '' }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/games/rebuild', { attachment_ids: ids, refine: m.refine }, 'rebuild', { prompt: '' }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   };
   return Object.assign(cfg, { below: h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px', maxWidth: '560px', marginInline: 'auto' } },
