@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.11.0] — 2026-11-06
+
+### Adicionado — Canvas
+- **30 nós novos, 5 em cada tipo**: Texto (modelo, juntar, editar, escolher trecho, refinar com IA), Imagem (redimensionar/girar, filtros e cor, texto na imagem, colagem, quadro do vídeo), Vídeo (cortar, juntar clipes, velocidade/reverso, visual, imagens em vídeo), Som (cortar, misturar, efeitos, áudio do vídeo, repetir), Input (cor/degradê, silêncio, link, sorteio de texto, data e projeto) e Output (vídeo final, GIF, áudio final, imagem final, galeria). Rodam com ffmpeg e Python, sem modelo nem chave (só «Refinar com IA» usa o modelo de texto).
+
+### Alterado
+- **Paleta reorganizada**: Texto, Imagem, Vídeo, Som, Input, Output (nós antigos e novos nos grupos certos).
+- **Integração entre todos os nós**: vídeo agora liga em portas de imagem (usa o quadro do meio) — inclusive nas referências do nó Imagem e na imagem inicial do Vídeo; texto, imagem, vídeo e áudio entram no Editor e na Galeria; cada tipo de saída tem destino em nós antigos e novos. Canvases antigos abrem sem mudança.
+- Mensagens de erro dos nós novos citam o nome da porta como aparece no nó.
+
 ## [0.10.5] — 2026-11-06
 
 ### Adicionado

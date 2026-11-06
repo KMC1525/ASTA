@@ -9,6 +9,7 @@ import re
 from typing import Any, Dict, List, Optional, Set
 
 from ..util import new_id, now_iso, num, slugify, text
+from . import nodes_ext
 
 SCHEMA = "asta.canvas.v1"
 MAX_NODES, MAX_EDGES, MAX_CLIPS = 200, 600, 400
@@ -22,8 +23,8 @@ NODE_TYPES: Dict[str, Dict[str, Any]] = {
     "text": {"label": "Texto", "icon": "type", "out": "text", "ins": []},
     "llm": {"label": "Texto IA", "icon": "wand", "out": "text", "ins": [("prompt", "Entrada", ["text"], True), ("style", "Estilo", ["style"], True)]},
     "upload": {"label": "Mídia", "icon": "upload", "out": "media", "ins": []},
-    "image": {"label": "Imagem", "icon": "image", "out": "image", "ins": [("prompt", "Prompt", ["text"], True), ("refs", "Referências", ["image"], True), ("style", "Estilo", ["style"], True)]},
-    "video": {"label": "Vídeo", "icon": "video", "out": "video", "ins": [("prompt", "Prompt", ["text"], True), ("image", "Imagem inicial", ["image"], False), ("style", "Estilo", ["style"], True)]},
+    "image": {"label": "Imagem", "icon": "image", "out": "image", "ins": [("prompt", "Prompt", ["text"], True), ("refs", "Referências", ["image", "video"], True), ("style", "Estilo", ["style"], True)]},
+    "video": {"label": "Vídeo", "icon": "video", "out": "video", "ins": [("prompt", "Prompt", ["text"], True), ("image", "Imagem inicial", ["image", "video"], False), ("style", "Estilo", ["style"], True)]},
     "sound": {"label": "Som", "icon": "audio", "out": "audio", "ins": [("prompt", "Prompt", ["text"], True), ("style", "Estilo", ["style"], True)]},
     "voice": {"label": "Voz", "icon": "mic", "out": "audio", "ins": [("text", "Fala", ["text"], True), ("style", "Estilo", ["style"], True)]},
     "transcribe": {"label": "Transcrever", "icon": "doc", "out": "text", "ins": [("audio", "Áudio/vídeo", ["audio", "video"], False)]},
@@ -31,7 +32,17 @@ NODE_TYPES: Dict[str, Dict[str, Any]] = {
     "style_folder": {"label": "Style Folder", "icon": "folder", "out": "style", "ins": []},
     "editor": {"label": "Editor", "icon": "film", "out": "video", "ins": [("clips", "Clipes", ["image", "video", "audio", "text"], True)]},
 }
+for _k, _v in nodes_ext.SPECS.items():  # v0.11: 5 nós novos por tipo (nodes_ext.py)
+    NODE_TYPES[_k] = {"label": _v["label"], "icon": _v["icon"], "out": _v["out"], "ins": _v["ins"]}
 GENERATORS = ("llm", "image", "video", "sound", "voice", "transcribe")  # nós que chamam um modelo
+EXT_TYPES = tuple(nodes_ext.SPECS)  # nós novos: rodam ffmpeg/Python (só «Refinar com IA» usa o modelo de texto)
+# ordem e grupos da paleta: Texto, Imagem, Vídeo, Som, Input, Output
+PALETTE = [("Texto", ["text", "llm", "transcribe", "text_template", "text_join", "text_edit", "text_pick", "text_refine"]),
+           ("Imagem", ["image", "img_resize", "img_filter", "img_text", "img_collage", "img_frame"]),
+           ("Vídeo", ["video", "vid_trim", "vid_join", "vid_speed", "vid_look", "vid_slideshow"]),
+           ("Som", ["sound", "voice", "aud_trim", "aud_mix", "aud_fx", "aud_from_video", "aud_loop"]),
+           ("Input", ["upload", "style_prompt", "style_folder", "in_color", "in_silence", "in_url", "in_random", "in_vars"]),
+           ("Output", ["editor", "out_export", "out_gif", "out_audio", "out_image", "out_gallery"])]
 
 
 def compatible(out_type: str, accepts: List[str]) -> bool:
@@ -52,7 +63,7 @@ def port_def(ntype: str, port: str) -> Optional[Dict[str, Any]]:
 
 
 def describe_types() -> List[Dict[str, Any]]:
-    return [{"type": k, "label": v["label"], "icon": v["icon"], "out": v["out"],
+    return [{"type": k, "label": v["label"], "icon": v["icon"], "out": v["out"], "group": next((g for g, ts in PALETTE if k in ts), ""),
              "ins": [{"id": i[0], "label": i[1], "accepts": i[2], "multi": i[3]} for i in v["ins"]]} for k, v in NODE_TYPES.items()]
 
 
@@ -134,6 +145,8 @@ def normalize_params(ntype: str, p: Any) -> Dict[str, Any]:
         return {"text": text(p.get("text"), "", 6000), "global": p.get("global", True) is not False}
     if ntype == "style_folder":
         return {"files": _files(p.get("files")), "global": p.get("global", True) is not False}
+    if ntype in nodes_ext.SPECS:
+        return nodes_ext.normalize(ntype, p)
     if ntype == "editor":
         return {"timeline": normalize_timeline(p.get("timeline")), "width": int(num(p.get("width"), 1280, 160, 3840)), "height": int(num(p.get("height"), 720, 160, 2160)),
                 "fps": int(num(p.get("fps"), 30, 10, 60)), "bg": _color(p.get("bg"), "#000000")}

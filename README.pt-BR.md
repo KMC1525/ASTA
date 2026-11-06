@@ -237,6 +237,19 @@ Um fluxo de nós para gerar e editar **imagens, vídeos, sons e vozes**, de prop
 | **Style Folder** | Solte várias imagens, vídeos e áudios como **referência de estilo** para o **projeto todo**; o ASTA os descreve com o seu modelo de visão (ou lê as cores dominantes) e entrega isso a todos os geradores. |
 | **Editor** | Um **editor de vídeo** que aceita todos os outros nós: trilhas, bandeja de mídias, prévia ao vivo, dividir/cortar/mover, fades, opacidade, posição, legendas e **exportação em MP4** (precisa do `ffmpeg`). |
 
+**Canvas v0.11 — 30 nós novos, 6 grupos.** A paleta agora é **Texto · Imagem · Vídeo · Som · Input · Output**, com cinco nós novos em cada (rodam com ffmpeg e Python — sem modelo nem chave de API, exceto *Refinar com IA*):
+
+| Grupo | Nós novos |
+|---|---|
+| **Texto** | Modelo de texto (`{1}`, `{2}`…) · Juntar textos · Editar texto (maiúsculas, ordenar, trocar…) · Escolher trecho (linha/frase/palavra, ou sorteio) · Refinar com IA (melhorar prompt, traduzir, resumir, cenas, legendas) |
+| **Imagem** | Redimensionar/girar/espelhar · Filtros e cor · Texto na imagem · Colagem · Quadro do vídeo |
+| **Vídeo** | Cortar · Juntar clipes · Velocidade/reverso · Visual do vídeo (filtros + fades) · Imagens em vídeo (com música) |
+| **Som** | Cortar áudio · Misturar áudios · Efeitos de áudio · Áudio do vídeo · Repetir áudio |
+| **Input** | Cor e degradê · Silêncio · Link (URL) · Sorteio de texto (ideias aleatórias) · Data e projeto |
+| **Output** | Vídeo final (vídeo + áudios + legendas gravadas) · GIF animado · Áudio final · Imagem final · Galeria |
+
+**Tudo se liga ao que faz sentido:** texto alimenta imagem/vídeo/som/voz e os nós de texto novos; um vídeo pode ser *imagem de referência/inicial* (usa o quadro do meio) ou virar imagem (*Quadro do vídeo*) ou áudio (*Áudio do vídeo*); imagens viram vídeo (*Imagens em vídeo*, *Juntar clipes*); toda saída entra no **Editor** e na **Galeria**. Canvases antigos abrem sem mudar.
+
 - **Execução inteligente**: os nós rodam na ordem das dependências, os resultados ficam em cache por um hash de parâmetros, entradas, estilos e modelo, e só o que mudou é gerado de novo. "Gerar de novo" cria uma nova variação. Um nó com erro nunca quebra o resto do fluxo.
 - Os **nós de estilo** são globais por padrão; desligue *global* para aplicá-los só onde estiverem ligados, ou marque *Ignorar estilos globais* num nó.
 - **Modelos** para começar rápido: Texto → Imagem, Texto → Imagem → Vídeo, Com estilo do projeto e uma cena completa (roteiro → imagem → vídeo + narração + som, montada no Editor).

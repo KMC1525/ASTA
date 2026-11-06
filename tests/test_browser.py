@@ -308,6 +308,10 @@ class BrowserTests(unittest.TestCase):
     def test_27_android_app_shell_connects_remembers_and_offers_the_new_apk(self):
         self.run_script("mobile_shell_ui.js")
 
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg não instalado")
+    def test_28_canvas_new_nodes_palette_controls_and_a_real_chain(self):
+        self.run_script("canvas_nodes_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

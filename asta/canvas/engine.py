@@ -25,9 +25,10 @@ from . import procedural as proc
 from . import media as media_mod
 from .media import Ctl, Media, build_media, media_config, pick_provider
 from .render import render_timeline
-from .schema import GENERATORS, NODE_TYPES
+from . import nodes_ext
+from .schema import EXT_TYPES, GENERATORS, NODE_TYPES
 
-RUNNABLE = GENERATORS + ("editor",)
+RUNNABLE = GENERATORS + ("editor",) + EXT_TYPES
 IMAGE_DEFAULT_SECONDS = 3.0
 STYLE_IMAGES_MAX = 3
 KEEP_HISTORY = 24
@@ -121,8 +122,10 @@ class CanvasEngine:
             return {"text": p["text"], "assets": []}
         if t == "upload":
             return {"text": "", "assets": [assets[i] for i in p["files"] if i in assets]}
-        if t in ("llm", "transcribe"):
+        if t in nodes_ext.TEXT_OUT or t in ("llm", "transcribe"):
             return {"text": r["text"] if r["state"] == "done" else "", "assets": []}
+        if t in EXT_TYPES:  # nós novos que entregam arquivos (a Galeria entrega também o texto que recebeu)
+            return {"text": r["text"] if r["state"] == "done" and t == "out_gallery" else "", "assets": [assets[i] for i in r["assets"] if i in assets] if r["state"] == "done" else []}
         if t in ("image", "video", "sound", "voice", "editor"):
             return {"text": "", "assets": [assets[i] for i in r["assets"] if i in assets] if r["state"] == "done" else []}
         return {"text": "", "assets": []}
@@ -234,7 +237,7 @@ class CanvasEngine:
     def node_hash(self, canvas: Dict[str, Any], node: Dict[str, Any]) -> str:
         t = node["type"]
         data: Dict[str, Any] = {"type": t, "params": node["params"]}
-        if t in ("image", "video", "sound", "voice", "llm", "transcribe", "editor"):
+        if t in ("image", "video", "sound", "voice", "llm", "transcribe", "editor") or t in EXT_TYPES:
             ports: Dict[str, Any] = {}
             for pid_, _label, _acc, _multi in NODE_TYPES[t]["ins"]:
                 if pid_ == "style":
@@ -247,7 +250,7 @@ class CanvasEngine:
                         items.append([_sig(o["text"]), [a["id"] for a in o["assets"]]])
                 ports[pid_] = items
             data["in"] = ports
-        if t in ("image", "video", "sound", "voice", "llm"):
+        if t in ("image", "video", "sound", "voice", "llm", "text_refine"):
             data["style"] = self.styles_for(canvas, node, need_digest=False).signature()
             data["style_ids"] = self.style_ids(canvas, node)
         if t in CAP_OF:
@@ -255,8 +258,10 @@ class CanvasEngine:
                 data["provider"] = self.provider_for(node)
             except ProviderError:
                 data["provider"] = "?"
-        if t == "llm":
+        if t in ("llm", "text_refine"):
             data["llm"] = self.settings["active"].get("generation", "demo")
+        if t in ("in_vars", "in_url", "out_gallery"):  # dependem de algo fora dos parâmetros: o resultado vale até o usuário pedir de novo
+            data["fixed"] = True
         return _sig(data)
 
     def stale_ids(self, canvas: Dict[str, Any]) -> List[str]:
@@ -383,6 +388,8 @@ class CanvasEngine:
 
     def _execute(self, canvas: Dict[str, Any], node: Dict[str, Any], forced: bool) -> Dict[str, Any]:
         t = node["type"]
+        if t in EXT_TYPES:
+            return nodes_ext.RUNNERS[t](self, canvas, node)
         if t == "editor":
             return self._editor(canvas, node)
         if t == "llm":
@@ -417,7 +424,7 @@ class CanvasEngine:
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
             if not base:
                 raise ValueError("O nó Imagem precisa de um prompt: escreva nele ou ligue um nó de texto.")
-            refs = [(b, a["mime"]) for a in self.inputs(canvas, node, "refs")["assets"] if a["kind"] == "image" for b in [self._asset_bytes(a)] if b][:6]
+            refs = self.image_inputs(canvas, node, "refs")[:6]
             if p["mode"] == "edit" and not refs:
                 raise ValueError("No modo Editar, ligue uma imagem na entrada \"Referências\".")
             prompt = base + (f"\n\nStyle: {style.text}" if style.text else "")
@@ -433,10 +440,10 @@ class CanvasEngine:
             return {"assets": ids, "text": "", "warnings": warnings}
         if t == "video":
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
-            first = next((a for a in self.inputs(canvas, node, "image")["assets"] if a["kind"] == "image"), None)
+            first = next(iter(self.image_inputs(canvas, node, "image")), None)
             if not base and not first:
                 raise ValueError("O nó Vídeo precisa de um prompt (ou de uma imagem inicial ligada).")
-            start = (self._asset_bytes(first), first["mime"]) if first and self._asset_bytes(first) else None
+            start = first
             prompt = (base or "Animate this image with gentle, natural motion") + (f"\n\nStyle: {style.text}" if style.text else "")
             m = prov.video(prompt, duration=p["duration"], aspect=p["aspect"], image=start, model=p["model"], extra=p["extra"], seed=seed)
             return {"assets": [self._save(node, m, "video", self._title(node, "Vídeo"), prompt, pid, model)], "text": "", "warnings": warnings}
@@ -454,6 +461,25 @@ class CanvasEngine:
             m = prov.voice(speech, voice=p["voice"], speed=p["speed"], model=p["model"], extra=p["extra"], instructions=style.text)
             return {"assets": [self._save(node, m, "audio", self._title(node, "Voz"), speech, pid, model)], "text": "", "warnings": warnings}
         raise ValueError(f"Tipo de nó sem gerador: {t}")
+
+    def image_inputs(self, canvas: Dict[str, Any], node: Dict[str, Any], port: str) -> List[Tuple[bytes, str]]:
+        """Imagens de uma porta como (bytes, mime). Um vídeo ligado numa porta de imagem entra pelo quadro do meio."""
+        out: List[Tuple[bytes, str]] = []
+        for a in self.inputs(canvas, node, port)["assets"]:
+            if a["kind"] == "image":
+                b = self._asset_bytes(a)
+                if b:
+                    out.append((b, a["mime"]))
+            elif a["kind"] == "video":
+                with tempfile.TemporaryDirectory() as td:
+                    dst = Path(td) / "f.png"
+                    src = self.cs.asset_path(self.cid, a["file"])
+                    ff = shutil.which("ffmpeg")
+                    if ff and src:
+                        r = subprocess.run([ff, "-y", "-loglevel", "error", "-ss", f"{(a.get('duration') or 2.0) / 2:.2f}", "-i", str(src), "-frames:v", "1", str(dst)], capture_output=True, timeout=120)
+                        if r.returncode == 0 and dst.exists():
+                            out.append((dst.read_bytes(), "image/png"))
+        return out
 
     def _transcribe(self, canvas: Dict[str, Any], node: Dict[str, Any]) -> Dict[str, Any]:
         src = next((a for a in self.inputs(canvas, node, "audio")["assets"] if a["kind"] in ("audio", "video")), None)

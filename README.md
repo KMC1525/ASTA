@@ -237,6 +237,19 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 | **Style Folder** | Drop many images, videos and audios as **style reference** for the **whole project**; ASTA describes them with your vision model (or reads their dominant colors) and feeds that to every generator. |
 | **Editor** | A **video editor** that supports every other node: tracks, a media bin, live preview, split/trim/move, fades, opacity, position, captions and **MP4 export** (needs `ffmpeg`). |
 
+**Canvas v0.11 — 30 new nodes, 6 groups.** The palette is now organized as **Text · Image · Video · Sound · Input · Output**, with five new nodes in each (they run on ffmpeg and Python — no model or API key needed, except *Refine with AI*):
+
+| Group | New nodes |
+|---|---|
+| **Text** | Text template (`{1}`, `{2}`…) · Join texts · Edit text (case, sort, replace…) · Pick a piece (line/sentence/word, or draw) · Refine with AI (improve prompt, translate, summarize, scenes, captions) |
+| **Image** | Resize/rotate/flip · Filters and color · Text on image · Collage · Video frame |
+| **Video** | Cut · Join clips · Speed/reverse · Video look (filters + fades) · Images to video (with music) |
+| **Sound** | Cut audio · Mix audios · Audio effects · Audio from video · Repeat audio |
+| **Input** | Color/gradient · Silence · Link (URL) · Text draw (random ideas) · Date and project |
+| **Output** | Final video (video + audios + burned captions) · Animated GIF · Final audio · Final image · Gallery |
+
+**Everything connects to everything useful:** text feeds image/video/sound/voice and the new text nodes; a video can be a *reference/start image* (its middle frame is used) or become an image (*Video frame*) or audio (*Audio from video*); images become video (*Images to video*, *Join clips*); every output goes into the **Editor** and the **Gallery**. Old canvases open unchanged.
+
 - **Smart execution**: nodes run in dependency order, results are cached by a hash of parameters, inputs, styles and model, and only what changed is regenerated. "Regenerate" gives you a new variation. A failed node never breaks the rest of the flow.
 - **Style nodes** are global by default; turn *global* off to apply them only where connected, or tick *Ignore global styles* on a node.
 - **Templates** to start fast: Text → Image, Text → Image → Video, With project style, and a full scene (script → image → video + narration + sound, assembled in the Editor).

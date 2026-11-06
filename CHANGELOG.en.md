@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-11-06
+
+### Added — Canvas
+- **30 new nodes, 5 per type**: Text (template, join, edit, pick a piece, refine with AI), Image (resize/rotate, filters and color, text on image, collage, video frame), Video (cut, join clips, speed/reverse, look, images to video), Sound (cut, mix, effects, audio from video, repeat), Input (color/gradient, silence, link, text draw, date and project) and Output (final video, GIF, final audio, final image, gallery). They run on ffmpeg and Python with no model or key (only "Refine with AI" uses the text model).
+
+### Changed
+- **Palette reorganized**: Text, Image, Video, Sound, Input, Output (old and new nodes in the right groups).
+- **Every node integrates**: a video now connects to image ports (its middle frame is used) — including the Image node's references and the Video node's start image; text, image, video and audio go into the Editor and the Gallery; every output type has a destination in old and new nodes. Old canvases open unchanged.
+- Error messages of the new nodes cite the port name as shown on the node.
+
 ## [0.10.5] — 2026-11-06
 
 ### Added
