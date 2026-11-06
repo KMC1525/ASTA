@@ -46,6 +46,7 @@ class CanvasRoutes:
         a("GET", r"/api/media/models", self.r_media_models)
         a("GET", r"/api/media/local/state", self.r_local_state)
         a("GET", r"/api/media/local/options", self.r_local_options)
+        a("GET", r"/api/media/local/quants", self.r_local_quants)
         a("POST", r"/api/media/local/download", self.r_local_download)
 
     # ------------------------------------------------------------------ documentos
@@ -278,6 +279,18 @@ class CanvasRoutes:
             raise HttpError(502, str(exc))
         except Exception as exc:  # noqa: BLE001 — erros da biblioteca do Hugging Face (repositório inexistente, sem rede…)
             raise HttpError(502, f"Não foi possível consultar o modelo: {exc}")
+
+    def r_local_quants(self, req) -> None:
+        """Versões menores (quantizadas, da comunidade) do modelo, para baixar no lugar do original."""
+        from .canvas import localmodels as lm
+
+        model = text(req.query.get("model", [""])[0], "", 200)
+        if not REPO_RE.match(model):
+            raise HttpError(400, "Informe o modelo no formato dono/nome.")
+        try:
+            req.json({"model": model, "variants": lm.quantized_variants(model, self._hf_token())})
+        except Exception as exc:  # noqa: BLE001 — sem rede / Hugging Face fora do ar
+            raise HttpError(502, f"Não foi possível procurar versões menores: {exc}")
 
     def r_local_download(self, req) -> None:
         from .canvas import localmodels as lm

@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.10.5] — 2026-11-06
+
+### Adicionado
+- **Quantizações menores para os modelos de Mídia** (Configuração → Mídia → Precisão e download): além de fp32/fp16/bf16, o painel de cada modelo procura na Hugging Face as **versões comprimidas da comunidade** (8 bits, 4 bits/NF4, fp8…) ligadas ao modelo original, com o tamanho de cada uma, e «Usar esta» troca o modelo escolhido por aquele repositório para baixar. Aparecem primeiro as que o ASTA carrega, da menor para a maior; GGUF/AWQ/GPTQ aparecem marcadas como não suportadas ali. Funciona para imagem, vídeo, som, voz e transcrição. São feitas por terceiros e 8/4 bits pedem a biblioteca bitsandbytes (placa NVIDIA).
+
 ## [0.10.4] — 2026-11-06
 
 ### Corrigido

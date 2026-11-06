@@ -11,6 +11,9 @@ Só os arquivos da precisão escolhida são baixados (variantes `.fp16.safetenso
 """
 from __future__ import annotations
 
+import re
+import urllib.parse
+
 import os
 import threading
 import time
@@ -27,6 +30,7 @@ HINTS = {"fp32": "Maior e mais lento, mas funciona em qualquer computador (inclu
 WEIGHT_EXT = (".safetensors", ".bin", ".pt", ".pth", ".ckpt", ".msgpack", ".h5", ".onnx", ".onnx_data", ".tflite", ".mlmodel", ".gguf")
 SKIP_EXT = (".md", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".mp4", ".wav", ".mp3", ".flac")
 MARKER = "asta_precision.txt"
+REPO_OK = re.compile(r"^[\w.-]+/[\w.-]+$")
 
 
 def _hub() -> Any:
@@ -93,6 +97,44 @@ def options(model: str, token: str = "", gpu: bool = False) -> Dict[str, Any]:
     for o in out:
         o["recommended"] = o["id"] == rec
     return {"model": model, "options": out, "recommended": rec}
+
+
+# Quantizações menores: repositórios de terceiros derivados do modelo (a própria Hugging Face liga cada um ao original). A precisão fp32/fp16/bf16 do modelo original
+# só muda o tipo dos números; estes são pesos já comprimidos (8 ou 4 bits), com downloads bem menores.
+def _quant_kind(mid: str, tags: List[str]) -> Dict[str, Any]:
+    key = " ".join([mid.lower()] + [str(t).lower() for t in tags])
+    def has(*w: str) -> bool:
+        return any(x in key for x in w)
+    if has("gguf"):
+        return {"kind": "GGUF", "loadable": False, "note": "formato GGUF (llama.cpp / stable-diffusion.cpp): use o provedor GGUF em Configuração → Mídia"}
+    if has("awq", "gptq", "mlx", "onnx", "openvino", "coreml", "exl2"):
+        return {"kind": "outro", "loadable": False, "note": "formato que o carregador embutido não lê"}
+    if has("nf4", "4bit", "4-bit", "int4", "bnb-4"):
+        return {"kind": "int4", "loadable": True, "note": "4 bits · pede a biblioteca bitsandbytes (placa NVIDIA)"}
+    if has("8bit", "8-bit", "int8", "bnb-8"):
+        return {"kind": "int8", "loadable": True, "note": "8 bits · pede a biblioteca bitsandbytes (placa NVIDIA)"}
+    if has("fp8", "float8"):
+        return {"kind": "fp8", "loadable": True, "note": "fp8 · metade do fp16; exige GPU recente"}
+    return {"kind": "outro", "loadable": True, "note": "versão comprimida da comunidade"}
+
+
+def quantized_variants(model: str, token: str = "", limit: int = 12) -> List[Dict[str, Any]]:
+    """Versões menores (quantizadas) do modelo feitas pela comunidade, das mais baixadas para as menos."""
+    from ..providers import http
+
+    q = urllib.parse.urlencode([("filter", f"base_model:quantized:{model}"), ("sort", "downloads"), ("direction", "-1"), ("limit", str(limit)),
+                                ("expand[]", "downloads"), ("expand[]", "usedStorage"), ("expand[]", "tags"), ("expand[]", "library_name")])
+    headers = {"Authorization": f"Bearer {token}"} if token else {}
+    data = http.get_json(f"https://huggingface.co/api/models?{q}", headers, timeout=20)
+    out = []
+    for m in data if isinstance(data, list) else []:
+        mid = m.get("id") or m.get("modelId")
+        if not isinstance(mid, str) or not REPO_OK.match(mid):
+            continue
+        info = _quant_kind(mid, m.get("tags") or [])
+        out.append({"id": mid, "size": int(m.get("usedStorage") or 0), "downloads": int(m.get("downloads") or 0), **info})
+    out.sort(key=lambda x: (not x["loadable"], x["size"] or 1 << 60))  # as que o ASTA carrega primeiro, das menores para as maiores
+    return out
 
 
 def _snapshot(model: str) -> Optional[Path]:

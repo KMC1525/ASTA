@@ -849,6 +849,24 @@ class LocalHFTests(unittest.TestCase):
             self.assertIn("Qwen/Qwen-Image-2.1", str(cm.exception))
             self.assertEqual(cm.exception.status, 424)
 
+    def test_smaller_community_quantizations_are_listed_and_classified(self):
+        from asta.canvas import localmodels as lm
+
+        data = [{"id": "x/m-gguf", "usedStorage": 5, "downloads": 9, "tags": ["gguf"]}, {"id": "x/m-nf4", "usedStorage": 12_000_000_000, "downloads": 5, "tags": ["bitsandbytes"]},
+                {"id": "x/m-fp8", "usedStorage": 16_000_000_000, "downloads": 3, "tags": []}, {"id": "x/m-awq", "usedStorage": 9, "downloads": 1, "tags": ["awq"]}, {"id": "ruim id", "tags": []}]
+        seen = {}
+
+        def fake_get(url, headers=None, timeout=0):
+            seen["url"] = url
+            return data
+        with mock.patch("asta.providers.http.get_json", fake_get):
+            out = lm.quantized_variants("Qwen/Qwen-Image-2.1")
+        self.assertIn("base_model%3Aquantized%3AQwen%2FQwen-Image-2.1", seen["url"])
+        self.assertEqual([v["id"] for v in out], ["x/m-nf4", "x/m-fp8", "x/m-gguf", "x/m-awq"])  # as carregáveis primeiro, da menor para a maior; id inválido some
+        by = {v["id"]: v for v in out}
+        self.assertEqual((by["x/m-nf4"]["kind"], by["x/m-fp8"]["kind"], by["x/m-gguf"]["kind"]), ("int4", "fp8", "GGUF"))
+        self.assertTrue(by["x/m-nf4"]["loadable"] and not by["x/m-gguf"]["loadable"] and not by["x/m-awq"]["loadable"])
+
     def test_missing_libraries_explain_how_to_install(self):
         with mock.patch.dict(sys.modules, {"torch": None, "diffusers": None, "transformers": None}):
             M._LOCAL_CACHE.clear()
@@ -1242,6 +1260,10 @@ class CanvasApiTests(ServerCase):
             self.assertEqual(status, 200)
             self.assertEqual({o["id"] for o in opts["options"]}, {"fp32", "fp16", "bf16"})
             self.assertEqual(self.c.json("GET", "/api/media/local/options?model=nada")[0], 400)
+            self.assertEqual(self.c.json("GET", "/api/media/local/quants?model=nada")[0], 400)
+            with mock.patch("asta.providers.http.get_json", return_value=[{"id": "c/m-fp8", "usedStorage": 7, "tags": []}]):
+                st, q = self.c.json("GET", "/api/media/local/quants?model=stabilityai/sd-turbo")
+            self.assertEqual((st, q["variants"][0]["id"], q["variants"][0]["kind"]), (200, "c/m-fp8", "fp8"))
             state = self.c.json("GET", "/api/media/local/state")[1]
             self.assertTrue(state["libs"])
             self.assertEqual(state["models"]["image"]["precision"], "")

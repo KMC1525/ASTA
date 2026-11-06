@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.5] — 2026-11-06
+
+### Added
+- **Smaller quantizations for Media models** (Configuration → Media → Precision and download): besides fp32/fp16/bf16, each model's panel looks up on Hugging Face the **community's compressed versions** (8-bit, 4-bit/NF4, fp8…) linked to the original model, with each one's size, and "Use this one" switches the chosen model to that repository for download. The ones ASTA can load come first, smallest to largest; GGUF/AWQ/GPTQ show as unsupported there. Works for image, video, sound, voice and transcription. They are made by third parties and 8/4-bit need the bitsandbytes library (NVIDIA card).
+
 ## [0.10.4] — 2026-11-06
 
 ### Fixed

@@ -731,14 +731,25 @@ function localModels(p, draft) {
         });
       };
       paint();
-      area.replaceChildren(h('div', { class: 'small muted' }, t('Escolha a precisão: menos bits = download menor e mais rápido, com um pequeno custo de qualidade; o fp16 pede placa de vídeo.')), list, h('div', { style: { marginTop: '8px' } }, btn));
+      const quants = h('div', { class: 'col', id: 'quants-' + cap, style: { gap: '6px', marginTop: '14px' } }, h('div', { class: 'small muted' }, t('Procurando versões menores (quantizadas)…')));
+      area.replaceChildren(h('div', { class: 'small muted' }, t('Escolha a precisão: menos bits = download menor e mais rápido, com um pequeno custo de qualidade; o fp16 pede placa de vídeo.')), list, h('div', { style: { marginTop: '8px' } }, btn), quants);
+      // versões menores (8 e 4 bits, fp8…) feitas pela comunidade: o download encolhe de verdade; usar uma delas troca o modelo escolhido por aquele repositório
+      api('/api/media/local/quants?model=' + encodeURIComponent(model)).then((q) => {
+        const vs = q.variants || [];
+        if (!vs.length) { quants.replaceChildren(h('div', { class: 'small dim' }, t('Não há versões menores deste modelo na Hugging Face. Para modelos de texto, use as versões GGUF em Modelos locais.'))); return; }
+        quants.replaceChildren(h('b', { class: 'small' }, t('Quantizações menores (da comunidade)')), h('div', { class: 'small dim' }, t('Pesos já comprimidos (8 ou 4 bits): download e memória bem menores, com algum custo de qualidade. Feitas por terceiros, não pelo ASTA.')),
+          ...vs.map((v) => h('div', { class: 'quant qv', dataset: { quant: v.id } },
+            h('div', { class: 'grow' }, h('div', { class: 'row', style: { gap: '8px' } }, h('b', { class: 'mono small' }, v.id), h('span', { class: 'chip' }, v.kind)), h('div', { class: 'dim small' }, t(v.note))),
+            h('span', { class: 'chip solid' }, v.size ? fmtBytes(v.size) : '?'),
+            v.loadable ? h('button', { class: 'btn sm', type: 'button', onclick: () => { draft.models[cap] = v.id; rows[cap].input.value = v.id; setChip(cap, ''); panel(cap); } }, icon('download', 13), t('Usar esta')) : h('span', { class: 'dim small' }, t('não suportada aqui')))));
+      }).catch(() => { quants.replaceChildren(h('div', { class: 'small dim' }, t('Não consegui procurar versões menores agora (sem conexão com a Hugging Face).'))); });
     }).catch((e) => { area.replaceChildren(h('div', { class: 'res err' }, e.message)); });
   }
   for (const [cap, label] of caps) {
     const dl = h('datalist', { id: 'lm-' + cap }, ((p.suggest || {})[cap] || []).map((m) => h('option', { value: m })));
     const input = h('input', { list: 'lm-' + cap, value: draft.models[cap] || '', placeholder: p.models[cap] || '', oninput: (e) => { draft.models[cap] = e.target.value.trim(); setChip(cap, ''); } });
     chips[cap] = h('span', { class: 'chip' }, t('não baixado'));
-    rows[cap] = { area: h('div') };
+    rows[cap] = { area: h('div'), input };
     box.append(h('div', null, h('label', { class: 'f' }, t('Modelo') + ' · ' + t(label)), h('div', { class: 'row nw' }, input, dl, chips[cap], h('button', { class: 'btn sm', onclick: () => panel(cap) }, icon('download', 13), t('Precisão e download'))), rows[cap].area));
   }
   refresh();
