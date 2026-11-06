@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.1] — 2026-11-06
+
+### Added
+- **Configuration → System**: a "Your PC's components" card with the type and name of each detected component (CPU, motherboard, computer, BIOS, GPUs, disks, audio, network, memory modules on Windows, RAM and operating system). Local, best-effort detection (Linux, macOS, Windows); nothing is sent anywhere.
+
 ## [0.9.0] — 2026-11-06
 
 ### Changed

@@ -168,6 +168,85 @@ def _gpu_name() -> Optional[str]:
 _HW_CACHE: Optional[dict] = None
 
 
+def _run_out(cmd: list, timeout: float = 6.0) -> str:
+    try:
+        return subprocess.run(cmd, capture_output=True, text=True, timeout=timeout).stdout.strip()
+    except Exception:  # noqa: BLE001 — ferramenta ausente/sem permissão: só não mostra o item
+        return ""
+
+
+def _read_first(path: str) -> str:
+    try:
+        return Path(path).read_text(errors="ignore").strip()
+    except Exception:  # noqa: BLE001
+        return ""
+
+
+def hardware_components() -> list:
+    """Lista [{type, name}] com o tipo e o nome de cada componente do PC (melhor esforço; o que não for detectado some)."""
+    out: list = []
+
+    def add(kind: str, name: str) -> None:
+        name = " ".join((name or "").split())
+        if name and name.lower() not in ("none", "unknown", "to be filled by o.e.m.", "default string") and {"type": kind, "name": name} not in out:
+            out.append({"type": kind, "name": name})
+
+    sysname = platform.system()
+    if sysname == "Linux":
+        cpu = next((l.split(":", 1)[1] for l in _read_first("/proc/cpuinfo").splitlines() if l.lower().startswith("model name")), "")
+        add("CPU", cpu)
+        add("Placa-mãe", " ".join(x for x in (_read_first("/sys/class/dmi/id/board_vendor"), _read_first("/sys/class/dmi/id/board_name")) if x))
+        add("Computador", " ".join(x for x in (_read_first("/sys/class/dmi/id/sys_vendor"), _read_first("/sys/class/dmi/id/product_name")) if x))
+        add("BIOS", " ".join(x for x in (_read_first("/sys/class/dmi/id/bios_vendor"), _read_first("/sys/class/dmi/id/bios_version")) if x))
+        if shutil.which("lspci"):
+            for line in _run_out(["lspci"]).splitlines():
+                if any(k in line for k in ("VGA compatible", "3D controller", "Display controller")):
+                    add("GPU", line.split(": ", 1)[-1])
+                elif "Audio device" in line or "Multimedia audio" in line:
+                    add("Áudio", line.split(": ", 1)[-1])
+                elif "Ethernet controller" in line or "Network controller" in line:
+                    add("Rede", line.split(": ", 1)[-1])
+        if shutil.which("lsblk"):
+            import shlex
+            for line in _run_out(["lsblk", "-dP", "-o", "NAME,MODEL,SIZE,TYPE"]).splitlines():
+                try:
+                    f = dict(x.split("=", 1) for x in shlex.split(line))
+                except ValueError:
+                    continue
+                if f.get("TYPE") == "disk" and f.get("MODEL", "").strip() and not f.get("NAME", "").startswith(("loop", "zram", "ram")):
+                    add("Disco", f"{f['MODEL'].strip()} ({f.get('SIZE', '')})")
+    elif sysname == "Darwin":
+        add("CPU", _run_out(["sysctl", "-n", "machdep.cpu.brand_string"]))
+        add("Computador", _run_out(["sysctl", "-n", "hw.model"]))
+        for line in _run_out(["system_profiler", "SPDisplaysDataType"], 15).splitlines():
+            if line.strip().startswith("Chipset Model:"):
+                add("GPU", line.split(":", 1)[1])
+    elif sysname == "Windows":
+        def ps(q: str) -> list:
+            return [x.strip() for x in _run_out(["powershell", "-NoProfile", "-Command", q], 15).splitlines() if x.strip()]
+        for x in ps("(Get-CimInstance Win32_Processor).Name"):
+            add("CPU", x)
+        for x in ps("(Get-CimInstance Win32_VideoController).Name"):
+            add("GPU", x)
+        for x in ps("$b=Get-CimInstance Win32_BaseBoard; $b.Manufacturer+' '+$b.Product"):
+            add("Placa-mãe", x)
+        for x in ps("(Get-CimInstance Win32_DiskDrive).Model"):
+            add("Disco", x)
+        for x in ps("(Get-CimInstance Win32_PhysicalMemory | ForEach-Object { $_.Manufacturer+' '+$_.PartNumber+' '+[math]::Round($_.Capacity/1GB)+' GB '+$_.Speed+' MHz' })"):
+            add("Memória (pente)", x)
+        for x in ps("(Get-CimInstance Win32_SoundDevice).Name"):
+            add("Áudio", x)
+    gpu = _gpu_name()
+    if gpu:
+        for g in gpu.split(";"):
+            add("GPU (NVIDIA)", g.strip())
+    ram = _ram_gb()
+    if ram is not None:
+        add("Memória RAM", f"{round(ram, 1)} GB")
+    add("Sistema operacional", " ".join(x for x in (platform.system(), platform.release(), platform.machine()) if x))
+    return out
+
+
 def hardware_info(refresh: bool = False) -> dict:
     """Detecta CPU/RAM (e GPU NVIDIA, se houver) e classifica em low/medium/high."""
     global _HW_CACHE
@@ -191,5 +270,6 @@ def hardware_info(refresh: bool = False) -> dict:
         "gpu": _gpu_name(),
         "ffmpeg": bool(shutil.which("ffmpeg")),
         "tier": tier,
+        "components": hardware_components(),
     }
     return _HW_CACHE

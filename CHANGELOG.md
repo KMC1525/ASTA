@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.9.1] — 2026-11-06
+
+### Adicionado
+- **Configuração → Sistema**: cartão «Componentes do seu PC» com o tipo e o nome de cada componente detectado (CPU, placa-mãe, computador, BIOS, GPUs, discos, áudio, rede, pentes de memória no Windows, RAM e sistema operacional). Detecção local, melhor esforço (Linux, macOS, Windows); nada é enviado para fora.
+
 ## [0.9.0] — 2026-11-06
 
 ### Alterado

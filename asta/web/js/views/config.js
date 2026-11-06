@@ -526,6 +526,9 @@ async function system() {
   const hw = state.hardware;
   const cmd = (label, text) => h('div', { class: 'field' }, h('label', { class: 'f' }, label), h('div', { class: 'codebox' }, h('span', null, text), h('button', { class: 'btn sm ghost', onclick: () => { navigator.clipboard.writeText(text).then(() => toast(t('Copiado'))); } }, icon('copy', 13))));
   return h('div', null,
+    (hw.components || []).length ? h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Componentes do seu PC')),
+      h('dl', { class: 'kv', id: 'hw-components', style: { margin: 0 } }, ...hw.components.flatMap((c) => [h('dt', null, t(c.type)), h('dd', null, c.name)])),
+      h('p', { class: 'muted small', style: { marginBottom: 0 } }, t('Detectado no seu computador, só para mostrar aqui: nada disso é enviado para fora.'))) : null,
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Seu hardware')),
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Sistema')), h('dd', null, hw.os + ' · ' + hw.arch), h('dt', null, 'CPU'), h('dd', null, t('{n} núcleos', { n: hw.cpus })),
         h('dt', null, 'RAM'), h('dd', null, hw.ram_gb ? hw.ram_gb + ' GB' : '—'), h('dt', null, 'GPU'), h('dd', null, hw.gpu || t('não detectada (NVIDIA)')),
