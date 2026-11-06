@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.2] — 2026-11-06
+
+### Fixed
+- The repository's Releases tab was empty (the APK was only built when a Release was published by hand). The `android-apk` workflow now runs on every push to `main` that changes the version or the app and creates the `vX.Y.Z` Release with the APK by itself.
+
 ## [0.10.1] — 2026-11-06
 
 ### Added — Mobile without a computer

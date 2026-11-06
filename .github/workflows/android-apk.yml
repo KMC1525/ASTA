@@ -2,6 +2,9 @@
 # (https://github.com/KMC1525/ASTA/releases/latest) e o próprio app avisa quando sai versão nova.
 name: android-apk
 on:
+  push:
+    branches: [main]
+    paths: ["asta/__init__.py", "mobile-app/**", ".github/workflows/android-apk.yml"]
   release:
     types: [published]
   workflow_dispatch:
@@ -20,10 +23,12 @@ jobs:
       - uses: actions/setup-java@v4
         with: { distribution: temurin, java-version: 17 }
       - name: Versão do app = versão do ASTA
+        id: ver
         working-directory: .
         run: |
           V=$(python3 -c "import re;print(re.search(r'__version__ = \"([^\"]+)\"',open('asta/__init__.py').read()).group(1))")
           sed -i "s/\"version\": \".*\"/\"version\": \"$V\"/" mobile-app/package.json
+          echo "v=$V" >> "$GITHUB_OUTPUT"
           sed -i "s/var APP_VERSION = '.*';/var APP_VERSION = '$V';/" mobile-app/www/index.html
       - run: npm install
       - run: npx cap add android
@@ -39,8 +44,15 @@ jobs:
         run: cp android/app/build/outputs/apk/debug/app-debug.apk ../ASTA-mobile.apk
       - uses: actions/upload-artifact@v4
         with: { name: ASTA-mobile-apk, path: ASTA-mobile.apk }
-      - name: Anexar à Release
-        if: github.event_name == 'release'
+      - name: Publicar a Release (cria vX.Y.Z se ainda não existe) com o APK
         working-directory: .
         env: { GH_TOKEN: "${{ github.token }}" }
-        run: gh release upload "${{ github.event.release.tag_name }}" ASTA-mobile.apk --clobber
+        run: |
+          TAG="v${{ steps.ver.outputs.v }}"
+          if [ "${{ github.event_name }}" = "release" ]; then TAG="${{ github.event.release.tag_name }}"; fi
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" mobile-app/ASTA-mobile.apk --clobber
+          else
+            gh release create "$TAG" mobile-app/ASTA-mobile.apk --target "${{ github.sha }}" --title "ASTA $TAG" --latest \
+              --notes "App Android do ASTA (APK). Baixe, permita instalar apps desconhecidos uma vez, abra e escaneie o QR code de pareamento do seu ASTA (asta mobile). / Android app (APK): download, allow unknown apps once, open it and scan your ASTA pairing QR code (asta mobile). Changelog: CHANGELOG.md"
+          fi
