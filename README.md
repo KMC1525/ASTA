@@ -6,7 +6,7 @@
 
 A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a playable 3D world, a companion to chat with, a complete 2D game, or a node flow that produces images, videos, sounds and voices.
 
-[Install](#install) · [Getting started](#getting-started) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
+[Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `no required dependencies`
 
@@ -95,6 +95,21 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 </details>
 
 **Optional tools.** [`ffmpeg`](https://ffmpeg.org) unlocks video analysis, the Canvas video Editor export, the **Studio** (generation, automatic editing and export) and the offline Demo video. Everything else works without it.
+
+## Terminal commands
+
+| Command | What it does |
+|---|---|
+| `asta` | opens the WebUI (it also updates/installs everything first when due; skip with `--no-update`) |
+| **`asta update`** | updates **Python, ASTA, all its libraries and Rust** to the latest versions by running the official installer (`--no-python`, `--core`, `--extras docs,media`, `--rust yes\|no`, `--force`) |
+| **`asta folder`** | **opens ASTA's local data folder** (`~/.asta`: chats, projects, media, models, settings) in your file manager (`--print` only prints the path, `--app` opens the installed program folder) |
+| `asta libs` | installs/updates the optional libraries (`docs`, `media`, `local`) |
+| `asta models list\|install` | the pre-installed local models |
+| `asta native setup` | installs/updates Rust and recompiles the fast core (also `install`, `update`, `build`, `status`) |
+| `asta doctor` | environment diagnostics (hardware, Python, Rust, ffmpeg, providers, terminal language) |
+| `asta version` · `asta --help` | version · all options |
+
+The terminal texts follow your computer's language (Portuguese or English; `ASTA_LANG=pt\|en` forces one).
 
 ## Getting started
 

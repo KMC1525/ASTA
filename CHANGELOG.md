@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.8.6] — 2026-11-06
+
+### Alterado
+- **README (en/pt-BR)**: nova seção «Comandos do terminal» com a tabela de todos os comandos, destacando `asta update` (Python, ASTA, bibliotecas e Rust) e o novo `asta folder`.
+
 ## [0.8.5] — 2026-11-06
 
 ### Adicionado
@@ -747,7 +752,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.5...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.6...HEAD
+[0.8.6]: https://github.com/KMC1525/ASTA/compare/v0.8.5...v0.8.6
 [0.8.5]: https://github.com/KMC1525/ASTA/compare/v0.8.4...v0.8.5
 [0.8.4]: https://github.com/KMC1525/ASTA/compare/v0.8.3...v0.8.4
 [0.8.3]: https://github.com/KMC1525/ASTA/compare/v0.8.2...v0.8.3
