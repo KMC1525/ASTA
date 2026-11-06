@@ -610,7 +610,7 @@ class StudioApi(ServerCase):
         media = make_media(self.tmp)
         raw = media["game"].read_bytes()
         s, _h, a = self.c.req("POST", f"/api/studio/projects/{pid}/media", raw=raw, headers={"X-Filename": "game.mp4", "Content-Length": str(len(raw))})
-        self.assertEqual(s, 200)
+        self.assertEqual(s, 201)
         full = self.c.json("GET", f"/api/studio/projects/{pid}")[1]
         vid = next(x for x in full["assets"] if x["kind"] == "video")
         vt = next(t["id"] for t in full["episodes"][0]["timeline"]["tracks"] if t["kind"] == "video")
