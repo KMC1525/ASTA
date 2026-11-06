@@ -5,6 +5,20 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.7.1] — 2026-11-06
+
+### Corrigido
+- **Atalhos de teclado da timeline (modo manual):** depois de mexer num campo do inspetor (velocidade, filtro, volume…) o foco ficava preso nele e **S, J, M, C, Del, Space deixavam de funcionar** até clicar fora — agora o foco sai do campo sozinho (e clicar na timeline também o solta). Botões da barra não roubam mais o foco (Space não aciona o último botão clicado). **Segurar uma tecla** (Del, S, J…) não repete a ação em rajada. **S** corta o que estiver sob o cursor mesmo quando a seleção não passa por ele. O **cursor pode ir além do fim** da timeline (para posicionar um clipe novo; antes travava no fim).
+- **Mídias sumiam do bin** ao trocar de aba (ou ao entrar em «Editar do zero» e importar arquivos): a tela usava uma cópia velha do projeto. Agora a timeline sempre carrega o projeto atualizado, e um projeto com mídias abre o editor mesmo sem clipes.
+- O preview mostrava o quadro preto no começo (por causa do fade de entrada); parado, agora mostra o quadro inteiro.
+
+### Adicionado
+- **Janelas da timeline redimensionáveis:** arraste as divisórias para mudar a **largura das mídias**, a **largura das propriedades** e a **altura monitor × timeline** (dois cliques voltam ao padrão), **trilhas mais altas/baixas** e **tela cheia do editor** (`F`; `Esc` sai). Os tamanhos ficam guardados no navegador.
+- **Copiar, recortar e colar** clipes (`Ctrl+C`, `Ctrl+X`, `Ctrl+V` — cola no cursor), `Esc` limpa a seleção e volta à ferramenta de seleção.
+
+### Testes
+- `tests/browser/studio_ui.js`: foco depois do inspetor, copiar/colar, tecla segurada, Space após botão da barra, cursor além do fim, corte sob o cursor, redimensionar as três divisórias, lembrar o tamanho ao recarregar, tela cheia e edição manual com importação e troca de aba.
+
 ## [0.7.0] — 2026-11-06
 
 ### Adicionado
@@ -692,7 +706,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.7.0...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/KMC1525/ASTA/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2

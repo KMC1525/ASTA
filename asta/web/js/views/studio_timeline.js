@@ -50,7 +50,9 @@ export function mountTimeline(host, o) {
 
   // ---------------------------------------------------------------- edições
   function splitAt(time, ids) {
-    const targets = (ids && ids.length ? S.tl.clips.filter((c) => ids.includes(c.id)) : S.tl.clips).filter((c) => !locked(c) && c.start + 0.04 < time && time < end(c) - 0.04);
+    const hit = (c) => !locked(c) && c.start + 0.04 < time && time < end(c) - 0.04;
+    let targets = (ids && ids.length ? S.tl.clips.filter((c) => ids.includes(c.id)) : S.tl.clips).filter(hit);
+    if (!targets.length && ids && ids.length) targets = S.tl.clips.filter(hit);   // a seleção não passa pelo cursor: corta o que estiver sob ele
     if (!targets.length) { toast(t('Não há clipe sob o cursor para cortar.')); return; }
     change(() => {
       const added = [];
@@ -117,6 +119,18 @@ export function mountTimeline(host, o) {
       if (side === 'start') { const d = S.t - c.start; if (isMedia(c)) c.in = r3(c.in + d * (c.speed || 1)); c.start = r3(S.t); c.dur = r3(c.dur - d); } else c.dur = r3(S.t - c.start);
     }), true);
   }
+  let clip = [];
+  function copySel(cut) {
+    const cs = selClips().filter((c) => !locked(c) || !cut);
+    if (!cs.length) return;
+    clip = clone(cs); toast(t('{n} clipe(s) copiado(s)', { n: cs.length }));
+    if (cut) del(false);
+  }
+  function paste() {
+    if (!clip.length) { toast(t('Nada copiado.')); return; }
+    const base = Math.min(...clip.map((c) => c.start));
+    change(() => { const add = clip.filter((c) => trackOf(c.track) && !trackOf(c.track).locked).map((c) => Object.assign(clone(c), { id: uid(), start: r3(S.t + (c.start - base)) })); S.tl.clips.push(...add); S.sel = new Set(add.map((c) => c.id)); }, true);
+  }
   function addMarker() { change(() => { S.tl.markers.push({ t: r3(S.t), label: '' }); S.tl.markers.sort((a, b) => a.t - b.t); }, true); }
   function addText() {
     const tr = S.tl.tracks.find((x) => x.kind === 'text' && !x.locked);
@@ -134,10 +148,10 @@ export function mountTimeline(host, o) {
       text: '', size: 44, color: '#ffffff', bg: '', pos: 'bottom' };
     change(() => { S.tl.clips.push(c); S.sel = new Set([c.id]); }, true);
   }
-  const setProp = (k, v) => change(() => selClips().filter((c) => !locked(c)).forEach((c) => { c[k] = v; }), true);
+  const setProp = (k, v) => { const a = document.activeElement; change(() => selClips().filter((c) => !locked(c)).forEach((c) => { c[k] = v; }), true); if (a && a.blur && /^(SELECT|INPUT)$/.test(a.tagName) && a.type !== 'text') setTimeout(() => { if (document.activeElement === a || !root.contains(document.activeElement)) { try { a.blur(); } catch (e) { /* ok */ } } }, 0); };   // sem foco preso no campo, os atalhos voltam a funcionar
 
   // ---------------------------------------------------------------- DOM
-  const toolBtn = (id, ic, label, key, fn, extra) => h('button', { class: 'stl-btn', type: 'button', id: 'stl-' + id, title: label + (key ? ` (${key})` : ''), onclick: fn }, icon(ic, 15), extra || null);
+  const toolBtn = (id, ic, label, key, fn, extra) => h('button', { class: 'stl-btn', type: 'button', id: 'stl-' + id, tabindex: '-1', onmousedown: (e) => e.preventDefault(), title: label + (key ? ` (${key})` : ''), onclick: fn }, icon(ic, 15), extra || null);
   const bar = h('div', { class: 'stl-bar' });
   const bin = h('div', { class: 'stl-bin' }), inspector = h('div', { class: 'stl-insp' });
   const monitor = h('div', { class: 'stl-mon ar-' + S.aspect.replace(':', '-') });
@@ -148,12 +162,33 @@ export function mountTimeline(host, o) {
   const scroller = h('div', { class: 'stl-scroll' }, content);
   const marquee = h('div', { class: 'stl-marquee hidden' });
   content.append(marquee);
-  const root = h('div', { class: 'stl' }, bar, h('div', { class: 'stl-top' }, bin, h('div', { class: 'stl-mon-wrap' }, monitor, h('div', { class: 'stl-trans' },
+  const gut = (id, dir, title) => h('div', { class: 'stl-gut ' + dir, id: 'stl-gut-' + id, role: 'separator', 'aria-orientation': dir === 'v' ? 'vertical' : 'horizontal', tabindex: '-1', title });
+  const g1 = gut('bin', 'v', t('Arraste para mudar a largura das mídias (dois cliques: padrão)')), g2 = gut('insp', 'v', t('Arraste para mudar a largura das propriedades (dois cliques: padrão)')), g3 = gut('top', 'h', t('Arraste para mudar a altura do monitor e da timeline (dois cliques: padrão)'));
+  const top = h('div', { class: 'stl-top' }, bin, g1, h('div', { class: 'stl-mon-wrap' }, monitor, h('div', { class: 'stl-trans' },
     h('button', { class: 'stl-btn', type: 'button', title: t('Início') + ' (Home)', onclick: () => seek(0) }, icon('skipback', 15)),
     h('button', { class: 'stl-btn', type: 'button', title: t('Quadro anterior') + ' (←)', onclick: () => seek(S.t - 1 / FPS) }, icon('stepback', 15)), playBtn,
     h('button', { class: 'stl-btn', type: 'button', title: t('Próximo quadro') + ' (→)', onclick: () => seek(S.t + 1 / FPS) }, icon('stepfwd', 15)),
-    h('button', { class: 'stl-btn', type: 'button', title: t('Fim') + ' (End)', onclick: () => seek(total()) }, icon('skipfwd', 15)), tcEl)), inspector), scroller);
+    h('button', { class: 'stl-btn', type: 'button', title: t('Fim') + ' (End)', onclick: () => seek(total()) }, icon('skipfwd', 15)), tcEl)), g2, inspector);
+  const root = h('div', { class: 'stl' }, bar, top, g3, scroller);
   fill(host, root);
+  // tamanhos das janelas (guardados no navegador)
+  const DEF = { bin: 210, insp: 270, top: 300, rs: 1 };
+  let LAY = Object.assign({}, DEF);
+  try { Object.assign(LAY, JSON.parse(localStorage.getItem('asta.stl.layout') || '{}')); } catch (e) { /* ok */ }
+  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(120, Math.min(LAY.bin, W * 0.4)); LAY.insp = Math.max(180, Math.min(LAY.insp, W * 0.4)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); };
+  const applyLay = () => { clampLay(); root.style.setProperty('--bin', LAY.bin + 'px'); root.style.setProperty('--insp', LAY.insp + 'px'); root.style.setProperty('--toph', LAY.top + 'px'); root.style.setProperty('--rs', String(LAY.rs)); };
+  const saveLay = () => { try { localStorage.setItem('asta.stl.layout', JSON.stringify(LAY)); } catch (e) { /* ok */ } };
+  const dragGut = (g, key, sign) => {
+    g.addEventListener('dblclick', () => { LAY[key] = DEF[key]; applyLay(); saveLay(); renderAll(); });
+    g.addEventListener('pointerdown', (e) => {
+      e.preventDefault(); const horiz = g.classList.contains('h'), p0 = horiz ? e.clientY : e.clientX, v0 = LAY[key]; g.setPointerCapture(e.pointerId); g.classList.add('on');
+      const mv = (ev) => { LAY[key] = v0 + sign * ((horiz ? ev.clientY : ev.clientX) - p0); applyLay(); if (key !== 'top') { paintRuler(); } };
+      const up = () => { g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.classList.remove('on'); saveLay(); renderAll(); };
+      g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up);
+    });
+  };
+  dragGut(g1, 'bin', 1); dragGut(g2, 'insp', -1); dragGut(g3, 'top', 1);
+  applyLay();
 
   function buildBar() {
     const sep = () => h('span', { class: 'stl-sep' });
@@ -167,7 +202,8 @@ export function mountTimeline(host, o) {
         toolBtn('text', 'type', t('Adicionar texto'), 'T', addText), toolBtn('marker', 'flag', t('Marcador no cursor'), 'K', addMarker),
         sep(), toolBtn('undo', 'undo', t('Desfazer'), 'Ctrl+Z', undo), toolBtn('redo', 'redo', t('Refazer'), 'Ctrl+Shift+Z', redo),
         sep(), toggle('snap', 'magnet', t('Ímã: gruda nas bordas dos clipes'), '', () => S.snap, (v) => { S.snap = v; }), toggle('ripple', 'ripple', t('Mover em cadeia (ripple)'), '', () => S.ripple, (v) => { S.ripple = v; }),
-        h('span', { class: 'grow' }), h('button', { class: 'stl-btn', type: 'button', title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)),
+        h('span', { class: 'grow' }), toolBtn('rowdn', 'rowsmall', t('Trilhas mais baixas'), '', () => { LAY.rs -= 0.2; applyLay(); saveLay(); renderAll(); }), toolBtn('rowup', 'rowbig', t('Trilhas mais altas'), '', () => { LAY.rs += 0.2; applyLay(); saveLay(); renderAll(); }),
+        toolBtn('full', 'expand', t('Tela cheia do editor') + ' (F)', 'F', () => toggleFull()), sep(), h('button', { class: 'stl-btn', type: 'button', tabindex: '-1', onmousedown: (e) => e.preventDefault(), title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)),
         h('button', { class: 'stl-btn', type: 'button', title: t('Mais zoom') + ' (+)', onclick: () => zoom(1.35) }, icon('zoomin', 15)), h('button', { class: 'stl-btn', type: 'button', title: t('Ajustar à tela'), onclick: fit }, icon('fit', 15)),
         status);
       const tool = (id) => bar.querySelector('#stl-t-' + id); if (tool(S.tool)) tool(S.tool).classList.add('on');
@@ -182,7 +218,7 @@ export function mountTimeline(host, o) {
     const fileIn = h('input', { type: 'file', multiple: true, accept: 'image/*,video/*,audio/*', class: 'hidden' });
     fileIn.addEventListener('change', async () => {
       for (const f of fileIn.files) {
-        try { const r = await fetch(`/api/studio/projects/${pid}/media`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name), 'Content-Type': f.type || 'application/octet-stream' }, body: f }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'erro'); S.assets[j.id] = j; }
+        try { const r = await fetch(`/api/studio/projects/${pid}/media`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name), 'Content-Type': f.type || 'application/octet-stream' }, body: f }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'erro'); S.assets[j.id] = j; if (o.onAsset) o.onAsset(j); }
         catch (e) { toast(f.name + ': ' + e.message, 'err'); }
       }
       fileIn.value = ''; paintBin();
@@ -255,7 +291,8 @@ export function mountTimeline(host, o) {
   // ---------------------------------------------------------------- preview (monitor)
   const pool = new Map();   // id do clipe → elemento de mídia
   const lastUse = new Map();
-  const fade = (c, tt) => { let f = 1; if (c.fade_in > 0) f = Math.min(f, (tt - c.start) / c.fade_in); if (c.fade_out > 0) f = Math.min(f, (end(c) - tt) / c.fade_out); return Math.max(0, Math.min(1, f)); };
+  const fade = (c, tt) => { if (!S.playing) return 1; let f = 1;   // parado: mostra o quadro inteiro (os fades só valem tocando e na exportação)
+   if (c.fade_in > 0) f = Math.min(f, (tt - c.start) / c.fade_in); if (c.fade_out > 0) f = Math.min(f, (end(c) - tt) / c.fade_out); return Math.max(0, Math.min(1, f)); };
   function elFor(c, a) {
     let el = pool.get(c.id);
     if (!el || el.dataset.asset !== c.asset) {
@@ -309,7 +346,7 @@ export function mountTimeline(host, o) {
     if (S.playing) { if (el.paused) el.play().catch(() => {}); } else if (!el.paused) el.pause();
   }
   function paintTime() { tcEl.textContent = timecode(S.t) + ' / ' + timecode(total()); playBtn.replaceChildren(icon(S.playing ? 'pause' : 'play', 15)); }
-  function seek(tt) { S.t = Math.max(0, Math.min(tt, Math.max(total(), 0.001))); if (S.playing) { S.w0 = performance.now(); S.t0 = S.t; } paintPh(); paintTime(); updatePreview(true); }
+  function seek(tt) { S.t = Math.max(0, Math.min(tt, 6 * 3600)); /* o cursor pode ir além do fim (para posicionar um clipe novo) */ if (S.playing) { S.w0 = performance.now(); S.t0 = S.t; } paintPh(); paintTime(); updatePreview(true); }
   function togglePlay() {
     if (S.playing) { S.playing = false; cancelAnimationFrame(S.raf); paintTime(); updatePreview(false); return; }
     if (S.t >= total() - 0.05) S.t = 0;
@@ -325,6 +362,7 @@ export function mountTimeline(host, o) {
     S.raf = requestAnimationFrame(tick);
   }
   function zoom(f) { const mid = (scroller.scrollLeft + scroller.clientWidth / 2 - HEAD_W) / S.pps; S.pps = Math.max(2, Math.min(400, S.pps * f)); renderAll(); scroller.scrollLeft = Math.max(0, mid * S.pps - scroller.clientWidth / 2 + HEAD_W); }
+  function toggleFull() { const on = root.classList.toggle('full'); host.classList.toggle('st-tlfull', on); document.body.classList.toggle('stl-noscroll', on); applyLay(); renderAll(); }
   function fit() { S.pps = Math.max(2, Math.min(400, (scroller.clientWidth - HEAD_W - 40) / Math.max(5, total()))); renderAll(); scroller.scrollLeft = 0; }
 
   // ---------------------------------------------------------------- mouse: selecionar, mover, aparar, lâmina, régua, soltar mídia
@@ -341,6 +379,7 @@ export function mountTimeline(host, o) {
   }
   let drag = null;
   content.addEventListener('pointerdown', (e) => {
+    const ae = document.activeElement; if (ae && ae !== document.body && /^(INPUT|SELECT|TEXTAREA)$/.test(ae.tagName) && root.contains(ae)) ae.blur();   // o foco sai do campo: os atalhos voltam
     if (e.button !== 0 && e.button !== 2) return;
     const rl = e.target.closest('.stl-ruler');
     if (rl) { drag = { type: 'scrub' }; seek(timeAt(e.clientX)); content.setPointerCapture(e.pointerId); return; }
@@ -438,9 +477,13 @@ export function mountTimeline(host, o) {
     if (e.altKey) return;
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
     const done = () => { e.preventDefault(); e.stopPropagation(); };
+    if (e.repeat && !/^Arrow/.test(k) && k !== '+' && k !== '-' && k !== '=') { if (!ctrl && k !== 'Escape') e.preventDefault(); return; }   // segurar a tecla não corta/exclui em rajada
     if (ctrl && k.toLowerCase() === 'z') { done(); if (e.shiftKey) redo(); else undo(); }
     else if (ctrl && k.toLowerCase() === 'y') { done(); redo(); }
     else if (ctrl && k.toLowerCase() === 'd') { done(); duplicate(); }
+    else if (ctrl && k.toLowerCase() === 'c') { done(); copySel(false); }
+    else if (ctrl && k.toLowerCase() === 'x') { done(); copySel(true); }
+    else if (ctrl && k.toLowerCase() === 'v') { done(); paste(); }
     else if (ctrl && k.toLowerCase() === 'a') { done(); S.sel = new Set(S.tl.clips.map((c) => c.id)); renderAll(); }
     else if (ctrl) return;
     else if (k === ' ') { done(); togglePlay(); }
@@ -457,7 +500,8 @@ export function mountTimeline(host, o) {
     else if (k === 'k' || k === 'K') { done(); addMarker(); }
     else if (k === '[') { done(); trimTo('start'); } else if (k === ']') { done(); trimTo('end'); }
     else if (k === '+' || k === '=') { done(); zoom(1.35); } else if (k === '-') { done(); zoom(1 / 1.35); }
-    else if (k === 'Escape') { S.sel.clear(); renderAll(); }
+    else if (k === 'f' || k === 'F') { done(); toggleFull(); }
+    else if (k === 'Escape') { if (root.classList.contains('full')) toggleFull(); else { S.tool = 'select'; S.sel.clear(); buildBar(); renderAll(); } }
   };
   document.addEventListener('keydown', onKey);
   window.addEventListener('beforeunload', () => { if (!S.saved) save(); });
@@ -465,8 +509,8 @@ export function mountTimeline(host, o) {
   buildBar(); paintBin(); renderAll(); paintStatus();
   new ResizeObserver(() => { if (root.isConnected) { paintRuler(); paintRows(); paintPh(); } }).observe(scroller);
   return {
-    save, S, destroy() { S.playing = false; cancelAnimationFrame(S.raf); document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
+    save, S, destroy() { document.body.classList.remove('stl-noscroll'); S.playing = false; cancelAnimationFrame(S.raf); document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
     refreshAssets(list) { setAssets(list); paintBin(); renderAll(); },
-    api: { splitAt, joinSel, toggleMute, del, duplicate, addText, addMarker, undo, redo, seek, togglePlay, zoom, fit, total },
+    api: { copySel, paste, toggleFull, splitAt, joinSel, toggleMute, del, duplicate, addText, addMarker, undo, redo, seek, togglePlay, zoom, fit, total },
   };
 }

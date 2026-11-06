@@ -208,6 +208,7 @@ async function renderProject(root, ctx, meta, sub) {
   }
   function paintAll() { paintHead(); paintTabs(); paintBody(); }
   function paintBody() {
+    tlToken++;
     if (tl) { tl.destroy(); tl = null; }
     if (tab === 'timeline') paintTimeline(); else if (tab === 'export') paintExport(); else paintScenes();
   }
@@ -277,16 +278,21 @@ async function renderProject(root, ctx, meta, sub) {
   }
 
   // ---------------------------------------------------------------- timeline
-  function paintTimeline() {
+  let manual = false;
+  async function paintTimeline() {
+    const my = ++tlToken;
+    try { await reload(); } catch (e) { /* segue com o que há */ }   // mídias e timeline sempre frescas: nada de bin vazio por dado velho
+    if (my !== tlToken || tab !== 'timeline') return;
     const ep = epOf();
-    if (!ep.timeline.clips.length) {
+    if (!ep.timeline.clips.length && !p.assets.length && !manual) {
       fill(body, h('div', { class: 'empty' }, h('h3', null, t('A timeline está vazia')), h('p', null, t('Gere o episódio na aba «Roteiro e cenas», use a edição automática ou importe mídias e monte do zero.')),
-        h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn primary', onclick: () => { tab = 'scenes'; paintTabs(); paintBody(); } }, t('Ir para o roteiro')), h('button', { class: 'btn', id: 'st-manual', onclick: () => { ep.timeline.clips = []; mount(true); } }, t('Editar do zero')))));
+        h('div', { class: 'row', style: { justifyContent: 'center' } }, h('button', { class: 'btn primary', onclick: () => { tab = 'scenes'; paintTabs(); paintBody(); } }, t('Ir para o roteiro')), h('button', { class: 'btn', id: 'st-manual', onclick: () => { manual = true; paintTimeline(); } }, t('Editar do zero')))));
       return;
     }
-    mount(false);
-    function mount() { const host = h('div', { class: 'st-tlhost' }); fill(body, host); tl = mountTimeline(host, { pid: p.id, eid: ep.id, timeline: ep.timeline, assets: p.assets, aspect: p.aspect, onSaved: (x) => { ep.timeline = x; } }); }
+    const host = h('div', { class: 'st-tlhost' }); fill(body, host);
+    tl = mountTimeline(host, { pid: p.id, eid: ep.id, timeline: ep.timeline, assets: p.assets, aspect: p.aspect, onSaved: (x) => { ep.timeline = x; }, onAsset: (a) => { if (!p.assets.some((y) => y.id === a.id)) p.assets.push(a); } });
   }
+  let tlToken = 0;
 
   // ---------------------------------------------------------------- exportar
   function paintExport() {

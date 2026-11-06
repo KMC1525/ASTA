@@ -1093,4 +1093,12 @@ export default {
   "Cartoon": "Cartoon",
   "Anime": "Anime",
   "Custom": "Custom",
+  "Arraste para mudar a largura das mídias (dois cliques: padrão)": "Drag to resize the media panel (double-click: default)",
+  "Arraste para mudar a largura das propriedades (dois cliques: padrão)": "Drag to resize the properties panel (double-click: default)",
+  "Arraste para mudar a altura do monitor e da timeline (dois cliques: padrão)": "Drag to resize the monitor and the timeline (double-click: default)",
+  "Trilhas mais baixas": "Shorter tracks",
+  "Trilhas mais altas": "Taller tracks",
+  "Tela cheia do editor": "Editor full screen",
+  "{n} clipe(s) copiado(s)": "{n} clip(s) copied",
+  "Nada copiado.": "Nothing copied.",
 };

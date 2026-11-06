@@ -7,6 +7,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.7.1] — 2026-11-06
+
+### Fixed
+- **Timeline keyboard shortcuts (manual mode):** after touching an inspector field (speed, filter, volume…) focus stayed stuck in it and **S, J, M, C, Del, Space stopped working** until you clicked elsewhere — focus now leaves the field by itself (and clicking the timeline releases it too). Toolbar buttons no longer steal focus (Space does not trigger the last clicked button). **Holding a key** (Del, S, J…) no longer repeats the action in a burst. **S** cuts whatever is under the cursor even when the selection does not pass through it. The **cursor can go past the end** of the timeline (to place a new clip; it used to stop at the end).
+- **Media vanished from the bin** when switching tabs (or after entering "Edit from scratch" and importing files): the screen used a stale copy of the project. The timeline now always loads the up-to-date project, and a project with media opens the editor even without clips.
+- The preview showed a black frame at the start (because of the fade-in); when paused it now shows the full frame.
+
+### Added
+- **Resizable timeline windows:** drag the dividers to change the **media width**, the **properties width** and the **monitor × timeline height** (double-click resets), **taller/shorter tracks** and **editor full screen** (`F`; `Esc` leaves). Sizes are remembered in the browser.
+- **Copy, cut and paste** clips (`Ctrl+C`, `Ctrl+X`, `Ctrl+V` — pastes at the cursor); `Esc` clears the selection and returns to the select tool.
+
+### Tests
+- `tests/browser/studio_ui.js`: focus after the inspector, copy/paste, held key, Space after a toolbar button, cursor past the end, cut under the cursor, resizing the three dividers, remembering the size on reload, full screen and manual editing with import and tab switching.
+
 ## [0.7.0] — 2026-11-06
 
 ### Added
@@ -694,7 +708,8 @@ First version: the complete ASTA, end to end.
 **Security**
 - Listens only on `127.0.0.1` by default; protection against DNS rebinding and CSRF; API keys never exposed to the browser; path validation.
 
-[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/KMC1525/ASTA/compare/v0.7.1...HEAD
+[0.7.1]: https://github.com/KMC1525/ASTA/compare/v0.7.0...v0.7.1
 [0.7.0]: https://github.com/KMC1525/ASTA/compare/v0.6.3...v0.7.0
 [0.6.3]: https://github.com/KMC1525/ASTA/compare/v0.6.2...v0.6.3
 [0.6.2]: https://github.com/KMC1525/ASTA/compare/v0.6.1...v0.6.2
