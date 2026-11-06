@@ -122,6 +122,12 @@ run('studio', async ({ open, api, check, base }) => {
   await page.reload(); await page.waitForSelector('.stl .stl-clip', { timeout: 15000 });
   check('salvar:recarregar-mantem-a-edicao', (await page.locator('.stl-clip').count()) === tl.clips.length);
 
+  // diálogo por cima do monitor (o vídeo do preview não pode furar o fundo escuro do diálogo)
+  await page.mouse.click(rb.x + 118 + 200, rb.y + 10); await page.waitForTimeout(200);
+  await page.locator('#st-auto-btn').click(); await page.waitForSelector('.modal-bg', { timeout: 5000 });
+  check('dialogo:fica-acima-do-monitor-de-preview', await page.evaluate(() => { const m = document.querySelector('.stl-mon').getBoundingClientRect(); const el = document.elementFromPoint(m.left + m.width / 2, m.top + m.height / 2); return !!(el && el.closest('.modal-bg')); }));
+  await page.locator('.modal-bg .foot .btn').first().click(); await page.waitForTimeout(300);
+
   // ---- exportar
   await page.locator('#st-tab-export').click(); await page.waitForSelector('.st-chips.modes', { timeout: 5000 });
   check('exportar:tres-modos', (await page.locator('.st-chips.modes .st-chip').count()) === 3);

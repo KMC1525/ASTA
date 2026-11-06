@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.8.2] — 2026-11-06
+
+### Corrigido
+- **Studio: o vídeo do preview aparecia por cima dos diálogos** (ex.: «Este projeto já tem uma timeline…» na edição automática), furando o fundo escuro. O monitor agora tem a sua própria camada de empilhamento, e a tela cheia do editor fica abaixo dos diálogos. Teste de navegador cobre.
+
 ## [0.8.1] — 2026-11-06
 
 ### Alterado
@@ -726,7 +731,8 @@ Primeira versão: o ASTA completo, de ponta a ponta.
 **Segurança**
 - Escuta apenas em `127.0.0.1` por padrão; proteção contra DNS rebinding e CSRF; chaves de API nunca expostas ao navegador; validação de caminhos.
 
-[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.1...HEAD
+[Não lançado]: https://github.com/KMC1525/ASTA/compare/v0.8.2...HEAD
+[0.8.2]: https://github.com/KMC1525/ASTA/compare/v0.8.1...v0.8.2
 [0.8.1]: https://github.com/KMC1525/ASTA/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/KMC1525/ASTA/compare/v0.7.1...v0.8.0
 [0.7.1]: https://github.com/KMC1525/ASTA/compare/v0.7.0...v0.7.1
