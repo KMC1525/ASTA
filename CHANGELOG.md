@@ -5,6 +5,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.9.2] — 2026-11-06
+
+### Melhorado
+- **Edição automática, todos os estilos**, com técnicas de edição por gênero (guias de edição para YouTube/Shorts pesquisados; não consigo assistir aos vídeos, então usei as práticas descritas neles). Cada estilo mostra a sua «Técnica» abaixo da lista e o Diretor de IA recebe essa nota.
+  - **Gameplay**: abre com o melhor momento (gancho com zoom) e segue em ordem cronológica.
+  - **Documentário e Vlog**: plano de cobertura (b-roll) intercalado (a cada 2 e 3 planos), movimento lento de câmera e pan; no Vlog/Tutorial os cortes de silêncio deixam uma folga na fala.
+  - **Phonk e Clipe musical**: introdução mais lenta, «drop»/refrão com cortes de 1–2 batidas e zoom a cada corte, rampas de velocidade só depois da introdução e fecho em câmera lenta.
+  - **Trailer**: cartela final com o título; **Apresentação de fotos**: tempos variados e zoom/pan alternados.
+  - Nenhum estilo repete o mesmo trecho enquanto houver material novo; a música abaixa quando há narração.
+  - O Revisor avisa quando faltou material e cortes repetiram trechos.
+- Corrigido: uma foto no fim podia estourar a duração alvo.
+
 ## [0.9.1] — 2026-11-06
 
 ### Adicionado

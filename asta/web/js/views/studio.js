@@ -145,7 +145,10 @@ async function renderList(root, ctx, meta) {
   const aeHost = h('div'), aeBpm = h('input', { type: 'number', min: 60, max: 240, placeholder: 'BPM', id: 'ae-bpm', oninput: (e) => { ae.bpm = parseInt(e.target.value || '0', 10) || 0; } });
   const aeTarget = h('input', { type: 'number', min: 0, max: 21600, placeholder: t('auto'), id: 'ae-target', oninput: (e) => { ae.target = parseInt(e.target.value || '0', 10) || 0; } });
   const aeComposer = createComposer({ placeholder: t('Anexe os vídeos, imagens e áudios (vários) e diga o que quer: momentos, ritmo, tom, o que destacar…'), sendLabel: t('Editar'), sendTitle: t('Monta a edição automaticamente'), tools: [], onSend: () => runAuto() });
-  const styleList = chips(meta.edit_styles.map((s) => [s.id, t(s.label), t(s.hint)]), ae.style, (v) => { ae.style = v; const s = meta.edit_styles.find((x) => x.id === v); aeBpm.parentElement.classList.toggle('hidden', !s.bpm); if (s.bpm) aeBpm.placeholder = 'BPM (' + s.bpm + ')'; }, 'estyles');
+  const craftNote = h('p', { class: 'muted small', id: 'ae-craft', style: { margin: '6px 0 0' } });
+  const showCraft = (id) => { const x = meta.edit_styles.find((y) => y.id === id); craftNote.textContent = x && x.craft ? t('Técnica: ') + t(x.craft) : ''; };
+  setTimeout(() => showCraft(ae.style), 0);
+  const styleList = chips(meta.edit_styles.map((s) => [s.id, t(s.label), t(s.hint)]), ae.style, (v) => { ae.style = v; showCraft(v); const s = meta.edit_styles.find((x) => x.id === v); aeBpm.parentElement.classList.toggle('hidden', !s.bpm); if (s.bpm) aeBpm.placeholder = 'BPM (' + s.bpm + ')'; }, 'estyles');
   async function runAuto() {
     if (!aeComposer.fileIds().length) { toast(t('Anexe pelo menos um vídeo, imagem ou áudio.'), 'err'); return; }
     aeComposer.setSending(true);
@@ -157,7 +160,7 @@ async function renderList(root, ctx, meta) {
     } catch (e) { toast(e.message, 'err'); aeComposer.setSending(false); aeComposer.refresh(); }
   }
   const aeCard = h('div', { class: 'card st-card', id: 'st-auto' }, h('h3', null, t('Edição automática')), h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Anexe vários arquivos e escreva o que quer: o Analista, o Diretor e o Revisor montam os cortes no estilo escolhido, e você refina na timeline.')),
-    h('label', { class: 'f' }, t('Estilo de edição')), styleList,
+    h('label', { class: 'f' }, t('Estilo de edição')), styleList, craftNote,
     h('div', { class: 'st-grid' }, h('div', null, h('label', { class: 'f' }, t('Duração alvo (segundos; vazio = automática)')), aeTarget), h('div', null, h('label', { class: 'f' }, t('Formato')), select(meta.aspects.map((a) => [a, a]), ae.aspect, (v) => { ae.aspect = v; })),
       h('div', { class: 'hidden' }, h('label', { class: 'f' }, t('Batida (BPM)')), aeBpm)), aeComposer.el, aeHost);
   aeBpm.parentElement.classList.add('hidden');

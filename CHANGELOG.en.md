@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.9.2] — 2026-11-06
+
+### Improved
+- **Automatic editing, every style**, using per-genre editing techniques (YouTube/Shorts editing guides were researched; I can't watch the videos, so I used the practices they describe). Each style shows its "Technique" under the list and the AI Director receives that note.
+  - **Gameplay**: opens with the best moment (hook with a zoom), then follows chronological order.
+  - **Documentary and Vlog**: cutaways (b-roll) interleaved (every 2 and 3 shots), slow camera movement and pan; Vlog/Tutorial silence cuts leave a pad on speech.
+  - **Phonk and Music video**: slower intro, a 'drop'/chorus with 1–2 beat cuts and a zoom on each cut, speed ramps only after the intro, closing in slow motion.
+  - **Trailer**: final title card; **Photo slideshow**: varied timing and alternating zoom/pan.
+  - No style repeats the same stretch while there is new material; music ducks under narration.
+  - The Reviewer warns when material ran short and cuts repeated stretches.
+- Fixed: a photo at the end could overshoot the target duration.
+
 ## [0.9.1] — 2026-11-06
 
 ### Added

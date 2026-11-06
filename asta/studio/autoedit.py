@@ -30,21 +30,37 @@ from . import tools
 # Perfis dos estilos de edição. pace = (mín, máx) de segundos por corte; None = grade de batidas (bpm).
 EDIT_STYLES: Dict[str, Dict[str, Any]] = {
     "gameplay": {"label": "Gameplay", "hint": "Melhores momentos (picos de volume), cortes rápidos e zoom nos destaques", "pace": (2.5, 6.0), "use": "loud", "fade": 0.0, "punch": 1.12, "punch_every": 3,
-                 "grade": "vivid", "orig_vol": 1.0, "music_vol": 0.15, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": False},
+                 "grade": "vivid", "orig_vol": 1.0, "music_vol": 0.15, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": False,
+                 "hook": True, "chrono": True, "dedupe": True, "sfx_zoom": True,
+                 "craft": "Abra com o melhor momento (gancho no 1º segundo); depois conte em ordem cronológica, cortando tempo morto; zoom só nos picos; música baixa para o áudio do jogo mandar."},
     "documentary": {"label": "Documentário", "hint": "Cortes longos e calmos, transições suaves, narração em destaque e música discreta", "pace": (5.0, 12.0), "use": "sequential", "fade": 0.5, "punch": 1.0, "punch_every": 0,
-                    "grade": "cinematic", "orig_vol": 0.8, "music_vol": 0.14, "voice_vol": 1.0, "default_target": 180, "silence": True, "titles": True},
+                    "grade": "cinematic", "orig_vol": 0.8, "music_vol": 0.14, "voice_vol": 1.0, "default_target": 180, "silence": True, "titles": True,
+                    "cutaway": 2, "dedupe": True, "pan": True, "pad": 0.25,
+                    "craft": "Planos longos e calmos; entre cada 2 planos principais entra um plano de cobertura (b-roll); movimento lento de câmera nas imagens; música discreta que abaixa quando há narração."},
     "phonk": {"label": "Edit Phonk", "hint": "Cortes na batida, câmera lenta/rápida, zoom, filtro granulado e música no talo", "pace": None, "use": "grid", "fade": 0.0, "punch": 1.18, "punch_every": 2, "grade": "phonk",
-              "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 30, "silence": False, "titles": False, "bpm": 140, "ramps": True},
+              "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 30, "silence": False, "titles": False, "bpm": 140, "ramps": True,
+              "hook": True, "dedupe": True, "buildup": True, "pan": True,
+              "craft": "Corte só nas batidas fortes (não em toda subdivisão); introdução mais lenta, 'drop' com cortes de 1–2 batidas e zoom a cada corte; rampas de velocidade com moderação; fecha com câmera lenta."},
     "trailer": {"label": "Trailer", "hint": "Ritmo que acelera, fades, cartelas de texto e música alta", "pace": (4.0, 1.2), "use": "spread", "fade": 0.3, "punch": 1.0, "punch_every": 0, "grade": "cinematic",
-                "orig_vol": 0.35, "music_vol": 0.85, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": True},
+                "orig_vol": 0.35, "music_vol": 0.85, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": True,
+                "dedupe": True, "endcard": True,
+                "craft": "Começa devagar e acelera até cortes bem curtos no clímax; cartelas de texto curtas; termina com uma cartela final com o título."},
     "vlog": {"label": "Vlog", "hint": "Corta o tempo morto, ritmo médio, cores quentes e música leve", "pace": (3.0, 8.0), "use": "sequential", "fade": 0.15, "punch": 1.0, "punch_every": 0, "grade": "warm",
-             "orig_vol": 1.0, "music_vol": 0.1, "voice_vol": 1.0, "default_target": 120, "silence": True, "titles": False},
+             "orig_vol": 1.0, "music_vol": 0.1, "voice_vol": 1.0, "default_target": 120, "silence": True, "titles": False,
+             "cutaway": 3, "dedupe": True, "pad": 0.12, "pan": True,
+             "craft": "Jump cuts: corta pausas e hesitações deixando uma folga mínima na fala; um plano de cobertura a cada 3 cortes; cores quentes e música bem baixa."},
     "tutorial": {"label": "Tutorial", "hint": "Remove pausas, cortes longos e claros, sem efeitos", "pace": (8.0, 20.0), "use": "sequential", "fade": 0.0, "punch": 1.0, "punch_every": 0, "grade": "none",
-                 "orig_vol": 1.0, "music_vol": 0.06, "voice_vol": 1.0, "default_target": 300, "silence": True, "titles": True},
+                 "orig_vol": 1.0, "music_vol": 0.06, "voice_vol": 1.0, "default_target": 300, "silence": True, "titles": True,
+                 "dedupe": True, "pad": 0.2, "cutaway": 4,
+                 "craft": "Clareza antes de estilo: tira pausas longas sem cortar a frase, cortes longos, sem efeitos, cartelas de passo, música quase inaudível."},
     "music_video": {"label": "Clipe musical", "hint": "Cortes no compasso da música, cores vivas", "pace": None, "use": "grid", "fade": 0.0, "punch": 1.08, "punch_every": 4, "grade": "vivid",
-                    "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 90, "silence": False, "titles": False, "bpm": 120},
+                    "orig_vol": 0.0, "music_vol": 1.0, "voice_vol": 1.0, "default_target": 90, "silence": False, "titles": False, "bpm": 120,
+                    "dedupe": True, "pan": True, "buildup": True,
+                    "craft": "Cortes no compasso (1, 2 ou 4 batidas), mais lentos na estrofe e mais rápidos no refrão; zoom a cada 4 cortes; nada de repetir o mesmo trecho."},
     "slideshow": {"label": "Apresentação de fotos", "hint": "Imagens com fades e música", "pace": (3.5, 5.0), "use": "sequential", "fade": 0.6, "punch": 1.0, "punch_every": 0, "grade": "none",
-                  "orig_vol": 1.0, "music_vol": 0.6, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": False},
+                  "orig_vol": 1.0, "music_vol": 0.6, "voice_vol": 1.0, "default_target": 60, "silence": False, "titles": False,
+                  "pan": True, "vary": 0.18, "chrono": True,
+                  "craft": "Cada foto fica o suficiente para ser vista, com tempos levemente diferentes, movimento lento (zoom e pan alternados) e fades suaves."},
 }
 ROLES = ("footage", "broll", "music", "voiceover", "ignore")
 VOICE_NAME = re.compile(r"(narr|voz|voice|\bvo\b|locu|fala|speech|podcast)", re.I)
@@ -59,6 +75,7 @@ DIRECTOR = """ROLE: Edit director.
 Given the file roles, the edit style profile, target_seconds and the user's prompt (INPUT_JSON), give DIRECTIVES for the cutting algorithm (do not list every cut):
 "pace": "fast"|"medium"|"slow" (relative to the style default); "order": file ids in the order they should appear (footage/broll); "highlights": up to 8 {"asset": id, "t": seconds} moments that must be included;
 "avoid": up to 6 {"asset": id, "from": s, "to": s} stretches to skip; "titles": up to 4 short title cards (empty if the style does not use them).
+Follow the style's "craft" note (the technique references editors of that genre use). "highlights"[0] is the HOOK: the single best moment, used to open the video.
 Output JSON: {"pace": str, "order": [str], "highlights": [{"asset": str, "t": number}], "avoid": [{"asset": str, "from": number, "to": number}], "titles": [str]}"""
 
 CRITIC = """ROLE: Edit reviewer.
@@ -68,7 +85,7 @@ Output JSON: {"approved": bool, "tips": [str]}"""
 
 
 def describe_styles() -> List[Dict[str, Any]]:
-    return [{"id": k, "label": v["label"], "hint": v["hint"], "bpm": v.get("bpm", 0), "default_target": v["default_target"]} for k, v in EDIT_STYLES.items()]
+    return [{"id": k, "label": v["label"], "hint": v["hint"], "bpm": v.get("bpm", 0), "default_target": v["default_target"], "craft": v.get("craft", "")} for k, v in EDIT_STYLES.items()]
 
 
 # ---------------------------------------------------------------------------------------------------- algoritmo dos cortes
@@ -113,12 +130,13 @@ def _windows(a: Dict[str, Any], style: Dict[str, Any], lo: float, hi: float, dir
         keep: List[Tuple[float, float]] = []
         if style.get("silence") and a.get("silences"):
             t = 0.0
+            pad = float(style.get("pad", 0.0))
             for s, e in sorted(a["silences"]):
                 if s - t > 0.8:
-                    keep.append((t, s))
+                    keep.append((max(0.0, t - pad if t else 0.0), min(dur, s + pad)))  # folga nas pontas: a fala não é cortada seca
                 t = max(t, e)
             if dur - t > 0.8:
-                keep.append((t, dur))
+                keep.append((max(0.0, t - pad), dur))
         else:
             keep = [(bounds[i], bounds[i + 1]) for i in range(len(bounds) - 1) if bounds[i + 1] - bounds[i] > 0.5] or [(0.0, dur)]
         for s, e in keep:
@@ -175,22 +193,52 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
                 if buckets[key]:
                     mixed.append(buckets[key].pop(0))
         cand = mixed
+    if st.get("cutaway") and any(roles.get(c[0]["id"]) == "broll" for c in cand) and any(roles.get(c[0]["id"]) == "footage" for c in cand):
+        main = [c for c in cand if roles.get(c[0]["id"]) != "broll"]  # um plano de cobertura (b-roll) a cada N planos principais
+        cover = [c for c in cand if roles.get(c[0]["id"]) == "broll"]
+        cand = []
+        for i, c in enumerate(main):
+            cand.append(c)
+            if cover and i % int(st["cutaway"]) == int(st["cutaway"]) - 1:
+                cand.append(cover[(i // int(st["cutaway"])) % len(cover)])
+    hl = next((h for h in directives.get("highlights", []) if h.get("asset") in by), None)
+    if st.get("hook") and hl:  # gancho: o diretor escolheu o melhor momento para abrir
+        hook = next((c for c in cand if c[0]["id"] == hl["asset"] and c[1] - 0.01 <= float(hl.get("t", 0)) <= c[2] + 0.01), None)
+        if hook:
+            cand.remove(hook)
+            cand.insert(0, hook)
+    used: List[Tuple[str, float, float]] = []
+
+    def reused(a: Dict[str, Any], s0: float, e0: float) -> bool:
+        return any(u[0] == a["id"] and min(e0, u[2]) - max(s0, u[1]) > 0.5 * max(0.1, e0 - s0) for u in used)
+
     guard = 0
     while t < target - 0.05 and guard < 4000:
         guard += 1
         if not cand:
             break
-        a, s, e = cand[k % len(cand)]
-        k += 1
+        tries = 0
+        while True:  # não repete o mesmo trecho enquanto houver material novo
+            a, s, e = cand[k % len(cand)]
+            k += 1
+            tries += 1
+            if not st.get("dedupe") or a["kind"] == "image" or not reused(a, s, e) or tries >= len(cand):
+                break
         progress = t / max(1.0, target)
+        n = len(segs)
         if a["kind"] == "image":
             d = (rnd.uniform(*pace) if pace else beat * 4) * fast
-            if target - t > 0.4:
-                d = min(d, target - t)
+            if st.get("vary"):
+                d *= 1 + rnd.uniform(-st["vary"], st["vary"])
+            d = min(d, max(target - t, 0.4))
             seg = {"asset": a["id"], "in": 0.0, "dur": round(d, 3), "speed": 1.0}
         else:
             if pace is None:
-                d = beat * rnd.choice((1, 2, 2, 4)) if st["use"] == "grid" else beat * 4
+                if st.get("buildup"):  # introdução/estrofe mais lenta, «drop»/refrão com cortes de 1-2 batidas, fecho calmo
+                    choices = (4, 4, 2) if progress < 0.25 else ((2, 4) if progress > 0.9 else (1, 2, 2, 1))
+                else:
+                    choices = (1, 2, 2, 4)
+                d = beat * rnd.choice(choices) if st["use"] == "grid" else beat * 4
             elif st["use"] == "spread" and pace[0] > pace[1]:  # trailer: do mais longo ao mais curto
                 d = pace[0] + (pace[1] - pace[0]) * progress
             else:
@@ -198,7 +246,9 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
             d = max(0.4, min(d, target - t) if target - t > 0.4 else d)
             speed = 1.0
             if st.get("ramps"):
-                speed = (0.6, 1.0, 1.5, 1.0)[(k - 1) % 4]
+                speed = 0.5 if progress > 0.92 else (0.6, 1.0, 1.5, 1.0)[n % 4]  # rampas com moderação; fecha em câmera lenta
+                if progress < 0.25:
+                    speed = 1.0
             src_len = d * speed
             if e - s < src_len:
                 s = max(0.0, min(s, a["dur"] - src_len))
@@ -206,10 +256,24 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
                 src_len = max(0.3, a["dur"] - s)
                 d = src_len / speed
             seg = {"asset": a["id"], "in": round(s, 3), "dur": round(d, 3), "speed": speed}
-        punch = st["punch"] if st["punch_every"] and (len(segs) % st["punch_every"] == st["punch_every"] - 1) else 1.0
-        seg.update(scale=punch, filter=st["grade"], fade_in=st["fade"] if t == 0 or st["fade"] else 0, fade_out=st["fade"], mute=st["orig_vol"] <= 0.001, volume=st["orig_vol"])
+            used.append((a["id"], s, s + src_len))
+        zoom_now = st["punch"] if st["punch_every"] and (n % st["punch_every"] == st["punch_every"] - 1) else 1.0
+        if st.get("hook") and n == 0:
+            zoom_now = max(zoom_now, st["punch"])  # o gancho já abre com um zoom
+        if st.get("buildup") and st["use"] == "grid" and st.get("ramps") and 0.25 <= progress <= 0.9:
+            zoom_now = st["punch"] if n % 2 == 0 else 1.0  # no «drop» o zoom bate a cada corte
+        px = py = 0.0
+        if st.get("pan") and (a["kind"] == "image" or zoom_now > 1.0 or st["use"] == "sequential"):
+            zoom_now = max(zoom_now, 1.06)
+            px = (0.3, -0.3, 0.0, 0.2)[n % 4] * (zoom_now - 1) / 0.12 if zoom_now > 1 else 0.0
+            py = (0.0, 0.15, -0.15, 0.0)[n % 4] * (zoom_now - 1) / 0.12
+            px, py = max(-0.5, min(0.5, px)), max(-0.5, min(0.5, py))
+        seg.update(scale=round(zoom_now, 2), x=round(px, 3), y=round(py, 3), filter=st["grade"], fade_in=st["fade"] if t == 0 or st["fade"] else 0, fade_out=st["fade"], mute=st["orig_vol"] <= 0.001, volume=st["orig_vol"])
         segs.append(seg)
         t += seg["dur"]
+    if st.get("chrono") and len(segs) > 2:  # gancho primeiro; o resto na ordem em que aconteceu
+        order = {a["id"]: i for i, a in enumerate(footage)}
+        segs = segs[:1] + sorted(segs[1:], key=lambda g: (order.get(g["asset"], 0), g["in"]))
     total = round(sum(s["dur"] for s in segs), 3)
     titles: List[Dict[str, Any]] = []
     if st["titles"]:
@@ -217,6 +281,8 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
         for i, c in enumerate(cards):
             at = 0.5 if i == 0 else total * i / max(1, len(cards))
             titles.append({"text": c[:90], "start": round(at, 2), "dur": 2.8 if i == 0 else 2.2})
+    if st.get("endcard") and title and total > 6:
+        titles.append({"text": title[:90], "start": round(max(0.0, total - 2.4), 2), "dur": 2.3})  # trailer: cartela final
     return {"segments": segs, "total": total, "music": music, "voice": voice, "titles": titles, "style": style_id}
 
 
@@ -312,7 +378,7 @@ class AutoEditPipeline(Runner):
             if st["use"] == "grid" and music_dur:
                 target = min(music_dur, 180)
             target = min(target, max(5.0, footage_total if st["use"] != "grid" else target))
-        dp = {"roles": roles, "style": {k: st[k] for k in ("label", "hint", "pace", "use")}, "target_seconds": target, "prompt": prompt, "files": [{"id": a["id"], "name": a["name"], "dur": a["dur"], "role": roles[a["id"]]} for a in inv]}
+        dp = {"roles": roles, "style": {k: st.get(k) for k in ("label", "hint", "pace", "use", "craft")}, "target_seconds": target, "prompt": prompt, "files": [{"id": a["id"], "name": a["name"], "dur": a["dur"], "role": roles[a["id"]]} for a in inv]}
         dobj, fb2 = self._ask("director", "studio_edit_director", DIRECTOR, dp, lambda pl: {"pace": "medium", "order": [], "highlights": [], "avoid": [], "titles": []})
         directives = {"pace": dobj.get("pace") if dobj.get("pace") in ("fast", "medium", "slow") else "medium",
                       "order": [i for i in (dobj.get("order") or []) if isinstance(i, str)], "highlights": [h for h in (dobj.get("highlights") or []) if isinstance(h, dict)][:8],
@@ -351,6 +417,10 @@ class AutoEditPipeline(Runner):
             if a["kind"] == "video" and s["in"] + s["dur"] * s["speed"] > a["dur"] + 0.05:
                 issues.append("um corte passa do fim do arquivo")
                 break
+        segs = edl["segments"]
+        dup = sum(1 for i, g in enumerate(segs) for h in segs[:i] if g["asset"] == h["asset"] and min(g["in"] + g["dur"] * g["speed"], h["in"] + h["dur"] * h["speed"]) - max(g["in"], h["in"]) > 0.5 * g["dur"] * g["speed"])
+        if dup > max(1, len(segs) // 6) and EDIT_STYLES[edl["style"]].get("dedupe"):
+            issues.append(f"{dup} cortes repetem trechos já usados (faltou material novo: anexe mais vídeos ou reduza a duração)")
         if not edl["music"] and EDIT_STYLES[edl["style"]]["use"] == "grid":
             issues.append("estilo de batida sem música: anexe uma faixa para os cortes seguirem o compasso")
         return issues
@@ -366,7 +436,7 @@ class AutoEditPipeline(Runner):
             for i, s in enumerate(edl["segments"]):
                 a = by[s["asset"]]
                 clips.append({"id": f"cut{i}", "track": tr["V1"], "asset": s["asset"], "label": a["name"][:40], "start": round(t, 3), "dur": round(s["dur"], 3), "in": s["in"], "speed": s["speed"],
-                              "mute": s["mute"] or a["kind"] == "image", "volume": s["volume"], "fade_in": s["fade_in"], "fade_out": s["fade_out"], "scale": s["scale"], "filter": s["filter"], "fit": "cover"})
+                              "mute": s["mute"] or a["kind"] == "image", "volume": s["volume"], "fade_in": s["fade_in"], "fade_out": s["fade_out"], "scale": s["scale"], "x": s.get("x", 0.0), "y": s.get("y", 0.0), "filter": s["filter"], "fit": "cover"})
                 t += s["dur"]
             total = t
             vt = 0.0
@@ -380,7 +450,7 @@ class AutoEditPipeline(Runner):
             while edl["music"] and mt < total - 0.05 and k < 60:
                 m = edl["music"][k % len(edl["music"])]
                 d = min(m["dur"] or total, total - mt)
-                clips.append({"id": f"mus{k}", "track": tr["A2"], "asset": m["id"], "label": m["name"][:40], "start": round(mt, 3), "dur": round(d, 3), "volume": st["music_vol"],
+                clips.append({"id": f"mus{k}", "track": tr["A2"], "asset": m["id"], "label": m["name"][:40], "start": round(mt, 3), "dur": round(d, 3), "volume": round(st["music_vol"] * (0.45 if edl["voice"] else 1.0), 3),  # abaixa a música quando há narração
                               "fade_in": 0.5 if k == 0 else 0, "fade_out": 1.5 if mt + d >= total - 0.06 else 0})
                 mt += d
                 k += 1

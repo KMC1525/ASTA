@@ -348,6 +348,70 @@ class PipelineTests(TmpCase):
 
 
 @needs_ff
+class PlanQualityTests(unittest.TestCase):
+    """Técnicas de edição (gancho, sem repetição, cobertura, estrutura da batida) no planejador determinístico."""
+
+    @staticmethod
+    def inv(**extra):
+        v = {"id": "v", "name": "v", "kind": "video", "dur": 120.0, "has_audio": True, "loud": [(100.0, -5.0), (30.0, -8.0), (60.0, -9.0), (10.0, -12.0), (80.0, -13.0), (45.0, -14.0)] * 1, "changes": [20.0, 50.0, 90.0], "silences": [(5.0, 9.0), (40.0, 44.0)]}
+        v.update(extra)
+        return [v, {"id": "p", "name": "p", "kind": "image", "dur": 0.0, "has_audio": False, "loud": [], "changes": [], "silences": []},
+                {"id": "m", "name": "musica", "kind": "audio", "dur": 60.0, "has_audio": True, "loud": [], "changes": [], "silences": []}]
+
+    def test_gameplay_opens_with_the_hook_then_follows_the_story_order(self):
+        roles = {"v": "footage", "p": "broll", "m": "music"}
+        e = AE.plan_edl("gameplay", self.inv(), roles, 40, {"highlights": [{"asset": "v", "t": 100.0}]}, 0, 1, "t")
+        segs = e["segments"]
+        self.assertTrue(segs[0]["in"] <= 100.0 <= segs[0]["in"] + segs[0]["dur"] + 0.01)
+        self.assertGreaterEqual(segs[0]["scale"], 1.1)  # o gancho abre com zoom
+        rest = [g["in"] for g in segs[1:] if g["asset"] == "v"]
+        self.assertEqual(rest, sorted(rest))
+
+    def test_no_clip_repeats_while_there_is_new_material(self):
+        roles = {"v": "footage", "p": "broll", "m": "music"}
+        for style in ("gameplay", "vlog", "documentary"):
+            e = AE.plan_edl(style, self.inv(), roles, 40, {}, 0, 2, "t")
+            vid = [g for g in e["segments"] if g["asset"] == "v"]
+            for i, g in enumerate(vid):
+                for h in vid[:i]:
+                    self.assertLessEqual(min(g["in"] + g["dur"], h["in"] + h["dur"]) - max(g["in"], h["in"]), 0.5 * g["dur"] + 0.01, style)
+
+    def test_documentary_and_vlog_insert_cutaways_between_main_shots(self):
+        roles = {"v": "footage", "p": "broll", "m": "music"}
+        e = AE.plan_edl("documentary", self.inv(), roles, 60, {}, 0, 3, "t")
+        ids = [g["asset"] for g in e["segments"]]
+        self.assertIn("p", ids)
+        self.assertNotEqual(ids[0], "p")
+        self.assertTrue(all(g["scale"] >= 1.0 for g in e["segments"]))
+
+    def test_silence_cuts_keep_a_breathing_pad(self):
+        pad = AE.EDIT_STYLES["vlog"]["pad"]
+        w = AE._windows(self.inv()[0], AE.EDIT_STYLES["vlog"], 3, 8, {}, __import__("random").Random(1))
+        self.assertTrue(any(abs(e - (5.0 + pad)) < 0.01 for s, e in w) or any(e <= 5.0 + pad + 0.01 for s, e in w))
+
+    def test_phonk_builds_up_then_drops_and_closes_in_slow_motion(self):
+        roles = {"v": "footage", "m": "music"}
+        e = AE.plan_edl("phonk", self.inv(), roles, 30, {}, 140, 4, "t")
+        segs = e["segments"]
+        q = max(1, len(segs) // 4)
+        intro = sum(g["dur"] for g in segs[:q]) / q
+        drop = sum(g["dur"] for g in segs[q:-q]) / max(1, len(segs) - 2 * q)
+        self.assertGreater(intro, drop)  # introdução mais lenta que o «drop»
+        self.assertTrue(any(g["speed"] == 0.5 for g in segs[-3:]))
+        t, early = 0.0, []
+        for g in segs:
+            if t < 0.2 * e["total"]:
+                early.append(g)
+            t += g["dur"]
+        self.assertTrue(all(g["speed"] == 1.0 for g in early))  # rampas só depois da introdução
+
+    def test_trailer_ends_with_a_title_card_and_every_style_has_a_craft_note(self):
+        roles = {"v": "footage", "m": "music"}
+        e = AE.plan_edl("trailer", self.inv(), roles, 60, {}, 0, 5, "Meu Filme")
+        self.assertTrue(any(t["text"] == "Meu Filme" and t["start"] >= e["total"] - 3 for t in e["titles"]))
+        self.assertTrue(all(x["craft"] for x in AE.describe_styles()))
+
+
 class AutoEditTests(TmpCase):
     def setUp(self):
         super().setUp()

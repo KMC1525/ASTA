@@ -1163,4 +1163,13 @@ export default {
   "GPU (NVIDIA)": "GPU (NVIDIA)",
   "Memória RAM": "RAM",
   "Sistema operacional": "Operating system",
+  "Técnica: ": "Technique: ",
+  "Abra com o melhor momento (gancho no 1º segundo); depois conte em ordem cronológica, cortando tempo morto; zoom só nos picos; música baixa para o áudio do jogo mandar.": "Open with the best moment (hook in the 1st second); then tell it in chronological order, cutting dead time; zoom only on peaks; low music so the game audio leads.",
+  "Planos longos e calmos; entre cada 2 planos principais entra um plano de cobertura (b-roll); movimento lento de câmera nas imagens; música discreta que abaixa quando há narração.": "Long, calm shots; a cutaway (b-roll) between every 2 main shots; slow camera movement on images; discreet music that ducks under narration.",
+  "Corte só nas batidas fortes (não em toda subdivisão); introdução mais lenta, 'drop' com cortes de 1–2 batidas e zoom a cada corte; rampas de velocidade com moderação; fecha com câmera lenta.": "Cut only on strong beats (not every subdivision); slower intro, a 'drop' with 1–2 beat cuts and a zoom on each cut; speed ramps in moderation; close in slow motion.",
+  "Começa devagar e acelera até cortes bem curtos no clímax; cartelas de texto curtas; termina com uma cartela final com o título.": "Starts slow and speeds up to very short cuts at the climax; short text cards; ends with a final title card.",
+  "Jump cuts: corta pausas e hesitações deixando uma folga mínima na fala; um plano de cobertura a cada 3 cortes; cores quentes e música bem baixa.": "Jump cuts: trims pauses and hesitations leaving a minimal pad on speech; a cutaway every 3 cuts; warm colors and very low music.",
+  "Clareza antes de estilo: tira pausas longas sem cortar a frase, cortes longos, sem efeitos, cartelas de passo, música quase inaudível.": "Clarity before style: removes long pauses without cutting the sentence, long cuts, no effects, step cards, nearly inaudible music.",
+  "Cortes no compasso (1, 2 ou 4 batidas), mais lentos na estrofe e mais rápidos no refrão; zoom a cada 4 cortes; nada de repetir o mesmo trecho.": "Cuts on the beat (1, 2 or 4 beats), slower on verses and faster on choruses; a zoom every 4 cuts; never repeat the same stretch.",
+  "Cada foto fica o suficiente para ser vista, com tempos levemente diferentes, movimento lento (zoom e pan alternados) e fades suaves.": "Each photo stays long enough to be seen, with slightly varied timing, slow movement (alternating zoom and pan) and soft fades.",
 };
