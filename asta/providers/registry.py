@@ -107,6 +107,16 @@ def build_provider(settings: Dict[str, Any], pid: str, models_dir: Optional[Path
     return OpenAICompatProvider(cfg)
 
 
+# onde o provedor deixa o usuário entrar na conta e criar a chave (login já com o destino certo)
+LOGIN_PAGES = {
+    "anthropic": "https://console.anthropic.com/login?returnTo=%2Fsettings%2Fkeys",
+    "openai": "https://platform.openai.com/login?next=%2Fapi-keys",
+    "xai": "https://console.x.ai",
+    "google": "https://aistudio.google.com/apikey",
+    "huggingface": "https://huggingface.co/login?next=%2Fsettings%2Ftokens",
+}
+
+
 def describe_presets() -> List[Dict[str, Any]]:
     out = []
     for pid, p in PRESETS.items():
@@ -114,5 +124,6 @@ def describe_presets() -> List[Dict[str, Any]]:
             "id": pid, "label": p["label"], "kind": p["kind"], "base_url": p.get("base_url", ""),
             "model": p.get("model", ""), "needs_key": p.get("needs_key", False), "local": p.get("local", False),
             "vision": p.get("vision", False), "docs": p.get("docs", ""), "hint": p.get("hint", ""),
+            "login": LOGIN_PAGES.get(pid, ""), "oauth": pid == "openrouter",
         })
     return out

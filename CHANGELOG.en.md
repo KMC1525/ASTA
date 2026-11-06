@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.10.3] — 2026-11-06
+
+### Added
+- **Sign in with your account on AI providers**: **OpenRouter** got an official OAuth/PKCE login ("Sign in with your account", no key to copy; "Disconnect"). For **Claude, ChatGPT, Grok, Gemini and Hugging Face**, which don't let third-party apps use the account or subscription login, the card has "Sign in and create the key" (opens their login already at the keys page). API keys keep working everywhere; the login only runs on the ASTA computer.
+
 ## [0.10.2] — 2026-11-06
 
 ### Fixed

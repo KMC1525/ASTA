@@ -34,6 +34,36 @@ const saveRow = (fn) => h('div', { class: 'row', style: { justifyContent: 'flex-
 const numInput = (obj, key, min, max, step) => h('input', { type: 'number', min, max, step: step || 1, value: obj[key], oninput: (e) => { const v = parseFloat(e.target.value); if (!Number.isNaN(v)) obj[key] = v; } });
 
 // ---------------------------------------------------------------------------------- provedores
+// Entrar com a conta: OpenRouter tem login OAuth aberto (a chave volta sozinha); Claude, ChatGPT, Grok, Gemini e Hugging Face não deixam apps de terceiros usarem o login/assinatura,
+// então abrimos a página de login deles já no lugar certo para criar a chave (que se cola no campo abaixo).
+function accountBox(p, cfg, repaint) {
+  const msg = h('p', { class: 'muted small', style: { margin: '6px 0 0' } });
+  const connected = cfg.auth === 'account' && cfg.has_key;
+  if (p.oauth) {
+    const go = async () => {
+      msg.textContent = '';
+      try {
+        const r = await api('/api/auth/openrouter/start', { method: 'POST', body: {} });
+        const w = window.open(r.url, 'asta-login', 'width=520,height=720');
+        if (!w) { location.href = r.url; return; }
+        msg.textContent = t('Faça o login na janela que abriu…');
+        const done = async () => { window.removeEventListener('message', onMsg); await refreshState(); toast(t('Conta conectada'), 'ok'); renderSide(); repaint(); };
+        const onMsg = (e) => { if (e.data === 'asta-auth-ok') done(); };
+        window.addEventListener('message', onMsg);
+        const tick = setInterval(async () => { if (w.closed) { clearInterval(tick); await refreshState(); const c = (state.settings.providers || {})[p.id] || {}; if (c.auth === 'account' && c.has_key) done(); else { window.removeEventListener('message', onMsg); msg.textContent = ''; } } }, 800);
+      } catch (e) { msg.textContent = e.message; msg.className = 'err small'; }
+    };
+    return h('div', { class: 'field', dataset: { account: p.id } }, h('label', { class: 'f' }, t('Conta')),
+      h('div', { class: 'row' }, h('button', { class: 'btn' + (connected ? '' : ' primary'), type: 'button', id: 'acct-' + p.id, onclick: go }, icon('user', 14), connected ? t('Entrar de novo com a conta') : t('Entrar com a conta do {p}', { p: 'OpenRouter' })),
+        connected ? h('span', { class: 'chip on' }, t('conta conectada')) : null,
+        connected ? h('button', { class: 'btn sm danger', type: 'button', onclick: async () => { await saveSettings({ providers: { [p.id]: { api_key: null, auth: '' } } }); toast(t('Conta desconectada')); await refreshState(); repaint(); } }, t('Desconectar')) : null),
+      h('p', { class: 'muted small', style: { margin: '6px 0 0' } }, t('Login oficial (OAuth): você autoriza no site do OpenRouter e não precisa copiar chave. O uso é cobrado na sua conta de lá.')), msg);
+  }
+  return h('div', { class: 'field', dataset: { account: p.id } }, h('label', { class: 'f' }, t('Conta')),
+    h('div', { class: 'row' }, h('a', { class: 'btn', href: p.login, target: '_blank', rel: 'noopener', id: 'acct-' + p.id }, icon('user', 14), t('Entrar na conta e criar a chave'))),
+    h('p', { class: 'muted small', style: { margin: '6px 0 0' } }, t('Este provedor não deixa outros apps usarem o login da conta nem da assinatura (Claude Pro, ChatGPT Plus…): você entra no site dele, cria a chave em um clique e cola no campo abaixo.')));
+}
+
 async function providers() {
   const presets = state.presets;
   const localModels = (await api('/api/hf/local')).models.map((m) => m.name);
@@ -82,6 +112,7 @@ async function providers() {
     if (p.id === 'demo') inputs.push(h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, t(p.hint)));
     else {
       if (p.id === 'lmstudio') inputs.push(lmStudioBox(p, draft, () => modelIn));
+      if (p.oauth || p.login) inputs.push(accountBox(p, cfg, () => { paint(); }));
       if (p.needs_key || p.kind === 'openai' || p.id === 'anthropic') inputs.push(field(t('Chave de API') + (p.needs_key ? '' : ' (' + t('opcional') + ')'),
         h('div', { class: 'row nw' }, h('input', { type: 'password', autocomplete: 'off', placeholder: cfg.has_key ? '•••••••• (' + t('salva') + ')' : 'sk-…', oninput: (e) => { draft.api_key = e.target.value; } }),
           cfg.has_key ? h('button', { class: 'btn sm danger', onclick: async () => { await saveSettings({ providers: { [p.id]: { api_key: null } } }); toast(t('Chave removida')); await refreshState(); paint(); } }, t('Remover')) : null),

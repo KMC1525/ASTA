@@ -319,6 +319,8 @@ ASTA's backend is still Python, now with an optional **Rust core** and a **perfo
 
 ## AI providers
 
+**Sign in with your account.** In *Configuration → Providers*, **OpenRouter** has a real *Sign in with your account* button (official OAuth/PKCE: you authorize on their site, the key comes back by itself, nothing to copy; *Disconnect* removes it). **Claude, ChatGPT, Grok, Gemini and Hugging Face** do not let third-party apps use your account or subscription login (Claude Pro, ChatGPT Plus…), so their card has *Sign in and create the key*, which opens the provider's login already at the key page — you create the key in one click and paste it. API keys keep working everywhere. The login runs only on the computer where ASTA runs.
+
 **Text models** (worlds, avatars, games, AI-text nodes):
 
 | Provider | Type | Notes |

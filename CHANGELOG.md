@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.10.3] — 2026-11-06
+
+### Adicionado
+- **Entrar com a conta nos provedores de IA**: o **OpenRouter** ganhou login OAuth/PKCE oficial («Entrar com a conta», sem copiar chave; «Desconectar»). Para **Claude, ChatGPT, Grok, Gemini e Hugging Face**, que não permitem que apps de terceiros usem o login da conta ou da assinatura, o cartão tem «Entrar na conta e criar a chave» (abre o login deles já na página das chaves). As chaves de API continuam valendo em todos; o login só roda no computador do ASTA.
+
 ## [0.10.2] — 2026-11-06
 
 ### Corrigido

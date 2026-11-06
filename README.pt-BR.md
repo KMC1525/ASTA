@@ -320,6 +320,8 @@ O backend do ASTA continua em Python, agora com um **núcleo Rust** opcional e u
 
 ## Provedores de IA
 
+**Entrar com a conta.** Em *Configuração → Provedores*, o **OpenRouter** tem um botão de verdade *Entrar com a conta* (OAuth/PKCE oficial: você autoriza no site deles, a chave volta sozinha, sem copiar nada; *Desconectar* remove). **Claude, ChatGPT, Grok, Gemini e Hugging Face** não deixam apps de terceiros usarem o login da conta nem da assinatura (Claude Pro, ChatGPT Plus…); por isso o cartão deles tem *Entrar na conta e criar a chave*, que abre o login do provedor já na página das chaves — você cria a chave em um clique e cola. As chaves de API continuam valendo em todos. O login só roda no computador onde o ASTA roda.
+
 **Modelos de texto** (mundos, avatars, jogos, nós de Texto IA):
 
 | Provedor | Tipo | Observações |

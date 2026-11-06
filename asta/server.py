@@ -28,6 +28,7 @@ from .routes_chat import ChatRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
 from .routes_mobile import MobileRoutes
+from .routes_auth import AuthRoutes
 from .mobile import Mobile, PAIR_REQUIRED_HTML
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
@@ -199,6 +200,8 @@ class App:
         self.mobile = Mobile(self.store.home, self.bind_host)
         self.mobile_routes = MobileRoutes(self)
         self.mobile_routes.register()
+        self.auth_routes = AuthRoutes(self)
+        self.auth_routes.register()
         self.studio_routes = StudioRoutes(self)
         self.studio_routes.register()
         self.preinstalled_routes = PreinstalledRoutes(self)
