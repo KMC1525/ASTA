@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.12] — 2026-11-08
+
+### Fixed — Android app: Chat could not talk to the computer's LM Studio
+- The Chat's LM Studio check waited only **1 second**, too short for another computer over Wi-Fi (first connection, the phone's Wi-Fi power saving). For network addresses (`192.168…`, VPN, `.local`) it now waits **5 s** and **retries once**; on the device itself it stays 1 s. A failure is cached for only 2 s (was 8 s), so starting the server and trying again works right away.
+- The Chat error message always said «open LM Studio and turn on Start Server», even when the server was already running on **another** computer. It now says the cause: **«Serve on Local Network» off** (connection refused), **firewall/isolated Wi-Fi** (timeout) or **wrong IP/Wi-Fi**; in the Android app `127.0.0.1` is explained as «the phone itself» and points to «LM Studio on the computer».
+- The «lost connection» notice also no longer says «start the server» when LM Studio is on another computer.
+
 ## [0.15.11] — 2026-11-08
 
 ### Added — LM Studio away from home with NO VPN on the phone

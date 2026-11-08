@@ -95,17 +95,50 @@ def probe(base_url: str = "", api_key: str = "", timeout: float = 2.0) -> Dict[s
     return out
 
 
-def detect(base_url: str = "", api_key: str = "", max_age: float = 8.0, timeout: float = 1.0) -> Dict[str, Any]:
-    """`probe` com cache curto (cada mensagem de chat consulta isto; o servidor desligado não pode atrasar a conversa)."""
+def _is_loopback_url(root: str) -> bool:
+    import urllib.parse
+
+    return (urllib.parse.urlsplit(root).hostname or "") in ("127.0.0.1", "localhost", "::1")
+
+
+def explain(info: Dict[str, Any], root: str) -> str:
+    """Mensagem que diz o que consertar quando o LM Studio não responde (o conselho muda se ele está no próprio aparelho ou em outro computador da rede)."""
+    if _is_loopback_url(root):
+        import os
+
+        if os.environ.get("ASTA_STRICT_LOOPBACK"):   # app Android: 127.0.0.1 é o próprio celular, onde não há LM Studio
+            return (f"O LM Studio não roda neste aparelho ({root}). Para usar o do seu computador, vá em Configuração → Provedores → LM Studio → «LM Studio no computador» "
+                    "e digite o IP do computador (não 127.0.0.1).")
+        return f"Não consegui falar com o LM Studio em {root}. {HOW_TO_START}"
+    kind = info.get("kind") or ""
+    detail = f" ({info.get('error')})" if info.get("error") else ""
+    if kind == "refused":
+        return (f"O computador em {root} recusou a conexão: no LM Studio (Developer) ligue «Serve on Local Network» — sem isso ele só aceita o próprio computador — "
+                f"e reinicie o servidor.{detail}")
+    if kind == "timeout":
+        return (f"O computador em {root} não respondeu a tempo: libere a porta 1234 no firewall dele (Windows: permitir o LM Studio na rede privada) e confira se o aparelho "
+                f"está no mesmo Wi-Fi (rede de visitantes isola os aparelhos). Se acabou de ligar o servidor, tente de novo.{detail}")
+    if kind in ("dns", "unreachable"):
+        return f"Não achei o computador em {root}: confira o IP digitado e se este aparelho está no mesmo Wi-Fi.{detail}"
+    return f"Não consegui falar com o LM Studio em {root}.{detail} {HOW_TO_START}"
+
+
+def detect(base_url: str = "", api_key: str = "", max_age: float = 8.0, timeout: Optional[float] = None) -> Dict[str, Any]:
+    """`probe` com cache curto (cada mensagem de chat consulta isto; o servidor desligado não pode atrasar a conversa).
+    No próprio aparelho 1 s basta; em outro computador da rede (Wi-Fi, primeira conexão) dá mais tempo e tenta de novo uma vez."""
     key = root_url(base_url)
     now = time.time()
     with _LOCK:
         hit = _CACHE.get(key)
-        if hit and now - hit[0] < max_age:
+        if hit and now - hit[0] < (max_age if hit[1]["running"] else min(max_age, 2.0)):   # falha vale pouco: o usuário acabou de ligar o servidor
             return hit[1]
-    info = probe(base_url, api_key, timeout=timeout)
+    local = _is_loopback_url(key)
+    to = timeout if timeout is not None else (1.0 if local else 5.0)
+    info = probe(base_url, api_key, timeout=to)
+    if not info["running"] and not local and info.get("kind") in ("timeout", "other"):
+        info = probe(base_url, api_key, timeout=to)
     with _LOCK:
-        _CACHE[key] = (now, info)
+        _CACHE[key] = (time.time(), info)
     return info
 
 
@@ -165,7 +198,7 @@ class LMStudioProvider(OpenAICompatProvider):
         """Resolve o modelo (o carregado no LM Studio, se nenhum foi escolhido) e a visão. Levanta ProviderError com instruções se não der."""
         info = detect(self.root, self.key)
         if not info["running"]:
-            raise ProviderError(f"Não consegui falar com o LM Studio em {self.root}. {HOW_TO_START}")
+            raise ProviderError(explain(info, self.root))
         by_id = {m["id"]: m for m in info["models"]}
         if not self.model:
             if not info["loaded"]:
@@ -196,7 +229,7 @@ class LMStudioProvider(OpenAICompatProvider):
     def _friendly(self, exc: ProviderError) -> ProviderError:
         if exc.status is None and ("conectar" in str(exc) or "rede" in str(exc).lower()):
             forget()
-            return ProviderError(f"Perdi a conexão com o LM Studio em {self.root}. {HOW_TO_START}")
+            return ProviderError(f"Perdi a conexão com o LM Studio em {self.root}. " + ("" if not _is_loopback_url(self.root) else HOW_TO_START) + ("Confira se o computador continua ligado, com o servidor do LM Studio ativo, e na mesma rede." if not _is_loopback_url(self.root) else ""))
         if exc.status in (404, 400) and "model" in str(exc).lower():
             return ProviderError(f"O LM Studio não achou o modelo «{self.model}»: carregue-o no LM Studio ou escolha outro em Configuração → Provedores. ({exc})", status=exc.status)
         return exc
@@ -204,5 +237,5 @@ class LMStudioProvider(OpenAICompatProvider):
     def list_models(self) -> List[str]:
         info = probe(self.root, self.key, timeout=5)
         if not info["running"]:
-            raise ProviderError(f"Não consegui falar com o LM Studio em {self.root}. {HOW_TO_START}")
+            raise ProviderError(explain(info, self.root))
         return [m["id"] for m in info["models"]]
