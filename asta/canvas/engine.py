@@ -26,6 +26,7 @@ from . import procedural as proc
 from . import media as media_mod
 from .media import Ctl, Media, build_media, media_config, pick_provider
 from .render import render_timeline
+from . import mentions as mentions_mod
 from . import nodes_ext
 from .schema import EXT_TYPES, GENERATORS, NODE_TYPES, normalize_result
 
@@ -280,6 +281,8 @@ class CanvasEngine:
                         items.append([_sig(o["text"]), [a["id"] for a in o["assets"]]])
                 ports[pid_] = items
             data["in"] = ports
+        if t in ("image", "video"):   # as imagens citadas com @ no prompt entram no hash: citar outra (ou trocar o arquivo) deixa o nó desatualizado
+            data["mentions"] = mentions_mod.ids_in(canvas, node["params"].get("prompt", ""))
         if t in ("image", "video", "sound", "voice", "llm", "text_refine"):
             data["style"] = self.styles_for(canvas, node, need_digest=False).signature()
             data["style_ids"] = self.style_ids(canvas, node)
@@ -453,7 +456,9 @@ class CanvasEngine:
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
             if not base:
                 raise ValueError("O nó Imagem precisa de um prompt: escreva nele ou ligue um nó de texto.")
-            refs = self.image_inputs(canvas, node, "refs")[:6]
+            base, ment_ids, missing = mentions_mod.resolve(canvas, base)   # «@imagem» no prompt: essas imagens viram as primeiras referências
+            warnings += [f"@{m}: não há imagem com esse apelido neste canvas — ficou como texto." for m in missing]
+            refs = (self._image_bytes(canvas, ment_ids) + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]
             if p["mode"] == "edit" and not refs:
                 raise ValueError("No modo Editar, ligue uma imagem na entrada \"Referências\".")
             prompt = base + (f"\n\nStyle: {style.text}" if style.text else "")
@@ -469,7 +474,11 @@ class CanvasEngine:
             return {"assets": ids, "text": "", "warnings": warnings}
         if t == "video":
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
-            first = next(iter(self.image_inputs(canvas, node, "image")), None)
+            base, ment_ids, missing = mentions_mod.resolve(canvas, base)
+            warnings += [f"@{m}: não há imagem com esse apelido neste canvas — ficou como texto." for m in missing]
+            first = next(iter(self.image_inputs(canvas, node, "image")), None) or next(iter(self._image_bytes(canvas, ment_ids)), None)   # a 1ª imagem citada vira a imagem inicial (se nenhuma está ligada)
+            if len(ment_ids) > 1:
+                warnings.append("O vídeo usa uma só imagem inicial: só a primeira citada com @ virou imagem; as outras valem como texto.")
             if not base and not first:
                 raise ValueError("O nó Vídeo precisa de um prompt (ou de uma imagem inicial ligada).")
             start = first
@@ -490,6 +499,16 @@ class CanvasEngine:
             m = prov.voice(speech, voice=p["voice"], speed=p["speed"], model=p["model"], extra=p["extra"], instructions=style.text)
             return {"assets": [self._save(node, m, "audio", self._title(node, "Voz"), speech, pid, model)], "text": "", "warnings": warnings}
         raise ValueError(f"Tipo de nó sem gerador: {t}")
+
+    def _image_bytes(self, canvas: Dict[str, Any], ids: List[str]) -> List[Tuple[bytes, str]]:
+        assets = self._assets(canvas)
+        out: List[Tuple[bytes, str]] = []
+        for i in ids:
+            a = assets.get(i)
+            b = self._asset_bytes(a) if a else None
+            if a and b:
+                out.append((b, a["mime"]))
+        return out
 
     def image_inputs(self, canvas: Dict[str, Any], node: Dict[str, Any], port: str) -> List[Tuple[bytes, str]]:
         """Imagens de uma porta como (bytes, mime). Um vídeo ligado numa porta de imagem entra pelo quadro do meio."""

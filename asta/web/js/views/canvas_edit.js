@@ -30,6 +30,7 @@ export default async function render(root, ctx, cid) {
     change(n, key, value, rerender) { n.params[key] = value; dirty(); if (rerender) refreshNode(n.id); },
     accOpen: new Set(),
     uploadTo: (n, files) => uploadFiles(files, null, n),
+    mentions: () => api(`/api/canvases/${cid}/mentions`).then((r) => r.items),
     openTimeline: (n) => openTimeline(n),
     run: (ids, force) => run(ids, force),
     preview: (a, list) => preview(a, list),

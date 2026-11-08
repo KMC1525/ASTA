@@ -1,5 +1,6 @@
 // Canvas: tipos de nó na interface (paleta, controles de cada nó e área de resultado) e regras de compatibilidade das portas.
 import { t } from './i18n.js';
+import { withMentions } from './canvas_mention.js';
 import { checkbox, h, icon, seg, select } from './ui.js';
 
 export const compatible = (out, accepts) => accepts.includes(out)
@@ -52,12 +53,12 @@ export const portLabel = (nodeType, p) => (nodeType === 'llm' && p.id === 'promp
 
 // ---------------------------------------------------------------------------------------------------- controles
 const cut = (e) => e.stopPropagation();
-function ta(c, n, key, ph, rows) {
+function ta(c, n, key, ph, rows, mention) {
   const el = h('textarea', { placeholder: ph, rows: rows || 3, class: 'nodrag' });
   el.value = n.params[key] || '';
   el.addEventListener('input', () => c.change(n, key, el.value));
   el.addEventListener('keydown', cut);
-  return el;
+  return mention && c.mentions ? withMentions(el, c) : el;   // @ cita uma imagem do canvas (Imagem e Vídeo)
 }
 function txt(c, n, key, ph, type) {
   const el = h('input', { type: type || 'text', placeholder: ph || '', class: 'nodrag' });
@@ -111,11 +112,11 @@ const BODY = {
   upload: (c, n) => fileThumbs(c, n),
   image: (c, n) => [
     seg([['generate', t('Gerar')], ['edit', t('Editar')]], n.params.mode, (v) => c.change(n, 'mode', v, true)),
-    ta(c, n, 'prompt', n.params.mode === 'edit' ? t('O que mudar na imagem ligada em “Referências”?') : t('Descreva a imagem (ou ligue um nó de texto)…'), 3),
+    ta(c, n, 'prompt', n.params.mode === 'edit' ? t('O que mudar na imagem ligada em “Referências” (ou citada com @)?') : t('Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem do canvas.'), 3, true),
     lab(t('Quantidade'), select([1, 2, 3, 4].map((i) => [String(i), String(i)]), String(n.params.count), (v) => c.change(n, 'count', Number(v)))),
     ...providerBlock(c, n, 'image', lab(t('Resolução'), select(c.meta.sizes.map((s) => [s, sizeLabel(s)]), n.params.size, (v) => c.change(n, 'size', v))))],
   video: (c, n) => [
-    ta(c, n, 'prompt', t('Descreva o vídeo (ou ligue um texto e/ou uma imagem inicial)…'), 3),
+    ta(c, n, 'prompt', t('Descreva o vídeo (ou ligue um texto e/ou uma imagem inicial). Digite @ para citar a imagem inicial.'), 3, true),
     h('div', { class: 'r2' }, lab(t('Duração (s)'), txt(c, n, 'duration', '5', 'number')), lab(t('Proporção'), select(c.meta.aspects.map((a) => [a, a]), n.params.aspect, (v) => c.change(n, 'aspect', v)))),
     ...providerBlock(c, n, 'video', lab(t('Resolução'), select((c.meta.resolutions || [0]).map((r) => [String(r), r ? r + 'p' : t('Automática')]), String(n.params.resolution || 0), (v) => c.change(n, 'resolution', Number(v)))))],
   sound: (c, n) => [
