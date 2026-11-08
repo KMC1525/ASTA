@@ -66,7 +66,7 @@
 
 /* timeline (Kdenlive) */
 .st-project:has(.stl){max-width:none}
-.st-tlhost{height:calc(100vh - 250px);min-height:520px}
+.st-tlhost{height:calc(100vh - 150px);min-height:720px}   /* v0.17: timeline maior (era 100vh − 250px, mín. 520px) */
 .stl{isolation:isolate;display:flex;flex-direction:column;height:100%;border:1px solid var(--line);border-radius:14px;overflow:hidden;background:var(--bg);user-select:none;--v:#5b8def;--a:#3ca877;--tx:#c792ea}
 .stl-bar{display:flex;align-items:center;gap:4px;padding:6px 8px;border-bottom:1px solid var(--line);background:var(--bg1);flex:none;flex-wrap:wrap}
 .stl-btn{border:1px solid transparent;background:transparent;color:var(--muted);width:30px;height:28px;border-radius:8px;cursor:pointer;display:grid;place-items:center;padding:0}
@@ -80,8 +80,7 @@
 .stl.full{position:fixed;inset:0;z-index:80;border-radius:0;height:100vh;border:0}
 body.stl-noscroll{overflow:hidden}
 .st-tlfull{height:auto;min-height:0}
-.stl-bin,.stl-insp{overflow:auto;background:var(--bg1)}
-.stl-bin{border-right:1px solid var(--line)}.stl-insp{border-left:1px solid var(--line)}
+.stl-bin,.stl-insp{overflow:auto;background:var(--bg1);min-height:0}
 .stl-bin-h{display:flex;align-items:center;gap:6px;padding:8px 10px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg1);z-index:2;font-size:13px}
 .stl-asset{display:grid;grid-template-columns:56px 1fr;gap:2px 8px;align-items:center;padding:6px 8px;cursor:grab;border-bottom:1px solid var(--line)}
 .stl-asset:hover{background:var(--bg2)}
@@ -106,8 +105,8 @@ body.stl-noscroll{overflow:hidden}
 .stl-ruler .tick{position:absolute;top:0;height:100%;border-left:1px solid var(--line3);padding-left:4px;font:10px var(--mono);color:var(--dim)}
 .stl-ruler .mk{position:absolute;top:2px;transform:translateX(-4px);color:#f2c46d;cursor:pointer}
 .stl-rows{display:flex;flex-direction:column}
-.stl-row{display:flex;height:calc(46px * var(--rs,1));border-bottom:1px solid var(--line)}
-.stl-row.k-audio{height:calc(40px * var(--rs,1))}.stl-row.k-text{height:calc(32px * var(--rs,1))}
+.stl-row{display:flex;height:calc(52px * var(--rs,1));border-bottom:1px solid var(--line)}
+.stl-row.k-audio{height:calc(48px * var(--rs,1))}.stl-row.k-text{height:calc(36px * var(--rs,1))}.stl-row.k-fx{height:calc(36px * var(--rs,1))}
 .stl-head{position:sticky;left:0;z-index:15;width:118px;flex:none;background:var(--bg1);border-right:1px solid var(--line2);display:flex;align-items:center;justify-content:space-between;padding:0 6px 0 10px;font-size:12px;font-weight:600}
 .stl-head .bt{display:flex;gap:1px}.stl-head .bt button{border:0;background:transparent;color:var(--dim);cursor:pointer;padding:3px;border-radius:5px}.stl-head .bt button:hover{color:var(--text);background:var(--bg3)}.stl-head .bt button.on{color:#f2c46d}
 .stl-row.k-video .stl-head .nm{color:var(--v)}.stl-row.k-audio .stl-head .nm{color:var(--a)}.stl-row.k-text .stl-head .nm{color:var(--tx)}
@@ -128,7 +127,7 @@ body.stl-noscroll{overflow:hidden}
 .stl-ph::before{content:"";position:absolute;top:0;left:-7px;border:6px solid transparent;border-top:9px solid #ff4d4d}
 .stl-marquee{position:absolute;border:1px dashed var(--accent);background:rgba(255,255,255,.07);z-index:25;pointer-events:none}.stl-marquee.hidden{display:none}
 .stl-menu .opt{padding:7px 10px}
-@media (max-width:980px){.stl-top{grid-template-columns:var(--bin,160px) 6px minmax(0,1fr)}.stl-insp,.stl-gut#stl-gut-insp{display:none}}
+@media (max-width:980px){.stl-dock[data-dock=right],.stl-gut#stl-gut-insp{display:none}}
 
 /* ---- timeline v0.13 (inspirada no Kdenlive): monitor do projeto, mixer de áudio, zoom embaixo, trilhas recolhíveis */
 .stl-mons{display:flex;min-width:0;min-height:0;background:#050505}
@@ -163,3 +162,40 @@ body.stl-noscroll{overflow:hidden}
 .stl-row.collapsed .stl-head .bt{display:none}
 @media (max-width:980px){.stl-mixer{display:none}}
 .cm-tc{font:12px var(--mono);color:var(--muted);margin-left:6px}
+
+/* ---- v0.17: Tools (janelas ligáveis), camadas livres (imagem e efeitos), forma de onda, painéis das ferramentas */
+.stl-top{min-height:0}
+.stl.no-top .stl-top{display:none}
+.stl-dock{display:flex;flex-direction:column;min-width:0;min-height:0;background:var(--bg1);overflow:hidden}
+.stl-dock[data-dock=left]{border-right:1px solid var(--line)}.stl-dock[data-dock=right]{border-left:1px solid var(--line)}
+.stl-dock .stl-panel{flex:1;min-height:0;overflow:auto}
+.stl-tabs2{display:flex;gap:2px;padding:4px 4px 0;border-bottom:1px solid var(--line);flex:none;overflow-x:auto;scrollbar-width:thin;background:var(--bg1)}
+.stl-tabs2 .tb{display:flex;align-items:center;gap:5px;border:1px solid transparent;border-bottom:0;background:transparent;color:var(--muted);border-radius:8px 8px 0 0;padding:5px 9px;font-size:12px;cursor:pointer;white-space:nowrap}
+.stl-tabs2 .tb:hover{color:var(--text)}.stl-tabs2 .tb.on{background:var(--bg3);color:var(--text);border-color:var(--line2)}
+.stl-btn.wide{width:auto;padding:0 8px;display:flex;align-items:center;gap:5px}.stl-btn .lbl{font-size:12px}
+.stl-menu .opt.tl-opt{display:flex;align-items:flex-start;gap:9px;cursor:pointer}.stl-menu .opt.tl-opt input{margin-top:3px}.stl-menu .opt.disabled{opacity:.4;cursor:default}
+.stl-row.k-image .stl-head .nm{color:#e3a35b}.stl-row.k-fx .stl-head .nm{color:#ff7eb6}
+.stl-clip.k-image{background-color:#5b3d17;border-color:#e3a35b}
+.stl-clip.k-fx{background-color:#5a1f3f;border-color:#ff7eb6;background-image:repeating-linear-gradient(135deg,rgba(255,126,182,.22) 0 8px,transparent 8px 16px)!important}
+.stl-clip .wf{position:absolute;left:0;right:0;top:14px;bottom:2px;width:100%;height:calc(100% - 16px);pointer-events:none}.stl-clip .wf polygon{fill:rgba(160,255,205,.55);stroke:none}
+.stl-clip.k-audio{background-image:none!important}
+.stl-strip.k-image .nm{border-color:#e3a35b}
+.pg1{padding:8px 10px;display:flex;flex-direction:column;gap:6px}
+.pg1 .sub{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--dim);margin-top:6px}
+.pg1 textarea,.pg1 input[type=search]{width:100%;font-size:12.5px;padding:5px 7px}
+.row2{display:flex;gap:8px;align-items:flex-end}.row2.wrap{flex-wrap:wrap}.row2 .pf{flex:1;min-width:0}
+.fxgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(84px,1fr));gap:6px}
+.fxsw{border:1px solid var(--line2);background:var(--bg2);color:var(--text);border-radius:8px;padding:4px;cursor:pointer;display:flex;flex-direction:column;gap:4px;align-items:center;font-size:11px}
+.fxsw i{display:block;width:100%;height:32px;border-radius:5px;background:linear-gradient(135deg,#f6c453,#d9465f 45%,#3a63d8 75%,#2fb36f)}
+.fxsw.on{border-color:var(--accent);background:var(--bg3)}
+.sfxl{display:flex;flex-direction:column}.sfxr{display:flex;align-items:center;gap:6px;padding:4px 10px;border-bottom:1px solid var(--line)}.sfxr .nm{flex:1;font-size:12.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.caplist,.brl{display:flex;flex-direction:column;max-height:260px;overflow:auto}
+.capr{display:flex;gap:8px;padding:3px 4px;cursor:pointer;border-radius:5px;font-size:12px}.capr:hover{background:var(--bg2)}.capr .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.brl{max-height:none;flex:1}
+.brr{display:flex;gap:8px;align-items:center;padding:6px 10px;border-bottom:1px solid var(--line);cursor:pointer}.brr:hover{background:var(--bg2)}.brr.on{background:var(--bg3)}
+.brr .th{width:56px;height:36px;border-radius:5px;background:var(--bg3) center/cover no-repeat;flex:none;object-fit:cover}.brr .th.ico{display:grid;place-items:center;color:var(--a)}
+.brr .col{min-width:0;display:flex;flex-direction:column}.brr .nm{font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.chiprow{display:flex;gap:5px;flex-wrap:wrap}
+.chipb{border:1px solid var(--line2);background:transparent;color:var(--muted);border-radius:999px;padding:2px 10px;font-size:11.5px;cursor:pointer}.chipb.on{border-color:var(--accent);color:var(--text);background:var(--bg3)}
+.txres{margin-top:8px;border-top:1px solid var(--line);padding-top:8px}
+@media (max-width:760px){.st-tlhost{height:calc(100vh - 110px);min-height:560px}}

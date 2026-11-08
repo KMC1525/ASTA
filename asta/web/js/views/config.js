@@ -555,6 +555,7 @@ async function studioTab() {
       h('div', { class: 'row', style: { gap: '18px' } }, cb(t('Legendas'), 'captions'), cb(t('Música de fundo'), 'music'))),
     cfgCard(t('Exportação'),
       h('div', { class: 'grid2' }, field(t('Qualidade do vídeo'), select(meta.quality.map((q) => [q, q]), st.export_quality, (v) => { st.export_quality = v; })),
+        field(t('Quadros por segundo (fps)'), select((meta.fps || [24]).map((q) => [q, q + ' fps']), st.export_fps || 24, (v) => { st.export_fps = parseInt(v, 10); })),
         field(t('Formato do áudio'), select(meta.audio_formats.map((q) => [q, q.toUpperCase()]), st.audio_format, (v) => { st.audio_format = v; })))),
     cfgCard(t('Edição automática'),
       h('div', { class: 'grid2' }, field(t('Estilo padrão'), select(meta.edit_styles.map((x) => [x.id, t(x.label)]), st.autoedit_style, (v) => { st.autoedit_style = v; })),

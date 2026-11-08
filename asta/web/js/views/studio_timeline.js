@@ -1,12 +1,11 @@
 import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { fill, h, icon, popover, toast } from '../ui.js';
+import { DEFAULT_ON, FILTERS as FX_FILTERS, FILTER_CSS as FX_CSS, TOOLS, buildTools } from './studio_tools.js';
 
 // Timeline de edição do Studio, inspirada no Kdenlive: bin de mídias, monitor do projeto, inspetor de propriedades, mixer de áudio e trilhas com cortar, juntar, silenciar, mover, aparar…
 const FPS = 24;
-const FILTERS = [['none', 'Sem filtro'], ['bw', 'Preto e branco'], ['warm', 'Quente'], ['cool', 'Frio'], ['vivid', 'Vivo'], ['vhs', 'VHS'], ['cinematic', 'Cinema'], ['phonk', 'Phonk']];
-const FILTER_CSS = { none: '', bw: 'grayscale(1)', warm: 'sepia(.35) saturate(1.2)', cool: 'hue-rotate(15deg) saturate(1.1)', vivid: 'saturate(1.5) contrast(1.1)', vhs: 'saturate(1.3) contrast(.95) blur(.4px)',
-  cinematic: 'contrast(1.12) saturate(.9)', phonk: 'grayscale(.5) contrast(1.3) brightness(.95)' };
+const FILTERS = FX_FILTERS, FILTER_CSS = FX_CSS;   // a lista de filtros é a mesma da ferramenta «Efeitos»
 const SPEEDS = [0.25, 0.5, 0.75, 1, 1.5, 2, 3, 4];
 const HEAD_W = 118;
 const uid = () => 'c_' + Math.random().toString(36).slice(2, 10);
@@ -143,32 +142,122 @@ export function mountTimeline(host, o) {
   }
   function addMarker() { change(() => { S.tl.markers.push({ t: r3(S.t), label: '' }); S.tl.markers.sort((a, b) => a.t - b.t); }, true); }
   function addText() {
-    const tr = S.tl.tracks.find((x) => x.kind === 'text' && !x.locked);
-    if (!tr) { toast(t('Não há trilha de texto livre.')); return; }
-    const c = { id: uid(), track: tr.id, asset: '', scene: '', label: '', start: r3(S.t), dur: 3, in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
+    const c = { id: uid(), track: '', asset: '', scene: '', label: '', start: r3(S.t), dur: 3, in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
       text: t('Texto'), size: S.aspect === '9:16' ? 50 : 42, color: '#ffffff', bg: '#000000', pos: 'bottom' };
-    change(() => { S.tl.clips.push(c); S.sel = new Set([c.id]); }, true);
+    change(() => {
+      const tr = S.tl.tracks.find((x) => x.kind === 'text' && !x.locked) || addLayer('text', true);   // sem camada de texto livre: cria uma
+      if (!tr) { toast(t('Limite de 16 camadas.'), 'err'); return; }
+      c.track = tr.id; S.tl.clips.push(c); S.sel = new Set([c.id]);
+    }, true);
   }
-  // trilha de destino de uma mídia solta: vídeo/imagem começa pela V1 (a de baixo) e sobe; áudio começa pela A1 e desce — sempre a primeira onde o trecho está livre
-  function pickTrack(kind, at, dur, ignoreBusy) {   // ignoreBusy: «Inserir» (empurra o resto da MESMA trilha) usa a trilha padrão mesmo ocupada
+  // Camadas livres: cada tipo tem as suas (vídeo só recebe vídeo, imagem só imagem, áudio só áudio, texto só texto, efeitos só efeitos). Mídia solta vai para a primeira camada do tipo
+  // onde o trecho está livre; se não houver (ou todas estiverem ocupadas), uma camada nova é criada — sem empilhar clipes de tipos diferentes na mesma trilha.
+  const kindOfAsset = (a) => (a.kind === 'audio' ? 'audio' : a.kind === 'image' ? 'image' : 'video');
+  const accepts = (tr, a) => !tr.locked && tr.kind === kindOfAsset(a);
+  const PREFIX = { video: 'V', audio: 'A', text: 'T', image: 'I', fx: 'FX' };
+  const KIND_LABEL = { video: 'Vídeo', audio: 'Áudio', text: 'Texto', image: 'Imagem', fx: 'Efeitos' };
+  function addLayer(kind, quiet) {   // espelha schema.add_track: a nova camada fica no topo do seu grupo (texto, efeitos, vídeo/imagem, áudio)
+    if (S.tl.tracks.length >= 16) { toast(t('Limite de 16 camadas.'), 'err'); return null; }
+    const pre = PREFIX[kind], nums = S.tl.tracks.filter((x) => x.kind === kind && x.name.toUpperCase().startsWith(pre) && /^\d+$/.test(x.name.slice(pre.length))).map((x) => parseInt(x.name.slice(pre.length), 10));
+    let n = Math.max(0, ...nums) + 1; const ids = new Set(S.tl.tracks.map((x) => x.id)); while (ids.has('t_' + pre.toLowerCase() + n)) n++;
+    const tr = { id: 't_' + pre.toLowerCase() + n, kind, name: pre + n, muted: false, hidden: false, locked: false, volume: 1, collapsed: false };
+    const nText = S.tl.tracks.filter((x) => x.kind === 'text').length, nFx = S.tl.tracks.filter((x) => x.kind === 'fx').length;
+    const at = { text: 0, fx: nText, video: nText + nFx, image: nText + nFx, audio: S.tl.tracks.length }[kind];
+    if (quiet) { S.tl.tracks.splice(at, 0, tr); return tr; }
+    change(() => { S.tl.tracks.splice(at, 0, tr); }, true);
+    toast(t('Camada {n} criada.', { n: tr.name }), 'ok');
+    return tr;
+  }
+  function pickTrack(kind, at, dur, ignoreBusy) {   // ignoreBusy: «Inserir» (empurra o resto da MESMA trilha) usa a camada padrão mesmo ocupada
     const list = S.tl.tracks.filter((x) => x.kind === kind && !x.locked);
-    if (kind === 'video') list.reverse();
+    if (kind === 'video' || kind === 'image') list.reverse();   // a de baixo da lista de camadas é a «principal» (V1)
     const free = (tr) => !S.tl.clips.some((c) => c.track === tr.id && c.start < at + dur - 1e-6 && end(c) > at + 1e-6);
-    return (ignoreBusy ? list[0] : list.find(free)) || list[0];
+    const hit = ignoreBusy ? list[0] : list.find(free);
+    if (hit) return hit;
+    return addLayer(kind, true) || list[0];   // nenhuma livre: camada nova (a criação entra no mesmo passo do histórico de quem chamou)
   }
   function addAsset(a, at, trackId, opt) {
     opt = opt || {};
-    const kind = a.kind === 'audio' ? 'audio' : 'video';
+    const kind = kindOfAsset(a);
     const dur = opt.dur || (a.kind === 'image' ? 4 : Math.max(0.5, a.dur || 4));
-    const tr = (trackId && trackOf(trackId)) || pickTrack(kind, at == null ? S.t : at, dur, !!opt.ripple);
-    if (!tr) { toast(t('Não há trilha livre para esse tipo de mídia.')); return; }
-    const c = { id: uid(), track: tr.id, asset: a.id, scene: '', label: a.name.slice(0, 40), start: r3(at == null ? S.t : at), dur, in: opt.in || 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
+    const start = at == null ? S.t : at;
+    const given = trackId && trackOf(trackId);
+    let tr = given && accepts(given, a) ? given : null;
+    const c = { id: uid(), track: '', asset: a.id, scene: '', label: a.name.slice(0, 40), start: r3(start), dur, in: opt.in || 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter: 'none',
       text: '', size: 44, color: '#ffffff', bg: '', pos: 'bottom' };
     change(() => {
+      if (!tr) tr = pickTrack(kind, start, dur, !!opt.ripple);
+      if (!tr) { toast(t('Não há camada livre para esse tipo de mídia.')); return; }
+      c.track = tr.id;
       if (opt.ripple) S.tl.clips.filter((x) => x.track === tr.id && x.start >= c.start - 1e-6).forEach((x) => { x.start = r3(x.start + dur); });   // «Inserir»: empurra o resto da trilha; «Sobrescrever» não mexe nos outros
       S.tl.clips.push(c); S.sel = new Set([c.id]);
     }, true);
+    return c;
   }
+  function addFx(filter, dur) {   // camada de efeitos: o filtro vale para tudo abaixo dela, enquanto o clipe dura
+    const start = S.t;
+    const c = { id: uid(), track: '', asset: '', scene: '', label: '', start: r3(start), dur: r3(dur), in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1, filter, text: '', size: 44, color: '#ffffff', bg: '', pos: 'bottom' };
+    change(() => {
+      const list = S.tl.tracks.filter((x) => x.kind === 'fx' && !x.locked);
+      const free = (tr) => !S.tl.clips.some((k) => k.track === tr.id && k.start < start + dur - 1e-6 && end(k) > start + 1e-6);
+      const tr = list.find(free) || addLayer('fx', true);
+      if (!tr) { toast(t('Limite de 16 camadas.'), 'err'); return; }
+      c.track = tr.id; S.tl.clips.push(c); S.sel = new Set([c.id]);
+    }, true);
+  }
+  function addCaptions(cues, st) {   // legendas viram clipes de texto numa camada de texto (a primeira destravada; senão, uma nova)
+    if (!cues || !cues.length) return;
+    st = st || {};
+    change(() => {
+      const tr = S.tl.tracks.find((x) => x.kind === 'text' && !x.locked) || addLayer('text', true);
+      if (!tr) { toast(t('Limite de 16 camadas.'), 'err'); return; }
+      const add = cues.map((q) => ({ id: uid(), track: tr.id, asset: '', scene: '', label: '', start: r3(Math.max(0, q.start)), dur: r3(Math.max(0.3, q.end - q.start)), in: 0, speed: 1, mute: false, volume: 1, fade_in: 0, fade_out: 0, opacity: 1, fit: 'cover', x: 0, y: 0, scale: 1,
+        filter: 'none', text: q.text, size: st.size || 44, color: st.color || '#ffffff', bg: st.bg || '', pos: st.pos || 'bottom' }));
+      S.tl.clips.push(...add); S.sel = new Set(add.map((x) => x.id));
+    }, true);
+  }
+  function selectAll() {   // Shift+A: tudo que está na timeline (mover com o mouse ou , e . ; apagar com Del). Trilhas travadas ficam selecionadas, mas nada nelas é movido nem apagado.
+    S.sel = new Set(S.tl.clips.map((c) => c.id)); renderAll();
+    const n = S.sel.size, lk = S.tl.clips.filter((c) => locked(c)).length;
+    toast(n ? t('{n} clipe(s) selecionado(s): arraste, use , e . para deslocar ou Del para apagar.', { n }) + (lk ? ' ' + t('{n} em trilhas travadas não serão alterados.', { n: lk }) : '') : t('A timeline está vazia.'));
+  }
+  function nudge(dt) {   // desloca os clipes selecionados (esquerda/direita), sem passar do começo e sem tocar nas trilhas travadas
+    const cs = selClips().filter((c) => !locked(c));
+    if (!cs.length) return;
+    const d = Math.max(dt, -Math.min(...cs.map((c) => c.start)));
+    if (Math.abs(d) < 1e-9) return;
+    change(() => cs.forEach((c) => { c.start = r3(c.start + d); }), true);
+  }
+  function renameTrack(tr) { const v = prompt(t('Nome da camada'), tr.name); if (v && v.trim()) { pushUndo(); tr.name = v.trim().slice(0, 12); renderAll(); scheduleSave(); } }
+  function moveTrack(tr, dir) {   // sobe/desce dentro do mesmo grupo (a ordem entre grupos é fixa: texto, efeitos, vídeo/imagem, áudio)
+    const grp = (k) => (k === 'image' ? 'video' : k), i = S.tl.tracks.indexOf(tr), j = i + dir, o = S.tl.tracks[j];
+    if (!o || grp(o.kind) !== grp(tr.kind)) return;
+    pushUndo(); S.tl.tracks[i] = o; S.tl.tracks[j] = tr; renderAll(); scheduleSave();
+  }
+  function deleteTrack(tr) {
+    const n = S.tl.clips.filter((c) => c.track === tr.id).length;
+    if (S.tl.tracks.filter((x) => x.kind === tr.kind).length < 2 && ['video', 'audio'].includes(tr.kind) && S.tl.tracks.length < 3) { toast(t('Deixe ao menos uma camada de vídeo e uma de áudio.'), 'err'); return; }
+    if (n && !confirm(t('Apagar a camada {n} e os {m} clipe(s) dela?', { n: tr.name, m: n }))) return;
+    change(() => { S.tl.clips = S.tl.clips.filter((c) => c.track !== tr.id); S.tl.tracks = S.tl.tracks.filter((x) => x.id !== tr.id); });
+  }
+  function trackMenu(e, tr) {
+    e.preventDefault(); e.stopPropagation();
+    const at = h('div', { style: { position: 'fixed', left: e.clientX + 'px', top: e.clientY + 'px', width: '1px', height: '1px' } }); document.body.appendChild(at);
+    const item = (ic, label, fn, dis) => h('div', { class: 'opt' + (dis ? ' disabled' : ''), role: 'menuitem', onclick: () => { if (dis) return; pop.close(); fn(); } }, icon(ic, 15), h('div', null, label));
+    const grp = (k) => (k === 'image' ? 'video' : k), i = S.tl.tracks.indexOf(tr);
+    const pop = popover(at, h('div', { class: 'toolmenu stl-menu', role: 'menu' }, item('edit', t('Renomear a camada'), () => renameTrack(tr)),
+      item('chev', t('Subir a camada'), () => moveTrack(tr, -1), !(S.tl.tracks[i - 1] && grp(S.tl.tracks[i - 1].kind) === grp(tr.kind))), item('chevd', t('Descer a camada'), () => moveTrack(tr, 1), !(S.tl.tracks[i + 1] && grp(S.tl.tracks[i + 1].kind) === grp(tr.kind))),
+      item('trash', t('Apagar a camada'), () => deleteTrack(tr))), () => at.remove());
+  }
+  function layerMenu(anchor) {
+    const item = (k, ic) => h('div', { class: 'opt', role: 'menuitem', dataset: { layer: k }, onclick: () => { pop.close(); addLayer(k); } }, icon(ic, 15), h('div', null, t(KIND_LABEL[k])));
+    const pop = popover(anchor, h('div', { class: 'toolmenu stl-menu', role: 'menu', id: 'stl-layer-menu' }, item('video', 'video'), item('image', 'image'), item('audio', 'audio'), item('text', 'type'), item('fx', 'wand')));
+  }
+  function toolsMenu(anchor) {
+    const row = (x) => h('label', { class: 'opt tl-opt', role: 'menuitemcheckbox', title: t(x.hint) }, h('input', { type: 'checkbox', checked: !!LAY.tools[x.id], dataset: { tool: x.id }, onchange: (ev) => { setTool(x.id, ev.target.checked); } }), icon(x.icon, 15), h('div', null, h('b', null, t(x.label)), h('div', { class: 'muted small' }, t(x.hint))));
+    popover(anchor, h('div', { class: 'toolmenu stl-menu', role: 'menu', id: 'stl-tools-menu' }, TOOLS.map(row), h('div', { class: 'opt', role: 'menuitem', onclick: () => { LAY.tools = Object.fromEntries(TOOLS.map((x) => [x.id, DEFAULT_ON.includes(x.id)])); applyTools(); saveLay(); } }, icon('refresh', 15), h('div', null, t('Voltar ao padrão')))));
+  }
+
   // velocidade: o clipe usa o MESMO trecho da mídia, então a duração na timeline muda (2× = metade do tempo; 0,5× = o dobro), sem passar do fim da mídia
   function setSpeed(v) {
     if (!(v > 0)) return;
@@ -181,7 +270,7 @@ export function mountTimeline(host, o) {
   // ---------------------------------------------------------------- DOM
   const toolBtn = (id, ic, label, key, fn, extra) => h('button', { class: 'stl-btn', type: 'button', id: 'stl-' + id, tabindex: '-1', onmousedown: (e) => e.preventDefault(), title: label + (key ? ` (${key})` : ''), onclick: fn }, icon(ic, 15), extra || null);
   const bar = h('div', { class: 'stl-bar' });
-  const bin = h('div', { class: 'stl-bin' }), inspector = h('div', { class: 'stl-insp' });
+  const bin = h('div', { class: 'stl-bin stl-panel', id: 'stl-tool-media', dataset: { tool: 'media' } }), inspector = h('div', { class: 'stl-insp stl-panel', id: 'stl-tool-props', dataset: { tool: 'props' } });
   const monitor = h('div', { class: 'stl-mon ar-' + S.aspect.replace(':', '-') });
   const layers = h('div', { class: 'stl-layers' }), capEl = h('div', { class: 'stl-cap' });
   monitor.append(layers, capEl);
@@ -191,12 +280,14 @@ export function mountTimeline(host, o) {
   const marquee = h('div', { class: 'stl-marquee hidden' });
   content.append(marquee);
   const gut = (id, dir, title) => h('div', { class: 'stl-gut ' + dir, id: 'stl-gut-' + id, role: 'separator', 'aria-orientation': dir === 'v' ? 'vertical' : 'horizontal', tabindex: '-1', title });
-  const g1 = gut('bin', 'v', t('Arraste para mudar a largura das mídias (dois cliques: padrão)')), g2 = gut('insp', 'v', t('Arraste para mudar a largura das propriedades (dois cliques: padrão)')), g3 = gut('top', 'h', t('Arraste para mudar a altura do monitor e da timeline (dois cliques: padrão)'));
-  const top = h('div', { class: 'stl-top' }, bin, g1, h('div', { class: 'stl-mons' }, h('div', { class: 'stl-mon-wrap' }, monitor, h('div', { class: 'stl-trans' },
+  const g1 = gut('bin', 'v', t('Arraste para mudar a largura do painel da esquerda (dois cliques: padrão)')), g2 = gut('insp', 'v', t('Arraste para mudar a largura do painel da direita (dois cliques: padrão)')), g3 = gut('top', 'h', t('Arraste para mudar a altura do monitor e da timeline (dois cliques: padrão)'));
+  const leftDock = h('div', { class: 'stl-dock', id: 'stl-dock-left', dataset: { dock: 'left' } }), rightDock = h('div', { class: 'stl-dock', id: 'stl-dock-right', dataset: { dock: 'right' } });
+  const center = h('div', { class: 'stl-mons', id: 'stl-tool-monitor' }, h('div', { class: 'stl-mon-wrap' }, monitor, h('div', { class: 'stl-trans' },
     h('button', { class: 'stl-btn', type: 'button', title: t('Início') + ' (Home)', onclick: () => seek(0) }, icon('skipback', 15)),
     h('button', { class: 'stl-btn', type: 'button', title: t('Quadro anterior') + ' (←)', onclick: () => seek(S.t - 1 / FPS) }, icon('stepback', 15)), playBtn,
     h('button', { class: 'stl-btn', type: 'button', title: t('Próximo quadro') + ' (→)', onclick: () => seek(S.t + 1 / FPS) }, icon('stepfwd', 15)),
-    h('button', { class: 'stl-btn', type: 'button', title: t('Fim') + ' (End)', onclick: () => seek(total()) }, icon('skipfwd', 15)), tcEl))), g2, inspector);
+    h('button', { class: 'stl-btn', type: 'button', title: t('Fim') + ' (End)', onclick: () => seek(total()) }, icon('skipfwd', 15)), tcEl)));
+  const top = h('div', { class: 'stl-top' }, leftDock, g1, center, g2, rightDock);
   const mixer = h('div', { class: 'stl-mixer', id: 'stl-mixer' });
   const zoomRange = h('input', { type: 'range', class: 'stl-zoom nodrag', id: 'stl-zoom', min: 0, max: 100, step: 1, title: t('Zoom da timeline') });
   const posEl = h('span', { class: 'stl-pos', id: 'stl-pos' });
@@ -204,12 +295,32 @@ export function mountTimeline(host, o) {
     h('button', { class: 'stl-btn', type: 'button', title: t('Mais zoom') + ' (+)', onclick: () => zoom(1.35) }, icon('zoomin', 15)), h('button', { class: 'stl-btn', type: 'button', title: t('Ajustar à tela'), onclick: () => fit() }, icon('fit', 15)));
   const root = h('div', { class: 'stl' }, bar, top, g3, h('div', { class: 'stl-tlwrap' }, scroller, mixer), zbar);
   fill(host, root);
-  // tamanhos das janelas (guardados no navegador)
-  const DEF = { bin: 210, insp: 270, top: 300, rs: 1, mix: true };
+  // tamanhos e janelas (Tools) ligadas — guardados no navegador
+  const DEF = { bin: 230, insp: 290, top: 250, rs: 1.15, mix: true };
   let LAY = Object.assign({}, DEF);
   try { Object.assign(LAY, JSON.parse(localStorage.getItem('asta.stl.layout') || '{}')); } catch (e) { /* ok */ }
-  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(120, Math.min(LAY.bin, W * 0.4)); LAY.insp = Math.max(180, Math.min(LAY.insp, W * 0.4)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.mix !== false; };
-  const applyLay = () => { clampLay(); root.style.setProperty('--bin', LAY.bin + 'px'); root.style.setProperty('--insp', LAY.insp + 'px'); root.style.setProperty('--toph', LAY.top + 'px'); root.style.setProperty('--rs', String(LAY.rs)); root.classList.toggle('no-mixer', !LAY.mix); };
+  if (!LAY.tools || typeof LAY.tools !== 'object') LAY.tools = Object.fromEntries(TOOLS.map((x) => [x.id, x.id === 'mixer' ? LAY.mix !== false : DEFAULT_ON.includes(x.id)]));   // layouts antigos só conheciam o mixer
+  TOOLS.forEach((x) => { if (LAY.tools[x.id] === undefined) LAY.tools[x.id] = DEFAULT_ON.includes(x.id); });
+  LAY.tab = LAY.tab && typeof LAY.tab === 'object' ? LAY.tab : {};
+  LAY.mix = LAY.tools.mixer !== false;
+  const isOn = (id) => !!LAY.tools[id];
+  const dockIds = (side) => TOOLS.filter((x) => x.dock === side && isOn(x.id)).map((x) => x.id);
+  const isVisible = (id) => { const d = TOOLS.find((x) => x.id === id); return !!d && isOn(id) && (d.dock === 'left' || d.dock === 'right' ? LAY.tab[d.dock] === id : true); };
+  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(140, Math.min(LAY.bin, W * 0.45)); LAY.insp = Math.max(190, Math.min(LAY.insp, W * 0.45)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.tools.mixer !== false; };
+  const applyLay = () => {
+    clampLay(); root.style.setProperty('--bin', LAY.bin + 'px'); root.style.setProperty('--insp', LAY.insp + 'px'); root.style.setProperty('--toph', LAY.top + 'px'); root.style.setProperty('--rs', String(LAY.rs)); root.classList.toggle('no-mixer', !LAY.mix);
+    const L = dockIds('left').length > 0, R = dockIds('right').length > 0, C = isOn('monitor');
+    leftDock.classList.toggle('hidden', !L); rightDock.classList.toggle('hidden', !R); center.classList.toggle('hidden', !C);
+    g1.classList.toggle('hidden', !(L && C)); g2.classList.toggle('hidden', !(R && (C || L)));
+    const cols = [];
+    if (L) cols.push(!C && !R ? 'minmax(0,1fr)' : LAY.bin + 'px');
+    if (L && C) cols.push('6px');
+    if (C) cols.push('minmax(0,1fr)');
+    if (R && (C || L)) cols.push('6px');
+    if (R) cols.push(C ? LAY.insp + 'px' : 'minmax(0,1fr)');
+    top.style.gridTemplateColumns = cols.join(' ');
+    const none = !L && !R && !C; root.classList.toggle('no-top', none); g3.classList.toggle('hidden', none);   // sem janelas no alto, a timeline ocupa tudo
+  };
   const saveLay = () => { try { localStorage.setItem('asta.stl.layout', JSON.stringify(LAY)); } catch (e) { /* ok */ } };
   const dragGut = (g, key, sign) => {
     g.addEventListener('dblclick', () => { LAY[key] = DEF[key]; applyLay(); saveLay(); renderAll(); });
@@ -221,7 +332,29 @@ export function mountTimeline(host, o) {
     });
   };
   dragGut(g1, 'bin', 1); dragGut(g2, 'insp', -1); dragGut(g3, 'top', 1);
-  applyLay();
+
+  // ---------------------------------------------------------------- Tools: as janelas do editor e as ferramentas extras
+  const setProps = (obj) => { change(() => selClips().filter((c) => !locked(c)).forEach((c) => Object.assign(c, obj)), true); };
+  const T = buildTools({ pid, S, mediaUrl: (a) => media(a), selClips, setProp: (k, v) => setProp(k, v), setProps, trackOf, select: (ids) => { S.sel = new Set(ids); renderAll(); }, seek: (x) => seek(x),
+    addAsset: (a, at) => addAsset(a, at), addFx: (f, d) => addFx(f, d), addCaptions: (q, st) => addCaptions(q, st), addAssetRec: (a) => { S.assets[a.id] = a; if (o.onAsset) o.onAsset(a); paintBin(); }, isOn, isVisible });
+  const panelEl = (id) => (id === 'media' ? bin : id === 'props' ? inspector : T.panels[id]);
+  function paintDocks() {
+    ['left', 'right'].forEach((side) => {
+      const ids = dockIds(side), dock = side === 'left' ? leftDock : rightDock;
+      if (!ids.length) { dock.replaceChildren(); return; }
+      if (!ids.includes(LAY.tab[side])) LAY.tab[side] = ids[0];
+      const tabs = ids.length > 1 ? h('div', { class: 'stl-tabs2', role: 'tablist' }, ids.map((id) => { const d = TOOLS.find((x) => x.id === id); return h('button', { type: 'button', role: 'tab', class: 'tb' + (LAY.tab[side] === id ? ' on' : ''), dataset: { tab: id }, title: t(d.hint),
+        onclick: () => { LAY.tab[side] = id; saveLay(); paintDocks(); T.refresh(id); } }, icon(d.icon, 13), h('span', null, t(d.label))); })) : null;
+      fill(dock, tabs, panelEl(LAY.tab[side]));
+    });
+  }
+  function applyTools() { paintDocks(); applyLay(); if (isOn('monitor')) updatePreview(true); renderAll(); buildBar(); }
+  function setTool(id, on) {
+    LAY.tools[id] = !!on; if (id === 'mixer') LAY.mix = !!on;
+    if (!on && id === 'capture') { const p = T.panels.capture; if (p && p._stop) p._stop(); }
+    applyTools(); saveLay();
+  }
+  paintDocks(); applyLay();
 
   function buildBar() {
     const sep = () => h('span', { class: 'stl-sep' });
@@ -235,14 +368,17 @@ export function mountTimeline(host, o) {
         toolBtn('text', 'type', t('Adicionar texto'), 'T', addText), toolBtn('marker', 'flag', t('Marcador no cursor'), 'K', addMarker),
         sep(), toolBtn('undo', 'undo', t('Desfazer'), 'Ctrl+Z', undo), toolBtn('redo', 'redo', t('Refazer'), 'Ctrl+Shift+Z', redo),
         sep(), toggle('snap', 'magnet', t('Ímã: gruda nas bordas dos clipes'), '', () => S.snap, (v) => { S.snap = v; }), toggle('ripple', 'ripple', t('Mover em cadeia (ripple)'), '', () => S.ripple, (v) => { S.ripple = v; }),
+        sep(), toolBtn('layer', 'layers', t('Nova camada: vídeo, imagem, áudio, texto ou efeitos'), '', (e) => layerMenu(e.currentTarget), h('span', { class: 'lbl' }, t('Camada'))),
+        toolBtn('tools', 'columns', t('Tools: ligar e desligar as janelas do editor'), '', (e) => toolsMenu(e.currentTarget), h('span', { class: 'lbl' }, t('Tools'))),
         h('span', { class: 'grow' }), toolBtn('rowdn', 'rowsmall', t('Trilhas mais baixas'), '', () => { LAY.rs -= 0.2; applyLay(); saveLay(); renderAll(); }), toolBtn('rowup', 'rowbig', t('Trilhas mais altas'), '', () => { LAY.rs += 0.2; applyLay(); saveLay(); renderAll(); }),
-        toolBtn('mixer', 'audio', t('Mixer de áudio'), '', () => { LAY.mix = !LAY.mix; applyLay(); saveLay(); renderAll(); paintBar(); }),
+        toolBtn('mixer', 'audio', t('Mixer de áudio'), '', () => { setTool('mixer', !LAY.mix); }),
         toolBtn('full', 'expand', t('Tela cheia do editor') + ' (F)', 'F', () => toggleFull()), sep(), h('button', { class: 'stl-btn', type: 'button', tabindex: '-1', onmousedown: (e) => e.preventDefault(), title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)),
         h('button', { class: 'stl-btn', type: 'button', title: t('Mais zoom') + ' (+)', onclick: () => zoom(1.35) }, icon('zoomin', 15)), h('button', { class: 'stl-btn', type: 'button', title: t('Ajustar à tela'), onclick: fit }, icon('fit', 15)),
         status);
       const tool = (id) => bar.querySelector('#stl-t-' + id); if (tool(S.tool)) tool(S.tool).classList.add('on');
       content.classList.toggle('razor', S.tool === 'razor');
       const on = (id, v) => { const b = bar.querySelector('#stl-' + id); if (b) b.classList.toggle('on', !!v); }; on('mixer', LAY.mix);
+      ['layer', 'tools'].forEach((id) => { const b = bar.querySelector('#stl-' + id); if (b) b.classList.add('wide'); });
     };
     paintBar();
   }
@@ -293,26 +429,62 @@ export function mountTimeline(host, o) {
     S.tl.markers.forEach((m, i) => kids.push(h('div', { class: 'mk', style: { left: m.t * S.pps + 'px' }, title: (m.label || t('Marcador')) + ' · ' + timecode(m.t), onpointerdown: (e) => { e.stopPropagation(); seek(m.t); }, ondblclick: (e) => { e.stopPropagation(); change(() => S.tl.markers.splice(i, 1), true); } }, icon('flag', 11))));
     fill(ruler, kids); ruler.style.width = w + 'px'; ruler.style.marginLeft = HEAD_W + 'px';
   }
+  // forma de onda dos clipes de áudio (picos 0–1 por bloco, guardados em cache no servidor); cada clipe desenha só o trecho que usa
+  const WAVE = {};
+  function waveSvg(c, a, peaks) {
+    const n = peaks.length, dur = a.dur || 1, i0 = Math.max(0, Math.floor((c.in || 0) / dur * n)), i1 = Math.min(n, Math.max(i0 + 1, Math.ceil(((c.in || 0) + c.dur * (c.speed || 1)) / dur * n)));
+    const want = Math.max(8, Math.min(i1 - i0, Math.floor(c.dur * S.pps / 2))), step = (i1 - i0) / want, NS = 'http://www.w3.org/2000/svg';
+    let top = '', bot = '';
+    for (let i = 0; i < want; i++) { let m = 0; for (let j = Math.floor(i0 + i * step); j < Math.max(Math.floor(i0 + i * step) + 1, Math.floor(i0 + (i + 1) * step)) && j < n; j++) m = Math.max(m, peaks[j]); const y = Math.max(1, m * 46); top += `${i},${50 - y} `; bot = `${i},${50 + y} ` + bot; }
+    const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('class', 'wf'); svg.setAttribute('viewBox', `0 0 ${want} 100`); svg.setAttribute('preserveAspectRatio', 'none');
+    const poly = document.createElementNS(NS, 'polygon'); poly.setAttribute('points', top + bot); svg.appendChild(poly); return svg;
+  }
+  let waveBusy = false;
+  async function loadWaves() {
+    if (waveBusy) return;
+    const need = [...new Set(S.tl.clips.filter((c) => { const tr = trackOf(c.track), a = assetOf(c); return tr && tr.kind === 'audio' && a && WAVE[a.id] === undefined && !(c.start > winR1 || end(c) < winR0); }).map((c) => c.asset))].slice(0, 4);
+    if (!need.length) return;
+    waveBusy = true; need.forEach((id) => { WAVE[id] = null; });
+    try {
+      await Promise.all(need.map(async (id) => { try { const r = await api(`/api/studio/projects/${pid}/wave/${id}?n=1200`); WAVE[id] = r.peaks && r.peaks.length ? r.peaks : false; } catch (e) { WAVE[id] = false; } }));
+    } finally { waveBusy = false; }
+    if (root.isConnected) { paintRows(); }
+  }
   function clipEl(c, tr) {
     const a = assetOf(c), k = tr.kind;
     const style = { left: c.start * S.pps + 'px', width: Math.max(3, c.dur * S.pps) + 'px' };
     if (a && a.kind !== 'audio' && c.dur * S.pps > 24) { style.backgroundImage = `url("${thumb(a)}")`; }
+    const pk = k === 'audio' && a && Array.isArray(WAVE[a.id]) ? waveSvg(c, a, WAVE[a.id]) : null;
     const el = h('div', { class: 'stl-clip k-' + k + (S.sel.has(c.id) ? ' sel' : '') + (c.mute ? ' muted' : '') + (tr.locked ? ' locked' : '') + (c.scene ? ' sc' : ''), dataset: { id: c.id }, style, title: (c.label || (a ? a.name : c.text)) + ' · ' + timecode(c.start) },
-      h('span', { class: 'hl', dataset: { h: 'l' } }), h('span', { class: 'hr', dataset: { h: 'r' } }),
-      h('div', { class: 'lb' }, c.mute ? icon('mute', 11) : null, k === 'text' ? (c.text || t('Texto')) : (c.label || (a ? a.name : '')),
+      pk, h('span', { class: 'hl', dataset: { h: 'l' } }), h('span', { class: 'hr', dataset: { h: 'r' } }),
+      h('div', { class: 'lb' }, c.mute ? icon('mute', 11) : null, k === 'text' ? (c.text || t('Texto')) : k === 'fx' ? t((FILTERS.find((f) => f[0] === c.filter) || FILTERS[0])[1]) : (c.label || (a ? a.name : '')),
         (c.speed || 1) !== 1 ? h('span', { class: 'bd' }, (c.speed).toFixed(2).replace(/\.?0+$/, '') + '×') : null, c.filter && c.filter !== 'none' ? h('span', { class: 'bd' }, t(FILTERS.find((f) => f[0] === c.filter)[1])) : null));
     return el;
   }
+  // Só os clipes perto da janela visível viram elementos (timelines com milhares de clipes ficavam pesadas); ao rolar além da margem, a lista é refeita.
+  let winR0 = 0, winR1 = 0;
+  const visRange = () => { const w = Math.max(scroller.clientWidth, 400) / S.pps, x0 = Math.max(0, scroller.scrollLeft / S.pps); return [Math.max(0, x0 - w), x0 + w * 2]; };
   function paintRows() {
+    const [r0, r1] = visRange(); winR0 = r0; winR1 = r1;
+    const near = (c) => S.sel.has(c.id) ? false : (c.start > r1 || end(c) < r0);
     fill(rows, S.tl.tracks.map((tr, idx) => h('div', { class: 'stl-row k-' + tr.kind + (tr.collapsed ? ' collapsed' : ''), dataset: { track: tr.id } },
-      h('div', { class: 'stl-head' }, h('button', { type: 'button', class: 'chev' + (tr.collapsed ? ' c' : ''), title: tr.collapsed ? t('Expandir a trilha') : t('Recolher a trilha'), dataset: { act: 'collapse' }, onclick: () => { tr.collapsed = !tr.collapsed; renderAll(); scheduleSave(); } }, icon('chev', 11)), h('span', { class: 'nm' }, tr.name), h('span', { class: 'bt' },
-        h('button', { type: 'button', class: tr.muted ? 'on' : '', title: tr.kind === 'audio' ? t('Silenciar a trilha') : t('Silenciar o áudio dos vídeos desta trilha'), dataset: { act: 'mute' }, onclick: () => { pushUndo(); tr.muted = !tr.muted; renderAll(); scheduleSave(); } }, icon('mute', 12)),
+      h('div', { class: 'stl-head', oncontextmenu: (e) => trackMenu(e, tr), title: t(KIND_LABEL[tr.kind]) + ' — ' + t('botão direito: renomear, subir, descer, apagar') }, h('button', { type: 'button', class: 'chev' + (tr.collapsed ? ' c' : ''), title: tr.collapsed ? t('Expandir a trilha') : t('Recolher a trilha'), dataset: { act: 'collapse' }, onclick: () => { tr.collapsed = !tr.collapsed; renderAll(); scheduleSave(); } }, icon('chev', 11)), h('span', { class: 'nm', ondblclick: () => renameTrack(tr) }, tr.name), h('span', { class: 'bt' },
+        tr.kind === 'video' || tr.kind === 'audio' ? h('button', { type: 'button', class: tr.muted ? 'on' : '', title: tr.kind === 'audio' ? t('Silenciar a trilha') : t('Silenciar o áudio dos vídeos desta trilha'), dataset: { act: 'mute' }, onclick: () => { pushUndo(); tr.muted = !tr.muted; renderAll(); scheduleSave(); } }, icon('mute', 12)) : null,
         tr.kind !== 'audio' ? h('button', { type: 'button', class: tr.hidden ? 'on' : '', title: t('Ocultar a trilha'), dataset: { act: 'hide' }, onclick: () => { pushUndo(); tr.hidden = !tr.hidden; renderAll(); scheduleSave(); } }, icon('eye', 12)) : null,
         h('button', { type: 'button', class: tr.locked ? 'on' : '', title: t('Travar a trilha'), dataset: { act: 'lock' }, onclick: () => { pushUndo(); tr.locked = !tr.locked; renderAll(); scheduleSave(); } }, icon('lock', 12)))),
-      h('div', { class: 'stl-lane' + (tr.hidden ? ' hid' : ''), style: { width: width() + 'px' } }, S.tl.clips.filter((c) => c.track === tr.id).map((c) => clipEl(c, tr))))));
+      h('div', { class: 'stl-lane' + (tr.hidden ? ' hid' : ''), style: { width: width() + 'px' } }, S.tl.clips.filter((c) => c.track === tr.id && !near(c)).map((c) => clipEl(c, tr))))));
+    loadWaves();
   }
+  let scrollRaf = 0;
+  scroller.addEventListener('scroll', () => {   // rolou além do que está desenhado? refaz só as trilhas (no máximo uma vez por quadro)
+    if (scrollRaf || drag) return;
+    const w = Math.max(scroller.clientWidth, 400) / S.pps, x0 = scroller.scrollLeft / S.pps;
+    if ((winR0 > 0 && x0 - winR0 < w * 0.25) || (winR1 < total() + 12 && winR1 - (x0 + w) < w * 0.25)) {   // a borda visível chegou perto do que está desenhado
+      scrollRaf = requestAnimationFrame(() => { scrollRaf = 0; paintRows(); });
+    }
+  }, { passive: true });
   function paintPh() { ph.style.left = HEAD_W + S.t * S.pps + 'px'; ph.style.height = content.scrollHeight + 'px'; }
-  function renderAll() { paintRuler(); paintRows(); paintPh(); paintInspector(); paintTime(); paintMixer(); syncZoom(); updatePreview(true); content.style.width = HEAD_W + width() + 'px'; }
+  function renderAll() { paintRuler(); paintRows(); paintPh(); paintInspector(); paintTime(); paintMixer(); syncZoom(); updatePreview(true); content.style.width = HEAD_W + width() + 'px'; T.refreshLive(); }
   // durante o arrasto só o que muda (régua, trilhas, cursor, tempo e monitor), no máximo uma vez por quadro: refazer o mixer e o inspetor a cada movimento do mouse deixava a edição pesada
   let renderRaf = 0;
   function renderDrag() {
@@ -330,12 +502,19 @@ export function mountTimeline(host, o) {
     const f = [];
     f.push(h('div', { class: 'stl-bin-h' }, h('b', null, one ? (c.label || (assetOf(c) || {}).name || (k === 'text' ? t('Texto') : t('Clipe'))).slice(0, 26) : t('{n} clipes', { n: cs.length }))));
     if (one) f.push(h('div', { class: 'pg' }, num(t('Início (s)'), 'start', 0.1, 0), num(t('Duração (s)'), 'dur', 0.1, 0.1), k !== 'text' && isMedia(c) ? num(t('Ponto de corte (s)'), 'in', 0.1, 0) : null));
-    if (k !== 'text') f.push(h('div', { class: 'pg' },
+    if (cs.length > 1) f.push(h('div', { class: 'pg' }, h('div', { class: 'pf wide', style: { color: 'var(--text)' } }, t('{n} clipes, {d} no total', { n: cs.length, d: fmtDur(Math.max(...cs.map((x) => end(x))) - Math.min(...cs.map((x) => x.start))) })),
+      h('label', { class: 'pf wide' }, h('span', null, t('Deslocar todos (s) — negativo = para a esquerda')), h('div', { class: 'row2' }, h('input', { type: 'number', step: 0.1, value: 1, id: 'stl-shift', style: { flex: '1' } }),
+        h('button', { class: 'stl-btn', type: 'button', id: 'stl-shift-l', title: t('Deslocar para a esquerda') + ' (,)', onclick: () => nudge(-Math.abs(parseFloat(document.getElementById('stl-shift').value) || 0)) }, icon('stepback', 14)),
+        h('button', { class: 'stl-btn', type: 'button', id: 'stl-shift-r', title: t('Deslocar para a direita') + ' (.)', onclick: () => nudge(Math.abs(parseFloat(document.getElementById('stl-shift').value) || 0)) }, icon('stepfwd', 14))))));
+    if (k === 'video' || k === 'audio') f.push(h('div', { class: 'pg' },
       h('label', { class: 'pf' }, h('span', null, t('Velocidade')), h('select', { disabled: !lk, dataset: { k: 'speed' }, onchange: (e) => setSpeed(parseFloat(e.target.value)) }, SPEEDS.map((s) => h('option', { value: s, selected: Math.abs(s - (c.speed || 1)) < 0.001 }, s + '×')))),
       num(t('Volume (%)'), 'volume', 5, 0, 200, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }),
-      h('label', { class: 'pf ck' }, h('input', { type: 'checkbox', checked: !!c.mute, disabled: !lk, dataset: { k: 'mute' }, onchange: (e) => setProp('mute', e.target.checked) }), h('span', null, t('Silenciar este clipe'))),
-      num(t('Fade de entrada (s)'), 'fade_in', 0.1, 0, 30), num(t('Fade de saída (s)'), 'fade_out', 0.1, 0, 30)));
-    if (k === 'video') f.push(h('div', { class: 'pg' },
+      h('label', { class: 'pf ck' }, h('input', { type: 'checkbox', checked: !!c.mute, disabled: !lk, dataset: { k: 'mute' }, onchange: (e) => setProp('mute', e.target.checked) }), h('span', null, t('Silenciar este clipe')))));
+    if (k !== 'text' && k !== 'fx') f.push(h('div', { class: 'pg' }, num(t('Fade de entrada (s)'), 'fade_in', 0.1, 0, 30), num(t('Fade de saída (s)'), 'fade_out', 0.1, 0, 30)));
+    if (k === 'fx') f.push(h('div', { class: 'pg' },
+      h('label', { class: 'pf wide' }, h('span', null, t('Efeito')), h('select', { disabled: !lk, dataset: { k: 'filter' }, onchange: (e) => setProp('filter', e.target.value) }, FILTERS.map(([v, l]) => h('option', { value: v, selected: v === (c.filter || 'none') }, t(l))))),
+      num(t('Intensidade (%)'), 'opacity', 5, 0, 100, { to: (v) => Math.round(v * 100), from: (v) => v / 100 })));
+    if (k === 'video' || k === 'image') f.push(h('div', { class: 'pg' },
       h('label', { class: 'pf' }, h('span', null, t('Filtro')), h('select', { disabled: !lk, dataset: { k: 'filter' }, onchange: (e) => setProp('filter', e.target.value) }, FILTERS.map(([v, l]) => h('option', { value: v, selected: v === (c.filter || 'none') }, t(l))))),
       h('label', { class: 'pf' }, h('span', null, t('Ajuste')), h('select', { disabled: !lk, dataset: { k: 'fit' }, onchange: (e) => setProp('fit', e.target.value) }, [['cover', t('Preencher')], ['contain', t('Caber')], ['stretch', t('Esticar')]].map(([v, l]) => h('option', { value: v, selected: v === c.fit }, l)))),
       num(t('Opacidade (%)'), 'opacity', 5, 0, 100, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }), num(t('Escala (%)'), 'scale', 5, 10, 400, { to: (v) => Math.round(v * 100), from: (v) => v / 100 }),
@@ -366,7 +545,7 @@ export function mountTimeline(host, o) {
   function updatePreview(seeked) {
     const tt = S.t, act = new Set();
     const tracks = S.tl.tracks;
-    const vtracks = tracks.map((tr, i) => [tr, i]).filter(([tr]) => tr.kind === 'video' && !tr.hidden);
+    const vtracks = tracks.map((tr, i) => [tr, i]).filter(([tr]) => (tr.kind === 'video' || tr.kind === 'image') && !tr.hidden);
     const shown = [];
     vtracks.forEach(([tr, i]) => {
       const cs = S.tl.clips.filter((c) => c.track === tr.id && c.start <= tt + 1e-6 && tt < end(c)).sort((a, b) => b.start - a.start);
@@ -376,7 +555,7 @@ export function mountTimeline(host, o) {
         const el = elFor(c, a);
         el.style.zIndex = String(100 - i); el.style.opacity = String((c.opacity ?? 1) * fade(c, tt));
         el.style.objectFit = c.fit === 'stretch' ? 'fill' : c.fit || 'cover';
-        el.style.transform = `translate(${(c.x || 0) * 50}%, ${(c.y || 0) * 50}%) scale(${c.scale || 1})`; el.style.filter = FILTER_CSS[c.filter || 'none'] || '';
+        el.style.transform = `translate(${(c.x || 0) * 50}%, ${(c.y || 0) * 50}%) scale(${c.scale || 1})` + (c.filter === 'mirror' ? ' scaleX(-1)' : ''); el.style.filter = FILTER_CSS[c.filter || 'none'] || '';
         el.className = 'lyr';
         shown.push(el);
         if (el.tagName === 'VIDEO') { el.muted = !!(c.mute || tr.muted); el.volume = Math.max(0, Math.min(1, (c.volume ?? 1) * fade(c, tt) * plainGain(tr))); route(el, tr.id); sync(el, c, tt, seeked); }
@@ -389,6 +568,10 @@ export function mountTimeline(host, o) {
       act.add(c.id);
       const el = elFor(c, a); el.volume = Math.max(0, Math.min(1, (c.volume ?? 1) * fade(c, tt) * plainGain(tr))); route(el, tr.id); sync(el, c, tt, seeked);
     });
+    // camadas de efeitos: o filtro vale para tudo que está na prévia enquanto o clipe de efeito está sob o cursor
+    const fxs = S.tl.clips.filter((c) => { const tr = trackOf(c.track); return tr && tr.kind === 'fx' && !tr.hidden && c.filter && c.filter !== 'none' && c.start <= tt + 1e-6 && tt < end(c); }).map((c) => FILTER_CSS[c.filter] || '').filter(Boolean);
+    const mirror = S.tl.clips.some((c) => { const tr = trackOf(c.track); return tr && tr.kind === 'fx' && !tr.hidden && c.filter === 'mirror' && c.start <= tt + 1e-6 && tt < end(c); });
+    layers.style.filter = fxs.join(' '); layers.style.transform = mirror ? 'scaleX(-1)' : '';
     // texto
     const caps = S.tl.clips.filter((c) => { const tr = trackOf(c.track); return tr && tr.kind === 'text' && !tr.hidden && c.start <= tt + 1e-6 && tt < end(c); });
     fill(capEl, caps.map((c) => h('div', { class: 'cp pos-' + c.pos, style: { color: c.color, background: c.bg ? c.bg + 'a6' : 'transparent', fontSize: Math.max(10, c.size * (monitor.clientWidth || 640) / (S.aspect === '9:16' ? 720 : 1280)) + 'px' } }, c.text)));
@@ -536,7 +719,7 @@ export function mountTimeline(host, o) {
     if (locked(c)) return;
     const handle = e.target.dataset && e.target.dataset.h;
     const ids = new Set(S.sel);
-    drag = { type: handle ? 'trim-' + handle : 'move', id: c.id, x0: e.clientX, y0: e.clientY, ids, orig: selClips().map((x) => ({ id: x.id, start: x.start, dur: x.dur, in: x.in, track: x.track })), pushed: false,
+    drag = { type: handle ? 'trim-' + handle : 'move', id: c.id, x0: e.clientX, y0: e.clientY, ids, orig: selClips().filter((x) => !locked(x)).map((x) => ({ id: x.id, start: x.start, dur: x.dur, in: x.in, track: x.track })), pushed: false,   // clipes de trilhas travadas não acompanham o arrasto
       after: S.ripple ? S.tl.clips.filter((x) => !ids.has(x.id) && x.start >= end(c) - 1e-6 && !locked(x)).map((x) => ({ id: x.id, start: x.start })) : [] };
     content.setPointerCapture(e.pointerId);
   });
@@ -607,7 +790,7 @@ export function mountTimeline(host, o) {
     const id = e.dataTransfer.getData('text/asta-asset'); if (!id || !S.assets[id]) return; e.preventDefault();
     const lane = e.target.closest('.stl-row'); const a = S.assets[id];
     let trackId = lane && lane.dataset.track; const tr = trackId && trackOf(trackId);
-    if (tr && ((a.kind === 'audio') !== (tr.kind === 'audio') || tr.kind === 'text' || tr.locked)) trackId = '';
+    if (tr && !accepts(tr, a)) trackId = '';   // só cai na camada do mesmo tipo (e destravada); senão vai para uma camada livre ou nova do tipo certo
     addAsset(a, Math.max(0, snapTime(timeAt(e.clientX), new Set())), trackId);
   });
 
@@ -618,15 +801,18 @@ export function mountTimeline(host, o) {
     if (e.altKey) return;
     const k = e.key, ctrl = e.ctrlKey || e.metaKey;
     const done = () => { e.preventDefault(); e.stopPropagation(); };
-    if (e.repeat && !/^Arrow/.test(k) && k !== '+' && k !== '-' && k !== '=') { if (!ctrl && k !== 'Escape') e.preventDefault(); return; }   // segurar a tecla não corta/exclui em rajada
+    if (e.repeat && !/^Arrow/.test(k) && !',.<>+-='.includes(k)) { if (!ctrl && k !== 'Escape') e.preventDefault(); return; }   // segurar a tecla não corta/exclui em rajada
     if (ctrl && k.toLowerCase() === 'z') { done(); if (e.shiftKey) redo(); else undo(); }
     else if (ctrl && k.toLowerCase() === 'y') { done(); redo(); }
     else if (ctrl && k.toLowerCase() === 'd') { done(); duplicate(); }
     else if (ctrl && k.toLowerCase() === 'c') { done(); copySel(false); }
     else if (ctrl && k.toLowerCase() === 'x') { done(); copySel(true); }
     else if (ctrl && k.toLowerCase() === 'v') { done(); paste(); }
-    else if (ctrl && k.toLowerCase() === 'a') { done(); S.sel = new Set(S.tl.clips.map((c) => c.id)); renderAll(); }
+    else if (ctrl && k.toLowerCase() === 'a') { done(); selectAll(); }
     else if (ctrl) return;
+    else if (e.shiftKey && (k === 'A' || k === 'a')) { done(); selectAll(); }   // Shift+A: seleciona a timeline inteira
+    else if (k === ',' || k === '<') { done(); nudge(-(e.shiftKey ? 1 : 1 / FPS)); }   // desloca a seleção (Shift: 1 s)
+    else if (k === '.' || k === '>') { done(); nudge(e.shiftKey ? 1 : 1 / FPS); }
     else if (k === ' ') { done(); togglePlay(); }
     else if (k === 'ArrowLeft') { done(); seek(S.t - (e.shiftKey ? 1 : 1 / FPS)); }
     else if (k === 'ArrowRight') { done(); seek(S.t + (e.shiftKey ? 1 : 1 / FPS)); }
@@ -654,8 +840,8 @@ export function mountTimeline(host, o) {
   buildBar(); paintBin(); renderAll(); paintStatus();
   new ResizeObserver(() => { if (root.isConnected) { paintRuler(); paintRows(); paintPh(); } }).observe(scroller);
   return {
-    save, S, destroy() { if (!S.saved) save(); window.removeEventListener('beforeunload', onUnload); window.removeEventListener('pagehide', onUnload); document.body.classList.remove('stl-noscroll'); S.playing = false; cancelAnimationFrame(S.raf); cancelAnimationFrame(meterRaf); cancelAnimationFrame(renderRaf); if (AUD.ctx) { try { AUD.ctx.close(); } catch (e) { /* ok */ } } document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
+    save, S, destroy() { T.destroy(); if (!S.saved) save(); window.removeEventListener('beforeunload', onUnload); window.removeEventListener('pagehide', onUnload); document.body.classList.remove('stl-noscroll'); S.playing = false; cancelAnimationFrame(S.raf); cancelAnimationFrame(meterRaf); cancelAnimationFrame(renderRaf); if (AUD.ctx) { try { AUD.ctx.close(); } catch (e) { /* ok */ } } document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
     refreshAssets(list) { setAssets(list); paintBin(); renderAll(); },
-    api: { copySel, paste, toggleFull, splitAt, joinSel, toggleMute, del, duplicate, addText, addMarker, undo, redo, seek, togglePlay, zoom, fit, total },
+    api: { copySel, paste, toggleFull, splitAt, joinSel, toggleMute, del, duplicate, addText, addMarker, undo, redo, seek, togglePlay, zoom, fit, total, selectAll, nudge, addLayer, addFx, addCaptions, setTool },
   };
 }

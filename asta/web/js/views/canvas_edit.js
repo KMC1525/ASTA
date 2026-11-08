@@ -2,6 +2,7 @@ import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { go } from '../main.js';
 import { confirmDialog, fill, h, icon, popover, toast } from '../ui.js';
+import { modelSearchBar } from './canvas_hub.js';
 import { GROUPS, LABEL, OUT_COLOR, TYPE_HELP, compatible, nodeBody, nodeResult, portLabel } from '../canvas_nodes.js';
 
 const uid = (p) => p + Math.random().toString(36).slice(2, 12);
@@ -62,12 +63,38 @@ export default async function render(root, ctx, cid) {
   const runBtn = h('button', { class: 'btn primary', title: t('Executa o que está desatualizado (o resto vem do cache)'), onclick: () => run(null, false) }, icon('play', 14), t('Executar tudo'));
   const cancelBtn = h('button', { class: 'btn danger hidden', onclick: async () => { if (S.job) await api('/api/jobs/' + S.job + '/cancel', { method: 'POST' }).catch(() => {}); } }, icon('stop', 14), t('Cancelar'));
   const assetsBtn = h('button', { class: 'btn', onclick: () => { S.assetsOpen = !S.assetsOpen; localStorage.setItem('asta.cv.assets', S.assetsOpen ? '1' : '0'); paintAssets(); } }, icon('image', 14), h('span', null, t('Arquivos')));
+  // barra de pesquisa de modelos (Hugging Face) no topo: procura, escolhe a quantização, baixa e usa no nó selecionado
+  const hub = modelSearchBar({ cid, selected: () => nodeById(S.sel) || null, onUsed: (res, n) => { if (n) { n.params.provider = res.provider; if (res.cap !== 'text') n.params.model = res.model; refreshNode(n.id); } api('/api/media/providers').then((p) => { prov.providers = p.providers; }).catch(() => {}); } });
+  const studioBtn = h('button', { class: 'btn', id: 'cv-to-studio', title: t('Leva o fluxo para a timeline do Studio, para continuar a produção lá'), onclick: (e) => studioMenu(e.currentTarget) }, icon('film', 14), h('span', null, t('Enviar ao Studio')));
+  async function studioMenu(anchor) {
+    await save();
+    let projects = []; try { projects = (await api('/api/studio/projects')).slice(0, 8); } catch (e) { /* sem lista: só «novo projeto» */ }
+    const sel = S.sel ? nodeById(S.sel) : null;
+    const mode = { v: localStorage.getItem('asta.cv.tostudio') || 'auto' };
+    const send = async (project_id, nodes) => {
+      pop.close();
+      try {
+        const r = await api(`/api/canvases/${cid}/to-studio`, { method: 'POST', body: { project_id, nodes, mode: mode.v } });
+        toast(t('Enviado ao Studio: {c} clipe(s), {a} arquivo(s).', { c: r.clips, a: r.assets }) + (r.warnings && r.warnings.length ? ' ⚠ ' + r.warnings[0] : ''), 'ok');
+        location.hash = r.url;
+      } catch (e) { toast(e.message, 'err'); }
+    };
+    const item = (ic, label, sub, fn, id) => h('div', { class: 'opt', role: 'menuitem', id, onclick: fn }, icon(ic, 15), h('div', null, h('div', null, label), sub ? h('div', { class: 'muted small' }, sub) : null));
+    const modeRow = (v, label) => h('label', { class: 'opt', style: { cursor: 'pointer' } }, h('input', { type: 'radio', name: 'cv-mode', checked: mode.v === v, onchange: () => { mode.v = v; try { localStorage.setItem('asta.cv.tostudio', v); } catch (e) { /* ok */ } } }), h('div', null, label));
+    const pop = popover(anchor, h('div', { class: 'toolmenu', style: { minWidth: '320px' }, id: 'cv-studio-menu' },
+      h('div', { class: 'muted small', style: { padding: '6px 10px' } }, t('Os arquivos são copiados: o canvas não muda.')),
+      modeRow('auto', t('Automático: usa a montagem do Editor, se houver')), modeRow('flow', t('Só as saídas do fluxo, na ordem dos nós')),
+      item('plus', t('Novo projeto no Studio'), t('Abre a timeline pronta para editar'), () => send('', []), 'cv-st-new'),
+      sel ? item('cursor', t('Só o nó selecionado → novo projeto'), sel.title || t(LABEL[sel.type] || sel.type), () => send('', [sel.id]), 'cv-st-sel') : null,
+      projects.length ? h('div', { class: 'muted small', style: { padding: '8px 10px 2px' } }, t('Adicionar ao fim de um projeto existente:')) : null,
+      projects.map((p) => item('film', p.name, t('{n} episódio(s)', { n: p.episodes }), () => send(p.id, sel ? [sel.id] : []), 'cv-st-p-' + p.id))));
+  }
   const top = h('div', { class: 'cv-top' },
     h('button', { class: 'btn ghost icon sm', title: t('Voltar'), onclick: async () => { await save(); location.hash = '#/canvas'; } }, icon('chev', 16)),
-    nameInput, savedLbl, h('span', { class: 'grow' }),
+    nameInput, savedLbl, hub.el, h('span', { class: 'grow' }),
     h('button', { class: 'btn ghost', title: t('Provedores de mídia'), onclick: () => c.openConfig() }, icon('config', 14), t('Provedores')),
     assetsBtn,
-    h('a', { class: 'btn', href: `/api/canvases/${cid}/download`, title: t('Baixa o canvas e todos os arquivos (.zip)') }, icon('download', 14), t('Baixar')),
+    h('a', { class: 'btn', href: `/api/canvases/${cid}/download`, title: t('Baixa o canvas e todos os arquivos (.zip)') }, icon('download', 14), t('Baixar')), studioBtn,
     runBtn, cancelBtn);
 
   const world = h('div', { class: 'cv-world' });

@@ -5,6 +5,41 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.0] — 2026-11-08
+
+### Adicionado — Studio e Canvas para produção criativa de verdade
+- **Studio · «Tools» na timeline** (`asta/web/js/views/studio_tools.js`): as janelas que já existiam — **Mídias, Monitor, Propriedades e Mixer de áudio** — viraram ferramentas que você **liga e desliga** (botão *Tools*; a escolha fica guardada no navegador), organizadas em painéis laterais com abas, e ganharam companhia: **Efeitos** (18 filtros, fades, zoom e *camadas de efeito*), **Efeitos sonoros** (20 efeitos gerados no ASTA, sem internet: whoosh, riser, impacto, glitch, rebobinar, moeda, chuva…), **Captura de tela** (gravação pelo navegador, com som da aba e microfone opcionais, que entra na timeline), **Legendas** (texto → legendas com tempo, importar/exportar SRT e WebVTT), **Transcrição** (áudio/vídeo → texto pelo provedor de transcrição → legendas alinhadas à fala; ou cole o texto e só alinhe) e **Navegador de mídia** (arquivos dos Canvas, de outros projetos e exportações, com busca e importação por cópia). Sem janelas no alto, a timeline ocupa o editor inteiro.
+- **Studio · camadas livres, sem misturar** (`schema.add_track`, `TRACK_KINDS`): **vídeo, imagem, áudio, texto e efeitos**. Mídia solta vai para a primeira camada livre **do tipo certo** ou cria uma nova (nada de empilhar tipos diferentes na mesma trilha); botão direito na camada: renomear, subir, descer, apagar. A **camada de efeitos** aplica o filtro a tudo que está abaixo dela enquanto o clipe dura (na prévia e na exportação) e não alonga o vídeo.
+- **Studio · exportação:** além de 480p/720p/1080p, agora **2K (2560 px) e 4K (3840 px)**; e **24, 30, 60 e 120 fps** (24 continua o padrão). A predefinição do x264 acompanha a carga (`veryfast` → `superfast` → `ultrafast`) para 2K/4K e 60/120 fps gastarem menos CPU. Padrão em Configuração → Studio (`export_fps`); o nome e o registro da exportação trazem resolução e fps.
+- **Studio · `Shift`+`A`** seleciona a timeline inteira; **`,` e `.`** deslocam a seleção (1 quadro; com `Shift`, 1 s), há o campo *Deslocar todos (s)* no inspetor e `Del` apaga tudo (`Ctrl+Z` desfaz). Trilhas travadas ficam selecionadas, mas nunca se movem nem são apagadas (corrigido: antes um arrasto também movia clipes de trilhas travadas).
+- **Studio · timeline maior e mais leve:** altura da timeline de `100vh − 250 px` para `100vh − 150 px` (mín. 720 px), trilhas mais altas, **forma de onda** nos clipes de áudio (picos calculados no Rust, em cache no servidor) e **virtualização**: só os clipes perto da área visível viram elementos (1500 clipes continuam fluidos).
+- **Studio · edição automática melhor** (`asta/studio/analysis.py`, `autoedit.py`): o áudio é decodificado **uma vez** e analisado no núcleo Rust (volume, silêncios, momentos fortes, **BPM real, fase da primeira batida e o *drop* da música**); o vídeo vira miniaturas cinza (cortes de cena e **movimento por trecho**). Mudanças: **condensação** — com mais material do que o alvo, escolhe os melhores trechos **espalhados pelo vídeo inteiro**, na ordem em que aconteceram (antes pegava só o começo); cortes terminam em **pausas ou trocas de cena**; ação começa limpa numa troca de cena; estilos de batida usam o **BPM e a fase medidos** na música (e o *drop* define onde a introdução acaba); sobra de corte curtinha é absorvida; loops da música têm fades; o revisor também avisa de cortes de menos de meio segundo.
+- **Canvas · Enviar ao Studio** (`asta/canvas/to_studio.py`, `POST /api/canvases/{id}/to-studio`): leva a montagem do **Editor** (camadas, tempos, volumes, textos) — ou as saídas finais do fluxo na ordem dos nós, ou só os nós selecionados — para a timeline de um **projeto novo** ou o **fim de um projeto existente**; os arquivos são copiados. Também no Studio, o **Navegador de mídia** importa arquivos dos Canvas.
+- **Canvas · barra de pesquisa de modelos** (`canvas_hub.js`, `GET /api/media/hub/search`, `POST /api/media/hub/use`): pesquisa na **Hugging Face** por Imagem, Vídeo, Som, Voz, Transcrição ou Texto. Em **GGUF** lista **todas as quantizações** de cada modelo (bits, tamanho, qualidade, se cabe na RAM, a recomendada) e baixa a escolhida; no formato **original** oferece fp32/fp16/bf16 e as versões menores da comunidade. **Usar** define o padrão do tipo (Configuração → Mídia) e o modelo do nó selecionado.
+- **Núcleo Rust · interface 4** (`asta/native/src/media.rs`): `asta_audio_levels`, `asta_silence_ranges`, `asta_pick_peaks`, `asta_onset_env`, `asta_tempo`, `asta_frame_activity`, `asta_scene_cuts`, `asta_waveform` e `asta_topo` (ordem de execução e níveis de um grafo). Cada uma tem o equivalente em Python (mesmas contas, mesma ordem) e os testes comparam os dois lados, inclusive com entradas aleatórias. Bibliotecas das interfaces 1–3 seguem aceitas (sem os recursos novos).
+- Testes novos: `tests/test_v017_native.py`, `test_v017_studio.py`, `test_v017_canvas.py` e os de navegador `studio_tools_ui.js` e `canvas_hub_ui.js`.
+
+### Alterado
+- **Canvas · motor mais leve em fluxos grandes:** índices de nós/arquivos/conexões (antes cada consulta varria listas), leitura do arquivo só quando alguém grava (antes uma leitura completa por nó, mesmo em cache), resultado gravado também na memória, e ordem de execução calculada no Rust. Uma nova rodada de 40 nós em cache faz no máximo 3 leituras do arquivo.
+- `tools.loud_moments`, `tools.silences` e `tools.scene_changes` (Studio) agora usam a análise nova: uma decodificação do áudio e miniaturas cinza, em vez de três filtros do ffmpeg que imprimiam texto. Mesma assinatura e mesmo formato de resultado; os momentos fortes saem a pelo menos `janela` segundos um do outro.
+- `normalize_timeline` aceita as camadas `image` e `fx` e vários filtros novos (`sepia`, `negative`, `blur`, `sharpen`, `glow`, `grain`, `vignette`, `mirror`, `noir`, `teal_orange`); a duração da timeline ignora clipes de efeito.
+- Versão do app Android, das telas, do núcleo (`Cargo.toml`) e dos instaladores atualizada para 0.17.0.
+
+### Corrigido
+- Arrastar com clipes de trilhas **travadas** selecionados os movia junto.
+- A timeline desenhava todos os clipes de uma vez: com milhares de clipes a interface travava.
+- Ao apagar uma mídia do projeto, a miniatura e as formas de onda em cache dela ficavam no disco.
+- Os nomes dos instaladores no README (`ASTA-0-16-0-…`) não batiam com os que a Release gera (`ASTA-0-17-…`: o rótulo tira o `.0` final).
+
+### Observações (limites honestos)
+- **Captura de tela** e **gravação do microfone** dependem das permissões do navegador (em `http://localhost` funcionam no Chrome, Edge e Firefox); **não foram testadas num navegador real com tela compartilhada** neste ambiente (só o painel e o envio do arquivo).
+- A **transcrição** usa o provedor de transcrição de Configuração → Mídia (o Demo não transcreve): os horários das legendas são calculados pela fala medida no áudio, não vêm do provedor, então são uma boa aproximação, não alinhamento por palavra.
+- A busca de modelos fala com a **Hugging Face de verdade**; nos testes ela foi **simulada** (sem rede). Modelos de som e voz só rodam no formato original (provedor «Hugging Face local»); GGUF de imagem e vídeo rodam pela stable-diffusion.cpp e o de texto pela conversa.
+- Exportar em **4K/120 fps** pede um computador forte e gera arquivos grandes; foi testado em 2K/60 e 4K/30 de 1 s em Linux.
+- A análise de BPM escolhe a oitava mais próxima de ~120 BPM (faixas a 174 BPM saem como 87: a mesma grade, só nas batidas pares).
+- Os instaladores (Windows, macOS, Android) são gerados pelo CI e **não foram executados em aparelhos reais**; o núcleo Rust 4 foi compilado e testado em Linux (`cargo test` + paridade com Python).
+- A suíte completa **não foi rodada de novo**: rodaram `test_v017_*`, `test_studio`, `test_v014_studio`, `test_canvas`, `test_canvas_nodes`, `test_i18n`, o JS de i18n e os testes de navegador do Studio e do Canvas.
+
 ## [0.16.0] — 2026-11-08
 
 ### Adicionado — a seção **Code** (vibe coding de bases de código longas com equipes de agentes)
