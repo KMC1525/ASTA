@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.5] — 2026-11-08
+
+### Changed
+- **Android app: connecting to a computer is now optional.** With the engine inside the device, the app opens the local ASTA directly and **no longer shows** the «Scan the QR code / type the address» screen. To use an ASTA on a computer, tap «Connect to an ASTA on another computer (optional)». If the local engine fails to start, that option appears by itself.
+
+### Fixed
+- **The Release never published (so the newest APK was v0.13.0, with the mandatory screen):** the AppImage job could not find the portable Python because the asset list of python-build-standalone's «latest» release is truncated; it now pages through the assets API and fails with a clear message if nothing is found. *I could not reproduce the job here: check the Actions tab to confirm the Release was published.*
+
 ## [0.15.4] — 2026-11-08
 
 ### Fixed
