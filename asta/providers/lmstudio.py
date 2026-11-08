@@ -121,7 +121,7 @@ def scan(hosts: Optional[List[str]] = None, port: int = 1234, timeout: float = 0
         hosts = []
         for ip in lan_ips():
             parts = ip.split(".")
-            if len(parts) == 4 and not ip.startswith("127."):
+            if len(parts) == 4 and not ip.startswith("127.") and not (100 <= int(parts[0]) <= 100 and 64 <= int(parts[1]) <= 127):   # VPN (CGNAT): varrer a /24 dela não acha nada
                 hosts += [".".join(parts[:3] + [str(i)]) for i in range(1, 255) if str(i) != parts[3]]
     hosts = list(dict.fromkeys(hosts))[:1024]
     t0 = time.time()

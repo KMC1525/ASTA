@@ -187,6 +187,16 @@ class WhyNotConnectedTests(LMStudioBase):
         self.assertEqual(info["kind"], "refused")
 
 
+class RemoteAccessTests(unittest.TestCase):
+    def test_vpn_and_tailscale_addresses_are_treated_as_direct_not_through_the_system_proxy(self):
+        from asta.providers import http
+
+        for host in ("100.101.5.6", "100.64.0.1", "100.127.255.254", "casa.tail1234.ts.net", "192.168.0.9", "pc.local"):
+            self.assertTrue(http.is_local_host(host), host)
+        for host in ("100.63.255.255", "100.128.0.1", "8.8.8.8", "example.com"):
+            self.assertFalse(http.is_local_host(host), host)
+
+
 class ScanTests(LMStudioBase):
     def test_scan_finds_the_lm_studio_of_another_computer_on_the_network(self):
         fake = FakeLMStudio()

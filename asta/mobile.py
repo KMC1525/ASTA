@@ -11,6 +11,7 @@ import ipaddress
 import json
 import os
 import secrets
+import re
 import socket
 import threading
 import time
@@ -54,6 +55,21 @@ def _hostname_ips(timeout: float = 1.0) -> List[str]:
     return list(box)
 
 
+def _tailscale_ips() -> List[str]:
+    """IPs do Tailscale deste computador (`tailscale ip -4`), se estiver instalado: é por eles que o celular alcança o ASTA/LM Studio de FORA de casa."""
+    import shutil
+    import subprocess
+
+    exe = shutil.which("tailscale")
+    if not exe:
+        return []
+    try:
+        r = subprocess.run([exe, "ip", "-4"], capture_output=True, text=True, timeout=2, encoding="utf-8", errors="replace")
+    except (OSError, subprocess.SubprocessError):
+        return []
+    return [x.strip() for x in r.stdout.split() if re.fullmatch(r"\d+\.\d+\.\d+\.\d+", x.strip())] if r.returncode == 0 else []
+
+
 def lan_ips() -> List[str]:
     """Endereços IPv4 do computador na rede local (o primeiro é o da saída padrão), sem loopback. O resultado vale por 30 s (a tela consulta isto com frequência)."""
     if time.time() - float(_LAN_CACHE["t"]) < 30 and _LAN_CACHE["ips"]:
@@ -68,6 +84,7 @@ def lan_ips() -> List[str]:
     except OSError:
         pass
     found.extend(_hostname_ips())
+    found.extend(_tailscale_ips())   # por último: a rede de casa continua sendo o primeiro endereço
     out: List[str] = []
     for ip in found:
         if ip and not ip.startswith(("127.", "0.", "169.254.")) and ip not in out:

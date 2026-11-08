@@ -192,14 +192,17 @@ function pcBox(draft, detect) {
     out.replaceChildren(...r.servers.map((sv) => h('button', { class: 'btn sm', type: 'button', onclick: () => point(sv.url) }, sv.url + ' · ' + t('{n} modelo(s)', { n: sv.models }))));
   };
   const manual = () => {
-    let v = addr.value.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    let v = addr.value.trim();
     if (!v) { out.textContent = t('Digite o IP do computador (ex.: 192.168.0.10).'); return; }
-    if (!/:\d+$/.test(v)) v += ':1234';
-    point('http://' + v);
+    const scheme = (v.match(/^(https?):\/\//i) || [, ''])[1].toLowerCase();   // https:// (túnel/proxy reverso) é mantido; sem esquema vale http + porta 1234
+    v = v.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!scheme && !/:\d+$/.test(v)) v += ':1234';
+    point((scheme || 'http') + '://' + v);
   };
   return h('div', { class: 'lms-pc', id: 'lms-pc', style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line, rgba(255,255,255,.1))' } },
     h('b', null, t('LM Studio no computador')),
     h('p', { class: 'muted small', style: { margin: '4px 0 8px' } }, t('Use os modelos do LM Studio do seu computador por este aparelho, na mesma rede Wi-Fi.')),
+    h('p', { class: 'muted small', style: { margin: '0 0 8px' } }, t('Fora de casa: instale o Tailscale (gratuito) no computador e neste aparelho, entre na mesma conta e digite aqui o IP do computador no Tailscale (100.x.x.x) ou o nome dele (….ts.net). Sem VPN, o endereço de casa (192.168…) não é alcançado de fora.')),
     h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn sm primary', type: 'button', id: 'lms-pc-scan', onclick: scan }, icon('refresh', 13), t('Procurar na rede')), addr,
       h('button', { class: 'btn sm', type: 'button', id: 'lms-pc-go', onclick: manual }, t('Conectar'))), out);
 }

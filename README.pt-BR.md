@@ -41,10 +41,10 @@ Escolha o arquivo do seu sistema na [**Release mais recente**](https://github.co
 
 | Sistema | Arquivo | Como |
 |---|---|---|
-| **Windows 10/11** (64 bits) | `ASTA-0-15-9-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
-| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-15-9-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
-| **Linux** (x86_64; também `-arm64`) | `ASTA-0-15-9-Linux.appimage` | `chmod +x ASTA-0-15-9-Linux.appimage && ./ASTA-0-15-9-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-15-9-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
+| **Windows 10/11** (64 bits) | `ASTA-0-15-10-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
+| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-15-10-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
+| **Linux** (x86_64; também `-arm64`) | `ASTA-0-15-10-Linux.appimage` | `chmod +x ASTA-0-15-10-Linux.appimage && ./ASTA-0-15-10-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-15-10-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
 
 Cada Release traz também o **núcleo Rust pré-compilado** de cada plataforma (`asta-core-*`) e o `SHA256SUMS.txt` (confira com `sha256sum -c`). Os instaladores não têm assinatura de código (exige certificado pago): o Windows pode mostrar o SmartScreen («Mais informações → Executar assim mesmo»). Eles são gerados pelo [GitHub Actions](.github/workflows/release.yml) e **não foram executados em Windows/macOS/Android reais por quem fez esta alteração** (o que deu para conferir está no [changelog](CHANGELOG.md)). Os instaladores de terminal abaixo continuam disponíveis.
 
@@ -139,7 +139,7 @@ O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O
 
 > O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
 
-**O app Android não precisa de computador.** Baixe o `ASTA-0-15-9-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
+**O app Android não precisa de computador.** Baixe o `ASTA-0-15-10-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
 
 <img src="docs/android-app-qr.svg" alt="QR code: app Android mais recente do ASTA" width="140">
 
@@ -294,6 +294,8 @@ O **Computer Use** é um recurso **opcional** (desligado até você ligar) em qu
 **Pelo celular (app Android):** a seção Computer Use tem **Executar no meu computador** — abre o ASTA do computador conectado, e as tarefas rodam lá enquanto o celular mostra o progresso e pergunta Sim/Não.
 
 **LM Studio do computador, pelo celular:** em *Configuração → Provedores → LM Studio* o celular/app oferece **Procurar na rede** (ou digite o IP do computador) para usar os modelos do LM Studio do computador — ligue *Serve on Local Network* no LM Studio.
+
+**Fora de casa:** o endereço `192.168…` do computador não é alcançado de fora da rede de casa. Instale o **Tailscale** (gratuito) no computador e no celular, entre na mesma conta e use o IP do Tailscale (`100.x.x.x`) ou o nome `….ts.net` — para o ASTA conectado e para o LM Studio do computador.
 
 - **No Chat:** o botão **Computer Use** ao lado do Run (como o *Web* e o *Criar*). Escolha o modo, escreva o que o computador deve fazer e aperte **Run**: a conversa ganha um **cartão ao vivo** da tarefa (progresso, a pergunta *Sim/Não* e, no fim, o resumo).
 - **Dois modos.** **Ask:** antes de cada ação que muda algo (criar, mover, mandar para a lixeira, abrir programa/jogo/site, digitar, clicar, ver a tela) o ASTA pergunta **Sim ou Não** — com a opção «Sim, e não perguntar mais deste tipo nesta tarefa». **Full Access:** executa tudo **sem perguntar nada**. Ler, listar e pesquisar nunca perguntam; em Configuração dá para escolher o que pergunta. O modo vale por tarefa (o padrão fica em Configuração).
