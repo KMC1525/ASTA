@@ -7,6 +7,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+### Changed
+- README (Portuguese and English): the modes table now lists the **eight tools** (including **Computer Use** and **Code**), the Studio and Canvas rows mention the 0.17 news (Tools, free layers, 4K/120 fps, `@`, model bar, model picker, Send to Studio), and the sections table and repository map were updated.
+
 ## [0.17.4] — 2026-11-08
 
 ### Added — «@» mentions also in Text nodes and for videos and sounds
