@@ -103,7 +103,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Padrões por seção (Configuração → Seções): o que já vem marcado ao criar algo novo
     "studio": {"kind": "single", "duration_type": "shorts", "target_seconds": 60, "style": "realistic", "style_custom": "", "aspect": "auto",
                "language": "auto", "motion": "auto", "captions": True, "music": True, "revisions": 1, "voice": "",
-               "export_quality": "720p", "audio_format": "m4a", "autoedit_style": "gameplay", "autoedit_target": 0},
+               "export_quality": "720p", "export_fps": 24, "audio_format": "m4a", "autoedit_style": "gameplay", "autoedit_target": 0},
     "rebuild": {"refine": True, "max_calls": 40},
     # Computer Use (opcional, desligado por padrão): equipe de agentes que faz tarefas no computador. Ver computer/manager.py (normalize_config)
     "computer": {"enabled": False, "mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar

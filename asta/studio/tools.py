@@ -66,49 +66,28 @@ def _stderr_of(cmd: List[str], timeout: int = 900) -> str:
 
 
 def scene_changes(path: Path, threshold: float = 0.3, limit: int = 400) -> List[float]:
-    """Instantes (s) de troca de cena de um vídeo — bons pontos de corte."""
-    ff = shutil.which("ffmpeg")
-    if not ff:
-        return []
-    err = _stderr_of([ff, "-hide_banner", "-i", str(path), "-an", "-vf", f"select='gt(scene,{threshold})',showinfo", "-f", "null", "-"])
-    ts = [float(m.group(1)) for m in re.finditer(r"pts_time:([\d.]+)", err)]
-    return ts[:limit]
+    """Instantes (s) de troca de cena de um vídeo — bons pontos de corte. (v0.17: miniaturas cinza + núcleo Rust, em vez do filtro `select` em tela cheia.)"""
+    from . import analysis
+
+    return analysis.analyze_video(path, threshold)["cuts"][:limit]
 
 
 def silences(path: Path, noise_db: int = -35, min_len: float = 0.6) -> List[Tuple[float, float]]:
     """Trechos de silêncio [(início, fim)] de um áudio/vídeo (para cortar «tempo morto»)."""
-    ff = shutil.which("ffmpeg")
-    if not ff:
+    from .. import native
+    from . import analysis
+
+    pcm = analysis.decode_pcm(path)
+    if not len(pcm):
         return []
-    err = _stderr_of([ff, "-hide_banner", "-i", str(path), "-vn", "-af", f"silencedetect=noise={noise_db}dB:d={min_len}", "-f", "null", "-"])
-    starts = [float(x) for x in re.findall(r"silence_start: ([\d.]+)", err)]
-    ends = [float(x) for x in re.findall(r"silence_end: ([\d.]+)", err)]
-    return list(zip(starts, ends))[:500]
+    return native.silence_ranges(analysis.audio_levels_of(pcm, 0.05), 0.05, float(noise_db), min_len, 500)
 
 
 def loud_moments(path: Path, window: float = 0.5, limit: int = 60) -> List[Tuple[float, float]]:
-    """Picos de volume [(instante, nível dB)] ordenados do mais alto — num gameplay costumam ser os momentos de ação."""
-    ff = shutil.which("ffmpeg")
-    if not ff:
-        return []
-    n = max(1, int(44100 * window))
-    err_out = subprocess.run([ff, "-hide_banner", "-i", str(path), "-vn", "-af", f"aresample=44100,asetnsamples=n={n}:p=0,astats=metadata=1:reset=1,ametadata=print:key=lavfi.astats.Overall.RMS_level:file=-",
-                              "-f", "null", "-"], capture_output=True, timeout=900)
-    levels: List[Tuple[float, float]] = []
-    t = None
-    for line in err_out.stdout.decode("utf-8", "replace").splitlines():
-        m = re.search(r"pts_time:([\d.]+)", line)
-        if m:
-            t = float(m.group(1))
-            continue
-        m = re.search(r"RMS_level=(-?[\d.]+|-inf)", line)
-        if m and t is not None:
-            try:
-                levels.append((t, float(m.group(1))))
-            except ValueError:
-                levels.append((t, -90.0))
-    levels.sort(key=lambda x: -x[1])
-    return levels[:limit]
+    """Picos de volume [(instante, nível dB)] ordenados do mais alto, a pelo menos `window` s um do outro — num gameplay costumam ser os momentos de ação."""
+    from . import analysis
+
+    return analysis.analyze_audio(path, loud=True, window=window, limit=limit).get("loud", [])
 
 
 def thumbnail(path: Path, t: float = 0.5, width: int = 240) -> Optional[bytes]:

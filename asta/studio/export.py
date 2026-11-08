@@ -12,7 +12,8 @@ from ..util import now_iso, slugify
 from . import schema as S
 from . import tools
 
-QUALITY = {"480p": 854, "720p": 1280, "1080p": 1920}  # lado maior
+QUALITY = {"480p": 854, "720p": 1280, "1080p": 1920, "2K": 2560, "4K": 3840}  # lado maior (2K = 2560 px, 4K = 3840 px)
+FPS = S.FPS_OPTIONS   # 24 (padrão de antes), 30, 60 e 120 quadros por segundo
 AUDIO_FORMATS = ("m4a", "mp3", "wav")
 
 
@@ -37,11 +38,13 @@ def export_episode(store: Any, pid: str, eid: str, mode: str = "full", quality: 
         path = ss.media_path(pid, a["file"]) if a else None
         return {"path": path, "kind": a["kind"], "duration": a["dur"]} if path else None
 
+    fps = int(fps) if int(fps or 0) in FPS else 24
     long_side = QUALITY.get(quality, 1280)
     w, h = size_of_aspect(p["aspect"], long_side)
     ext = "mp4" if mode != "audio" else (fmt if fmt in AUDIO_FORMATS else "m4a")
     stamp = time.strftime("%Y%m%d-%H%M%S")
-    fname = f"{slugify(p['name'], 'video', 40)}-ep{ep['n']}-{mode}-{stamp}.{ext}"
+    tag = f"-{quality}-{fps}fps" if mode != "audio" else ""
+    fname = f"{slugify(p['name'], 'video', 40)}-ep{ep['n']}-{mode}{tag}-{stamp}.{ext}"
     out = ss.export_dir(pid) / fname
     try:
         warnings = render_timeline(tl, w, h, fps, "#000000", resolve, out, ctl, mode=mode, top_first=True)   # na timeline do Studio a primeira trilha da lista é a de cima (V2 sobre V1), como na prévia
@@ -49,7 +52,7 @@ def export_episode(store: Any, pid: str, eid: str, mode: str = "full", quality: 
         out.unlink(missing_ok=True)
         raise ProviderError(str(exc).replace("do Editor", "da timeline").replace("O Editor", "A exportação")) from None
     info = tools.probe(out)
-    rec = {"file": fname, "mode": mode, "quality": quality if mode != "audio" else "", "format": ext, "size": out.stat().st_size, "dur": round(info["dur"], 2), "created": now_iso(), "warnings": warnings[:10]}
+    rec = {"file": fname, "mode": mode, "quality": quality if mode != "audio" else "", "fps": fps if mode != "audio" else 0, "format": ext, "size": out.stat().st_size, "dur": round(info["dur"], 2), "created": now_iso(), "warnings": warnings[:10]}
 
     def fn(pr: Dict[str, Any]) -> None:
         e = next((x for x in pr["episodes"] if x["id"] == eid), None)

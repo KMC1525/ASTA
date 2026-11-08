@@ -18,6 +18,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .. import attachments as att
+from .. import native
 from ..agents.runner import Cancelled
 from ..providers import ProviderError, build_provider
 from ..util import now_iso
@@ -26,7 +27,7 @@ from . import media as media_mod
 from .media import Ctl, Media, build_media, media_config, pick_provider
 from .render import render_timeline
 from . import nodes_ext
-from .schema import EXT_TYPES, GENERATORS, NODE_TYPES
+from .schema import EXT_TYPES, GENERATORS, NODE_TYPES, normalize_result
 
 RUNNABLE = GENERATORS + ("editor",) + EXT_TYPES
 IMAGE_DEFAULT_SECONDS = 3.0
@@ -85,6 +86,10 @@ class CanvasEngine:
         self.emit = emit or (lambda ev: None)
         self.cancelled = cancelled
         self._cur = ""
+        self._cv: Optional[Dict[str, Any]] = None   # canvas em memória e a versão do armazenamento em que ele vale
+        self._cv_rev = -1
+        self._ix_for: Optional[Dict[str, Any]] = None
+        self._ix: Dict[str, Any] = {}
         self.ctl = Ctl(check=self._check, note=lambda m: self.emit({"type": "note", "node": self._cur, "message": m}))
 
     # ------------------------------------------------------------------ utilidades
@@ -93,25 +98,50 @@ class CanvasEngine:
             raise Cancelled()
 
     def canvas(self) -> Dict[str, Any]:
-        c = self.cs.get(self.cid)
-        if not c:
-            raise ValueError("Canvas não encontrado.")
-        return c
+        """O canvas atual. Só relê o arquivo quando alguém gravou depois da última leitura (fluxos grandes lidos nó a nó faziam centenas de leituras iguais)."""
+        rev = self.cs.rev(self.cid)
+        if self._cv is None or rev != self._cv_rev:
+            c = self.cs.get(self.cid)
+            if not c:
+                raise ValueError("Canvas não encontrado.")
+            self._cv, self._cv_rev = c, rev
+        return self._cv
 
-    @staticmethod
-    def _node(canvas: Dict[str, Any], nid: str) -> Optional[Dict[str, Any]]:
-        return next((n for n in canvas["nodes"] if n["id"] == nid), None)
+    def _set_result(self, nid: str, result: Dict[str, Any]) -> None:
+        """Grava o resultado de um nó e mantém o canvas em memória em dia, sem reler o arquivo (se foi só a nossa gravação)."""
+        before = self.cs.rev(self.cid)
+        ok = self.cs.set_node_result(self.cid, nid, result)
+        if ok and self._cv is not None and self._cv_rev == before and self.cs.rev(self.cid) == before + 1:
+            n = self._node(self._cv, nid)
+            if n is not None:
+                n["result"] = normalize_result(result)
+                self._cv_rev = before + 1
 
-    @staticmethod
-    def _assets(canvas: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
-        return {a["id"]: a for a in canvas["assets"]}
+    def _index(self, canvas: Dict[str, Any]) -> Dict[str, Any]:
+        """Tabelas de consulta do canvas (nó por id, arquivo por id, conexões que chegam em cada porta e em cada nó), refeitas só quando o canvas muda."""
+        size = (len(canvas["nodes"]), len(canvas["edges"]), len(canvas["assets"]))
+        if self._ix_for is not canvas or self._ix.get("n") != size:
+            into: Dict[Tuple[str, str], List[str]] = {}
+            preds: Dict[str, List[str]] = {}
+            for e in canvas["edges"]:
+                into.setdefault((e["to"], e["port"]), []).append(e["from"])
+                preds.setdefault(e["to"], []).append(e["from"])
+            self._ix_for = canvas
+            self._ix = {"n": size, "nodes": {n["id"]: n for n in canvas["nodes"]}, "assets": {a["id"]: a for a in canvas["assets"]}, "into": into, "preds": preds}
+        return self._ix
+
+    def _node(self, canvas: Dict[str, Any], nid: str) -> Optional[Dict[str, Any]]:
+        return self._index(canvas)["nodes"].get(nid)
+
+    def _assets(self, canvas: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+        return self._index(canvas)["assets"]
 
     def _asset_bytes(self, a: Dict[str, Any]) -> Optional[bytes]:
         p = self.cs.asset_path(self.cid, a["file"])
         return p.read_bytes() if p else None
 
     def _edges_to(self, canvas: Dict[str, Any], nid: str, port: str) -> List[str]:
-        return [e["from"] for e in canvas["edges"] if e["to"] == nid and e["port"] == port]
+        return list(self._index(canvas)["into"].get((nid, port), ()))
 
     # ------------------------------------------------------------------ saída de um nó
     def output(self, canvas: Dict[str, Any], node: Dict[str, Any]) -> Dict[str, Any]:
@@ -222,7 +252,7 @@ class CanvasEngine:
             text = f"Seguir o estilo de {len(items)} arquivo(s) de referência ({kinds})" + (f"; cores dominantes {palette}" if palette else "") + "."
         res = dict(node["result"])
         res.update({"digest": text[:4000], "digest_key": key})
-        self.cs.set_node_result(self.cid, node["id"], res)
+        self._set_result(node["id"], res)
         node["result"] = res
         return text[:4000]
 
@@ -266,7 +296,8 @@ class CanvasEngine:
 
     def stale_ids(self, canvas: Dict[str, Any]) -> List[str]:
         """Nós geradores cujo resultado está desatualizado (nunca rodou, algo mudou ou um nó de entrada está desatualizado)."""
-        by_id = {n["id"]: n for n in canvas["nodes"]}
+        by_id = self._index(canvas)["nodes"]
+        preds = self._index(canvas)["preds"]
         order = self.topo(canvas)
         stale: Dict[str, bool] = {}
         for nid in order:
@@ -276,29 +307,26 @@ class CanvasEngine:
                 continue
             s = n["result"]["state"] != "done" or n["result"]["hash"] != self.node_hash(canvas, n)
             if not s:
-                s = any(stale.get(e["from"]) for e in canvas["edges"] if e["to"] == nid)
+                s = any(stale.get(src) for src in preds.get(nid, ()))
             stale[nid] = s
         return [i for i, v in stale.items() if v]
 
     # ------------------------------------------------------------------ plano
     @staticmethod
     def topo(canvas: Dict[str, Any]) -> List[str]:
+        """Ordem de execução (Kahn, fila FIFO — estável). Núcleo Rust (interface 4) quando existe; o mesmo cálculo em Python senão. Nós presos num ciclo ficam de fora."""
         ids = [n["id"] for n in canvas["nodes"]]
-        indeg = {i: 0 for i in ids}
-        adj: Dict[str, List[str]] = {i: [] for i in ids}
-        for e in canvas["edges"]:
-            adj[e["from"]].append(e["to"])
-            indeg[e["to"]] += 1
-        queue = [i for i in ids if indeg[i] == 0]
-        out: List[str] = []
-        while queue:
-            cur = queue.pop(0)
-            out.append(cur)
-            for nxt in adj[cur]:
-                indeg[nxt] -= 1
-                if indeg[nxt] == 0:
-                    queue.append(nxt)
-        return out
+        pos = {i: k for k, i in enumerate(ids)}
+        edges = [(pos[e["from"]], pos[e["to"]]) for e in canvas["edges"] if e["from"] in pos and e["to"] in pos]
+        return [ids[k] for k in native.topo(len(ids), edges)["order"]]
+
+    @staticmethod
+    def levels(canvas: Dict[str, Any]) -> Dict[str, int]:
+        """Nível de cada nó (caminho mais longo desde uma raiz): nós do mesmo nível não dependem um do outro."""
+        ids = [n["id"] for n in canvas["nodes"]]
+        pos = {i: k for k, i in enumerate(ids)}
+        r = native.topo(len(ids), [(pos[e["from"]], pos[e["to"]]) for e in canvas["edges"] if e["from"] in pos and e["to"] in pos])
+        return {i: r["level"][k] for k, i in enumerate(ids)}
 
     def plan(self, canvas: Dict[str, Any], targets: Optional[List[str]]) -> List[str]:
         order = self.topo(canvas)
@@ -306,12 +334,13 @@ class CanvasEngine:
             return [i for i in order if self._node(canvas, i)["type"] in RUNNABLE]
         need = set()
         stack = list(targets)
+        preds = self._index(canvas)["preds"]
         while stack:
             cur = stack.pop()
             if cur in need:
                 continue
             need.add(cur)
-            stack += [e["from"] for e in canvas["edges"] if e["to"] == cur]
+            stack += preds.get(cur, ())
         return [i for i in order if i in need and self._node(canvas, i)["type"] in RUNNABLE]
 
     # ------------------------------------------------------------------ execução
@@ -342,7 +371,7 @@ class CanvasEngine:
             if not node:
                 continue
             self._cur = nid
-            if any(e["from"] in failed for e in canvas["edges"] if e["to"] == nid):
+            if any(src in failed for src in self._index(canvas)["preds"].get(nid, ())):
                 self.emit({"type": "node", "id": nid, "state": "skipped", "message": "Um nó de entrada falhou."})
                 failed.add(nid)
                 stats["skipped"] += 1
@@ -353,7 +382,7 @@ class CanvasEngine:
                 self.emit({"type": "node", "id": nid, "state": "cached"})
                 stats["cached"] += 1
                 continue
-            self.cs.set_node_result(self.cid, nid, {**node["result"], "state": "running", "error": ""})
+            self._set_result(nid, {**node["result"], "state": "running", "error": ""})
             self.emit({"type": "node", "id": nid, "state": "running"})
             try:
                 res = self._execute(canvas, node, forced)
@@ -362,16 +391,16 @@ class CanvasEngine:
                 res.update({"state": "done", "hash": h, "ts": now_iso(), "error": ""})
                 res.setdefault("digest", node["result"]["digest"])
                 res.setdefault("digest_key", node["result"]["digest_key"])
-                self.cs.set_node_result(self.cid, nid, res)
+                self._set_result(nid, res)
                 self.cs.prune_node_assets(self.cid, nid, KEEP_HISTORY)
                 self.emit({"type": "node", "id": nid, "state": "done", "assets": res["assets"], "text": res["text"][:400], "warnings": res.get("warnings", [])})
                 stats["ran"] += 1
             except Cancelled:
-                self.cs.set_node_result(self.cid, nid, {**node["result"], "state": "idle"})
+                self._set_result(nid, {**node["result"], "state": "idle"})
                 raise
             except (ProviderError, ValueError) as exc:
                 if str(exc) == "cancelado":
-                    self.cs.set_node_result(self.cid, nid, {**node["result"], "state": "idle"})
+                    self._set_result(nid, {**node["result"], "state": "idle"})
                     raise Cancelled()
                 self._fail(node, str(exc), stats, failed)
             except Exception as exc:  # noqa: BLE001
@@ -381,7 +410,7 @@ class CanvasEngine:
         return stats
 
     def _fail(self, node: Dict[str, Any], msg: str, stats: Dict[str, int], failed: set) -> None:
-        self.cs.set_node_result(self.cid, node["id"], {**node["result"], "state": "error", "error": msg[:800]})
+        self._set_result(node["id"], {**node["result"], "state": "error", "error": msg[:800]})
         self.emit({"type": "node", "id": node["id"], "state": "error", "message": msg[:800]})
         stats["errors"] += 1
         failed.add(node["id"])

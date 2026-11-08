@@ -38,13 +38,15 @@ MOTIONS = ("auto", "video")  # auto: Ken Burns sobre a imagem (leve); video: usa
 EXPORT_MODES = ("full", "video", "audio")
 STAGES = ("receive", "analyze", "generate", "review", "deliver")  # recebe → analisa → gera → revisa → entrega
 STAGE_LABEL = {"receive": "Recebe", "analyze": "Analisa", "generate": "Gera", "review": "Revisa", "deliver": "Entrega"}
-FILTERS = ("none", "bw", "warm", "cool", "vivid", "vhs", "cinematic", "phonk")
+FILTERS = ("none", "bw", "warm", "cool", "vivid", "vhs", "cinematic", "phonk", "sepia", "negative", "blur", "sharpen", "glow", "grain", "vignette", "mirror", "noir", "teal_orange")
+TRACK_KINDS = ("video", "audio", "text", "image", "fx")   # v0.17: camadas livres — vídeo, áudio, texto, imagem e efeitos (uma camada de efeitos aplica o filtro a tudo que está abaixo dela)
+FPS_OPTIONS = (24, 30, 60, 120)
 TRANSITIONS = ("cut", "fade")
 
 
 def describe() -> Dict[str, Any]:
     return {"schema": SCHEMA, "durations": [{"id": k, **v} for k, v in DURATION_TYPES.items()], "styles": [{"id": k, "label": v["label"]} for k, v in STYLES.items()],
-            "aspects": list(ASPECTS), "kinds": list(KINDS), "motions": list(MOTIONS), "export_modes": list(EXPORT_MODES), "stages": list(STAGES), "filters": list(FILTERS),
+            "aspects": list(ASPECTS), "kinds": list(KINDS), "fps": list(FPS_OPTIONS), "track_kinds": list(TRACK_KINDS), "motions": list(MOTIONS), "export_modes": list(EXPORT_MODES), "stages": list(STAGES), "filters": list(FILTERS),
             "limits": {"min_seconds": MIN_SECONDS, "max_seconds": MAX_SECONDS, "max_scenes": MAX_SCENES}}
 
 
@@ -78,7 +80,7 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
     for t in (raw.get("tracks") if isinstance(raw.get("tracks"), list) else [])[:16]:
         t = t if isinstance(t, dict) else {}
         tid = slugify(t.get("id") or "", "", 16).replace("-", "_") or f"t{len(tracks) + 1}"
-        kind = t.get("kind") if t.get("kind") in ("video", "audio", "text") else "video"
+        kind = t.get("kind") if t.get("kind") in TRACK_KINDS else "video"
         if tid in ids:
             continue
         ids.add(tid)
@@ -98,8 +100,9 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
             cid = new_id("c_")
         seen.add(cid)
         is_text = kinds[tr] == "text"
+        no_asset = kinds[tr] in ("text", "fx")   # texto e efeitos não têm mídia: o texto desenha, o efeito filtra o que está abaixo
         clips.append({
-            "id": cid, "track": tr, "asset": "" if is_text else text(c.get("asset"), "", 60), "scene": text(c.get("scene"), "", 24), "label": text(c.get("label"), "", 60),
+            "id": cid, "track": tr, "asset": "" if no_asset else text(c.get("asset"), "", 60), "scene": text(c.get("scene"), "", 24), "label": text(c.get("label"), "", 60),
             "start": round(num(c.get("start"), 0, 0, 86400), 3), "dur": round(num(c.get("dur"), 3, 0.1, 86400), 3), "in": round(num(c.get("in"), 0, 0, 86400), 3),
             "speed": round(num(c.get("speed"), 1, 0.25, 4), 2), "mute": bool(c.get("mute")), "volume": round(num(c.get("volume"), 1, 0, 2), 2),
             "fade_in": round(num(c.get("fade_in"), 0, 0, 30), 2), "fade_out": round(num(c.get("fade_out"), 0, 0, 30), 2), "opacity": round(num(c.get("opacity"), 1, 0, 1), 2),
@@ -108,18 +111,42 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
             "text": text(c.get("text"), "", 300) if is_text else "", "size": int(num(c.get("size"), 44, 8, 300)), "color": _color(c.get("color"), "#ffffff"),
             "bg": _color(c.get("bg"), "") if c.get("bg") else "", "pos": c.get("pos") if c.get("pos") in ("top", "center", "bottom") else "bottom",
         })
-    clips = [c for c in clips if kinds[c["track"]] == "text" or c["asset"]]
+    clips = [c for c in clips if kinds[c["track"]] in ("text", "fx") or c["asset"]]
     markers = []
     for m in (raw.get("markers") if isinstance(raw.get("markers"), list) else [])[:200]:
         if isinstance(m, dict):
             markers.append({"t": round(num(m.get("t"), 0, 0, 86400), 3), "label": text(m.get("label"), "", 40)})
-    duration = round(max([c["start"] + c["dur"] for c in clips] + [0.0]), 3)
+    duration = round(max([c["start"] + c["dur"] for c in clips if kinds[c["track"]] != "fx"] + [0.0]), 3)   # um efeito além do último clipe não alonga o vídeo
     return {"tracks": tracks, "clips": clips, "markers": markers, "duration": duration, "master": round(num(raw.get("master"), 1.0, 0.0, 2.0), 3)}
 
 
 def default_tracks() -> List[Dict[str, Any]]:
     mk = lambda i, k, n: {"id": i, "kind": k, "name": n, "muted": False, "hidden": False, "locked": False, "volume": 1.0, "collapsed": False}  # noqa: E731
     return [mk("t_t1", "text", "T1"), mk("t_v2", "video", "V2"), mk("t_v1", "video", "V1"), mk("t_a1", "audio", "A1"), mk("t_a2", "audio", "A2"), mk("t_a3", "audio", "A3")]
+
+
+TRACK_PREFIX = {"video": "V", "audio": "A", "text": "T", "image": "I", "fx": "FX"}
+
+
+def add_track(tl: Dict[str, Any], kind: str) -> Optional[Dict[str, Any]]:
+    """Cria uma camada nova do tipo `kind` na timeline `tl` (lista de cima para baixo: texto, efeitos, vídeo/imagem, áudio); a nova fica no topo do seu grupo. Devolve a trilha (ou None se já são 16)."""
+    kind = kind if kind in TRACK_KINDS else "video"
+    if len(tl["tracks"]) >= 16:
+        return None
+    pre = TRACK_PREFIX[kind]
+    nums = [int(t["name"][len(pre):]) for t in tl["tracks"] if t["kind"] == kind and t["name"].upper().startswith(pre) and t["name"][len(pre):].isdigit()]
+    n = max(nums + [0]) + 1
+    ids = {t["id"] for t in tl["tracks"]}
+    tid = f"t_{pre.lower()}{n}"
+    while tid in ids:
+        n += 1
+        tid = f"t_{pre.lower()}{n}"
+    tr = {"id": tid, "kind": kind, "name": f"{pre}{n}", "muted": False, "hidden": False, "locked": False, "volume": 1.0, "collapsed": False}
+    n_text = sum(1 for t in tl["tracks"] if t["kind"] == "text")
+    n_fx = sum(1 for t in tl["tracks"] if t["kind"] == "fx")
+    at = {"text": 0, "fx": n_text, "video": n_text + n_fx, "image": n_text + n_fx, "audio": len(tl["tracks"])}[kind]
+    tl["tracks"].insert(min(at, len(tl["tracks"])), tr)
+    return tr
 
 
 # --------------------------------------------------------------------------- cenas / episódios

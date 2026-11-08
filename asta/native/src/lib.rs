@@ -8,6 +8,7 @@
 use std::f64::consts::PI;
 
 mod io;
+mod media;
 mod model;
 mod ops;
 mod plan;
@@ -17,7 +18,7 @@ mod util;
 /// Versão da interface (o Python recusa uma biblioteca de outra versão).
 #[no_mangle]
 pub extern "C" fn asta_abi_version() -> u32 {
-    3
+    4
 }
 
 unsafe fn slice_mut<'a, T>(p: *mut T, n: usize) -> Option<&'a mut [T]> {

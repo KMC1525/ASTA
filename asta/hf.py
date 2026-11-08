@@ -87,6 +87,28 @@ def search(query: str, token: str = "", limit: int = 20, kind: str = "text") -> 
     return sorted(found.values(), key=lambda m: -m["downloads"])[:limit]
 
 
+# Capacidades do Canvas → filtros "pipeline_tag" do Hugging Face para modelos no formato original (diffusers/transformers), sem exigir GGUF
+ORIGINAL_TAGS: Dict[str, List[str]] = {
+    "image": ["text-to-image", "image-to-image"], "video": ["text-to-video", "image-to-video"], "sound": ["text-to-audio"], "voice": ["text-to-speech"], "stt": ["automatic-speech-recognition"],
+    "text": ["text-generation"],
+}
+
+
+def search_original(query: str, token: str = "", cap: str = "image", limit: int = 20) -> List[Dict[str, Any]]:
+    """Busca modelos (qualquer formato) de uma capacidade do Canvas — imagem, vídeo, som, voz, transcrição ou texto —, do mais baixado para o menos."""
+    if cap not in ORIGINAL_TAGS:
+        raise ProviderError("Capacidade inválida.")
+    found: Dict[str, Dict[str, Any]] = {}
+    for tag in ORIGINAL_TAGS[cap]:
+        params = {"search": query, "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(limit)}
+        data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
+        for m in data if isinstance(data, list) else []:
+            mid = m.get("id") or m.get("modelId") if isinstance(m, dict) else None
+            if isinstance(mid, str) and REPO_RE.match(mid):
+                found.setdefault(mid, {"id": mid, "downloads": int(m.get("downloads") or 0), "likes": int(m.get("likes") or 0), "cap": cap, "format": "original", "gguf": "gguf" in [str(t).lower() for t in (m.get("tags") or [])]})
+    return sorted(found.values(), key=lambda m: -m["downloads"])[:limit]
+
+
 def group_files(raw: List[Dict[str, Any]], ram_gb: float = 0) -> List[Dict[str, Any]]:
     """Agrupa arquivos GGUF em opções de download: junta partes divididas, ignora projetores de visão (mmproj) e marca a recomendada.
 

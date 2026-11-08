@@ -23,6 +23,7 @@ from ..canvas.media import MIME_EXT, sniff_mime
 from ..providers import ProviderError, build_provider
 from ..storage import Store
 from ..util import num, text
+from . import analysis
 from . import rulebased as rb
 from . import schema as S
 from . import tools
@@ -105,6 +106,79 @@ def guess_roles(inv: List[Dict[str, Any]]) -> Dict[str, str]:
     return roles
 
 
+def _boundaries(a: Dict[str, Any]) -> Tuple[List[float], List[float]]:
+    """Pontos onde cortar sem machucar o material: o meio das pausas (fala/ação parada) e as trocas de cena."""
+    pauses = [(s0 + e0) / 2 for s0, e0 in sorted(a.get("silences") or []) if e0 - s0 >= 0.4]
+    return pauses, sorted(a.get("changes") or [])
+
+
+def _chunk(s: float, e: float, lo: float, hi: float, pauses: List[float], changes: List[float]) -> List[Tuple[float, float]]:
+    """Divide [s, e) em janelas de até `hi` s que terminam, quando dá, numa pausa (a fala não é cortada no meio) ou numa troca de cena, sem ficar menores que `lo`."""
+    out: List[Tuple[float, float]] = []
+    t = s
+    while t < e - 0.3:
+        end = min(e, t + hi)
+        if e - t > hi:
+            for pts in (pauses, changes):
+                c = [x for x in pts if t + lo <= x <= t + hi and e - x > 0.3]
+                if c:
+                    end = max(c)
+                    break
+        out.append((t, end))
+        t = end
+    return out
+
+
+def _window_score(a: Dict[str, Any], s: float, e: float, act: Optional["analysis.ActivityIndex"]) -> float:
+    """Quanto um trecho vale: o som mais forte dentro dele (quando há dados) + o movimento na imagem."""
+    loud = [db for t, db in a.get("loud", []) if s <= t < e]
+    sc = (max(loud) + 90.0) / 90.0 if loud else 0.0
+    if act is not None:
+        sc += 2.0 * act.mean(s, e)
+    return sc
+
+
+def _condense(cand: List[Tuple[Dict[str, Any], float, float]], target: float, pace: Tuple[float, float], by: Dict[str, Dict[str, Any]], directives: Dict[str, Any]) -> List[Tuple[Dict[str, Any], float, float]]:
+    """Material de sobra: em vez de usar só o começo dos vídeos, escolhe os melhores trechos **espalhados por todo o material** e mantém a ordem em que aconteceram.
+    Divide as janelas em tantos blocos seguidos quantos cortes são necessários e fica com a de maior nota de cada bloco."""
+    vids = [c for c in cand if c[0]["kind"] == "video"]
+    if not vids:
+        return cand
+    lens = [min(max(e - s, min(pace)), max(pace)) for _, s, e in vids]
+    avg = sum(lens) / len(lens)
+    if sum(lens) <= target * 1.4:
+        return cand
+    k = max(1, int(math.ceil(target / avg)) + 1)
+    if len(vids) <= k * 1.2:
+        return cand
+    idx: Dict[str, "analysis.ActivityIndex"] = {}
+    marked = {(h.get("asset"), round(float(num(h.get("t"), 0, 0, 1e9)), 2)) for h in directives.get("highlights", []) if isinstance(h, dict)}
+
+    def score(c: Tuple[Dict[str, Any], float, float]) -> float:
+        a, s, e = c
+        act = None
+        if a.get("activity"):
+            act = idx.setdefault(a["id"], analysis.ActivityIndex(a["activity"]))
+        sc = _window_score(a, s, e, act)
+        if any(h[0] == a["id"] and s <= h[1] < e for h in marked):
+            sc += 1.0   # momento marcado pelo diretor
+        return sc
+
+    chosen: List[int] = []
+    for g in range(k):
+        lo_i, hi_i = g * len(vids) // k, (g + 1) * len(vids) // k
+        if hi_i > lo_i:
+            chosen.append(max(range(lo_i, hi_i), key=lambda i: (score(vids[i]), -i)))
+    total = sum(lens[i] for i in chosen)
+    rest = sorted((i for i in range(len(vids)) if i not in chosen), key=lambda i: (-score(vids[i]), i))
+    while total < target * 1.05 and rest:   # as durações variam: completa com os melhores que sobraram
+        i = rest.pop(0)
+        chosen.append(i)
+        total += lens[i]
+    keep = {id(vids[i]) for i in chosen}
+    return [c for c in cand if c[0]["kind"] != "video" or id(c) in keep]
+
+
 def _windows(a: Dict[str, Any], style: Dict[str, Any], lo: float, hi: float, directives: Dict[str, Any], rnd: random.Random) -> List[Tuple[float, float]]:
     """Janelas candidatas [início, fim) de um vídeo, na ordem de preferência do estilo."""
     dur = a["dur"]
@@ -119,11 +193,15 @@ def _windows(a: Dict[str, Any], style: Dict[str, Any], lo: float, hi: float, dir
     use = style["use"]
     if use == "loud":
         peaks, taken = sorted(a.get("loud", []), key=lambda x: -x[1]), []
+        cuts = a.get("changes", [])
         for t, _db in peaks:
             if all(abs(t - u) > pace for u in taken):
                 taken.append(t)
-                out.append((max(0.0, t - pace * 0.4), min(dur, t + pace * 0.6)))
-        cuts = a.get("changes", [])
+                ws = max(0.0, t - pace * 0.4)
+                near = [c for c in cuts if abs(c - ws) <= 0.5 and c <= t - 0.2]   # a ação começa limpa, numa troca de cena, sem perder o pico
+                if near:
+                    ws = min(near, key=lambda c: abs(c - ws))
+                out.append((ws, min(dur, ws + pace)) if near else (ws, min(dur, t + pace * 0.6)))
         out += [(max(0.0, c - 0.2), min(dur, c - 0.2 + pace)) for c in cuts]
         t = 0.0
         while t < dur - 0.3:  # sem picos/cortes suficientes: o resto do vídeo, em ordem, completa o material (só entra depois dos melhores momentos)
@@ -143,11 +221,9 @@ def _windows(a: Dict[str, Any], style: Dict[str, Any], lo: float, hi: float, dir
                 keep.append((max(0.0, t - pad), dur))
         else:
             keep = [(bounds[i], bounds[i + 1]) for i in range(len(bounds) - 1) if bounds[i + 1] - bounds[i] > 0.5] or [(0.0, dur)]
+        pauses, changes = _boundaries(a)
         for s, e in keep:
-            t = s
-            while t < e - 0.3:
-                out.append((t, min(e, t + hi)))
-                t += hi
+            out += _chunk(s, e, lo, hi, pauses, changes)
     else:  # grid / spread: janelas espalhadas pelo vídeo (começando pelos picos de volume)
         step = max(pace, dur / 24)
         out += [(t, min(dur, t + step)) for t in [x for x, _ in sorted(a.get("loud", []), key=lambda p: -p[1])[:30]]]
@@ -185,7 +261,12 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
             footage = [a for a in footage if a not in short]
     pace = st["pace"]
     fast = {"fast": 0.7, "slow": 1.4}.get(directives.get("pace"), 1.0)
-    beat = 60.0 / float(bpm or st.get("bpm") or 120)
+    m0 = music[0] if music else {}
+    bpm = float(bpm or m0.get("bpm") or st.get("bpm") or 120)    # andamento pedido > o medido na música anexada > o do estilo
+    beat = 60.0 / bpm
+    phase = float(m0.get("phase") or 0.0) if m0.get("bpm") and abs(bpm - float(m0["bpm"])) < 1.0 else 0.0   # 1ª batida real: o 1º corte a alcança, os seguintes caem nas batidas
+    drop = float(m0.get("drop") or 0.0)
+    intro_end = min(0.6, max(0.1, drop / max(1.0, target))) if drop else 0.25               # onde a música «explode» (padrão: 25% do vídeo)
     segs: List[Dict[str, Any]] = []
     t = 0.0
     k = 0
@@ -215,6 +296,8 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
             cand.append(c)
             if cover and i % int(st["cutaway"]) == int(st["cutaway"]) - 1:
                 cand.append(cover[(i // int(st["cutaway"])) % len(cover)])
+    if st["use"] == "sequential" and pace:   # sobra material: os melhores trechos de TODO o vídeo, não só o começo
+        cand = _condense(cand, target, (min(pace) * fast, max(pace) * fast), by, directives)
     hl = next((h for h in directives.get("highlights", []) if h.get("asset") in by), None)
     if st.get("hook") and hl:  # gancho: o diretor escolheu o melhor momento para abrir
         hook = next((c for c in cand if c[0]["id"] == hl["asset"] and c[1] - 0.01 <= float(hl.get("t", 0)) <= c[2] + 0.01), None)
@@ -249,10 +332,12 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
         else:
             if pace is None:
                 if st.get("buildup"):  # introdução/estrofe mais lenta, «drop»/refrão com cortes de 1-2 batidas, fecho calmo
-                    choices = (4, 4, 2) if progress < 0.25 else ((2, 4) if progress > 0.9 else (1, 2, 2, 1))
+                    choices = (4, 4, 2) if progress < intro_end else ((2, 4) if progress > 0.9 else (1, 2, 2, 1))
                 else:
                     choices = (1, 2, 2, 4)
                 d = beat * rnd.choice(choices) if st["use"] == "grid" else beat * 4
+                if n == 0 and 0.05 < phase < beat and st["use"] == "grid":
+                    d += phase
             elif st["use"] == "spread" and pace[0] > pace[1]:  # trailer: do mais longo ao mais curto
                 d = pace[0] + (pace[1] - pace[0]) * progress
             else:
@@ -261,7 +346,7 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
             speed = 1.0
             if st.get("ramps"):
                 speed = 0.5 if progress > 0.92 else (0.6, 1.0, 1.5, 1.0)[n % 4]  # rampas com moderação; fecha em câmera lenta
-                if progress < 0.25:
+                if progress < intro_end:
                     speed = 1.0
             src_len = d * speed
             if e - s < src_len:
@@ -274,7 +359,7 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
         zoom_now = st["punch"] if st["punch_every"] and (n % st["punch_every"] == st["punch_every"] - 1) else 1.0
         if st.get("hook") and n == 0:
             zoom_now = max(zoom_now, st["punch"])  # o gancho já abre com um zoom
-        if st.get("buildup") and st["use"] == "grid" and st.get("ramps") and 0.25 <= progress <= 0.9:
+        if st.get("buildup") and st["use"] == "grid" and st.get("ramps") and intro_end <= progress <= 0.9:
             zoom_now = st["punch"] if n % 2 == 0 else 1.0  # no «drop» o zoom bate a cada corte
         px = py = 0.0
         if st.get("pan") and (a["kind"] == "image" or zoom_now > 1.0 or st["use"] == "sequential"):
@@ -285,6 +370,14 @@ def plan_edl(style_id: str, inv: List[Dict[str, Any]], roles: Dict[str, str], ta
         seg.update(scale=round(zoom_now, 2), x=round(px, 3), y=round(py, 3), filter=st["grade"], fade_in=st["fade"] if t == 0 or st["fade"] else 0, fade_out=st["fade"], mute=st["orig_vol"] <= 0.001, volume=st["orig_vol"])
         segs.append(seg)
         t += seg["dur"]
+    if len(segs) > 1 and segs[-1]["dur"] < 0.8 and segs[-2]["asset"] == segs[-1]["asset"] != "" and by[segs[-2]["asset"]]["kind"] == "video":   # sobra de um corte: estende o anterior (se o arquivo tem folga)
+        p_, l_ = segs[-2], segs[-1]
+        room = by[p_["asset"]]["dur"] - (p_["in"] + p_["dur"] * p_["speed"])
+        if room >= l_["dur"] * p_["speed"]:
+            p_["dur"] = round(p_["dur"] + l_["dur"], 3)
+            segs.pop()
+    elif len(segs) > 1 and segs[-1]["dur"] < 0.5:
+        segs.pop()                                                                                                                       # corte curto demais para ser visto
     if st.get("chrono") and len(segs) > 2:  # gancho primeiro; o resto na ordem em que aconteceu
         order = {a["id"]: i for i, a in enumerate(footage)}
         segs = segs[:1] + sorted(segs[1:], key=lambda g: (order.get(g["asset"], 0), g["in"]))
@@ -381,13 +474,18 @@ class AutoEditPipeline(Runner):
             rec = self.ss.add_asset_file(pid, path, MIME_EXT.get(mime) or path.suffix.lstrip(".") or "bin", kind, name=m["name"], mime=mime)
             if not rec:
                 continue
-            item = {"id": rec["id"], "name": m["name"], "kind": kind, "dur": rec["dur"], "has_audio": rec["audio"], "path": self.ss.media_path(pid, rec["file"]), "loud": [], "changes": [], "silences": []}
+            item = {"id": rec["id"], "name": m["name"], "kind": kind, "dur": rec["dur"], "has_audio": rec["audio"], "path": self.ss.media_path(pid, rec["file"]), "loud": [], "changes": [], "silences": [], "activity": []}
+            src = item["path"]
             if kind == "video":
-                src = item["path"]
-                item["changes"] = tools.scene_changes(src, 0.3) if st["use"] in ("loud", "sequential") else []
+                av = analysis.analyze_video(src, 0.3)   # miniaturas cinza (uma leitura): trocas de cena e movimento por trecho
+                item["changes"], item["activity"] = av["cuts"], av.get("activity", [])
                 if rec["audio"]:
-                    item["loud"] = tools.loud_moments(src, 0.5) if st["use"] in ("loud", "grid", "spread") else []
-                    item["silences"] = tools.silences(src) if st["silence"] else []
+                    aa = analysis.analyze_audio(src, loud=True, silence=True)   # áudio decodificado uma vez; contas no núcleo Rust
+                    item["silences"] = aa.get("silences", [])
+                    idx = analysis.ActivityIndex(item["activity"]) if item["activity"] else None
+                    item["loud"] = sorted(((t, db + (8.0 * idx.mean(t - 0.5, t + 0.5) if idx else 0.0)) for t, db in aa.get("loud", [])), key=lambda x: -x[1])   # volume + movimento
+            elif kind == "audio":
+                item.update({k: v for k, v in analysis.analyze_audio(src, beats=True).items() if k in ("bpm", "phase", "confidence", "drop")})   # andamento real e ponto do «drop»
             inv.append(item)
             self.emit({"type": "note", "message": f"Analisado: {m['name']} ({rec['dur']:.0f}s)"})
         if not inv:
@@ -398,7 +496,7 @@ class AutoEditPipeline(Runner):
 
         # ---- analista
         self._step("analyst", "running")
-        light = [{k: (v if k not in ("loud", "changes", "silences") else len(v)) for k, v in a.items() if k != "path"} for a in inv]
+        light = [{k: (v if k not in ("loud", "changes", "silences", "activity", "beats") else len(v)) for k, v in a.items() if k != "path"} for a in inv]
         obj, fb = self._ask("analyst", "studio_edit_analyst", ANALYST, {"files": light, "prompt": prompt, "style": st["label"]}, lambda pl: {"title": "", "focus": [], "roles": guess_roles(inv)})
         roles = {a["id"]: (obj.get("roles") or {}).get(a["id"]) if (obj.get("roles") or {}).get(a["id"]) in ROLES else None for a in inv}
         guessed = guess_roles(inv)
@@ -461,6 +559,9 @@ class AutoEditPipeline(Runner):
         dup = sum(1 for i, g in enumerate(segs) for h in segs[:i] if g["asset"] == h["asset"] and min(g["in"] + g["dur"] * g["speed"], h["in"] + h["dur"] * h["speed"]) - max(g["in"], h["in"]) > 0.5 * g["dur"] * g["speed"])
         if dup > max(1, len(segs) // 6) and EDIT_STYLES[edl["style"]].get("dedupe"):
             issues.append(f"{dup} cortes repetem trechos já usados (faltou material novo: anexe mais vídeos ou reduza a duração)")
+        tiny = sum(1 for g in segs if g["dur"] < 0.45 and by[g["asset"]]["kind"] == "video")
+        if tiny > max(1, len(segs) // 10):
+            issues.append(f"{tiny} cortes duram menos de meio segundo (o espectador não consegue ver)")
         if not edl["music"] and EDIT_STYLES[edl["style"]]["use"] == "grid":
             issues.append("estilo de batida sem música: anexe uma faixa para os cortes seguirem o compasso")
         return issues
@@ -497,7 +598,7 @@ class AutoEditPipeline(Runner):
                 m = edl["music"][k % len(edl["music"])]
                 d = min(m["dur"] or total, total - mt)
                 clips.append({"id": f"mus{k}", "track": tr["A2"], "asset": m["id"], "label": m["name"][:40], "start": round(mt, 3), "dur": round(d, 3), "volume": round(st["music_vol"] * (0.45 if edl["voice"] else 1.0), 3),  # abaixa a música quando há narração
-                              "fade_in": 0.5 if k == 0 else 0, "fade_out": 1.5 if mt + d >= total - 0.06 else 0})
+                              "fade_in": 0.5 if k == 0 else 0.8, "fade_out": 1.5 if mt + d >= total - 0.06 else 0.8})   # entre uma volta e outra da faixa, fades curtos (sem estalo)
                 mt += d
                 k += 1
             for i, c in enumerate(edl["titles"]):

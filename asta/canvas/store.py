@@ -25,6 +25,10 @@ class CanvasStore:
         self.folder = Path(folder)
         self.folder.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        self._revs: Dict[str, int] = {}   # versão de cada canvas na memória: sobe a cada gravação (o motor só relê o arquivo quando ela muda)
+
+    def rev(self, cid: str) -> int:
+        return self._revs.get(cid, 0)
 
     # ------------------------------------------------------------------ caminhos
     def _dir(self, cid: str) -> Optional[Path]:
@@ -50,6 +54,7 @@ class CanvasStore:
     def _write(self, canvas: Dict[str, Any]) -> Dict[str, Any]:
         canvas["updated"] = now_iso()
         write_json(self.folder / canvas["id"] / "canvas.json", canvas)
+        self._revs[canvas["id"]] = self._revs.get(canvas["id"], 0) + 1
         return canvas
 
     def summary(self, c: Dict[str, Any]) -> Dict[str, Any]:
