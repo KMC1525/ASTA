@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from . import guard
+from . import x11
 
 
 class DriverError(Exception):
@@ -280,11 +281,32 @@ class LinuxDriver(Driver):
             return "wayland"
         return "none"
 
+    _nat_cache: tuple = (0.0, "")
+
+    def _native_reason(self) -> str:
+        """"" se o X11 nativo (ctypes, sem instalar nada) está disponível; senão o motivo."""
+        t, r = self._nat_cache
+        if time.time() - t > 20:
+            r = x11.available()
+            self._nat_cache = (time.time(), r)
+        return r
+
+    def _native(self, what: str = "keys") -> bool:
+        """Usa o X11 nativo? Num desktop Wayland com XWayland, as ferramentas do Wayland (grim, ydotool…) têm prioridade sobre o X11, que só enxerga janelas X."""
+        if self._native_reason():
+            return False
+        if os.environ.get("WAYLAND_DISPLAY"):
+            if what == "shot" and self._shot_tool_external():
+                return False
+            if what == "keys" and self._keys_tool_external() in ("ydotool", "wtype"):
+                return False
+        return True
+
     def _cap_open(self) -> Dict[str, Any]:
         ok = bool(shutil.which("xdg-open") or shutil.which("gio") or shutil.which("gnome-open") or shutil.which("kde-open"))
         return {"ok": ok, "hint": "" if ok else "Instale o xdg-utils (xdg-open)."}
 
-    def _shot_tool(self) -> List[str]:
+    def _shot_tool_external(self) -> List[str]:
         s = self._session()
         order = [["grim", "{out}"], ["gnome-screenshot", "-f", "{out}"], ["spectacle", "-b", "-n", "-o", "{out}"], ["maim", "{out}"], ["scrot", "-o", "{out}"], ["import", "-window", "root", "{out}"]] if s == "wayland" else \
                 [["maim", "{out}"], ["scrot", "-o", "{out}"], ["import", "-window", "root", "{out}"], ["gnome-screenshot", "-f", "{out}"], ["spectacle", "-b", "-n", "-o", "{out}"], ["grim", "{out}"]]
@@ -293,14 +315,22 @@ class LinuxDriver(Driver):
                 return cmd
         return []
 
+    def _shot_tool(self) -> List[str]:
+        return [] if self._native("shot") else self._shot_tool_external()
+
     def _cap_shot(self) -> Dict[str, Any]:
         if self._session() == "none":
             return {"ok": False, "hint": "Sem ambiente gráfico (DISPLAY/WAYLAND_DISPLAY) nesta sessão."}
-        if self._shot_tool():
-            return {"ok": True, "how": self._shot_tool()[0]}
+        if self._native("shot"):
+            return {"ok": True, "how": "X11 nativo"}
+        if self._shot_tool_external():
+            return {"ok": True, "how": self._shot_tool_external()[0]}
         return {"ok": False, "hint": "Instale uma ferramenta de captura: scrot, maim, gnome-screenshot ou grim (Wayland)."}
 
     def _keys_tool(self) -> str:
+        return "x11" if self._native("keys") else self._keys_tool_external()
+
+    def _keys_tool_external(self) -> str:
         s = self._session()
         if s == "none":
             return ""
@@ -315,16 +345,16 @@ class LinuxDriver(Driver):
     def _cap_keys(self) -> Dict[str, Any]:
         t = self._keys_tool()
         if t:
-            return {"ok": True, "how": t}
+            return {"ok": True, "how": "X11 nativo" if t == "x11" else t}
         if self._session() == "none":
             return {"ok": False, "hint": "Sem ambiente gráfico nesta sessão."}
-        return {"ok": False, "hint": "Instale o xdotool (X11) ou o ydotool/wtype (Wayland) para o ASTA digitar e apertar teclas."}
+        return {"ok": False, "hint": "Sem X11 nesta sessão: instale o ydotool ou o wtype (Wayland) para o ASTA digitar e apertar teclas."}
 
     def _cap_mouse(self) -> Dict[str, Any]:
         t = self._keys_tool()
-        if t in ("xdotool", "ydotool"):
-            return {"ok": True, "how": t}
-        return {"ok": False, "hint": "Instale o xdotool (X11) ou o ydotool (Wayland) para o ASTA mexer o mouse." if self._session() != "none" else "Sem ambiente gráfico nesta sessão."}
+        if t in ("x11", "xdotool", "ydotool"):
+            return {"ok": True, "how": "X11 nativo" if t == "x11" else t}
+        return {"ok": False, "hint": "Sem X11 nesta sessão: instale o ydotool (Wayland) para o ASTA mexer o mouse." if self._session() != "none" else "Sem ambiente gráfico nesta sessão."}
 
     def open_target(self, target: str) -> None:
         for cmd in (["xdg-open"], ["gio", "open"], ["kde-open"], ["gnome-open"]):
@@ -388,6 +418,12 @@ class LinuxDriver(Driver):
 
     # ----- tela / teclado / mouse
     def screenshot(self, dest: Path) -> None:
+        if self._native("shot"):
+            try:
+                x11.screenshot(dest)
+                return
+            except x11.X11Error as exc:
+                raise DriverError(f"A captura de tela falhou: {exc}") from None
         cmd = self._shot_tool()
         if not cmd or self._session() == "none":
             raise DriverError("Captura de tela indisponível. " + self._cap_shot().get("hint", ""))
@@ -396,6 +432,11 @@ class LinuxDriver(Driver):
             raise DriverError("A captura de tela falhou: " + (r.stderr.decode("utf-8", "ignore").strip()[:200] or cmd[0]))
 
     def screen_size(self) -> Optional[tuple]:
+        if self._native("keys"):
+            try:
+                return x11.screen_size()
+            except x11.X11Error:
+                return None
         if shutil.which("xdotool") and os.environ.get("DISPLAY"):
             try:
                 m = re.search(r"WIDTH=(\d+)\s+HEIGHT=(\d+)", _run(["xdotool", "getdisplaygeometry", "--shell"], 5).stdout.decode())
@@ -405,8 +446,16 @@ class LinuxDriver(Driver):
                 pass
         return None
 
+    def _x11(self, fn, *a) -> None:
+        try:
+            fn(*a)
+        except x11.X11Error as exc:
+            raise DriverError(f"O servidor X recusou: {exc}") from None
+
     def type_text(self, text: str) -> None:
         t = self._keys_tool()
+        if t == "x11":
+            return self._x11(x11.type_text, text)
         if t == "xdotool":
             r = _run(["xdotool", "type", "--clearmodifiers", "--delay", "12", "--", text], 30 + len(text) * 0.05)
         elif t == "wtype":
@@ -422,6 +471,8 @@ class LinuxDriver(Driver):
         k = parse_combo(combo)
         t = self._keys_tool()
         chord = "+".join(k["mods"] + [k["key"]])
+        if t == "x11":
+            return self._x11(x11.press_keys, k["mods"], k["key"])
         if t == "xdotool":
             r = _run(["xdotool", "key", "--clearmodifiers", chord], 10)
         elif t == "wtype":
@@ -442,6 +493,8 @@ class LinuxDriver(Driver):
     def click(self, x: int, y: int, button: str = "left", double: bool = False) -> None:
         b = {"left": "1", "middle": "2", "right": "3"}.get(button, "1")
         t = self._keys_tool()
+        if t == "x11":
+            return self._x11(x11.click, int(x), int(y), int(b), double)
         if t == "xdotool":
             r = _run(["xdotool", "mousemove", str(int(x)), str(int(y)), "click", "--repeat", "2" if double else "1", b], 10)
         elif t == "ydotool":
@@ -454,6 +507,8 @@ class LinuxDriver(Driver):
             raise DriverError("Não consegui clicar: " + r.stderr.decode("utf-8", "ignore").strip()[:200])
 
     def scroll(self, dy: int) -> None:
+        if self._keys_tool() == "x11":
+            return self._x11(x11.scroll, int(dy))
         if self._keys_tool() == "xdotool":
             n = max(1, min(30, abs(int(dy))))
             _run(["xdotool", "click", "--repeat", str(n), "5" if dy > 0 else "4"], 10)

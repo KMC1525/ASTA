@@ -1751,4 +1751,6 @@ export default {
   "Janelas de administrador não recebem teclas de um programa comum.": "Administrator windows do not receive keys from a regular program.",
   "O Android deste aparelho não deixa o ASTA abrir outros apps. Conecte o app a um ASTA de computador para usar o Computer Use lá.": "This Android device does not let ASTA open other apps. Connect the app to a computer's ASTA to use Computer Use there.",
   "O Android não deixa um app listar ou controlar os outros. Para controlar um computador, conecte o app ao ASTA dele (Configuração → Celular e tablet).": "Android does not let an app list or control the others. To control a computer, connect the app to its ASTA (Configuration → Mobile and tablet).",
+  "Sem X11 nesta sessão: instale o ydotool ou o wtype (Wayland) para o ASTA digitar e apertar teclas.": "No X11 in this session: install ydotool or wtype (Wayland) so ASTA can type and press keys.",
+  "Sem X11 nesta sessão: instale o ydotool (Wayland) para o ASTA mexer o mouse.": "No X11 in this session: install ydotool (Wayland) so ASTA can move the mouse.",
 };
