@@ -5,6 +5,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.1] — 2026-11-08
+
+### Alterado — nós de mídia do Canvas mais simples: Provedor, Modelo e Resolução
+- O bloco **«Avançado»** dos nós **Imagem, Vídeo, Som, Voz e Transcrever** (prompt negativo, semente, parâmetros extras em JSON e «ignorar estilos globais») foi **substituído por Modelo + Resolução**: o nó mostra *Provedor*, *Modelo* e, em Imagem e Vídeo, *Resolução*. Em Imagem a antiga lista de tamanhos virou a **Resolução**, agora com a proporção (`1280×720 (16:9)`); em Vídeo há a nova **Resolução** (*Automática*, 480p, 720p ou 1080p, lado maior).
+- **Resolução do vídeo** (`resolution`, `long_side` nos provedores): vale para o **Demo e os modelos locais** (Hugging Face local e GGUF), que usam o tamanho pedido; os provedores de nuvem escolhem os próprios tamanhos e a ignoram. Mudar a resolução deixa o nó desatualizado (muda o hash).
+- **Nada se perde:** o que já estava salvo nos canvases (prompt negativo, semente, `extra`, `ignore_global_styles`) **continua valendo no motor**; só não aparece mais na tela. Os canvases antigos abrem sem mudança.
+- «Gerar de novo» já sorteia outra semente, então a semente na tela deixou de ser necessária.
+- README: as opções de carga dos GGUF (VAE etc.) agora se definem no `extra` do nó em `canvas.json` ou pela API; o texto foi atualizado.
+- Versão do app Android e das telas atualizada para 0.17.1 (o núcleo Rust não mudou).
+- Testes: `SimpleNodeTests` e `SimpleNodeApi` em `tests/test_v017_canvas.py` e o teste de navegador `canvas_simple_nodes_ui.js`.
+
+### Observações (limites honestos)
+- **Quem usava prompt negativo, semente fixa ou JSON extra pela tela perdeu esse acesso**: agora só dá pela edição do `canvas.json` ou pela API (não há mais campo para isso). Se fizer falta, dá para devolver como opção em Configuração → Mídia.
+- A resolução do vídeo **não muda** o tamanho nos provedores de nuvem (OpenAI, Google, Replicate, Hugging Face Inference…).
+- Rodaram `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, `test_all_providers`, o JS de i18n e os testes de navegador do Canvas; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.0] — 2026-11-08
 
 ### Adicionado — Studio e Canvas para produção criativa de verdade

@@ -373,6 +373,8 @@ class BrowserTests(unittest.TestCase):
             self.skipTest("ffmpeg não instalado")
         self.run_script("canvas_hub_ui.js")
 
+    def test_37_canvas_media_nodes_show_only_model_and_resolution(self):
+        self.run_script("canvas_simple_nodes_ui.js")
 
 if __name__ == "__main__":
     unittest.main()

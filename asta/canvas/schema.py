@@ -116,6 +116,14 @@ def normalize_timeline(raw: Any) -> Dict[str, Any]:
     return {"tracks": tracks, "clips": clips, "duration": round(max([c["start"] + c["dur"] for c in clips] + [0]), 3)}
 
 
+VIDEO_RESOLUTIONS = (0, 480, 720, 1080)   # lado maior em px; 0 = automática (o que o modelo/provedor escolher)
+
+
+def _resolution(v: Any) -> int:
+    n = int(num(v, 0, 0, 4096))
+    return n if n in VIDEO_RESOLUTIONS else 0
+
+
 def normalize_params(ntype: str, p: Any) -> Dict[str, Any]:
     p = p if isinstance(p, dict) else {}
     prov = text(p.get("provider"), "", 40)
@@ -131,7 +139,7 @@ def normalize_params(ntype: str, p: Any) -> Dict[str, Any]:
                 "count": int(num(p.get("count"), 1, 1, 4)), "seed": int(num(p.get("seed"), 0, 0, 2 ** 31)), "negative": text(p.get("negative"), "", 1000), "provider": prov, "model": model,
                 "extra": _json_dict(p.get("extra")), "ignore_global_styles": bool(p.get("ignore_global_styles"))}
     if ntype == "video":
-        return {"prompt": text(p.get("prompt"), "", 6000), "duration": int(num(p.get("duration"), 5, 1, 30)), "aspect": p.get("aspect") if p.get("aspect") in ASPECTS else "16:9", "provider": prov, "model": model,
+        return {"prompt": text(p.get("prompt"), "", 6000), "duration": int(num(p.get("duration"), 5, 1, 30)), "aspect": p.get("aspect") if p.get("aspect") in ASPECTS else "16:9", "resolution": _resolution(p.get("resolution")), "provider": prov, "model": model,
                 "extra": _json_dict(p.get("extra")), "ignore_global_styles": bool(p.get("ignore_global_styles"))}
     if ntype == "sound":
         return {"prompt": text(p.get("prompt"), "", 2000), "kind": "music" if p.get("kind") == "music" else "sfx", "duration": int(num(p.get("duration"), 5, 1, 120)), "provider": prov, "model": model,

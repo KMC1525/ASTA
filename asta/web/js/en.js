@@ -2286,4 +2286,5 @@ export default {
   "Centro": "Center",
   "Base": "Bottom",
   "Efeito": "Effect",
+  "Automática": "Automatic",
 };

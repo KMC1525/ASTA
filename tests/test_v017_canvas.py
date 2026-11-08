@@ -223,5 +223,52 @@ class HubApi(ServerCase):
         self.assertEqual(self.c.json("POST", "/api/media/hub/use", {"cap": "sound", "provider": "local_hf", "model": "sem-barra"})[0], 400)
 
 
+class SimpleNodeTests(Base):
+    """v0.17.1 — os nós de mídia mostram só Provedor, Modelo e Resolução; o que já estava salvo continua valendo."""
+
+    def test_video_resolution_is_normalized_and_old_canvases_open_unchanged(self):
+        from asta.canvas.schema import normalize_params
+
+        self.assertEqual(normalize_params("video", {})["resolution"], 0)
+        self.assertEqual([normalize_params("video", {"resolution": r})["resolution"] for r in (480, "720", 1080, 999, "x", None, -5)], [480, 720, 1080, 0, 0, 0, 0])
+        old = normalize_params("image", {"negative": "borrado", "seed": 7, "extra": {"quality": "high"}, "ignore_global_styles": True, "size": "1280x720"})
+        self.assertEqual((old["negative"], old["seed"], old["extra"], old["ignore_global_styles"], old["size"]), ("borrado", 7, {"quality": "high"}, True, "1280x720"))
+
+    @unittest.skipUnless(FF, "ffmpeg não instalado")
+    def test_video_resolution_reaches_the_provider_and_changes_the_demo_frame_size(self):
+        from asta.studio import tools as T
+
+        sizes = {}
+        for res in (0, 480, 720):
+            c = self.make([node("text", nid="t", text="uma praia"), node("video", nid="v", duration=1, aspect="16:9", resolution=res)], [edge("t", "v", "prompt")], name=f"r{res}")
+            self.run_engine(c["id"])
+            cv = self.cs.get(c["id"])
+            a = next(x for x in cv["assets"] if x["kind"] == "video")
+            info = T.probe(self.cs.asset_path(c["id"], a["file"]))
+            sizes[res] = max(info["w"], info["h"])
+        self.assertEqual((sizes[0], sizes[480], sizes[720]), (640, 480, 720))        # automática = 640 no Demo
+        # mudar a resolução deixa o nó desatualizado (muda o hash)
+        c = self.make([node("text", nid="t", text="x"), node("video", nid="v", duration=1, resolution=480)], [edge("t", "v", "prompt")])
+        self.run_engine(c["id"])
+        self.cs.patch_node_params(c["id"], "v", {"resolution": 720})
+        self.assertIn("v", CanvasEngine(self.store, c["id"]).stale_ids(self.cs.get(c["id"])))
+
+    def test_every_provider_accepts_long_side(self):
+        import inspect
+
+        from asta.canvas import media as M
+
+        for cls in (M.MediaProvider, M.DemoMedia, M.OpenAIMedia, M.GGUFMedia):
+            self.assertIn("long_side", inspect.signature(cls.video).parameters, cls.__name__)
+        for name in ("GoogleMedia", "ReplicateMedia", "HFInferenceMedia", "LocalHFMedia"):
+            if hasattr(M, name):
+                self.assertIn("long_side", inspect.signature(getattr(M, name).video).parameters, name)
+
+
+class SimpleNodeApi(ServerCase):
+    def test_meta_lists_the_video_resolutions(self):
+        self.assertEqual(self.c.json("GET", "/api/canvas-templates")[1]["resolutions"], [0, 480, 720, 1080])
+
+
 if __name__ == "__main__":
     unittest.main()

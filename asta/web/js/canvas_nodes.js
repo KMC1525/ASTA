@@ -1,6 +1,6 @@
 // Canvas: tipos de nó na interface (paleta, controles de cada nó e área de resultado) e regras de compatibilidade das portas.
 import { t } from './i18n.js';
-import { accordion, checkbox, h, icon, seg, select } from './ui.js';
+import { checkbox, h, icon, seg, select } from './ui.js';
 
 export const compatible = (out, accepts) => accepts.includes(out)
   || (out === 'media' && accepts.some((a) => ['image', 'video', 'audio', 'media'].includes(a)))
@@ -68,7 +68,11 @@ function txt(c, n, key, ph, type) {
 }
 const lab = (text, ctl) => h('div', null, h('label', { class: 'f' }, text), ctl);
 
-function providerBlock(c, n, cap, extraFields) {
+// Provedor + Modelo (+ Resolução, quando o tipo tem). v0.17.1: o antigo bloco «Avançado» (prompt negativo, semente, parâmetros extras em JSON, ignorar estilos) saiu da tela;
+// o que já estava salvo nos canvases continua valendo no motor.
+const ratio = (w, h) => { const g = (a, b) => (b ? g(b, a % b) : a), d = g(w, h); return (w / d) + ':' + (h / d); };
+export const sizeLabel = (s) => { const [w, h] = s.split('x').map(Number); return `${w}×${h} (${ratio(w, h)})`; };
+function providerBlock(c, n, cap, resolutionField) {
   const provs = c.prov.providers.filter((p) => p.caps.includes(cap));
   const defId = c.prov.active[cap] || 'demo';
   const def = c.prov.providers.find((p) => p.id === defId);
@@ -82,19 +86,7 @@ function providerBlock(c, n, cap, extraFields) {
   const warn = eff && eff.needs_key && !eff.has_key
     ? h('div', { class: 'warnk' }, icon('warn', 13), t('Sem chave de API:'), h('a', { href: '#/config', onclick: () => c.openConfig() }, t('configurar')))
     : (eff && eff.id === 'demo' ? h('div', { class: 'dim small' }, t('Demo: resultado simples, sem IA real.')) : null);
-  let extra = {};
-  const jsonEl = h('textarea', { class: 'nodrag mono', rows: 2, placeholder: '{"quality": "high"}' });
-  jsonEl.value = Object.keys(n.params.extra || {}).length ? JSON.stringify(n.params.extra) : '';
-  jsonEl.addEventListener('keydown', cut);
-  jsonEl.addEventListener('input', () => { try { extra = jsonEl.value.trim() ? JSON.parse(jsonEl.value) : {}; jsonEl.style.borderColor = ''; c.change(n, 'extra', extra && typeof extra === 'object' && !Array.isArray(extra) ? extra : {}); } catch (e) { jsonEl.style.borderColor = 'var(--err)'; } });
-  const accKey = n.id + ':' + cap;
-  const adv = accordion(t('Avançado'), h('div', { class: 'col', style: { gap: '8px', display: 'flex', flexDirection: 'column' } },
-    lab(t('Modelo'), model), dl,
-    ...(extraFields || []),
-    n.params.extra !== undefined ? lab(t('Parâmetros extras (JSON)'), jsonEl) : null,
-    n.params.ignore_global_styles !== undefined ? checkbox(t('Ignorar estilos globais'), n.params.ignore_global_styles, (v) => c.change(n, 'ignore_global_styles', v, true)) : null), c.accOpen.has(accKey));
-  adv.firstChild.addEventListener('click', () => { if (adv.classList.contains('open')) c.accOpen.add(accKey); else c.accOpen.delete(accKey); });  // reabre depois de redesenhar o nó
-  return [lab(t('Provedor'), sel), warn, adv];
+  return [lab(t('Provedor'), sel), warn, lab(t('Modelo'), model), dl, resolutionField || null];
 }
 
 function fileThumbs(c, n) {
@@ -120,13 +112,12 @@ const BODY = {
   image: (c, n) => [
     seg([['generate', t('Gerar')], ['edit', t('Editar')]], n.params.mode, (v) => c.change(n, 'mode', v, true)),
     ta(c, n, 'prompt', n.params.mode === 'edit' ? t('O que mudar na imagem ligada em “Referências”?') : t('Descreva a imagem (ou ligue um nó de texto)…'), 3),
-    h('div', { class: 'r2' }, lab(t('Tamanho'), select(c.meta.sizes.map((s) => [s, s.replace('x', '×')]), n.params.size, (v) => c.change(n, 'size', v))),
-      lab(t('Quantidade'), select([1, 2, 3, 4].map((i) => [String(i), String(i)]), String(n.params.count), (v) => c.change(n, 'count', Number(v))))),
-    ...providerBlock(c, n, 'image', [lab(t('Prompt negativo'), txt(c, n, 'negative', t('o que evitar'))), lab(t('Semente (0 = aleatória)'), txt(c, n, 'seed', '0', 'number'))])],
+    lab(t('Quantidade'), select([1, 2, 3, 4].map((i) => [String(i), String(i)]), String(n.params.count), (v) => c.change(n, 'count', Number(v)))),
+    ...providerBlock(c, n, 'image', lab(t('Resolução'), select(c.meta.sizes.map((s) => [s, sizeLabel(s)]), n.params.size, (v) => c.change(n, 'size', v))))],
   video: (c, n) => [
     ta(c, n, 'prompt', t('Descreva o vídeo (ou ligue um texto e/ou uma imagem inicial)…'), 3),
     h('div', { class: 'r2' }, lab(t('Duração (s)'), txt(c, n, 'duration', '5', 'number')), lab(t('Proporção'), select(c.meta.aspects.map((a) => [a, a]), n.params.aspect, (v) => c.change(n, 'aspect', v)))),
-    ...providerBlock(c, n, 'video')],
+    ...providerBlock(c, n, 'video', lab(t('Resolução'), select((c.meta.resolutions || [0]).map((r) => [String(r), r ? r + 'p' : t('Automática')]), String(n.params.resolution || 0), (v) => c.change(n, 'resolution', Number(v)))))],
   sound: (c, n) => [
     seg([['sfx', t('Efeito')], ['music', t('Música')]], n.params.kind, (v) => c.change(n, 'kind', v, true)),
     ta(c, n, 'prompt', n.params.kind === 'music' ? t('Estilo da música: calma, piano, noturna…') : t('Ex.: chuva forte com trovões'), 2),
