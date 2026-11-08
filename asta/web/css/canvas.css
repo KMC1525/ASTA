@@ -158,3 +158,20 @@
 .tl-clip .bgimg{position:absolute;inset:0;background-size:auto 100%;background-repeat:repeat-x;opacity:.55}
 .tl-play{position:absolute;top:0;bottom:0;width:0;border-left:2px solid #fff;z-index:5;pointer-events:none}
 .tl-play::before{content:"";position:absolute;top:0;left:-7px;border:6px solid transparent;border-top-color:#fff}
+
+/* v0.17: barra de pesquisa de modelos (Hugging Face) e «Enviar ao Studio» */
+.cv-hub{position:relative;display:flex;align-items:center;gap:4px;flex:0 1 460px;min-width:220px}
+.cv-hub select{font-size:12px;padding:4px 6px;max-width:130px}
+.cv-hub input[type=search]{flex:1;min-width:120px;font-size:13px;padding:5px 8px}
+.cv-hub-panel{position:absolute;top:calc(100% + 6px);left:0;width:min(680px,92vw);max-height:72vh;overflow:auto;background:var(--bg1);border:1px solid var(--line2);border-radius:12px;box-shadow:0 12px 40px rgba(0,0,0,.5);z-index:60;padding:6px}
+.cv-hub-panel.hidden{display:none}
+.hub-head{padding:6px 8px}
+.hub-item{border-bottom:1px solid var(--line)}
+.hub-r{display:flex;align-items:center;gap:8px;padding:8px;cursor:pointer;border-radius:8px}.hub-r:hover{background:var(--bg2)}.hub-r.on{background:var(--bg3)}.hub-r.on svg{transform:rotate(90deg)}
+.hub-r .nm{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px}
+.hub-detail{padding:4px 8px 10px 26px}.hub-detail.hidden{display:none}
+.hub-q{display:flex;align-items:center;gap:10px;padding:7px 8px;border:1px solid var(--line);border-radius:10px;margin-bottom:6px;background:var(--bg2)}
+.hub-q .grow{flex:1;min-width:0}
+.hub-prog{width:100%}
+.chip.warn{color:#f2c46d;border-color:#5b4a22}
+@media (max-width:900px){.cv-hub{flex-basis:100%;order:9}}

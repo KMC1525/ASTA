@@ -25,6 +25,13 @@ FONT_CANDIDATES = [
 ]
 
 
+def _preset(w: int, h: int, fps: int) -> str:
+    """Predefinição do x264 pela carga (pixels por segundo): vídeos pequenos usam `veryfast`; 2K/4K e 60/120 fps usam `superfast`/`ultrafast`, que gastam bem menos CPU
+    (o arquivo sai um pouco maior, a qualidade visual é a mesma para o CRF escolhido)."""
+    load = w * h * max(1, fps)
+    return "veryfast" if load <= 1920 * 1080 * 30 else ("superfast" if load <= 3840 * 2160 * 30 else "ultrafast")
+
+
 def _even(v: float) -> int:
     return max(2, int(v) // 2 * 2)
 
@@ -76,7 +83,11 @@ GRADES = {  # filtros de cor dos clipes (Studio): trechos de filtro do ffmpeg ap
     "bw": "hue=s=0", "warm": "colorbalance=rs=.12:gs=.02:bs=-.12:rm=.1:bm=-.1", "cool": "colorbalance=rs=-.1:bs=.15:bm=.06",
     "vivid": "eq=saturation=1.45:contrast=1.08", "vhs": "eq=saturation=1.3:contrast=0.95,noise=alls=12:allf=t,gblur=sigma=0.6",
     "cinematic": "eq=contrast=1.12:saturation=0.9,colorbalance=rs=.05:bs=.08:rh=.04:bh=-.04", "phonk": "eq=contrast=1.3:saturation=0.45:brightness=-0.03,noise=alls=10:allf=t,vignette=PI/4",
+    "sepia": "colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131:0", "negative": "negate", "blur": "gblur=sigma=5", "sharpen": "unsharp=5:5:1.4:5:5:0.0",
+    "glow": "eq=brightness=0.04:saturation=1.2,gblur=sigma=1.6", "grain": "noise=alls=20:allf=t", "vignette": "vignette=PI/4", "mirror": "hflip", "noir": "hue=s=0,eq=contrast=1.4:brightness=-0.05",
+    "teal_orange": "colorbalance=rs=-.12:bs=.16:rm=-.05:bm=.06:rh=.16:bh=-.12",
 }
+VISUAL = ("video", "image")   # trilhas que desenham imagem; «fx» filtra o que está abaixo; «text» escreve
 
 
 def _tempo(speed: float) -> str:
@@ -125,12 +136,16 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
             if c["text"].strip() and not t["hidden"]:
                 items.append((t, c, None))
             continue
+        if t["kind"] == "fx":   # camada de efeitos: aplica o filtro do clipe a tudo que está abaixo dela, enquanto o clipe dura
+            if not t["hidden"] and GRADES.get(c.get("filter") or ""):
+                items.append((t, c, {"kind": "fx"}))
+            continue
         r = resolve(c)
         if not r:
             warnings.append(f"Um clipe da trilha {t['name']} aponta para um arquivo que não existe mais — ignorado.")
             continue
         items.append((t, c, r))
-    total = max([c["start"] + c["dur"] for _, c, _ in items] + [0.0])
+    total = max([c["start"] + c["dur"] for _, c, r in items if not (r and r.get("kind") == "fx")] + [0.0])   # efeito além do último clipe não alonga o vídeo
     if total <= 0:
         raise ProviderError("A linha do tempo está vazia — adicione clipes ao Editor (ou ligue nós a ele e use \"Montar automaticamente\").")
     total = round(min(total, 6 * 3600.0), 3)
@@ -154,16 +169,29 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                         texts.append((t, c))
                     continue
                 dur, start = c["dur"], c["start"]
+                if r["kind"] == "fx":
+                    if video_on:
+                        fx = len([f for f in filters if "split=2" in f])
+                        op = float(c.get("opacity", 1.0))
+                        grade = GRADES[c["filter"]] + (",format=rgba" if op < 0.999 else "")
+                        if op < 0.999:
+                            grade += f",colorchannelmixer=aa={op}"
+                        filters.append(f"{label}split=2[fa{fx}][fb{fx}]")
+                        filters.append(f"[fb{fx}]{grade}[fg{fx}]")
+                        nxt = f"[ofx{fx}]"
+                        filters.append(f"[fa{fx}][fg{fx}]overlay=enable='between(t,{start:.3f},{start + dur:.3f})':eof_action=pass{nxt}")
+                        label = nxt
+                    continue
                 speed = float(c.get("speed") or 1.0) if r["kind"] in ("video", "audio") else 1.0
                 can_sound = audio_on and not t["muted"] and not c.get("mute") and c["volume"] > 0
-                if r["kind"] == "video" and t["kind"] == "video" and not video_on:  # só o áudio: o vídeo nem entra no grafo
+                if r["kind"] == "video" and t["kind"] in VISUAL and not video_on:  # só o áudio: o vídeo nem entra no grafo
                     if can_sound and not t["hidden"] and has_audio(r["path"]):
                         k = n_in
                         n_in += 1
                         args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur * speed:.3f}", "-i", str(r["path"])]
                         audio_labels.append(_audio_chain(filters, k, c, dur, start))
                     continue
-                if r["kind"] in ("image", "video") and t["kind"] == "video" and not t["hidden"]:
+                if r["kind"] in ("image", "video") and t["kind"] in VISUAL and not t["hidden"]:
                     k = n_in
                     n_in += 1
                     if r["kind"] == "image":
@@ -206,7 +234,7 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                     n_in += 1
                     args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur * speed:.3f}", "-i", str(r["path"])]
                     audio_labels.append(_audio_chain(filters, k, c, dur, start))
-                elif r["kind"] == "audio" and t["kind"] == "video" and can_sound:  # áudio solto numa trilha de vídeo: toca normalmente
+                elif r["kind"] == "audio" and t["kind"] in VISUAL and can_sound:  # áudio solto numa trilha de vídeo: toca normalmente
                     k = n_in
                     n_in += 1
                     args += ["-ss", f"{c['in']:.3f}", "-t", f"{dur:.3f}", "-i", str(r["path"])]
@@ -227,7 +255,7 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
                 filters.append(f"{label}drawtext={':'.join(opts)}{nxt}")
                 label = nxt
             maps = ["-map", label] if video_on else []
-            codec = ["-c:v", "libx264", "-preset", "veryfast", "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(fps)] if video_on else ["-vn"]
+            codec = ["-c:v", "libx264", "-preset", _preset(W, H, fps), "-crf", "22", "-pix_fmt", "yuv420p", "-r", str(fps)] if video_on else ["-vn"]
             if audio_labels:
                 if len(audio_labels) == 1:
                     filters.append(f"{audio_labels[0]}apad=whole_dur={total:.3f}[aout]")

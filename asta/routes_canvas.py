@@ -38,6 +38,7 @@ class CanvasRoutes:
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/run", self.r_run)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/nodes/(?P<nid>[\w-]+)/autofill", self.r_autofill)
         a("GET", r"/api/canvases/(?P<cid>[\w-]+)/download", self.r_download)
+        a("POST", r"/api/canvases/(?P<cid>[\w-]+)/to-studio", self.r_to_studio)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/assets", self.r_asset_upload)
         a("GET", r"/api/canvases/(?P<cid>[\w-]+)/assets/(?P<fname>[\w][\w.-]*)", self.r_asset_get)
         a("DELETE", r"/api/canvases/(?P<cid>[\w-]+)/assets/(?P<aid>[\w-]+)", self.r_asset_delete)
@@ -45,6 +46,8 @@ class CanvasRoutes:
         a("GET", r"/api/media/providers", self.r_media_providers)
         a("POST", r"/api/media/test", self.r_media_test)
         a("GET", r"/api/media/models", self.r_media_models)
+        a("GET", r"/api/media/hub/search", self.r_hub_search)
+        a("POST", r"/api/media/hub/use", self.r_hub_use)
         a("GET", r"/api/media/local/state", self.r_local_state)
         a("GET", r"/api/media/local/options", self.r_local_options)
         a("GET", r"/api/media/local/quants", self.r_local_quants)
@@ -268,6 +271,87 @@ class CanvasRoutes:
             req.json({"models": build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
+
+    def r_to_studio(self, req, cid: str) -> None:
+        """Leva o fluxo (ou os nós escolhidos) para a timeline de um projeto do Studio — novo (`project_id` vazio) ou existente."""
+        from .canvas.to_studio import export_to_studio
+
+        if not self.cs.get(cid):
+            raise HttpError(404, "Canvas não encontrado")
+        b = req.body_json()
+        b = b if isinstance(b, dict) else {}
+        nodes = [text(n, "", 40) for n in b.get("nodes")][:200] if isinstance(b.get("nodes"), list) else []
+        mode = b.get("mode") if b.get("mode") in ("auto", "editor", "flow") else "auto"
+        running = self.app.jobs.running(f"studio:{text(b.get('project_id'), '', 40)}") if b.get("project_id") else None
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+        try:
+            res = export_to_studio(self.store, cid, text(b.get("project_id"), "", 40), text(b.get("episode_id"), "", 40), text(b.get("name"), "", 100), nodes, mode)
+        except ValueError as exc:
+            raise HttpError(400, str(exc))
+        res["url"] = f"#/studio/{res['project_id']}/timeline"
+        req.json(res, 201)
+
+    # ------------------------------------------------------------------ barra de busca de modelos (Hugging Face) no topo do Canvas
+    HUB_CAPS = ("image", "video", "sound", "voice", "stt", "text")
+    GGUF_CAP_KIND = {"image": "image", "video": "video", "text": "text"}   # só estes têm provedor GGUF no ASTA (sons e vozes usam o formato original)
+
+    def r_hub_search(self, req) -> None:
+        """Busca modelos no Hugging Face por capacidade. `format=gguf` (várias quantizações por arquivo) ou `format=original` (fp32/fp16/bf16 e versões comprimidas da comunidade)."""
+        from . import hf
+
+        q = text(req.query.get("q", [""])[0], "", 120)
+        cap = text(req.query.get("cap", ["image"])[0], "image", 12)
+        fmt = "gguf" if req.query.get("format", ["gguf"])[0] != "original" else "original"
+        if cap not in self.HUB_CAPS:
+            raise HttpError(400, "Escolha o tipo do modelo.")
+        if fmt == "gguf" and cap not in self.GGUF_CAP_KIND:
+            fmt = "original"
+        try:
+            if fmt == "gguf":
+                found = [dict(r, cap=cap, format="gguf") for r in hf.search(q or "gguf", self._hf_token(), kind=self.GGUF_CAP_KIND[cap])]
+            else:
+                found = hf.search_original(q, self._hf_token(), cap)
+        except ProviderError as exc:
+            raise HttpError(502, str(exc))
+        except Exception as exc:  # noqa: BLE001 — sem rede / Hugging Face fora do ar
+            raise HttpError(502, f"Não foi possível pesquisar no Hugging Face: {exc}")
+        req.json({"results": found, "format": fmt, "cap": cap})
+
+    def r_hub_use(self, req) -> None:
+        """Passa a usar um modelo baixado: vira o padrão da capacidade em Configuração → Mídia e, se vier `canvas` + `node`, também o modelo desse nó."""
+        from .canvas.media import MEDIA_PRESETS
+
+        b = req.body_json()
+        b = b if isinstance(b, dict) else {}
+        cap, provider, model = text(b.get("cap"), "", 12), text(b.get("provider"), "", 20), text(b.get("model"), "", 200)
+        if cap not in self.HUB_CAPS or provider not in ("gguf_local", "local_hf") or not model:
+            raise HttpError(400, "Informe o tipo, o provedor (gguf_local ou local_hf) e o modelo.")
+        if provider == "gguf_local":
+            if cap not in ("image", "video") or not (self.store.models_dir / cap / Path(model).name).is_file():
+                raise HttpError(404, "Esse arquivo GGUF não foi baixado ainda (ou não é de imagem/vídeo).")
+            model = Path(model).name
+        elif not REPO_RE.match(model):
+            raise HttpError(400, "Informe o modelo no formato dono/nome.")
+        node_type = {"image": "image", "video": "video", "sound": "sound", "voice": "voice", "stt": "transcribe", "text": "llm"}[cap]
+        if cap == "text":   # modelo de texto GGUF baixado: provedor «Hugging Face GGUF (embutido)» da conversa
+            if not (self.store.models_dir / Path(model).name).is_file():
+                raise HttpError(404, "Esse arquivo GGUF não foi baixado ainda.")
+            self.store.save_settings({"providers": {"local_hf": {"model": Path(model).name}}})
+            pid = "local_hf"
+            label = "Hugging Face GGUF (embutido)"
+        else:
+            self.store.save_settings({"media": {"active": {cap: provider}, "models": {provider: {cap: model}}}})
+            pid, label = provider, MEDIA_PRESETS[provider]["label"]
+        patched = False
+        cid, nid = text(b.get("canvas"), "", 40), text(b.get("node"), "", 40)
+        if cid and nid:
+            cv = self.cs.get(cid)
+            n = next((x for x in (cv or {}).get("nodes", []) if x["id"] == nid), None)
+            if n and n["type"] == node_type:
+                patch = {"provider": pid} if cap == "text" else {"provider": pid, "model": model}
+                patched = self.cs.patch_node_params(cid, nid, patch)
+        req.json({"ok": True, "provider": pid, "label": label, "model": model, "cap": cap, "node_updated": patched})
 
     # ------------------------------------------------------------------ modelos locais do Canvas: a precisão é escolhida antes do download
     def _hf_token(self) -> str:

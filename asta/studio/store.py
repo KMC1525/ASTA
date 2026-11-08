@@ -198,6 +198,12 @@ class StudioStore:
         path = self.media_path(pid, found[0]["file"])
         if path:
             path.unlink(missing_ok=True)
+        d = self._dir(pid)
+        if d and (d / "thumbs").is_dir():   # miniatura e formas de onda guardadas em cache deste arquivo
+            for f in (d / "thumbs").glob(f"{aid}.jpg"):
+                f.unlink(missing_ok=True)
+            for f in (d / "thumbs").glob(f"wave-{aid}-*.json"):
+                f.unlink(missing_ok=True)
         return True
 
     def asset(self, p: Dict[str, Any], aid: str) -> Optional[Dict[str, Any]]:

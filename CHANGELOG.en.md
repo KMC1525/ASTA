@@ -7,6 +7,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.0] — 2026-11-08
+
+### Added — Studio and Canvas for real creative production
+- **Studio · «Tools» on the timeline** (`asta/web/js/views/studio_tools.js`): the windows that already existed — **Media, Monitor, Properties and Audio mixer** — are now tools you **turn on and off** (the *Tools* button; the choice is remembered in the browser), laid out in side panels with tabs, and new ones joined them: **Effects** (18 filters, fades, zoom and *effect layers*), **Sound effects** (20 effects generated inside ASTA, offline: whoosh, riser, impact, glitch, rewind, coin, rain…), **Screen capture** (browser recording, with optional tab sound and microphone, straight onto the timeline), **Captions** (text → timed captions, SRT and WebVTT import/export), **Transcription** (audio/video → text through the transcription provider → captions aligned to the speech; or paste the text and just align it) and a **Media browser** (files from the Canvases, other projects and exports, with search and import by copy). With no windows on top, the timeline takes the whole editor.
+- **Studio · free layers, never mixed** (`schema.add_track`, `TRACK_KINDS`): **video, image, audio, text and effects**. Loose media goes to the first free layer **of the right kind** or creates a new one (no more stacking different kinds on one track); right-click a layer: rename, move up, move down, delete. The **effects layer** applies its filter to everything below it while the clip lasts (in the preview and in the export) and does not stretch the video.
+- **Studio · export:** besides 480p/720p/1080p, now **2K (2560 px) and 4K (3840 px)**; and **24, 30, 60 and 120 fps** (24 stays the default). The x264 preset follows the load (`veryfast` → `superfast` → `ultrafast`) so 2K/4K and 60/120 fps spend less CPU. Default in Configuration → Studio (`export_fps`); the export's name and record carry resolution and fps.
+- **Studio · `Shift`+`A`** selects the whole timeline; **`,` and `.`** shift the selection (1 frame; with `Shift`, 1 s), the inspector has a *Shift all (s)* field, and `Del` deletes everything (`Ctrl+Z` undoes). Locked tracks stay selected but never move or get deleted (fixed: a drag used to move clips of locked tracks too).
+- **Studio · bigger and lighter timeline:** height from `100vh − 250 px` to `100vh − 150 px` (min. 720 px), taller tracks, **waveforms** on audio clips (peaks computed in Rust, cached on the server) and **virtualization**: only clips near the visible area become elements (1500 clips stay smooth).
+- **Studio · better automatic editing** (`asta/studio/analysis.py`, `autoedit.py`): audio is decoded **once** and analysed in the Rust core (volume, silences, loud moments, **real BPM, first-beat phase and the music's *drop***); video becomes tiny gray frames (scene cuts and **motion per stretch**). Changes: **condensation** — with more footage than the target, it picks the best stretches **spread across the whole video**, in the order they happened (it used to take only the start); cuts end in **pauses or scene changes**; action starts clean on a scene change; beat styles use the **measured BPM and phase** of the music (and the *drop* decides where the intro ends); a tiny leftover cut is absorbed; music loops get fades; the reviewer also flags cuts shorter than half a second.
+- **Canvas · Send to Studio** (`asta/canvas/to_studio.py`, `POST /api/canvases/{id}/to-studio`): takes the **Editor's** assembly (layers, times, volumes, texts) — or the flow's final outputs in node order, or only the selected nodes — to the timeline of a **new project** or the **end of an existing one**; files are copied. In the Studio, the **Media browser** also imports files from the Canvases.
+- **Canvas · model search bar** (`canvas_hub.js`, `GET /api/media/hub/search`, `POST /api/media/hub/use`): searches **Hugging Face** for Image, Video, Sound, Voice, Transcription or Text. In **GGUF** it lists **every quantization** of each model (bits, size, quality, whether it fits the RAM, the recommended one) and downloads the chosen one; in the **original** format it offers fp32/fp16/bf16 and the community's smaller versions. **Use** sets the type's default (Configuration → Media) and the selected node's model.
+- **Rust core · interface 4** (`asta/native/src/media.rs`): `asta_audio_levels`, `asta_silence_ranges`, `asta_pick_peaks`, `asta_onset_env`, `asta_tempo`, `asta_frame_activity`, `asta_scene_cuts`, `asta_waveform` and `asta_topo` (run order and levels of a graph). Each has a Python equivalent (same maths, same order) and the tests compare both sides, including random inputs. Libraries of interfaces 1–3 are still accepted (without the new features).
+- New tests: `tests/test_v017_native.py`, `test_v017_studio.py`, `test_v017_canvas.py` and the browser tests `studio_tools_ui.js` and `canvas_hub_ui.js`.
+
+### Changed
+- **Canvas · lighter engine on big flows:** indexes of nodes/files/connections (every lookup used to scan lists), the file is re-read only when someone writes (before: a full read per node, even cached ones), results are also written to memory, and the run order is computed in Rust. A new run of 40 cached nodes makes at most 3 file reads.
+- `tools.loud_moments`, `tools.silences` and `tools.scene_changes` (Studio) now use the new analysis: one audio decode and tiny gray frames, instead of three ffmpeg filters that printed text. Same signature and result format; loud moments come at least `window` seconds apart.
+- `normalize_timeline` accepts the `image` and `fx` layers and several new filters (`sepia`, `negative`, `blur`, `sharpen`, `glow`, `grain`, `vignette`, `mirror`, `noir`, `teal_orange`); the timeline duration ignores effect clips.
+- Android app, screens, core (`Cargo.toml`) and installers version bumped to 0.17.0.
+
+### Fixed
+- Dragging with clips from **locked** tracks selected moved them too.
+- The timeline drew all clips at once: with thousands of clips the interface froze.
+- Deleting a project media file left its cached thumbnail and waveforms on disk.
+- The installer names in the README (`ASTA-0-16-0-…`) did not match what the Release produces (`ASTA-0-17-…`: the label drops the trailing `.0`).
+
+### Notes (honest limits)
+- **Screen capture** and **microphone recording** depend on browser permissions (on `http://localhost` they work in Chrome, Edge and Firefox); they **were not tested in a real browser with a shared screen** in this environment (only the panel and the file upload).
+- **Transcription** uses the transcription provider from Configuration → Media (Demo does not transcribe): caption times are computed from the speech measured in the audio, not given by the provider, so they are a good approximation, not word-level alignment.
+- The model search talks to the **real Hugging Face**; in the tests it was **simulated** (no network). Sound and voice models only run in the original format («local Hugging Face» provider); image and video GGUF run through stable-diffusion.cpp and text GGUF through the chat.
+- Exporting at **4K/120 fps** needs a strong computer and produces large files; it was tested at 2K/60 and 4K/30 of 1 s on Linux.
+- BPM analysis picks the octave closest to ~120 BPM (tracks at 174 BPM come out as 87: the same grid, only on the even beats).
+- The installers (Windows, macOS, Android) are built by CI and **were not run on real devices**; Rust core 4 was compiled and tested on Linux (`cargo test` + parity with Python).
+- The full suite was **not run again**: `test_v017_*`, `test_studio`, `test_v014_studio`, `test_canvas`, `test_canvas_nodes`, `test_i18n`, the i18n JS check and the Studio and Canvas browser tests ran.
+
 ## [0.16.0] — 2026-11-08
 
 ### Added — the **Code** section (vibe coding on long codebases with agent teams)

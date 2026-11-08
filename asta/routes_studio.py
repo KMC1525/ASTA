@@ -11,7 +11,7 @@ from .canvas.media import MIME_EXT, sniff_mime
 from .jobs import HttpError, Job
 from .studio import schema as S
 from .studio.autoedit import AutoEditPipeline, describe_styles
-from .studio.export import AUDIO_FORMATS, QUALITY, export_episode
+from .studio.export import AUDIO_FORMATS, FPS, QUALITY, export_episode
 from .studio.pipeline import StudioPipeline
 from .util import safe_filename, text
 
@@ -46,6 +46,16 @@ class StudioRoutes:
         a("GET", r"/api/studio/projects/(?P<pid>[\w-]+)/media/(?P<fname>[\w][\w.-]*)", self.r_media_get)
         a("DELETE", r"/api/studio/projects/(?P<pid>[\w-]+)/media/(?P<aid>[\w-]+)", self.r_media_delete)
         a("GET", r"/api/studio/projects/(?P<pid>[\w-]+)/thumb/(?P<aid>[\w-]+)", self.r_thumb)
+        # v0.17 — ferramentas da timeline: efeitos sonoros, legendas, transcrição, forma de onda e navegador de mídia
+        a("GET", r"/api/studio/sfx", self.r_sfx_list)
+        a("POST", r"/api/studio/projects/(?P<pid>[\w-]+)/sfx", self.r_sfx_make)
+        a("POST", r"/api/studio/captions/parse", self.r_cap_parse)
+        a("POST", r"/api/studio/captions/align", self.r_cap_align)
+        a("POST", r"/api/studio/captions/srt", self.r_cap_srt)
+        a("POST", r"/api/studio/projects/(?P<pid>[\w-]+)/transcribe", self.r_transcribe)
+        a("GET", r"/api/studio/projects/(?P<pid>[\w-]+)/wave/(?P<aid>[\w-]+)", self.r_wave)
+        a("GET", r"/api/studio/library", self.r_library)
+        a("POST", r"/api/studio/projects/(?P<pid>[\w-]+)/import", self.r_import)
 
     # ------------------------------------------------------------------ util
     def _project(self, pid: str) -> Dict[str, Any]:
@@ -91,6 +101,7 @@ class StudioRoutes:
         d = S.describe()
         d["edit_styles"] = describe_styles()
         d["quality"] = list(QUALITY)
+        d["fps"] = list(FPS)
         d["audio_formats"] = list(AUDIO_FORMATS)
         req.json(d)
 
@@ -226,13 +237,18 @@ class StudioRoutes:
         mode = b.get("mode") if b.get("mode") in S.EXPORT_MODES else "full"
         quality = b.get("quality") if b.get("quality") in QUALITY else "720p"
         fmt = b.get("format") if b.get("format") in AUDIO_FORMATS else "m4a"
+        try:
+            fps = int(b.get("fps") or 24)
+        except (TypeError, ValueError):
+            fps = 24
+        fps = fps if fps in FPS else 24
 
         def work(job: Job) -> None:
             from .canvas.media import Ctl
 
             ctl = Ctl(check=lambda: (_ for _ in ()).throw(ValueError("cancelado")) if job.cancelled else None, note=lambda m: job.emit({"type": "note", "message": m}))
             job.emit({"type": "start", "mode": mode})
-            rec = export_episode(self.store, pid, eid, mode, quality, fmt, 24, ctl)
+            rec = export_episode(self.store, pid, eid, mode, quality, fmt, fps, ctl)
             job.emit({"type": "done", "project_id": pid, "episode_id": eid, "export": rec, "url": f"/api/studio/projects/{pid}/exports/{rec['file']}"})
 
         job = self.app.jobs.start(f"studio-export:{pid}", work)
@@ -307,3 +323,129 @@ class StudioRoutes:
         self._project(pid)
         self._guard(pid)
         req.json({"ok": self.ss.delete_asset(pid, aid)})
+
+    # ------------------------------------------------------------------ v0.17: ferramentas da timeline
+    def r_sfx_list(self, req) -> None:
+        from .studio import sfx
+
+        req.json({"effects": sfx.describe()})
+
+    def r_sfx_make(self, req, pid: str) -> None:
+        """Gera um efeito sonoro e o adiciona aos ativos do projeto (o navegador o coloca na timeline)."""
+        from .studio import sfx
+
+        self._project(pid)
+        b = self._body(req)
+        kind = text(b.get("kind"), "", 20)
+        try:
+            data = sfx.render(kind, float(b.get("duration") or 0), int(b.get("seed") or 0))
+        except (ValueError, TypeError) as exc:
+            raise HttpError(400, str(exc))
+        rec = self.ss.add_asset(pid, data, "wav", "audio", name=sfx.CATALOG[kind][0], mime="audio/wav", source="sfx")
+        if not rec:
+            raise HttpError(400, "Não foi possível salvar o efeito.")
+        req.json(rec, 201)
+
+    def r_cap_parse(self, req) -> None:
+        """Legendas de um arquivo SRT/WebVTT colado ou enviado (texto)."""
+        from .studio import captions
+
+        b = self._body(req)
+        cues = captions.parse(text(b.get("text"), "", 2_000_000))
+        if not cues:
+            raise HttpError(400, "Não encontrei legendas neste texto (formato SRT ou WebVTT).")
+        req.json({"cues": cues})
+
+    def r_cap_align(self, req) -> None:
+        """Quebra um texto em legendas e distribui pelo tempo (`start` → `end`, ou a duração `dur` a partir de `start`)."""
+        from .studio import captions
+
+        b = self._body(req)
+        start = float(b.get("start") or 0)
+        end = float(b.get("end") or (start + float(b.get("dur") or 0)))
+        if end <= start:
+            raise HttpError(400, "Informe o trecho (início e fim) em que o texto será dito.")
+        cues = captions.align(text(b.get("text"), "", 60000), [(0.0, end - start)], start)
+        if not cues:
+            raise HttpError(400, "Escreva o texto das legendas.")
+        req.json({"cues": cues})
+
+    def r_cap_srt(self, req) -> None:
+        """SRT (ou WebVTT) das legendas enviadas: [{start, dur|end, text}]."""
+        from .studio import captions
+
+        b = self._body(req)
+        cues = [c for c in (b.get("cues") if isinstance(b.get("cues"), list) else [])[:5000] if isinstance(c, dict) and ("end" in c or "dur" in c) and "start" in c]
+        try:
+            out = captions.to_srt(cues, vtt=b.get("format") == "vtt")
+        except (KeyError, TypeError, ValueError):
+            raise HttpError(400, "Legendas inválidas.")
+        req.bytes(out.encode("utf-8"), "text/vtt; charset=utf-8" if b.get("format") == "vtt" else "application/x-subrip; charset=utf-8")
+
+    def r_transcribe(self, req, pid: str) -> None:
+        from .canvas.media import Ctl
+        from .studio.transcribe import transcribe_asset
+
+        self._project(pid)
+        b = self._body(req)
+        aid = text(b.get("asset"), "", 60)
+        language, given, offset = text(b.get("language"), "", 12), text(b.get("text"), "", 60000), float(b.get("offset") or 0)
+        key = f"studio-tx:{pid}"
+        running = self.app.jobs.running(key)
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+
+        def work(job: Job) -> None:
+            ctl = Ctl(check=lambda: (_ for _ in ()).throw(ValueError("cancelado")) if job.cancelled else None, note=lambda m: job.emit({"type": "note", "message": m}))
+            job.emit({"type": "start"})
+            res = transcribe_asset(self.store, pid, aid, language, given, offset, ctl)
+            job.emit({"type": "done", **res})
+
+        job = self.app.jobs.start(key, work)
+        req.json({"job_id": job.id})
+
+    def r_wave(self, req, pid: str, aid: str) -> None:
+        """Forma de onda (picos 0–1) de um áudio/vídeo do projeto, guardada em cache; `n` blocos (16 a 4000)."""
+        from . import native
+        from .studio import analysis
+
+        p = self._project(pid)
+        a = self.ss.asset(p, aid)
+        path = self.ss.media_path(pid, a["file"]) if a else None
+        if not a or not path or a["kind"] == "image":
+            raise HttpError(404, "Sem forma de onda")
+        try:
+            n = max(16, min(4000, int(req.query.get("n", ["400"])[0])))
+        except ValueError:
+            n = 400
+        cache = self.ss.folder / pid / "thumbs" / f"wave-{aid}-{n}.json"
+        if cache.is_file():
+            return req.json(json.loads(cache.read_text(encoding="utf-8")))
+        info = analysis.analyze_audio(path, waveform=n)
+        out = {"n": n, "dur": info.get("dur", 0), "peaks": [round(v, 4) for v in info.get("wave", [])]}
+        cache.parent.mkdir(parents=True, exist_ok=True)
+        cache.write_text(json.dumps(out), encoding="utf-8")
+        req.json(out)
+
+    def r_library(self, req) -> None:
+        from .studio import library
+
+        q = lambda k: text(req.query.get(k, [""])[0], "", 120)  # noqa: E731
+        kind, source = q("kind"), q("source")
+        req.json({"items": library.browse(self.store, q("q"), kind if kind in library.KINDS else "", source if source in library.SOURCES else "", q("exclude"))})
+
+    def r_import(self, req, pid: str) -> None:
+        from .studio import library
+
+        self._project(pid)
+        self._guard(pid)
+        b = self._body(req)
+        recs = []
+        for it in (b.get("items") if isinstance(b.get("items"), list) else [b])[:40]:
+            if isinstance(it, dict):
+                r = library.import_item(self.store, pid, text(it.get("source"), "", 12), text(it.get("ref"), "", 200))
+                if r:
+                    recs.append(r)
+        if not recs:
+            raise HttpError(404, "Não encontrei esses arquivos para importar.")
+        req.json({"assets": recs}, 201)

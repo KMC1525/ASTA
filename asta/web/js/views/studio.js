@@ -321,12 +321,13 @@ async function renderProject(root, ctx, meta, sub) {
   function paintExport() {
     const ep = epOf();
     const SD = (state.settings && state.settings.studio) || {};
-    const x = { mode: 'full', quality: SD.export_quality || '720p', format: SD.audio_format || 'm4a' };
+    const x = { mode: 'full', quality: SD.export_quality || '720p', format: SD.audio_format || 'm4a', fps: (meta.fps || [24]).includes(SD.export_fps) ? SD.export_fps : 24 };
     const out = h('div', { class: 'st-exp-out', id: 'st-exp-out' }), listEl = h('div', { class: 'st-exports', id: 'st-exports' });
-    const modeBox = chips(['full', 'video', 'audio'].map((k) => [k, t(EXPORT_LABEL[k][0]), t(EXPORT_LABEL[k][1])]), x.mode, (v) => { x.mode = v; q.classList.toggle('hidden', v === 'audio'); f.classList.toggle('hidden', v !== 'audio'); }, 'modes');
+    const modeBox = chips(['full', 'video', 'audio'].map((k) => [k, t(EXPORT_LABEL[k][0]), t(EXPORT_LABEL[k][1])]), x.mode, (v) => { x.mode = v; q.classList.toggle('hidden', v === 'audio'); fp.classList.toggle('hidden', v === 'audio'); f.classList.toggle('hidden', v !== 'audio'); }, 'modes');
     const q = h('div', null, h('label', { class: 'f' }, t('Qualidade')), select(meta.quality.map((v) => [v, v]), x.quality, (v) => { x.quality = v; }));
+    const fp = h('div', null, h('label', { class: 'f' }, t('Quadros por segundo (fps)')), select((meta.fps || [24]).map((v) => [v, v + ' fps']), x.fps, (v) => { x.fps = parseInt(v, 10); }));
     const f = h('div', { class: 'hidden' }, h('label', { class: 'f' }, t('Formato do áudio')), select(meta.audio_formats.map((v) => [v, v.toUpperCase()]), x.format, (v) => { x.format = v; }));
-    const paintList = () => fill(listEl, ep.exports.length ? [...ep.exports].reverse().map((r) => h('div', { class: 'st-exp' }, h('span', { class: 'chip' }, t(EXPORT_LABEL[r.mode][0])), h('span', null, r.file), h('span', { class: 'muted small' }, fmtDur(r.dur) + ' · ' + (r.size / 1048576).toFixed(1) + ' MB'), h('span', { class: 'grow' }),
+    const paintList = () => fill(listEl, ep.exports.length ? [...ep.exports].reverse().map((r) => h('div', { class: 'st-exp' }, h('span', { class: 'chip' }, t(EXPORT_LABEL[r.mode][0])), h('span', null, r.file), h('span', { class: 'muted small' }, fmtDur(r.dur) + (r.quality ? ' · ' + r.quality : '') + (r.fps ? ' · ' + r.fps + ' fps' : '') + ' · ' + (r.size / 1048576).toFixed(1) + ' MB'), h('span', { class: 'grow' }),
       h('a', { class: 'btn sm', href: `/api/studio/projects/${p.id}/exports/${r.file}`, target: '_blank', rel: 'noopener' }, icon('play', 13), t('Abrir')), h('a', { class: 'btn sm', href: `/api/studio/projects/${p.id}/exports/${r.file}?download=1` }, icon('download', 13), t('Baixar')),
       h('button', { class: 'btn ghost icon sm danger', title: t('Excluir'), onclick: async () => { await api(`/api/studio/projects/${p.id}/exports/${r.file}`, { method: 'DELETE' }); ep.exports = ep.exports.filter((e) => e.file !== r.file); paintList(); } }, icon('trash', 13)))) : [h('div', { class: 'muted small' }, t('Nenhuma exportação ainda.'))]);
     const go1 = h('button', { class: 'btn primary', id: 'st-export', onclick: async () => {
@@ -338,7 +339,7 @@ async function renderProject(root, ctx, meta, sub) {
       } catch (e) { go1.disabled = false; if (e.status === 409) toast(t('Já há uma geração ou exportação em andamento neste projeto.'), 'err'); else toast(e.message, 'err'); }
     } }, icon('download', 14), t('Exportar'));
     fill(body, h('div', { class: 'card st-export' }, h('h3', null, t('Exportar o episódio')), h('p', { class: 'muted small', style: { marginTop: 0 } }, ep.timeline.clips.length ? t('Duração da timeline: {d}', { d: fmtDur(ep.timeline.duration) }) : t('A timeline está vazia.')),
-      h('label', { class: 'f' }, t('O que exportar')), modeBox, h('div', { class: 'st-grid' }, q, f), h('div', { class: 'row', style: { marginTop: '14px' } }, go1), out), h('h3', { class: 'st-h3' }, t('Exportações')), listEl);
+      h('label', { class: 'f' }, t('O que exportar')), modeBox, h('div', { class: 'st-grid' }, q, fp, f), h('p', { class: 'muted small', style: { margin: '8px 0 0' }, id: 'st-exp-hint' }, t('2K e 4K com 60 ou 120 fps pedem um computador forte e geram arquivos grandes; a exportação usa a predefinição mais leve do codificador para gastar menos CPU.')), h('div', { class: 'row', style: { marginTop: '14px' } }, go1), out), h('h3', { class: 'st-h3' }, t('Exportações')), listEl);
     paintList();
   }
 

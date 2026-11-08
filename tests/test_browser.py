@@ -363,6 +363,16 @@ class BrowserTests(unittest.TestCase):
         finally:
             mgr._resolve = None
 
+    def test_35_studio_tools_layers_shift_a_effects_sfx_captions_waveform_and_many_clips(self):
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg não instalado")
+        self.run_script("studio_tools_ui.js")
+
+    def test_36_canvas_model_search_bar_quantizations_download_use_and_send_to_studio(self):
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg não instalado")
+        self.run_script("canvas_hub_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

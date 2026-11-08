@@ -23,7 +23,7 @@ from array import array
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-ABI = 3   # versão da interface desta versão do ASTA; bibliotecas antigas (1 e 2) ainda servem: a 1 só para o áudio, a 2 também para modelos locais — sem os recursos novos (agentes, armazenamento, memória)
+ABI = 4   # versão da interface desta versão do ASTA; bibliotecas antigas (1, 2 e 3) ainda servem: a 1 só para o áudio, a 2 também para modelos locais, a 3 para agentes/armazenamento — sem os recursos novos (análise de mídia e grafos, v0.17)
 SRC = Path(__file__).resolve().parent
 _LIB: Any = None
 _TRIED = False
@@ -117,6 +117,19 @@ def _bind(lib: Any) -> None:
         lib.asta_release_memory.restype = i64
         lib.asta_evict_file.argtypes = [u8p, sz]
         lib.asta_evict_file.restype = i64
+    if lib.asta_abi_version() >= 4:  # v0.17: análise de mídia (áudio, andamento, quadros) e ordem de grafos
+        sz, i64, vp, f64, u32p = ctypes.c_size_t, ctypes.c_int64, ctypes.c_void_p, ctypes.c_double, ctypes.POINTER(ctypes.c_uint32)
+        lib.asta_audio_levels.argtypes = [vp, sz, sz, vp, sz]
+        lib.asta_silence_ranges.argtypes = [vp, sz, f64, f64, f64, vp, sz]
+        lib.asta_pick_peaks.argtypes = [vp, sz, f64, f64, sz, vp]
+        lib.asta_onset_env.argtypes = [vp, sz, vp]
+        lib.asta_tempo.argtypes = [vp, sz, f64, f64, f64, vp]
+        lib.asta_frame_activity.argtypes = [vp, sz, sz, vp]
+        lib.asta_scene_cuts.argtypes = [vp, sz, f64, f64, f64, f64, vp, sz]
+        lib.asta_waveform.argtypes = [vp, sz, sz, vp]
+        lib.asta_topo.argtypes = [sz, vp, vp, sz, vp, vp]
+        for fn in ("audio_levels", "silence_ranges", "pick_peaks", "onset_env", "tempo", "frame_activity", "scene_cuts", "waveform", "topo"):
+            getattr(lib, "asta_" + fn).restype = i64
 
 
 def load(force: bool = False) -> Any:
@@ -134,7 +147,7 @@ def load(force: bool = False) -> Any:
                 continue
             try:
                 lib = ctypes.CDLL(str(path))
-                if lib.asta_abi_version() not in (1, 2, ABI):
+                if lib.asta_abi_version() not in (1, 2, 3, ABI):
                     _REASON = f"{path.name}: versão da interface diferente (recompile com `asta native setup`)"
                     continue
                 _bind(lib)
@@ -165,7 +178,7 @@ def find_tool(name: str) -> Optional[str]:
 def status() -> Dict[str, Any]:
     lib = load()
     return {"active": lib is not None, "reason": _REASON, "cargo": bool(find_tool("cargo")), "rustup": bool(find_tool("rustup")), "path": _REASON if lib is not None else "",
-            "models": lib is not None and hasattr(lib, "asta_plan_llm"), "ops": lib is not None and hasattr(lib, "asta_plan_agents"),
+            "models": lib is not None and hasattr(lib, "asta_plan_llm"), "ops": lib is not None and hasattr(lib, "asta_plan_agents"), "media": lib is not None and hasattr(lib, "asta_audio_levels"),
             "abi": int(lib.asta_abi_version()) if lib is not None else 0, "last": dict(LAST)}
 
 
@@ -1132,3 +1145,258 @@ def evict_file(path: Any) -> int:
         finally:
             os.close(fd)
     return 1
+
+
+# --------------------------------------------------------------------------- v0.17: análise de mídia (Studio) e ordem de grafos (Canvas)
+# Mesmo esquema: Rust (interface 4) quando existe; senão o equivalente em Python, com as mesmas contas na mesma ordem (os testes comparam os dois lados).
+def _lib4() -> Any:
+    lib = load()
+    return lib if lib is not None and hasattr(lib, "asta_audio_levels") else None
+
+
+def _addr(a: "array[Any]") -> int:
+    return a.buffer_info()[0]
+
+
+def audio_levels(pcm: "array[int]", win: int) -> "array[float]":
+    """Nível (dB, RMS) de cada janela de `win` amostras de um PCM de 16 bits mono (`array('h')`). Silêncio = -90 dB; a última janela pode ser parcial."""
+    n = len(pcm)
+    if n == 0 or win <= 0:
+        return array("d")
+    count = (n + win - 1) // win
+    out = zeros(count)
+    lib = _lib4()
+    if lib is not None:
+        if lib.asta_audio_levels(_addr(pcm), n, win, _addr(out), count) == count:
+            return out
+    for k in range(count):
+        chunk = pcm[k * win:(k + 1) * win]
+        ss = 0
+        for v in chunk:
+            ss += v * v
+        rms = math.sqrt(ss / len(chunk)) / 32768.0
+        out[k] = -90.0 if rms <= 0.0 else max(20.0 * math.log10(rms), -90.0)
+    return out
+
+
+def silence_ranges(levels: "array[float]", win_s: float, thresh_db: float = -35.0, min_len: float = 0.6, limit: int = 2000) -> list:
+    """Trechos de silêncio [(início, fim)] em segundos: janelas abaixo de `thresh_db` somando ao menos `min_len`."""
+    n = len(levels)
+    if n == 0:
+        return []
+    lib = _lib4()
+    if lib is not None:
+        out = zeros(limit * 2)
+        k = lib.asta_silence_ranges(_addr(levels), n, win_s, thresh_db, min_len, _addr(out), limit)
+        if k >= 0:
+            return [(out[i * 2], out[i * 2 + 1]) for i in range(min(k, limit))]
+    pairs: list = []
+    start = None
+
+    def push(a: int, b: int) -> None:
+        t0, t1 = a * win_s, b * win_s
+        if t1 - t0 >= min_len - 1e-9:
+            pairs.append((t0, t1))
+
+    for i, v in enumerate(levels):
+        if v < thresh_db:
+            if start is None:
+                start = i
+        elif start is not None:
+            push(start, i)
+            start = None
+    if start is not None:
+        push(start, n)
+    return pairs[:limit]
+
+
+def pick_peaks(vals: "array[float]", win_s: float, min_gap: float, limit: int) -> list:
+    """Os `limit` pontos mais altos da curva, com `min_gap` segundos de distância mínima: [(instante do centro da janela, valor)], do maior para o menor."""
+    n = len(vals)
+    if n == 0 or limit <= 0:
+        return []
+    lib = _lib4()
+    if lib is not None:
+        out = zeros(limit * 2)
+        k = lib.asta_pick_peaks(_addr(vals), n, win_s, min_gap, limit, _addr(out))
+        if k >= 0:
+            return [(out[i * 2], out[i * 2 + 1]) for i in range(k)]
+    order = sorted(range(n), key=lambda i: (-vals[i], i))
+    taken: list = []
+    res: list = []
+    for i in order:
+        if len(res) >= limit:
+            break
+        t = (i + 0.5) * win_s
+        if all(abs(t - u) >= min_gap - 1e-9 for u in taken):
+            taken.append(t)
+            res.append((t, vals[i]))
+    return res
+
+
+def onset_env(levels: "array[float]") -> "array[float]":
+    """Subida positiva do nível (dB) de uma janela para a seguinte — onde começam as batidas e notas."""
+    n = len(levels)
+    out = zeros(n)
+    if n == 0:
+        return out
+    lib = _lib4()
+    if lib is not None and lib.asta_onset_env(_addr(levels), n, _addr(out)) == n:
+        return out
+    for i in range(1, n):
+        out[i] = max(levels[i] - levels[i - 1], 0.0)
+    return out
+
+
+def tempo(env: "array[float]", hop_s: float, min_bpm: float = 70.0, max_bpm: float = 200.0) -> Optional[Dict[str, float]]:
+    """Andamento do envelope de início de notas: {"bpm", "phase" (s até a 1ª batida), "confidence"} ou None se o sinal é curto ou sem pulso."""
+    n = len(env)
+    if n == 0:
+        return None
+    lib = _lib4()
+    if lib is not None:
+        out = zeros(3)
+        r = lib.asta_tempo(_addr(env), n, hop_s, min_bpm, max_bpm, _addr(out))
+        if r >= 0:
+            return {"bpm": out[0], "phase": out[1], "confidence": out[2]} if r == 1 else None
+    lag_min = max(int(math.floor(60.0 / max_bpm / hop_s)), 1)
+    lag_max = int(math.ceil(60.0 / min_bpm / hop_s))
+    if lag_max <= lag_min or n < lag_max * 2:
+        return None
+    scores = []
+    for lag in range(lag_min, lag_max + 1):
+        s = 0.0
+        for i in range(n - lag):
+            s += env[i] * env[i + lag]
+        bpm = 60.0 / (lag * hop_s)
+        prior = math.exp(-0.5 * (math.log2(bpm / 120.0) / 0.8) ** 2)
+        scores.append(s / (n - lag) * prior)
+    mean = sum(scores) / len(scores)
+    best = 0
+    for i, s in enumerate(scores):
+        if s > scores[best]:
+            best = i
+    if scores[best] <= 0.0:
+        return None
+    lag_f = float(lag_min + best)
+    if 0 < best < len(scores) - 1:
+        a, b, c = scores[best - 1], scores[best], scores[best + 1]
+        d = a - 2.0 * b + c
+        if abs(d) > 1e-12:
+            lag_f += max(-0.5, min(0.5, 0.5 * (a - c) / d))
+    period = lag_f
+    offs = int(math.ceil(period))
+    best_off, best_sum = 0, -1.0
+    for off in range(offs):
+        total, k = 0.0, 0
+        while True:
+            ix = int(math.floor(off + k * period + 0.5))   # round() do Rust: metade para longe do zero
+            if ix >= n:
+                break
+            total += env[ix]
+            k += 1
+        if total > best_sum:
+            best_sum, best_off = total, off
+    return {"bpm": 60.0 / (period * hop_s), "phase": best_off * hop_s, "confidence": scores[best] / mean if mean > 0 else 0.0}
+
+
+def frame_activity(frames: bytes, fsize: int) -> "array[float]":
+    """Diferença média absoluta (0 a 1) de cada quadro (cinza, `fsize` bytes) para o anterior; o primeiro vale 0."""
+    if fsize <= 0 or not frames:
+        return array("d")
+    nf = len(frames) // fsize
+    out = zeros(nf)
+    if nf == 0:
+        return out
+    lib = _lib4()
+    if lib is not None:
+        buf = ctypes.create_string_buffer(bytes(frames[:nf * fsize]), nf * fsize)
+        if lib.asta_frame_activity(ctypes.addressof(buf), nf, fsize, _addr(out)) == nf:
+            return out
+    for i in range(1, nf):
+        a, b = frames[(i - 1) * fsize:i * fsize], frames[i * fsize:(i + 1) * fsize]
+        d = 0
+        for x, y in zip(a, b):
+            d += abs(x - y)
+        out[i] = d / (fsize * 255.0)
+    return out
+
+
+def scene_cuts(act: "array[float]", step_s: float, k: float = 2.5, min_abs: float = 0.08, min_gap: float = 0.6, limit: int = 2000) -> list:
+    """Trocas de cena: máximos locais da atividade acima de max(min_abs, média + k·desvio), com `min_gap` s entre elas. Instantes em ordem crescente."""
+    n = len(act)
+    if n < 2:
+        return []
+    lib = _lib4()
+    if lib is not None:
+        out = zeros(limit)
+        c = lib.asta_scene_cuts(_addr(act), n, step_s, k, min_abs, min_gap, _addr(out), limit)
+        if c >= 0:
+            return [out[i] for i in range(min(c, limit))]
+    mean = sum(act) / n
+    var = sum((v - mean) * (v - mean) for v in act) / n
+    thr = max(min_abs, mean + k * math.sqrt(var))
+    cand = [i for i in range(1, n) if act[i] > thr and act[i] >= act[i - 1] and act[i] > (act[i + 1] if i + 1 < n else -1.7976931348623157e308)]
+    cand.sort(key=lambda i: (-act[i], i))
+    taken: list = []
+    for i in cand:
+        t = i * step_s
+        if all(abs(t - u) >= min_gap - 1e-9 for u in taken):
+            taken.append(t)
+    taken.sort()
+    return taken[:limit]
+
+
+def waveform(pcm: "array[int]", buckets: int) -> "array[float]":
+    """Pico absoluto (0 a 1) de cada um de `buckets` blocos iguais do PCM — a forma de onda dos clipes."""
+    n = len(pcm)
+    if n == 0 or buckets <= 0:
+        return zeros(max(buckets, 0))
+    out = zeros(buckets)
+    lib = _lib4()
+    if lib is not None and lib.asta_waveform(_addr(pcm), n, buckets, _addr(out)) == buckets:
+        return out
+    for b in range(buckets):
+        a = b * n // buckets
+        z = min(max((b + 1) * n // buckets, a + 1), n)
+        m = 0
+        for v in pcm[min(a, n - 1):z]:
+            m = max(m, abs(v))
+        out[b] = min(m / 32768.0, 1.0)
+    return out
+
+
+def topo(n: int, edges: list) -> Dict[str, Any]:
+    """Ordem de execução de um grafo de `n` nós (índices 0..n-1) com conexões [(de, para)]: Kahn com fila FIFO (estável). Devolve
+    {"order": [...], "level": [...], "cycle": bool}; `level[i]` = caminho mais longo até o nó (nós do mesmo nível não dependem um do outro).
+    Conexões com índice fora do intervalo são ignoradas."""
+    if n <= 0:
+        return {"order": [], "level": [], "cycle": False}
+    good = [(a, b) for a, b in edges if 0 <= a < n and 0 <= b < n]
+    lib = _lib4()
+    if lib is not None:
+        fr, to = array("I", [a for a, _ in good]), array("I", [b for _, b in good])
+        order, level = array("I", bytes(4 * n)), array("I", bytes(4 * n))
+        k = lib.asta_topo(n, _addr(fr) if good else None, _addr(to) if good else None, len(good), _addr(order), _addr(level))
+        if k >= 0:
+            return {"order": list(order[:k]), "level": list(level), "cycle": k < n}
+    from collections import deque
+
+    indeg = [0] * n
+    adj: list = [[] for _ in range(n)]
+    for a, b in good:
+        adj[a].append(b)
+        indeg[b] += 1
+    level = [0] * n
+    q = deque(i for i in range(n) if indeg[i] == 0)
+    order_l: list = []
+    while q:
+        cur = q.popleft()
+        order_l.append(cur)
+        for nx in adj[cur]:
+            if level[nx] < level[cur] + 1:
+                level[nx] = level[cur] + 1
+            indeg[nx] -= 1
+            if indeg[nx] == 0:
+                q.append(nx)
+    return {"order": order_l, "level": level, "cycle": len(order_l) < n}
