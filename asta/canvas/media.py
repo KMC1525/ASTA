@@ -1294,8 +1294,6 @@ _SD_CB: Any = None
 def _install_sd_log(sdc: Any) -> None:
     """Troca o callback de log da stable-diffusion-cpp-python por um que guarda as últimas mensagens (e continua mostrando-as no terminal)."""
     global _SD_CB
-    if _SD_CB is not None:
-        return
     try:
         import ctypes
 
@@ -1308,7 +1306,7 @@ def _install_sd_log(sdc: Any) -> None:
             except Exception:  # noqa: BLE001 — um callback nunca pode derrubar a geração
                 pass
 
-        _SD_CB = sdc.sd_log_callback(cb)
+        _SD_CB = sdc.sd_log_callback(cb)   # guardado em variável global: o ctypes libera o callback se ninguém o referencia
         sdc.sd_set_log_callback(_SD_CB, ctypes.c_void_p(0))
     except Exception:  # noqa: BLE001 — versões sem esse recurso: segue sem capturar
         _SD_CB = None
@@ -1316,7 +1314,7 @@ def _install_sd_log(sdc: Any) -> None:
 
 def _sd_reason() -> str:
     """O motivo da falha, das últimas mensagens de aviso/erro da biblioteca («failed to allocate…», «unknown tensor…»); vazio se não há."""
-    lines = [t for lvl, t in list(_SD_LOG) if lvl >= 2 and t][-4:]
+    lines = [t for lvl, t in list(_SD_LOG) if lvl >= 2 and t][-4:] or [t for _, t in list(_SD_LOG) if t][-3:]   # sem aviso/erro: as últimas linhas mostram até onde a biblioteca chegou
     return " | ".join(l[:220] for l in lines)
 
 
@@ -1390,11 +1388,19 @@ class GGUFMedia(MediaProvider):
             gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)   # a stable-diffusion-cpp-python nova chama `generate_image`; a antiga, `txt2img`
             if gen is None:
                 raise ProviderError("A versão instalada da stable-diffusion-cpp-python não tem um gerador de imagem conhecido (generate_image/txt2img). Atualize-a (asta libs).")
-            _SD_LOG.clear()
-            try:
-                imgs = gen(**kw)
-            except (ValueError, RuntimeError, OSError) as exc:
-                if "null pointer" in str(exc).lower() or "nullptr" in str(exc).lower():   # o modelo não carregou na stable-diffusion.cpp (arquivo de apoio faltando ou formato não suportado)
+            imgs, scale = None, 1.0
+            while imgs is None:
+                _install_sd_log(_local_import("stable_diffusion_cpp", extra="local")[0])   # o construtor da biblioteca troca o callback de log: reinstala o nosso antes de cada geração
+                _SD_LOG.clear()
+                try:
+                    imgs = gen(**{**kw, "width": max(256, int(w * scale) // 16 * 16), "height": max(256, int(h * scale) // 16 * 16)})
+                except (ValueError, RuntimeError, OSError) as exc:
+                    if not ("null pointer" in str(exc).lower() or "nullptr" in str(exc).lower()):
+                        raise
+                    if scale > 0.6 and max(w, h) > 640:   # quase sempre falta de memória: tenta uma vez mais com 60% do tamanho
+                        scale = 0.5625
+                        self.ctl.note("Sem memória para este tamanho: tentando de novo com resolução menor…")
+                        continue
                     info = support.missing(path.parent, path.name)
                     fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
                            f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
@@ -1402,7 +1408,6 @@ class GGUFMedia(MediaProvider):
                     mem = (" Parece falta de memória: feche outros programas, use uma quantização menor (Q3/Q2) ou uma resolução menor." if re.search(r"alloc|out of memory|oom", why, re.I) else "")
                     raise ProviderError(f"A geração com {path.name} falhou na stable-diffusion.cpp («{exc}»)." + (f" Motivo informado pela biblioteca: {why}." if why else "")
                                         + mem + " Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a biblioteca precisa ser recente (asta libs)." + fix) from None
-                raise
             for img in (imgs if isinstance(imgs, (list, tuple)) else [imgs])[:1]:
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
