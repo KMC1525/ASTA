@@ -45,8 +45,8 @@ jobs:
         include:
           - { os: ubuntu-22.04, tag: linux-x86_64, lib: libasta_core.so, ext: so }
           - { os: ubuntu-22.04-arm, tag: linux-aarch64, lib: libasta_core.so, ext: so, optional: true }
-          - { os: macos-14, tag: macos-aarch64, lib: libasta_core.dylib, ext: dylib }
-          - { os: macos-14, tag: macos-x86_64, lib: libasta_core.dylib, ext: dylib, target: x86_64-apple-darwin }
+          - { os: macos-latest, tag: macos-aarch64, lib: libasta_core.dylib, ext: dylib }
+          - { os: macos-latest, tag: macos-x86_64, lib: libasta_core.dylib, ext: dylib, target: x86_64-apple-darwin }
           - { os: windows-latest, tag: windows-x86_64, lib: asta_core.dll, ext: dll }
     steps:
       - uses: actions/checkout@v4
@@ -138,7 +138,7 @@ jobs:
   # ------------------------------------------------------------------ macOS: pacote .pkg
   macos:
     needs: [meta, core]
-    runs-on: macos-14
+    runs-on: macos-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4

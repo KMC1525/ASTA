@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.2] — 2026-11-08
+
+### Fixed
+- **`/api/mobile` hung on macOS:** the LAN IP lookup used `getaddrinfo(gethostname())`, which can stall; it now runs with a 1 s limit and is cached for 30 s.
+- **Rebuild:** the uploaded ZIP stayed open (handle leak, file lock on Windows); it is now closed and reopened per read.
+- **Release:** macOS runners moved from `macos-14` to `macos-latest` (jobs were being cancelled).
+- **Portable tests:** Studio `AutoEditTests` is skipped without ffmpeg; tests that call `node` read its output as UTF-8 (they failed on Windows).
+
+### Notes
+- macOS/Windows test runs still have older failures outside this scope; Linux is green.
+
 ## [0.15.1] — 2026-11-08
 
 ### Fixed — Computer Use

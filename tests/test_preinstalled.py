@@ -79,7 +79,7 @@ class CatalogTests(unittest.TestCase):
         if not shutil.which("node"):
             self.skipTest("Node.js não instalado")
         script = "import EN from '%s'; console.log(JSON.stringify(%s.filter((h) => !(h in EN))));" % ((ROOT / "asta/web/js/en.js").as_posix(), json.dumps([e["hint"] for e in pre.CATALOG]))
-        r = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True)
+        r = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(json.loads(r.stdout), [])
 
     def test_canvas_defaults_only_for_catalog_models(self):

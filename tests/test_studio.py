@@ -462,6 +462,7 @@ class PlanQualityTests(unittest.TestCase):
         self.assertTrue(all(x["craft"] for x in AE.describe_styles()))
 
 
+@needs_ff
 class AutoEditTests(TmpCase):
     def setUp(self):
         super().setUp()
