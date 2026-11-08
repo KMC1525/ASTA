@@ -468,6 +468,8 @@ class CanvasEngine:
             use_refs = list(refs)
             if not use_refs and style.images and getattr(prov, "supports_refs", False) and _style_refs_ok(pid, model):
                 use_refs = list(style.images)  # modelos que aceitam várias imagens usam o Style Folder como referência
+            if use_refs and not prov.supports_refs and p["mode"] == "edit":
+                raise ValueError(f"{prov.label} não consegue editar imagens (não aceita imagem de entrada). Escolha outro modelo no nó, ou volte o modo para Gerar.")
             if use_refs and not prov.supports_refs:
                 warnings.append(f"{prov.label} não aceita imagens de referência — usei só o texto.")
                 use_refs = []

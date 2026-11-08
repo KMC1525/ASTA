@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.10] — 2026-11-08
+
+### Corrigido — editar imagens com modelos locais e ligações entre nós
+- **Modelos locais agora editam de verdade.** Antes, ligar uma imagem em «Referências» de um nó com modelo local (GGUF ou Hugging Face) só mostrava um aviso e gerava a imagem do zero, ignorando a referência. Agora o GGUF usa `init_image` (imagem → imagem) ou, nos modelos de edição (Qwen-Image-Edit, FLUX Kontext), `ref_images`; o modelo Hugging Face local faz imagem → imagem reaproveitando os pesos já carregados. A proporção da imagem ligada é mantida (não estica).
+- Se a biblioteca instalada não aceita imagem de entrada, o erro diz isso e como resolver (`asta libs`) em vez de gerar uma imagem sem a referência.
+- **Modo Editar com um modelo que não edita** (sem entrada de imagem) agora dá um erro claro no nó, em vez de gerar do zero com um aviso fácil de perder. No modo Gerar, a referência continua só virando aviso.
+- Versão 0.17.10 (o núcleo Rust não mudou).
+
 ## [0.17.9] — 2026-11-08
 
 ### Corrigido — o motivo do «NULL pointer access» não aparecia, e a geração não tentava de novo com menos memória

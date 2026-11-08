@@ -256,6 +256,52 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertGreaterEqual(len(installs), 2)   # reinstalado antes de cada tentativa
         M._SD_CB = None
 
+    def test_gguf_edit_uses_init_image_or_ref_images_and_keeps_the_aspect(self):
+        from asta.canvas import media as M
+        from asta.canvas.media import ProviderError
+        from tests.test_canvas import PNG
+
+        seen = []
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class SD:
+            def __init__(self, **kw):
+                pass
+
+            def generate_image(self, prompt="", width=0, height=0, seed=0, init_image=None, strength=0.0, ref_images=None, **kw):
+                seen.append({"w": width, "h": height, "init": init_image, "strength": strength, "refs": ref_images})
+                return [Img()]
+
+        class Old:
+            def __init__(self, **kw):
+                pass
+
+            def generate_image(self, prompt="", width=0, height=0, seed=0, **kw):
+                return [Img()]
+
+        mod = mock.MagicMock(StableDiffusion=SD)
+        (self.img / "qwen-image-edit-Q4_K_M.gguf").write_bytes(b"g")
+        prov = M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(self.tmp), "models": {"image": "qwen-image-edit-Q4_K_M.gguf"}, "needs_key": False})
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            prov.image("x", size="1024x1024", refs=[(PNG, "image/png")])
+        self.assertIsNotNone(seen[0]["refs"])
+        self.assertIsNone(seen[0]["init"])
+        # modelo comum: imagem → imagem
+        M._LOCAL_CACHE.clear()
+        prov2 = self.prov()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            prov2.image("x", size="1024x1024", refs=[(PNG, "image/png")])
+        self.assertIsNotNone(seen[1]["init"])
+        self.assertEqual(seen[1]["strength"], 0.75)
+        # biblioteca antiga sem init_image: erro claro, não uma imagem que ignora a referência
+        M._LOCAL_CACHE.clear()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mock.MagicMock(StableDiffusion=Old)}), self.assertRaises(ProviderError) as cm:
+            prov2.image("x", refs=[(PNG, "image/png")])
+        self.assertIn("init_image", str(cm.exception))
+
     def test_image_sizes_are_multiples_of_16(self):
         (self.img / "meu-modelo-Q4_K_M.gguf").write_bytes(b"g")
         from asta.canvas import media as M

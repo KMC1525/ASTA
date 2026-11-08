@@ -801,6 +801,33 @@ class LocalHFTests(unittest.TestCase):
         diffusers.AutoPipelineForText2Image.from_pretrained.side_effect = lambda model, **kw: (calls.setdefault("model", model), Pipe())[1]
         return {"torch": torch, "diffusers": diffusers}, calls
 
+    def test_connected_image_makes_the_local_model_do_image_to_image(self):
+        from asta.canvas import localmodels as lm
+
+        mods, calls = self.fake_modules()
+        i2i_calls = {}
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class I2I:
+            def __call__(self, **kw):
+                i2i_calls["kw"] = kw
+                return mock.Mock(images=[Img()])
+
+        mods["diffusers"].AutoPipelineForImage2Image.from_pipe.side_effect = lambda pipe: I2I()
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value="fp16"), mock.patch.object(lm, "has_fp16_variant", return_value=True):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "stabilityai/sd-turbo"}, key="", needs_key=False)
+            out = p.image("deixe azul", size="1024x1024", refs=[(PNG, "image/png")])
+        self.assertEqual(out[0].mime, "image/png")
+        kw = i2i_calls["kw"]
+        self.assertIn("image", kw)
+        self.assertNotIn("width", kw)
+        self.assertTrue(0 < kw["strength"] < 1 and kw["num_inference_steps"] >= 2)
+        self.assertNotIn("kw", calls)   # o texto→imagem não rodou
+
     def test_image_pipeline_uses_the_downloaded_precision_and_only_local_files(self):
         from asta.canvas import localmodels as lm
 
@@ -983,6 +1010,29 @@ class EngineTests(TmpCase):
         self.assertEqual(self.result(c["id"], "dep")["state"], "idle")
         self.assertEqual([e["state"] for e in ev if e.get("id") == "dep" and e["state"] != "running"], ["skipped"])
         del s
+
+    def test_edit_mode_refuses_a_model_that_cannot_take_an_input_image(self):
+        from asta.canvas import engine as E
+
+        c = self.cs.create("t")
+        a = self.cs.add_asset(c["id"], PNG, "png", "image", name="foto.png", mime="image/png")
+        self.cs.save_layout(c["id"], {"nodes": [node("upload", nid="u", files=[a["id"]]), node("image", nid="e", mode="edit", prompt="deixe azul"), node("image", nid="g", prompt="um gato")],
+                                      "edges": [edge("u", "e", "refs"), edge("u", "g", "refs")]})
+
+        class NoRefs:
+            supports_refs = False
+            label = "Modelo X"
+
+            def image(self, *a, **k):
+                return [M.Media(PNG, "image/png")]
+
+        with mock.patch.object(E, "build_media", lambda *a, **k: NoRefs()):
+            _, ev = self.run_engine(c["id"])
+        states = {e["id"]: e for e in ev if e.get("state") in ("error", "done")}
+        self.assertEqual(states["e"]["state"], "error")
+        self.assertIn("não consegue editar", states["e"]["message"])
+        self.assertEqual(states["g"]["state"], "done")   # no modo Gerar a referência só vira aviso
+        self.assertTrue(states["g"]["warnings"])
 
     def test_validation_messages(self):
         c = self.make([node("image", nid="i"), node("video", nid="v"), node("voice", nid="vo"), node("sound", nid="so"), node("llm", nid="l"), node("transcribe", nid="tr"), node("image", nid="ed", mode="edit", prompt="x")], [])
