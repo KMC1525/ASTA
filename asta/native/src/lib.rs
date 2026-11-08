@@ -1,4 +1,4 @@
-//! Núcleo em Rust do ASTA (v0.5; v0.12: carga e inferência de modelos locais — cabeçalhos GGUF/safetensors, hardware, planejador e pré-carga paralela). Biblioteca C (`cdylib`) carregada pelo Python via `ctypes`; só a biblioteca padrão, sem dependências.
+//! Núcleo em Rust do ASTA (v0.5; v0.12: carga e inferência de modelos locais — cabeçalhos GGUF/safetensors, hardware, planejador e pré-carga paralela; v0.14: vários agentes locais, armazenamento e memória). Biblioteca C (`cdylib`) carregada pelo Python via `ctypes`; só a biblioteca padrão, sem dependências.
 //!
 //! Faz o trabalho pesado de CPU da síntese de áudio (música, efeitos e voz do Canvas Demo) em buffers `f64`/`i16` compartilhados com o Python,
 //! sem criar um objeto Python por amostra — o que, em máquinas fracas, era o gargalo (20 s de música levavam ~22 s e dezenas de MB).
@@ -9,6 +9,7 @@ use std::f64::consts::PI;
 
 mod io;
 mod model;
+mod ops;
 mod plan;
 mod sys;
 mod util;
@@ -16,7 +17,7 @@ mod util;
 /// Versão da interface (o Python recusa uma biblioteca de outra versão).
 #[no_mangle]
 pub extern "C" fn asta_abi_version() -> u32 {
-    2
+    3
 }
 
 unsafe fn slice_mut<'a, T>(p: *mut T, n: usize) -> Option<&'a mut [T]> {

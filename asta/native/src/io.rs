@@ -5,7 +5,7 @@
 
 use std::fs::File;
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "android"))]
 extern "C" {
     fn posix_fadvise(fd: i32, offset: i64, len: i64, advice: i32) -> i32;
 }
@@ -40,7 +40,7 @@ pub unsafe extern "C" fn asta_prefetch(path: *const u8, path_len: usize, threads
     if size == 0 {
         return 0;
     }
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         use std::os::unix::io::AsRawFd;
         posix_fadvise(f.as_raw_fd(), 0, 0, 3); // POSIX_FADV_WILLNEED

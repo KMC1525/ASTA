@@ -11,12 +11,13 @@ import threading
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterator, List, Tuple
 
-from .. import native, perf
+from .. import native, perf, scheduler
 from ..util import hardware_info
 from .base import Provider, ProviderError, content_text, split_system
 
-_CACHE: Dict[str, Any] = {}
-_LOCK = threading.Lock()
+_CACHE: Dict[str, Any] = {}   # modelos carregados (do menos para o mais recentemente usado)
+_LOCK = scheduler.PriorityLock()   # fila justa com prioridade: o chat passa na frente de tarefas em segundo plano
+_PATHS: Dict[str, str] = {}   # chave do cache → arquivo do modelo (para tirá-lo do cache de páginas ao descarregar)
 
 
 def _n_ctx(tier: str) -> int:
@@ -26,13 +27,42 @@ def _n_ctx(tier: str) -> int:
 MAX_CTX = 1 << 20
 
 
+def _release(paths) -> None:
+    """Depois de descarregar modelos: tira os pesos do cache de páginas e devolve ao sistema a memória que o alocador ainda segura (núcleo Rust)."""
+    for p in paths:
+        try:
+            native.evict_file(p)
+        except Exception:  # noqa: BLE001
+            pass
+    try:
+        native.release_memory()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _unload() -> None:
     with _LOCK:
+        paths = list(_PATHS.values())
         _CACHE.clear()
+        _PATHS.clear()
     gc.collect()
+    _release(paths)
+
+
+def _resident_limit(path: str, want_ctx: int, prof: Dict[str, Any]) -> int:
+    """Quantos modelos podem ficar carregados ao mesmo tempo (núcleo Rust: pelo tamanho do modelo e a memória livre). Padrão 1 (hardware leve)."""
+    try:
+        info = native.model_info(path) or {}
+        mem = perf.memory_state()
+        plan = native.plan_agents(2, native.AGENT_KIND["embedded"], int(info.get("bytes") or 0), int(info.get("kv_bytes_per_token") or 0) * int(want_ctx), mem["ram_avail"], mem["vram_free"],
+                                  mem["unified"], mem["phys"], mem["logical"], perf.MODE_NUM[prof["mode"]])
+        return max(1, int(plan.get("resident_models") or 1))
+    except Exception:  # noqa: BLE001
+        return 1
 
 
 _IDLE = perf.IdleUnloader(_unload)
+_CTX_FLOOR: Dict[str, int] = {}   # janela mínima já necessária por modelo: só cresce (várias respostas de tamanhos diferentes não recarregam o modelo a cada vez)
 _PLAIN: set = set()   # modelos que ficaram mudos com as opções de economia (flash attention / cache KV de 8 bits): recarregados só com o básico
 
 
@@ -49,7 +79,8 @@ def _load_llama(Llama: Any, base: Dict[str, Any], prof: Dict[str, Any]) -> Any:
     if prof["flash"]:
         extra["flash_attn"] = True
     if prof["kv_q8"]:
-        extra.update(type_k=8, type_v=8, flash_attn=True)  # 8 = GGML_TYPE_Q8_0 (cache de atenção pela metade; exige flash attention)
+        bits = 2 if prof.get("kv_q4") else 8   # 8 = GGML_TYPE_Q8_0 (cache de atenção pela metade), 2 = GGML_TYPE_Q4_0 (um quarto: contextos de 256K a 1M); exigem flash attention
+        extra.update(type_k=bits, type_v=bits, flash_attn=True)
     older = {k: v for k, v in extra.items() if k not in ("n_ubatch", "n_threads_batch", "use_mlock")}
     basic = {k: v for k, v in extra.items() if k in ("n_batch", "use_mmap")}
     for kw in (extra, older, basic):
@@ -134,6 +165,7 @@ class LocalLlamaProvider(Provider):
         return path
 
     def _llm(self):
+        need_reply = int(getattr(self, "_need_reply", 0) or 0)   # tamanho da resposta pedida (definido por _chat/_stream antes de chamar)
         try:
             from llama_cpp import Llama  # type: ignore
         except ImportError:
@@ -145,23 +177,35 @@ class LocalLlamaProvider(Provider):
         hw = hardware_info()
         prof = perf.profile(self.perf_cfg, hw)
         if path in _PLAIN:
-            prof = dict(prof, flash=False, kv_q8=False)
+            prof = dict(prof, flash=False, kv_q8=False, kv_q4=False)
         want = perf.cap_context(context_size(self.n_ctx_cfg, Path(path).name, hw["tier"]), prof, explicit=bool(self.n_ctx_cfg))
+        if not self.n_ctx_cfg and need_reply > 0:   # janela automática: tem de caber a resposta pedida (2K no Chat, mais nos agentes) com espaço para a conversa; antes a resposta era encolhida para a metade da janela
+            _CTX_FLOOR[path] = max(_CTX_FLOOR.get(path, 0), min(MAX_CTX, 2 * int(need_reply) + 1024))
+            want = max(want, _CTX_FLOOR[path])
         key = f"{path}|{want}|{prof['mode']}|{int(prof['flash'])}{int(prof['kv_q8'])}"  # a chave não usa a memória livre do momento (senão recarregaria o modelo a cada variação); mudar a janela de contexto ou o modo recarrega
         plan = _plan(path, hw, prof, want, bool(self.n_ctx_cfg)) if key not in _CACHE else {}
         ctx = int(plan.get("n_ctx") or want)
         if plan:   # o plano manda nos parâmetros de carga; o modo "mudo" (flash/KV 8 bits) continua sendo respeitado
             prof = dict(prof, n_batch=plan["n_batch"], n_ubatch=plan["n_ubatch"], n_threads_batch=plan["n_threads_batch"], mlock=plan["mlock"],
-                        flash=plan["flash"] and path not in _PLAIN, kv_q8=plan["kv_q8"] and path not in _PLAIN)
+                        flash=plan["flash"] and path not in _PLAIN, kv_q8=plan["kv_q8"] and path not in _PLAIN, kv_q4=bool(plan.get("kv_q4")) and path not in _PLAIN)
         with _LOCK:
             llm = _CACHE.get(key)
+            if llm is not None:
+                _CACHE[key] = _CACHE.pop(key)   # mais recente por último
             if llm is None:
                 use_gpu = bool(hw.get("gpu")) or (hw["os"] == "Darwin" and "arm" in hw["arch"].lower())
                 ngl = int(plan["n_gpu_layers"]) if plan and use_gpu else (-1 if use_gpu else 0)
                 threads = int(plan["n_threads"]) if plan else max(1, hw["cpus"] - 1)
                 base = dict(model_path=path, n_ctx=ctx, n_threads=threads, n_gpu_layers=ngl, verbose=False)
-                _CACHE.clear()  # mantém apenas um modelo na RAM (hardware leve)
-                gc.collect()
+                limit = _resident_limit(path, ctx, prof) if plan else 1   # vários agentes com modelos diferentes: mantém mais de um na RAM só se couber; senão, um só
+                dropped = []
+                while len(_CACHE) >= limit:
+                    old_key = next(iter(_CACHE))   # o menos usado recentemente
+                    _CACHE.pop(old_key, None)
+                    dropped.append(_PATHS.pop(old_key, ""))
+                if dropped:
+                    gc.collect()
+                    _release([d for d in dropped if d])
                 if plan.get("prefetch"):
                     native.prefetch([path])   # leitura paralela para o cache do sistema: o mmap acha tudo em RAM (carga bem mais rápida em disco frio)
                 llm = _load_llama(Llama, base, prof)
@@ -173,7 +217,8 @@ class LocalLlamaProvider(Provider):
                     except Exception:  # noqa: BLE001
                         pass
                 _CACHE[key] = llm
-                native.record("llm", model=Path(path).name, n_ctx=ctx, n_gpu_layers=ngl, n_threads=threads, kv_q8=bool(prof["kv_q8"]), flash=bool(prof["flash"]), notes=plan.get("notes", []),
+                _PATHS[key] = path
+                native.record("llm", model=Path(path).name, n_ctx=ctx, n_gpu_layers=ngl, n_threads=threads, kv_q8=bool(prof["kv_q8"]), kv_q4=bool(prof.get("kv_q4")), flash=bool(prof["flash"]), notes=plan.get("notes", []),
                               quant=(plan.get("info") or {}).get("quant"), layers=(plan.get("info") or {}).get("layers"))
         _IDLE.touch(prof["idle_s"])
         return llm, path
@@ -198,6 +243,7 @@ class LocalLlamaProvider(Provider):
         return ProviderError(f"O modelo local falhou: {msg[:300]}")
 
     def _chat(self, messages, system, temperature, max_tokens, json_mode) -> str:
+        self._need_reply = max_tokens
         llm, path = self._llm()
         msgs, max_tokens = self._prepare(llm, messages, system, max_tokens)
         with _LOCK:
@@ -214,6 +260,8 @@ class LocalLlamaProvider(Provider):
             except Exception as exc:  # noqa: BLE001  (ValueError de contexto, RuntimeError do llama.cpp…)
                 raise self._wrap(exc) from None
         out = (res["choices"][0]["message"].get("content") or "").strip()
+        fr = str(res["choices"][0].get("finish_reason") or "")
+        self.last_stop = "length" if fr == "length" else ("stop" if fr else "")
         if not out and self._go_plain(path):  # modelo mudo com as opções de economia: recarrega só com o básico e tenta de novo
             return self._chat(messages, system, temperature, max_tokens, json_mode)
         return out
@@ -225,16 +273,21 @@ class LocalLlamaProvider(Provider):
         _PLAIN.add(path)
         with _LOCK:
             _CACHE.clear()
+            _PATHS.clear()
         gc.collect()
         return True
 
     def _stream(self, messages, system, temperature, max_tokens) -> Iterator[str]:
+        self._need_reply = max_tokens
         llm, path = self._llm()
         msgs, max_tokens = self._prepare(llm, messages, system, max_tokens)
         got = False
         with _LOCK:
             try:
                 for chunk in llm.create_chat_completion(messages=msgs, temperature=temperature, max_tokens=max_tokens, stream=True):
+                    fr = chunk["choices"][0].get("finish_reason")
+                    if fr:
+                        self.last_stop = "length" if fr == "length" else "stop"
                     delta = chunk["choices"][0].get("delta", {}).get("content")
                     if delta:
                         got = True

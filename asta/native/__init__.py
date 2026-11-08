@@ -4,6 +4,10 @@ A biblioteca `libasta_core` (código em `asta/native/src/lib.rs`, só biblioteca
 a conversão para PCM, trabalhando em buffers compartilhados (`array('d')`) em vez de um objeto Python por amostra: bem mais rápido e com uma fração da RAM.
 Ela é carregada com `ctypes` (nada para instalar no Python). Para compilar:  `asta native build`  (precisa do Rust — https://rustup.rs).
 Sem a biblioteca (ou com `ASTA_NO_NATIVE=1`), o ASTA usa as versões em Python, que dão o mesmo resultado (exceto o ruído, que usa outro gerador de números aleatórios).
+
+v0.14 — o núcleo Rust é parte **obrigatória** da instalação: os instaladores (Windows, macOS, Linux/AppImage, Android) já trazem a biblioteca pronta, e quem instala pelo terminal recebe a
+biblioteca **pré-compilada** da Release (baixada e conferida por SHA-256; nada de compilador) — só se isso falhar o ASTA compila na máquina (`asta native setup`). O Python continua sendo
+o orquestrador e o espelho de tudo: se por qualquer motivo a biblioteca não carregar, o ASTA segue funcionando, só mais devagar.
 """
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ from array import array
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-ABI = 2   # versão da interface desta versão do ASTA; bibliotecas antigas (1) ainda servem para o áudio, só sem os recursos de modelos locais
+ABI = 3   # versão da interface desta versão do ASTA; bibliotecas antigas (1 e 2) ainda servem: a 1 só para o áudio, a 2 também para modelos locais — sem os recursos novos (agentes, armazenamento, memória)
 SRC = Path(__file__).resolve().parent
 _LIB: Any = None
 _TRIED = False
@@ -30,6 +34,43 @@ WAVES = {"sine": 0, "square": 1, "saw": 2, "triangle": 3}
 
 def _libname() -> str:
     return "asta_core.dll" if os.name == "nt" else ("libasta_core.dylib" if sys.platform == "darwin" else "libasta_core.so")
+
+
+RELEASES = "https://github.com/KMC1525/ASTA/releases/download"
+
+
+def _marker() -> Path:
+    return native_dir() / "VERSION"
+
+
+def installed_for() -> str:
+    """A versão do ASTA para a qual a biblioteca instalada foi baixada/compilada (vazio se não sabemos)."""
+    try:
+        return _marker().read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _mark(version: str = "") -> None:
+    from .. import __version__
+
+    try:
+        _marker().write_text(version or __version__, encoding="utf-8")
+    except OSError:
+        pass
+
+
+def platform_tag() -> str:
+    """«linux-x86_64», «linux-aarch64», «macos-aarch64», «macos-x86_64», «windows-x86_64»… (o nome da biblioteca pré-compilada na Release)."""
+    import platform
+
+    osname = {"darwin": "macos"}.get(platform.system().lower(), platform.system().lower())
+    arch = {"x86_64": "x86_64", "amd64": "x86_64", "arm64": "aarch64", "aarch64": "aarch64"}.get(platform.machine().lower(), platform.machine().lower())
+    return f"{osname}-{arch}"
+
+
+def prebuilt_name() -> str:
+    return f"asta-core-{platform_tag()}{Path(_libname()).suffix}"
 
 
 def native_dir() -> Path:
@@ -64,6 +105,18 @@ def _bind(lib: Any) -> None:
         lib.asta_plan_llm.restype = i64
         lib.asta_plan_media.argtypes = [u64, u64, u64, u32, u32, ctypes.c_void_p, sz]
         lib.asta_plan_media.restype = i64
+    if lib.asta_abi_version() >= 3:  # v0.14: vários agentes locais, armazenamento (varredura e duplicados) e memória
+        u8p, sz, u64, u32, i64 = ctypes.c_char_p, ctypes.c_size_t, ctypes.c_uint64, ctypes.c_uint32, ctypes.c_int64
+        lib.asta_plan_agents.argtypes = [u32, u32, u64, u64, u64, u64, u32, u32, u32, u32, ctypes.c_void_p, sz]
+        lib.asta_plan_agents.restype = i64
+        lib.asta_scan_dir.argtypes = [u8p, sz, u64, u32, ctypes.c_void_p, sz]
+        lib.asta_scan_dir.restype = i64
+        lib.asta_dup_groups.argtypes = [u8p, sz, u64, u8p, sz, u64, ctypes.c_void_p, sz]
+        lib.asta_dup_groups.restype = i64
+        lib.asta_release_memory.argtypes = []
+        lib.asta_release_memory.restype = i64
+        lib.asta_evict_file.argtypes = [u8p, sz]
+        lib.asta_evict_file.restype = i64
 
 
 def load(force: bool = False) -> Any:
@@ -81,7 +134,7 @@ def load(force: bool = False) -> Any:
                 continue
             try:
                 lib = ctypes.CDLL(str(path))
-                if lib.asta_abi_version() not in (1, ABI):
+                if lib.asta_abi_version() not in (1, 2, ABI):
                     _REASON = f"{path.name}: versão da interface diferente (recompile com `asta native setup`)"
                     continue
                 _bind(lib)
@@ -112,7 +165,8 @@ def find_tool(name: str) -> Optional[str]:
 def status() -> Dict[str, Any]:
     lib = load()
     return {"active": lib is not None, "reason": _REASON, "cargo": bool(find_tool("cargo")), "rustup": bool(find_tool("rustup")), "path": _REASON if lib is not None else "",
-            "models": lib is not None and hasattr(lib, "asta_plan_llm"), "last": dict(LAST)}
+            "models": lib is not None and hasattr(lib, "asta_plan_llm"), "ops": lib is not None and hasattr(lib, "asta_plan_agents"),
+            "abi": int(lib.asta_abi_version()) if lib is not None else 0, "last": dict(LAST)}
 
 
 def rust_version() -> str:
@@ -209,10 +263,115 @@ def build(verbose: bool = True) -> int:
         print(_("Compilou, mas não achei a biblioteca gerada."))
         return 1
     shutil.copyfile(built, dest / _libname())
+    _mark()
     shutil.rmtree(dest / "target", ignore_errors=True)  # só a biblioteca fica (a pasta de compilação ocupa centenas de MB)
     load(force=True)
     print(_("Núcleo em Rust ativo:"), status()["path"] if available() else status()["reason"])
     return 0 if available() else 1
+
+
+def fetch_prebuilt(version: str = "", verbose: bool = True) -> int:
+    """Baixa a biblioteca pré-compilada desta plataforma na Release do ASTA, confere o SHA-256 (SHA256SUMS.txt da mesma Release) e só instala se ela carrega e tem a interface certa.
+    Devolve 0 se o núcleo ficou ativo. Não precisa de Rust nem de compilador. `ASTA_NATIVE_URL` troca a pasta de onde baixa (espelhos, testes)."""
+    import hashlib
+    import urllib.request
+
+    from .. import __version__
+    from ..termi18n import _
+    from ..util import ssl_context
+
+    base = (os.environ.get("ASTA_NATIVE_URL") or f"{RELEASES}/v{version or __version__}").rstrip("/")
+    name = prebuilt_name()
+
+    def say(msg: str) -> None:
+        if verbose:
+            print(msg)
+
+    try:
+        ctx = ssl_context()
+        with urllib.request.urlopen(urllib.request.Request(f"{base}/SHA256SUMS.txt", headers={"User-Agent": "ASTA"}), timeout=25, context=ctx) as r:
+            sums = r.read(1 << 20).decode("utf-8", "replace")
+        want = next((ln.split()[0].lower() for ln in sums.splitlines() if ln.split()[-1:] and ln.split()[-1].lstrip("*") == name), "")
+        if not want:
+            say(_("Não há núcleo pré-compilado para {p} nesta versão.", p=platform_tag()))
+            return 1
+        with urllib.request.urlopen(urllib.request.Request(f"{base}/{name}", headers={"User-Agent": "ASTA"}), timeout=120, context=ctx) as r:
+            data = r.read(64 * 1024 * 1024 + 1)
+    except Exception as exc:  # noqa: BLE001  (sem internet, release ainda sem a biblioteca…)
+        say(_("Não consegui baixar o núcleo pré-compilado ({e}).", e=str(exc)[:120]))
+        return 1
+    if len(data) > 64 * 1024 * 1024 or hashlib.sha256(data).hexdigest() != want:
+        say(_("O núcleo baixado não confere com o SHA-256 publicado — descartado."))
+        return 1
+    dest = native_dir()
+    dest.mkdir(parents=True, exist_ok=True)
+    tmp = dest / (_libname() + ".new")
+    tmp.write_bytes(data)
+    try:
+        lib = ctypes.CDLL(str(tmp))
+        if lib.asta_abi_version() != ABI:
+            raise OSError(f"interface {lib.asta_abi_version()} ≠ {ABI}")
+        del lib
+        os.replace(tmp, dest / _libname())
+    except (OSError, AttributeError) as exc:
+        say(_("O núcleo baixado não carrega aqui ({e}).", e=str(exc)[:120]))
+        try:
+            tmp.unlink()
+        except OSError:
+            pass
+        return 1
+    _mark(version)
+    load(force=True)
+    say(_("Núcleo em Rust ativo (pré-compilado):") + " " + (status()["path"] if available() else status()["reason"]))
+    return 0 if available() else 1
+
+
+_ENSURE_LOCK = threading.Lock()
+
+
+def ensure(wait: bool = False) -> bool:
+    """Garante o núcleo Rust: se não está ativo (ou é de uma interface antiga), baixa a biblioteca pré-compilada em segundo plano — no máximo uma vez a cada 24 h.
+    Sem internet, sem permissão ou com ASTA_NO_NATIVE, o ASTA segue em Python. Devolve True se já estava ativo."""
+    if os.environ.get("ASTA_NO_NATIVE", "") not in ("", "0") or os.environ.get("ASTA_NO_NATIVE_FETCH", "") not in ("", "0"):
+        return available()
+    if available() and status()["abi"] >= ABI:
+        return True
+    stamp = native_dir() / ".fetch-stamp"
+    try:
+        import time
+
+        if stamp.is_file() and time.time() - stamp.stat().st_mtime < 24 * 3600:
+            return False
+        native_dir().mkdir(parents=True, exist_ok=True)
+        stamp.write_text(str(time.time()))
+    except OSError:
+        return False
+
+    def work() -> None:
+        with _ENSURE_LOCK:
+            try:
+                fetch_prebuilt(verbose=False)
+            except Exception:  # noqa: BLE001
+                pass
+
+    if wait:
+        work()
+        return available()
+    threading.Thread(target=work, name="asta-native-fetch", daemon=True).start()
+    return False
+
+
+def _toolchain_ok() -> bool:
+    """O computador tem o que o Rust precisa para ligar o binário (compilador/linker)? macOS: as ferramentas de linha de comando da Apple; Linux: gcc/cc/clang; Windows: não dá
+    para saber barato (segue e deixa o rustup dizer)."""
+    if sys.platform == "darwin":
+        try:
+            return subprocess.run(["xcode-select", "-p"], capture_output=True, timeout=10).returncode == 0
+        except (OSError, subprocess.SubprocessError):
+            return False
+    if os.name == "nt":
+        return True
+    return any(shutil.which(c) for c in ("cc", "gcc", "clang"))
 
 
 def _build_hint() -> str:
@@ -234,6 +393,16 @@ def setup(mode: str = "yes", ask: Any = None) -> int:
         print(_("Rust: pulado (ASTA_RUST=no)."))
         return 0
     mode = "ask" if mode == "ask" else "yes"   # padrão: automático (como as bibliotecas e os modelos); "ask" só se pedido
+    from .. import __version__
+
+    if not os.environ.get("ASTA_NATIVE_BUILD") and available() and status()["abi"] >= ABI and installed_for() in (__version__, ""):   # já é desta versão do ASTA (ou veio num instalador/AppImage)
+        print(_("Núcleo Rust: já ativo ({p}).", p=status()["path"]))
+        return 0
+    if not os.environ.get("ASTA_NATIVE_BUILD") and fetch_prebuilt() == 0:   # o caminho normal: biblioteca pronta da Release, sem compilador
+        return 0
+    if not _toolchain_ok():
+        print(_("Sem a biblioteca pré-compilada e sem compilador neste computador, o ASTA segue em Python (mais lento). ") + _build_hint())
+        return 0
     have = bool(find_tool("cargo"))
     if mode == "ask":
         answer = ask(_("Atualizar o Rust e recompilar o núcleo do ASTA (mais rápido e leve)?") if have else
@@ -606,12 +775,20 @@ def plan_llm(weights: int, layers: int, kv_per_token: int, ctx_train: int, ctx_w
         if q > ctx_max:
             kv_q8, ctx_max = True, q
             notes.append("cache de atenção em 8 bits para caber mais contexto")
+    kv_q4 = False
+    if kv_q8 and ctx_max < want and want >= 65536.0:   # contexto longo (256K, 512K, 1M…): se nem o cache de 8 bits cabe, usa o de 4 bits
+        q = ctx_for(0.28)
+        if q > ctx_max:
+            kv_q4, ctx_max = True, q
+            notes.append("cache de atenção em 4 bits para caber o contexto longo")
     ctx = want if explicit else min(want, ctx_max)
     if ctx < 512.0:
         ctx = 512.0
         notes.append("pouca memória livre: contexto mínimo")
     if explicit and want > ctx_max and ctx_max > 0.0:
         notes.append(f"o contexto pedido ({int(want)}) passa do que cabe na memória livre ({int(ctx_max)})")
+    if explicit and ctx_train > 0 and want > ctx_train:
+        notes.append(f"o contexto pedido ({int(want)}) passa do que o modelo foi treinado ({int(ctx_train)}): a qualidade pode cair")
     p = float(max(phys, 1))
     lg = float(max(logical, max(phys, 1)))
     threads = min(p, 4.0) if all_gpu else (p - 1.0 if p >= 8.0 else p)
@@ -624,7 +801,7 @@ def plan_llm(weights: int, layers: int, kv_per_token: int, ctx_train: int, ctx_w
     ram_after = ram - cpu_weights - kvpt * ctx * (1.0 - frac_gpu)
     cache_bytes = 256.0 * MIB if mode == 0 else min(ram_after * 0.10, 1024.0 * MIB) if ram_after > 4096.0 * MIB else 0.0
     return {"n_ctx": int(ctx), "ctx_max": int(ctx_max), "n_gpu_layers": -1 if all_gpu else int(ngl), "gpu_layers_fit": int(ngl), "n_threads": int(threads), "n_threads_batch": int(threads_batch),
-            "n_batch": int(n_batch), "n_ubatch": int(n_ubatch), "kv_q8": kv_q8, "flash": flash, "mlock": mlock, "prefetch": prefetch, "cache_bytes": int(cache_bytes), "notes": notes}
+            "n_batch": int(n_batch), "n_ubatch": int(n_ubatch), "kv_q8": kv_q8, "kv_q4": kv_q4, "flash": flash, "mlock": mlock, "prefetch": prefetch, "cache_bytes": int(cache_bytes), "notes": notes}
 
 
 def plan_media(weights: int, vram_free: int, ram_avail: int, unified: bool, mode: int) -> Dict[str, Any]:
@@ -722,3 +899,220 @@ def weight_files(path: Any) -> list:
     except OSError:
         pass
     return out
+
+
+# --------------------------------------------------------------------------- v0.14: vários agentes locais, armazenamento e memória
+# Cada função usa o Rust (interface 3) quando existe e tem o equivalente em Python (mesmas contas, conferidas nos testes).
+AGENT_KIND = {"cloud": 0, "embedded": 1, "server": 2}
+
+
+def _lib3() -> Any:
+    lib = load()
+    return lib if lib is not None and hasattr(lib, "asta_plan_agents") else None
+
+
+def plan_agents(n_agents: int, kind: int, model_bytes: int, kv_bytes_per_agent: int, ram_avail: int, vram_free: int, unified: bool, phys: int, logical: int, mode: int) -> Dict[str, Any]:
+    """Como rodar vários agentes de IA: quantos ao mesmo tempo (`parallel`), quantos modelos ficam na memória (`resident_models`), threads por agente e o tipo de fila.
+    kind: 0 nuvem · 1 modelo embutido (uma instância; fila com prioridade) · 2 servidor local (LM Studio, Ollama…). mode: 0 leve, 1 equilibrado, 2 máximo."""
+    lib = _lib3()
+    if lib is not None:
+        r = _call_json(lambda buf, cap: lib.asta_plan_agents(int(n_agents), int(kind), int(model_bytes), int(kv_bytes_per_agent), int(ram_avail), int(vram_free), int(unified), int(phys), int(logical), int(mode), buf, cap))
+        if r:
+            return r
+    n, p = float(max(n_agents, 1)), float(max(phys, 1))
+    l = float(max(logical, max(phys, 1)))
+    ram, vram = float(ram_avail), float(vram_free)
+    w, kv = max(float(model_bytes), 1.0), max(float(kv_bytes_per_agent), 0.0)
+    notes = []
+    pool = ram * 0.65 if unified else (vram * 0.85 + ram * 0.30 if vram > 0.0 else ram * 0.65)
+    fit = max(math.floor(pool / (w * 1.15)), 1.0)
+    resident = 1.0 if mode == 0 else (min(fit, 2.0) if mode == 1 else min(fit, 3.0))
+    if kind == 0:
+        parallel, threads_each, queue = min(n, {0: 2.0, 1: 4.0}.get(mode, 8.0)), 1.0, "fair"
+    elif kind == 2:
+        by_mem = max(math.floor((pool - w) / max(kv, 64.0 * MIB)), 1.0)
+        parallel, threads_each, queue = min(n, {0: 1.0, 1: 2.0}.get(mode, 4.0), by_mem), 1.0, "fair"
+    else:
+        if n > 1.0:
+            notes.append("modelo embutido: um agente fala por vez (fila com prioridade para o chat)")
+        parallel, threads_each, queue = 1.0, (min(p, 4.0) if vram > 0.0 else (p - 1.0 if p >= 8.0 else p)), "priority"
+    if kind == 1:
+        threads = threads_each
+    elif mode == 0:
+        threads = max(math.floor(p / 2.0), 1.0)
+    else:
+        threads = min(max(math.floor(l / max(parallel, 1.0)), 1.0), p)
+    return {"parallel": int(parallel), "resident_models": int(resident), "threads_each": int(threads), "queue": queue, "share_prefix": kind != 0 and n > 1.0, "pool_bytes": int(pool), "notes": notes}
+
+
+def scan_dir(path: Any, max_entries: int = 0, threads: int = 0) -> Optional[Dict[str, Any]]:
+    """Totais de uma pasta (arquivos, pastas, bytes), por tipo de arquivo e os 20 maiores — com várias threads no Rust. None se não é uma pasta. Links simbólicos não são seguidos."""
+    p = str(path)
+    if not os.path.isdir(p):
+        return None
+    lib = _lib3()
+    if lib is not None:
+        b = p.encode("utf-8")
+        r = _call_json(lambda buf, cap: lib.asta_scan_dir(b, len(b), int(max_entries), int(threads or min(8, os.cpu_count() or 2)), buf, cap))
+        if r:
+            return r
+    files = dirs = total = 0
+    by_ext: Dict[str, list] = {}
+    big: list = []
+    limit = max_entries or 5_000_000
+    stack = [p]
+    while stack and files + dirs <= limit:
+        d = stack.pop()
+        try:
+            it = os.scandir(d)
+        except OSError:
+            continue
+        with it:
+            for e in it:
+                try:
+                    if e.is_symlink():
+                        continue
+                    if e.is_dir(follow_symlinks=False):
+                        dirs += 1
+                        stack.append(e.path)
+                    elif e.is_file(follow_symlinks=False):
+                        sz = e.stat(follow_symlinks=False).st_size
+                        files += 1
+                        total += sz
+                        ext = os.path.splitext(e.name)[1][1:].lower()
+                        ent = by_ext.setdefault(ext, [0, 0])
+                        ent[0] += 1
+                        ent[1] += sz
+                        big.append((sz, e.path))
+                        if len(big) > 400:
+                            big = sorted(big, reverse=True)[:20]
+                except OSError:
+                    continue
+    big = sorted(big, reverse=True)[:20]
+    exts = sorted(by_ext.items(), key=lambda kv: (-kv[1][1], kv[0]))[:16]
+    return {"files": files, "dirs": dirs, "bytes": total, "by_ext": [{"ext": k, "files": v[0], "bytes": v[1]} for k, v in exts], "largest": [{"path": q, "bytes": sz} for sz, q in big]}
+
+
+def dup_groups(root: Any, min_size: int = 1 << 20, exts: Any = (), max_files: int = 200000) -> list:
+    """Grupos de arquivos IDÊNTICOS sob `root` (mesmo tamanho e conteúdo, conferido byte a byte): [{"size": N, "paths": [...]}, ...] do maior para o menor.
+    `exts`: só estas extensões (vazio = todas). Quem decide o que fazer com os duplicados (ex.: trocar por links) é quem chama."""
+    p = str(root)
+    if not os.path.isdir(p):
+        return []
+    ext_list = [str(e).strip().lstrip(".").lower() for e in (exts or ()) if str(e).strip()]
+    lib = _lib3()
+    if lib is not None:
+        b, eb = p.encode("utf-8"), ",".join(ext_list).encode("utf-8")
+        r = _call_json(lambda buf, cap: lib.asta_dup_groups(b, len(b), int(max(min_size, 1)), eb, len(eb), int(max_files), buf, cap))
+        if r is not None:
+            return r
+    import filecmp
+    import hashlib
+
+    by_size: Dict[int, list] = {}
+    n = 0
+    stack = [p]
+    while stack and n < max_files:
+        d = stack.pop()
+        try:
+            it = os.scandir(d)
+        except OSError:
+            continue
+        with it:
+            for e in it:
+                try:
+                    if e.is_symlink():
+                        continue
+                    if e.is_dir(follow_symlinks=False):
+                        stack.append(e.path)
+                    elif e.is_file(follow_symlinks=False):
+                        sz = e.stat(follow_symlinks=False).st_size
+                        if sz >= max(min_size, 1) and (not ext_list or os.path.splitext(e.name)[1][1:].lower() in ext_list):
+                            by_size.setdefault(sz, []).append(e.path)
+                            n += 1
+                except OSError:
+                    continue
+
+    def digest(path: str, size: int, partial: bool) -> Optional[bytes]:
+        h = hashlib.blake2b(digest_size=16)
+        h.update(str(size).encode())
+        try:
+            with open(path, "rb") as f:
+                if partial:
+                    h.update(f.read(65536))
+                    if size > 131072:
+                        f.seek(size - 65536)
+                        h.update(f.read(65536))
+                else:
+                    for chunk in iter(lambda: f.read(1 << 20), b""):
+                        h.update(chunk)
+        except OSError:
+            return None
+        return h.digest()
+
+    groups: list = []
+    for size, paths in by_size.items():
+        if len(paths) < 2:
+            continue
+        sig: Dict[bytes, list] = {}
+        for q in paths:
+            d1 = digest(q, size, True)
+            if d1:
+                sig.setdefault(d1, []).append(q)
+        for l1 in (v for v in sig.values() if len(v) > 1):
+            full: Dict[bytes, list] = {}
+            for q in l1:
+                d2 = digest(q, size, False)
+                if d2:
+                    full.setdefault(d2, []).append(q)
+            for rest in (list(v) for v in full.values() if len(v) > 1):
+                while len(rest) > 1:
+                    first = rest.pop(0)
+                    same = [q for q in rest if filecmp.cmp(first, q, shallow=False)]
+                    rest = [q for q in rest if q not in same]
+                    if same:
+                        groups.append({"size": size, "paths": sorted([first] + same)})
+    groups.sort(key=lambda g: (-g["size"], g["paths"]))
+    return groups
+
+
+def release_memory() -> int:
+    """Devolve ao sistema a memória livre que o alocador ainda segura (use depois de descarregar um modelo). Bytes liberados (estimativa) ou -1 se o sistema não oferece."""
+    lib = _lib3()
+    if lib is not None:
+        try:
+            return int(lib.asta_release_memory())
+        except Exception:  # noqa: BLE001
+            return -1
+    if sys.platform.startswith("linux"):
+        try:
+            libc = ctypes.CDLL("libc.so.6")
+            libc.malloc_trim(0)
+            return 0
+        except (OSError, AttributeError):
+            return -1
+    return -1
+
+
+def evict_file(path: Any) -> int:
+    """Tira o arquivo (pesos de um modelo descarregado) do cache de páginas do sistema. 0 = feito, 1 = o sistema não oferece (ele mesmo gerencia), -1 = não abriu."""
+    p = str(path)
+    if not os.path.isfile(p):
+        return -1
+    lib = _lib3()
+    if lib is not None:
+        b = p.encode("utf-8")
+        return int(lib.asta_evict_file(b, len(b)))
+    if hasattr(os, "posix_fadvise"):
+        try:
+            fd = os.open(p, os.O_RDONLY)
+        except OSError:
+            return -1
+        try:
+            os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_DONTNEED)
+            return 0
+        except OSError:
+            return 1
+        finally:
+            os.close(fd)
+    return 1

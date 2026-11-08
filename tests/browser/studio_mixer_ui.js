@@ -1,4 +1,4 @@
-// Timeline do Studio (estilo Kdenlive): monitor do clipe com entrada/saída e inserir, mixer de áudio com faders em dB e volume geral, zoom embaixo e trilhas recolhíveis.
+// Timeline do Studio (estilo Kdenlive): mixer de áudio com faders em dB e volume geral, zoom embaixo, trilhas recolhíveis, inserir/colocar mídia pelo menu do bin e lâmina estrita.
 const { run } = require('./_common.js');
 run('studio_mixer', async ({ open, api, check }) => {
   const page = await open({ width: 1700, height: 1000 });
@@ -31,16 +31,33 @@ run('studio_mixer', async ({ open, api, check }) => {
   await page.locator('.stl-bar #stl-mixer').click(); await page.waitForTimeout(300);
   check('mixer:botao-esconde-o-painel', !(await page.locator('.stl-mixer').isVisible()));
   await page.locator('.stl-bar #stl-mixer').click(); await page.waitForTimeout(300);
-  // monitor do clipe: clique na mídia carrega; marcar saída e inserir
-  await page.locator('.stl-asset').first().click(); await page.waitForSelector('#stl-clipmon audio, #stl-clipmon video', { state: 'attached', timeout: 8000 });
-  check('monitor-do-clipe:carrega-a-midia-clicada', (await page.locator('#stl-clipmon .cm-name').innerText()).includes('tom.wav'));
-  await page.locator('#cm-insert').click(); await page.waitForTimeout(1300);
-  tl = (await api(`/api/studio/projects/${p.id}`)).episodes[0].timeline;
-  check('monitor-do-clipe:inserir-poe-o-clipe-no-cursor', tl.clips.length === 1 && tl.clips[0].start === 0 && Math.abs(tl.clips[0].dur - 4) < 0.6);
-  await page.locator('#cm-insert').click(); await page.waitForTimeout(1300);   // cursor em 0: o segundo empurra o primeiro (modo «inserir»)
-  tl = (await api(`/api/studio/projects/${p.id}`)).episodes[0].timeline;
+  // v0.14: o monitor do clipe foi removido; a mídia do bin se coloca com dois cliques, arrastando ou pelo menu do botão direito (inserir empurra, colocar não mexe nos outros)
+  check('monitor-do-clipe:foi-removido', (await page.locator('#stl-clipmon').count()) === 0 && (await page.locator('#stl-clipmon-btn, .stl-bar #stl-clipmon').count()) === 0);
+  await page.locator('.stl-asset').first().click();
+  check('bin:clique-destaca-a-midia', (await page.locator('.stl-asset.cur').count()) === 1);
+  // o salvamento da timeline tem 700 ms de atraso: espera (até 8 s) o servidor refletir a edição, em vez de um tempo fixo que falha com a máquina carregada
+  const settle = async (n) => { for (let i = 0; i < 27; i++) { const t = (await api(`/api/studio/projects/${p.id}`)).episodes[0].timeline; if (t.clips.length === n) return t; await page.waitForTimeout(300); } return (await api(`/api/studio/projects/${p.id}`)).episodes[0].timeline; };
+  const insert = async () => { await page.locator('.stl-asset').first().click({ button: 'right' }); await page.locator('.stl-menu .opt').first().click(); await page.waitForTimeout(300); };
+  await insert();
+  tl = await settle(1);
+  check('bin:menu-inserir-poe-o-clipe-no-cursor', tl.clips.length === 1 && tl.clips[0].start === 0 && Math.abs(tl.clips[0].dur - 4) < 0.6);
+  await insert();   // cursor em 0: o segundo empurra o primeiro (modo «inserir»)
+  tl = await settle(2);
   const starts = tl.clips.map((c) => c.start).sort((a, b) => a - b);
-  check('monitor-do-clipe:inserir-empurra-o-que-vem-depois', tl.clips.length === 2 && starts[0] === 0 && starts[1] >= tl.clips[0].dur - 0.7);
+  check('bin:menu-inserir-empurra-o-que-vem-depois', tl.clips.length === 2 && starts[0] === 0 && starts[1] >= tl.clips[0].dur - 0.7);
+  // mídia em uso não sai do projeto
+  await page.locator('.stl-asset').first().click({ button: 'right' }); await page.locator('.stl-menu .opt').nth(2).click(); await page.waitForTimeout(500);
+  check('bin:midia-em-uso-nao-e-removida', (await page.locator('.stl-asset').count()) === 1);
+  // lâmina: um clique perto da borda de um clipe não corta os outros
+  await page.keyboard.press('Control+a'); await page.keyboard.press('Delete'); await page.waitForTimeout(400);
+  await page.locator('.stl-asset').first().dblclick(); await page.waitForTimeout(500);
+  const clipBox = await page.locator('.stl-clip').first().boundingBox();
+  await page.keyboard.press('c');
+  await page.mouse.click(clipBox.x + 1, clipBox.y + clipBox.height / 2); await page.waitForTimeout(500);
+  tl = (await api(`/api/studio/projects/${p.id}`)).episodes[0].timeline;
+  check('lamina:clique-na-borda-nao-corta-nada', tl.clips.length === 1);
+  await page.keyboard.press('v');
+  await page.waitForTimeout(900);
   // zoom embaixo
   const before = await page.locator('#stl-zoom').inputValue();
   await page.locator('#stl-zoom').fill('90'); await page.waitForTimeout(300);

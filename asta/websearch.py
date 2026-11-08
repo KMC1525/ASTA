@@ -24,6 +24,7 @@ from typing import Any, Dict, List, Optional
 
 from .providers import http
 from .providers.base import ProviderError
+from .util import ssl_context
 
 MAX_RESULTS = 10
 PAGE_BYTES = 400_000
@@ -278,7 +279,7 @@ class _SafeRedirect(urllib.request.HTTPRedirectHandler):
         return super().redirect_request(req, fp, code, msg, headers, newurl)
 
 
-_OPENER = urllib.request.build_opener(_SafeRedirect, urllib.request.HTTPSHandler(context=ssl.create_default_context()))
+_OPENER = urllib.request.build_opener(_SafeRedirect, urllib.request.HTTPSHandler(context=ssl_context()))
 
 
 def fetch_page(url: str, limit: int = PAGE_CHARS) -> Dict[str, str]:

@@ -7,7 +7,8 @@ import { isSendKey } from '../prefs.js';
 export const kindOf = (n) => {
   const e = String(n).split('.').pop().toLowerCase();
   return { png: 'image', jpg: 'image', jpeg: 'image', gif: 'image', webp: 'image', bmp: 'image', mp3: 'audio', wav: 'audio', ogg: 'audio', m4a: 'audio', flac: 'audio', mp4: 'video', mov: 'video', webm: 'video', mkv: 'video',
-    pdf: 'document', docx: 'document', doc: 'document', odt: 'document', xlsx: 'spreadsheet', csv: 'spreadsheet', ods: 'spreadsheet', pptx: 'presentation', odp: 'presentation' }[e] || 'text';
+    pdf: 'document', docx: 'document', doc: 'document', odt: 'document', xlsx: 'spreadsheet', csv: 'spreadsheet', ods: 'spreadsheet', pptx: 'presentation', odp: 'presentation',
+    zip: 'archive', rar: 'archive', '7z': 'archive', tar: 'archive', tgz: 'archive', gz: 'archive', bz2: 'archive', xz: 'archive', cbz: 'archive', cbr: 'archive' }[e] || 'text';
 };
 
 // Compositor: caixa de texto + anexos de qualquer tipo (clique, arrastar-e-soltar, colar) + botão de enviar.

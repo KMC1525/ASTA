@@ -66,7 +66,7 @@ function accountBox(p, cfg, repaint) {
 
 async function providers() {
   const presets = state.presets;
-  const localModels = (await api('/api/hf/local')).models.map((m) => m.name);
+  const localInfo = (await api('/api/hf/local')).models, localModels = localInfo.map((m) => m.name);
   let preText = [];   // modelos de texto pré-instalados: o contexto base deles (32K) vale enquanto o usuário não escolher outro valor
   try { preText = (await api('/api/preinstalled')).models.filter((m) => m.kind === 'text' && m.n_ctx); } catch (e) { /* sem a lista, só não mostramos o valor automático */ }
   const container = h('div');
@@ -128,14 +128,22 @@ async function providers() {
         const ctxHint = h('p', { class: 'muted small', style: { margin: '4px 0 0' } });
         const showCtx = () => {
           const pre = preText.find((m) => (m.parts || [m.file]).includes(draft.model) || m.file.split('/').pop() === draft.model);
-          ctxHint.textContent = draft.n_ctx > 0 ? t('Usando {n} tokens de contexto.', { n: draft.n_ctx.toLocaleString() })
+          const loc = localInfo.find((m) => m.name === draft.model);
+          let txt = draft.n_ctx > 0 ? t('Usando {n} tokens de contexto.', { n: draft.n_ctx.toLocaleString() })
             : pre ? t('Automático: {n} tokens (base do modelo pré-instalado).', { n: pre.n_ctx.toLocaleString() }) : t('Automático: conforme o seu hardware (2.048 a 8.192 tokens).');
+          if (loc && loc.ctx_train) {   // até onde o modelo foi treinado e quanto o cache de atenção custa na memória (lido do arquivo, sem carregar o modelo)
+            const gb = (n) => (n / 1073741824).toFixed(n >= 1073741824 * 10 ? 0 : 1) + ' GB', want = draft.n_ctx > 0 ? draft.n_ctx : loc.ctx_train;
+            txt += ' ' + t('Este modelo foi treinado com até {n} tokens.', { n: loc.ctx_train.toLocaleString() });
+            if (loc.kv_bytes_per_token) txt += ' ' + t('O cache de atenção de {c} tokens ocupa ≈ {a} (≈ {b} com cache de 4 bits).', { c: want.toLocaleString(), a: gb(loc.kv_bytes_per_token * want), b: gb(loc.kv_bytes_per_token * want * 0.28) });
+            if (draft.n_ctx > loc.ctx_train) txt += ' ⚠ ' + t('O valor escolhido passa do que o modelo suporta: a qualidade pode cair.');
+          }
+          ctxHint.textContent = txt;
         };
-        const ctxDl = h('datalist', { id: 'ctx-' + p.id }, [4096, 8192, 16384, 32768, 65536, 131072].map((n) => h('option', { value: String(n) })));
+        const ctxDl = h('datalist', { id: 'ctx-' + p.id }, [4096, 8192, 16384, 32768, 65536, 131072, 262144, 524288, 1048576].map((n) => h('option', { value: String(n), label: n >= 1048576 ? '1M' : Math.round(n / 1024) + 'K' })));
         const ctxIn = h('input', { type: 'number', list: 'ctx-' + p.id, min: 512, step: 1024, value: draft.n_ctx || '', placeholder: t('automática'), oninput: (e) => { draft.n_ctx = Math.max(0, parseInt(e.target.value || '0', 10) || 0); showCtx(); } });
         inputs.push(field(t('Janela de contexto (tokens)'), h('div', { class: 'row nw' }, ctxIn, ctxDl,
           h('button', { class: 'btn sm', onclick: () => { draft.n_ctx = 0; ctxIn.value = ''; showCtx(); } }, t('Usar o automático'))),
-          t('Quanto texto o modelo lê de uma vez. Janelas maiores usam mais memória (RAM). Os modelos de texto pré-instalados começam com 32.768 (32K); você pode ajustar quando quiser.')));
+          t('Quanto texto o modelo lê de uma vez. Janelas maiores usam mais memória (RAM/VRAM): 256K (262144), 512K (524288) e 1M (1048576) só valem em modelos treinados para isso — o ASTA lê o limite do modelo no arquivo e avisa se você passar dele, e comprime o cache de atenção sozinho para caber. Os modelos de texto pré-instalados começam com 32.768 (32K).')));
         showCtx(); inputs.push(ctxHint);
       }
       if (p.hint) inputs.push(h('p', { class: 'muted small' }, t(p.hint)));
@@ -207,7 +215,7 @@ async function generation() {
 async function chat() {
   const c = JSON.parse(JSON.stringify(state.settings.chat)), w = c.web, keys = { brave: '', tavily: '' };
   const num = (key, min, max, step, label, hint, target = c) => field(label, h('input', { type: 'number', min, max, step, value: target[key], id: 'cc-' + key, oninput: (e) => { const v = parseInt(e.target.value, 10); if (!Number.isNaN(v)) target[key] = Math.max(min, Math.min(max, v)); } }), hint);
-  const quick = (key, values, fmt, input) => h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap', marginTop: '6px' } }, ...values.map((v) => h('button', { class: 'chip', type: 'button', onclick: () => { c[key] = v; document.getElementById(input).value = v; } }, fmt(v))));
+  const quick = (key, values, fmt, input) => h('div', { class: 'row', style: { gap: '6px', flexWrap: 'wrap', marginTop: '6px', marginBottom: '14px' } }, ...values.map((v) => h('button', { class: 'chip', type: 'button', onclick: () => { c[key] = v; document.getElementById(input).value = v; } }, fmt(v))));
   const kb = (n) => (n >= 1000000 ? (n / 1000000) + 'M' : n >= 1000 ? (n / 1000) + 'K' : String(n));
   const keyField = (id, label, setFlag) => field(label, h('div', { class: 'row', style: { gap: '8px' } }, h('input', { type: 'password', autocomplete: 'off', id: 'cc-' + id, placeholder: setFlag ? '•••••••• (' + t('salva') + ')' : '', oninput: (e) => { keys[id.replace('_key', '')] = e.target.value; } }),
     setFlag ? h('button', { class: 'btn sm', type: 'button', onclick: async () => { await saveSettings({ chat: { web: { [id]: null } } }); toast(t('Chave removida'), 'ok'); await refreshState(); } }, t('Remover')) : null));
@@ -228,13 +236,20 @@ async function chat() {
     h('p', { class: 'muted', style: { marginTop: 0 } }, t('Ajustes da tela Chat. O modelo e o provedor se escolhem no botão ao lado do Run; aqui ficam o tamanho das respostas, a memória da conversa, o tempo de pensamento e a busca na web.')),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Respostas')),
       h('div', { class: 'grid2' },
-        h('div', null, num('max_tokens', 2000, 32000, 100, t('Tamanho das respostas (tokens)'), t('Limite do texto de cada resposta (mínimo 2.000). 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Com tempo de pensamento ligado, o pensamento vai além desse limite.')), quick('max_tokens', [2000, 4000, 8000, 16000], (v) => t('{n} tokens', { n: kb(v) }), 'cc-max_tokens')),
+        h('div', null, num('max_tokens', 2000, 128000, 100, t('Tamanho das respostas (tokens)'), t('Limite do texto de cada resposta (mínimo 2.000, máximo 128.000). 1 token ≈ 3–4 letras; 2.000 ≈ 1.200 palavras. Se o modelo aceitar menos que isso, o ASTA descobre o limite dele e ajusta sozinho. Com tempo de pensamento ligado, o pensamento vai além desse limite.')), quick('max_tokens', [2000, 4000, 8000, 16000, 32000, 64000], (v) => t('{n} tokens', { n: kb(v) }), 'cc-max_tokens')),
         field(t('Criatividade (temperatura)'), range(0, 1.5, 0.05, c.temperature, (v) => { c.temperature = v; }), t('Baixa = mais objetivo; alta = mais criativo. Modelos com pensamento estendido ignoram este valor.'))),
+      field(t('Estilo das respostas'), seg([['balanced', t('Equilibrado')], ['detailed', t('Detalhado')], ['epic', t('Longo e profundo')]], c.reply_style || 'detailed', (v) => { c.reply_style = v; }),
+        t('Equilibrado: o tamanho acompanha a pergunta. Detalhado (padrão): respostas completas, com raciocínio, exemplos e passos. Longo e profundo: usa todo o espaço disponível, em seções. Em todos, o tamanho vem de conteúdo, nunca de enrolação.')),
+      field(t('Equipe de agentes'), seg([['off', t('Desligada')], ['plan', t('Planejar e escrever')], ['review', t('Planejar, escrever e revisar')]], c.agents || 'off', (v) => { c.agents = v; }),
+        t('Desligada: um modelo só, resposta direta. Planejar e escrever: um Planejador monta o roteiro e o Redator o segue. Planejar, escrever e revisar: um Revisor confere o rascunho e o Redator o melhora uma vez. Mais completo, porém mais lento e com mais tokens; se algum agente falhar, a resposta segue sem ele.')),
+      h('div', { class: 'row', style: { gap: '16px', flexWrap: 'wrap', alignItems: 'center' } },
+        checkbox(t('Continuar sozinho quando a resposta for cortada pelo limite'), c.auto_continue !== false, (v) => { c.auto_continue = v; }),
+        num('continue_rounds', 0, 8, 1, t('Continuações no máximo'), t('Quantas vezes o ASTA pede para o modelo seguir de onde parou. 0 = nunca.'))),
       field(t('Instruções personalizadas'), h('textarea', { rows: 3, id: 'cc-instructions', maxlength: 3000, placeholder: t('Ex.: Responda sempre em português, de forma curta e com exemplos.'), oninput: (e) => { c.instructions = e.target.value; } }, c.instructions || ''), t('Entram em toda conversa do Chat, como um pedido seu ao assistente.'))),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Janela de contexto')),
       h('div', { class: 'grid2' },
-        h('div', null, num('context_tokens', 1000, 2000000, 1000, t('Janela de contexto (tokens)'), t('Quanto da conversa (mais anexos e fontes da web) o ASTA envia ao modelo. Passou disso, as mensagens mais antigas saem primeiro. Nunca ponha mais do que o modelo aguenta.')), quick('context_tokens', [4000, 8000, 16000, 32000, 128000], (v) => kb(v), 'cc-context_tokens')),
-        num('history_turns', 1, 100, 1, t('Máximo de turnos lembrados'), t('Pares pergunta/resposta no máximo, mesmo que caibam mais na janela.'))),
+        h('div', null, num('context_tokens', 1000, 2000000, 1000, t('Janela de contexto (tokens)'), t('Quanto da conversa (mais anexos e fontes da web) o ASTA envia ao modelo. Passou disso, as mensagens mais antigas saem primeiro. Nunca ponha mais do que o modelo aguenta: 256K, 512K e 1M só em modelos que suportam (Gemini, GPT-4.1, Claude com 1M, Llama 4, Qwen-Plus… e locais com contexto longo).')), quick('context_tokens', [4000, 8000, 16000, 32000, 128000, 256000, 512000, 1000000], (v) => kb(v), 'cc-context_tokens')),
+        num('history_turns', 1, 1000, 1, t('Máximo de turnos lembrados'), t('Pares pergunta/resposta no máximo, mesmo que caibam mais na janela.'))),
       h('p', { class: 'muted small', style: { margin: '10px 0 0' } }, t('Modelos locais têm a própria janela, definida ao carregá-los (LM Studio: Context Length; Ollama: num_ctx; GGUF embutido: n_ctx em Provedores). Este valor só limita o que o ASTA envia.'))),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Tempo de pensamento')),
       field(t('Nível padrão'), seg(levels, c.thinking, (v) => { c.thinking = v; }), t('Slow → Ultra: quanto o modelo pode «pensar» antes de responder (mais tempo e tokens, respostas melhores em problemas difíceis).')),
@@ -522,13 +537,46 @@ async function performance() {
       h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Núcleo Rust')), h('dd', null, nat.active ? h('span', { class: 'chip on' }, t('ativo')) : h('span', { class: 'muted' }, t('inativo — usando Python puro'))),
         h('dt', null, 'Rust (cargo)'), h('dd', null, nat.cargo ? t('encontrado') : t('não encontrado (opcional)')),
         h('dt', null, t('Carga de modelos locais')), h('dd', { id: 'nat-models' }, nat.models ? h('span', { class: 'chip on' }, t('otimizada')) : h('span', { class: 'muted' }, t('padrão (recompile o núcleo: asta native setup)'))),
+        h('dt', null, t('Agentes, armazenamento e memória')), h('dd', { id: 'nat-ops' }, nat.ops ? h('span', { class: 'chip on' }, t('otimizados')) : h('span', { class: 'muted' }, t('padrão (atualize o núcleo: asta native setup)'))),
         h('dt', null, t('Processador')), h('dd', null, (nat.cores ? t('{p} núcleos físicos · {l} threads', { p: nat.cores[0], l: nat.cores[1] }) : '—') + ((nat.features || []).length ? ' · ' + nat.features.join(' ').toUpperCase() : '')),
         nat.last && nat.last.llm ? h('dt', null, t('Último modelo de texto')) : null,
         nat.last && nat.last.llm ? h('dd', { id: 'nat-llm' }, nat.last.llm.model + ' · ' + t('contexto {c}', { c: nat.last.llm.n_ctx }) + ' · ' + (nat.last.llm.n_gpu_layers === -1 ? t('tudo na GPU') : nat.last.llm.n_gpu_layers > 0 ? t('{n} camadas na GPU', { n: nat.last.llm.n_gpu_layers }) : t('na CPU')) + ' · ' + t('{n} threads', { n: nat.last.llm.n_threads }) + (nat.last.llm.kv_q8 ? ' · ' + t('cache em 8 bits') : '')) : null,
         nat.last && nat.last.media ? h('dt', null, t('Último modelo de mídia')) : null,
         nat.last && nat.last.media ? h('dd', { id: 'nat-media' }, nat.last.media.model + ' · ' + ({ gpu: t('tudo na GPU'), model_offload: t('descarga do modelo'), sequential_offload: t('descarga sequencial (pouca VRAM)'), cpu: t('na CPU') }[nat.last.media.strategy] || '—')) : null),
-      h('p', { class: 'muted small' }, t('O núcleo Rust acelera a síntese de áudio do Canvas, lê o cabeçalho dos modelos locais (GGUF e safetensors) e escolhe contexto, camadas na GPU, threads e descarga conforme a memória livre, além de pré-carregar os pesos em paralelo. Os instaladores e o “asta update” instalam e atualizam o Rust sozinhos; para fazer agora, rode no terminal:')),
-      cmd(t('Instalar/atualizar o Rust e compilar o núcleo'), 'asta native setup')));
+      h('p', { class: 'muted small' }, t('O núcleo Rust é parte do ASTA: faz a síntese de áudio do Canvas, lê o cabeçalho dos modelos locais, escolhe contexto (até 1M de tokens), camadas na GPU e threads pela memória livre, agenda vários agentes locais, procura arquivos duplicados e devolve memória ao sistema. Os instaladores já o trazem; pelo terminal o ASTA baixa a biblioteca pronta da Release (sem compilador). Se ele estiver inativo, o ASTA funciona em Python, só mais devagar. Para ativar agora, rode no terminal:')),
+      cmd(t('Ativar/atualizar o núcleo Rust (baixa a biblioteca pronta)'), 'asta native setup')),
+    storageCard());
+}
+
+// Armazenamento (HDD/SSD): quanto cada parte ocupa, sobras e arquivos duplicados; «Liberar espaço» mostra a prévia e só então aplica (nada é apagado sem confirmar)
+function storageCard() {
+  const fmt = (n) => { let f = n, u = 0; const U = ['B', 'KB', 'MB', 'GB', 'TB']; while (f >= 1024 && u < 4) { f /= 1024; u++; } return (u ? f.toFixed(1) : Math.round(f)) + ' ' + U[u]; };
+  const body = h('div', { id: 'storage-body' }, h('div', { class: 'spinner' }));
+  const load = async () => {
+    let r;
+    try { r = await api('/api/storage'); } catch (e) { body.replaceChildren(h('div', { class: 'errbox' }, e.message)); return; }
+    const free = r.orphans.bytes + r.duplicates.bytes;
+    body.replaceChildren(
+      h('dl', { class: 'kv', style: { margin: 0 } }, h('dt', null, t('Total do ASTA')), h('dd', { id: 'storage-total' }, fmt(r.total)),
+        h('dt', null, t('Livre no disco')), h('dd', null, r.disk.total ? fmt(r.disk.free) + ' / ' + fmt(r.disk.total) : '—'),
+        ...r.areas.slice(0, 8).flatMap((a) => [h('dt', null, t(a.label)), h('dd', null, fmt(a.bytes) + ' · ' + t('{n} arquivo(s)', { n: a.files }))])),
+      h('p', { class: 'muted small', id: 'storage-free' }, free ? t('Dá para liberar ≈ {n}: {o} de sobras (downloads parados, anexos esquecidos) e {d} em {g} grupo(s) de arquivos idênticos (viram um só no disco, sem perder nada).', { n: fmt(free), o: fmt(r.orphans.bytes), d: fmt(r.duplicates.bytes), g: r.duplicates.groups }) : t('Nada a liberar agora: sem sobras nem arquivos duplicados.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn', id: 'storage-preview', type: 'button', disabled: !free, onclick: () => optimize(false) }, t('Ver o que seria feito')), h('button', { class: 'btn primary', id: 'storage-apply', type: 'button', disabled: !free, onclick: () => optimize(true) }, t('Liberar espaço')),
+        h('button', { class: 'btn ghost', type: 'button', onclick: load }, icon('refresh', 14), t('Atualizar'))),
+      h('div', { id: 'storage-out' }));
+  };
+  async function optimize(apply) {
+    if (apply && !(await confirmDialog(t('Apagar as sobras e trocar os arquivos idênticos por um único arquivo no disco? Nada que você usa é perdido: os dois caminhos continuam funcionando.'), false, t('Liberar espaço')))) return;
+    try {
+      const r = await api('/api/storage/optimize', { method: 'POST', body: { apply } });
+      const out = document.getElementById('storage-out');
+      out.replaceChildren(h('p', { class: 'small', style: { margin: '10px 0 0' } }, (apply ? t('Liberado: {n}.', { n: fmt(r.freed) }) : t('Seria liberado: {n}.', { n: fmt(r.freed) })) + ' ' + t('{c} sobra(s) e {l} arquivo(s) duplicado(s).', { c: r.cleaned.length, l: r.linked.length })
+        + (r.failed.length ? ' ' + t('{n} não deu para tratar.', { n: r.failed.length }) : '')));
+      if (apply) { toast(t('Espaço liberado: {n}', { n: fmt(r.freed) }), 'ok'); load(); }
+    } catch (e) { toast(e.message, 'err'); }
+  }
+  load();
+  return cfgCard(t('Armazenamento'), h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Quanto o ASTA ocupa no HDD/SSD e o que dá para liberar. O núcleo Rust procura arquivos idênticos (modelos, imagens, vídeos…) e o ASTA os troca por links: o mesmo arquivo, um só no disco.')), body);
 }
 
 // ---------------------------------------------------------------------------------- dados e backup
@@ -561,6 +609,12 @@ async function data() {
 
 // ---------------------------------------------------------------------------------- celular e tablet
 async function mobileTab() {
+  if (/ASTA-Android/.test(navigator.userAgent || '')) {   // app Android: o ASTA roda neste aparelho; QR de pareamento e «asta mobile» são do computador
+    return h('div', null, cfgCard(t('ASTA neste aparelho'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Você está no app Android: o ASTA roda dentro do aparelho, sem computador. Conversas, projetos e chaves ficam só aqui.')),
+      h('p', { class: 'muted small' }, t('Para usar o ASTA de um computador (modelos locais pesados, mais memória), conecte o app a ele: o ASTA do computador continua rodando lá e este app vira a janela.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn', type: 'button', id: 'app-choose', onclick: () => { try { localStorage.setItem('asta.mode', 'remote'); } catch (e) { /* ok */ } location.href = 'http://localhost/?choose=1'; } }, icon('globe', 14), t('Conectar a um computador')))));
+  }
   const info = await api('/api/mobile');
   if (window.ASTA_CLASSIFY) window.ASTA_CLASSIFY();
   const d = window.ASTA_DEVICE || {};

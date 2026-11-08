@@ -273,3 +273,56 @@ def hardware_info(refresh: bool = False) -> dict:
         "components": hardware_components(),
     }
     return _HW_CACHE
+
+
+# --------------------------------------------------------------------------- certificados HTTPS (macOS com o Python do python.org)
+_CERTS_DONE = False
+
+
+def ssl_context():
+    """Contexto TLS para as conexões HTTPS do ASTA. O Python instalado pelo python.org no macOS vem SEM certificados raiz (até alguém rodar o «Install Certificates.command»):
+    toda chamada HTTPS falha com CERTIFICATE_VERIFY_FAILED — o ASTA não conseguia falar com provedores de IA, buscar atualizações nem baixar modelos. Aqui, se o contexto padrão
+    não tem nenhuma autoridade raiz, carregamos as do `certifi` (se instalado) ou as do Chaveiro do macOS. Nunca desliga a verificação."""
+    import ssl
+
+    ctx = ssl.create_default_context()
+    if ctx.cert_store_stats().get("x509_ca", 0) > 0 or os.environ.get("SSL_CERT_FILE") or os.environ.get("SSL_CERT_DIR"):
+        return ctx
+    try:
+        import certifi  # type: ignore
+
+        ctx.load_verify_locations(cafile=certifi.where())
+        return ctx
+    except Exception:  # noqa: BLE001  (certifi ausente ou quebrado)
+        pass
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+
+            pem = subprocess.run(["/usr/bin/security", "find-certificate", "-a", "-p", "/System/Library/Keychains/SystemRootCertificates.keychain", "/Library/Keychains/System.keychain"],
+                                 capture_output=True, text=True, timeout=30).stdout
+            if "BEGIN CERTIFICATE" in pem:
+                ctx.load_verify_locations(cadata=pem)
+        except Exception:  # noqa: BLE001
+            pass
+    return ctx
+
+
+def fix_default_certs() -> bool:
+    """Faz TODA chamada HTTPS do Python (urllib sem contexto próprio) usar `ssl_context()`. Só mexe se o contexto padrão não tem certificados; devolve True se corrigiu."""
+    global _CERTS_DONE
+    import ssl
+
+    if _CERTS_DONE:
+        return False
+    _CERTS_DONE = True
+    try:
+        if ssl.create_default_context().cert_store_stats().get("x509_ca", 0) > 0:
+            return False
+    except Exception:  # noqa: BLE001
+        return False
+    fixed = ssl_context()
+    if fixed.cert_store_stats().get("x509_ca", 0) <= 0:
+        return False
+    ssl._create_default_https_context = lambda *a, **k: ssl_context()   # type: ignore[assignment,misc]
+    return True

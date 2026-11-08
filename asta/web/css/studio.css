@@ -130,21 +130,9 @@ body.stl-noscroll{overflow:hidden}
 .stl-menu .opt{padding:7px 10px}
 @media (max-width:980px){.stl-top{grid-template-columns:var(--bin,160px) 6px minmax(0,1fr)}.stl-insp,.stl-gut#stl-gut-insp{display:none}}
 
-/* ---- timeline v0.13 (inspirada no Kdenlive): monitor do clipe + monitor do projeto, mixer de áudio, zoom embaixo, trilhas recolhíveis */
+/* ---- timeline v0.13 (inspirada no Kdenlive): monitor do projeto, mixer de áudio, zoom embaixo, trilhas recolhíveis */
 .stl-mons{display:flex;min-width:0;min-height:0;background:#050505}
-.stl-mons>.stl-mon-wrap{flex:1 1 55%}
-.stl-clipmon{flex:1 1 45%;min-width:0;display:flex;flex-direction:column;border-right:1px solid var(--line);background:var(--bg1)}
-.stl.no-clipmon .stl-clipmon{display:none}
-.stl-clipmon .stl-bin-h{position:static}.cm-name{font-size:11.5px;color:var(--dim);max-width:55%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.cm-screen{flex:1;min-height:0;background:#0a0a0a;display:grid;place-items:center;overflow:hidden}
-.cm-screen video,.cm-screen img{max-width:100%;max-height:100%;object-fit:contain}
-.cm-empty{padding:16px;text-align:center;font-size:12px;color:var(--dim);max-width:260px}
-.cm-audio{display:grid;place-items:center;color:var(--a);gap:8px}
-.cm-bar{position:relative;height:22px;padding:0 8px;display:flex;align-items:center;background:var(--bg1)}
-.cm-range{position:absolute;top:6px;height:10px;background:rgba(91,141,239,.35);border:1px solid var(--v);border-radius:3px;pointer-events:none;margin:0 8px}
-.cm-scrub{position:relative;width:100%;accent-color:var(--accent);background:none;border:0;padding:0;height:16px}
-.cm-trans{padding:4px 8px 8px;flex-wrap:wrap}.cm-trans .stl-tc{min-width:0;margin-left:6px}
-.stl-btn.txt{width:auto;padding:0 10px;font-size:12px;border-color:var(--line2)}
+.stl-mons>.stl-mon-wrap{flex:1 1 auto}
 .stl-asset.cur{background:var(--bg3);box-shadow:inset 3px 0 0 var(--accent)}
 .stl-tlwrap{flex:1;display:flex;min-height:0}
 .stl-tlwrap .stl-scroll{flex:1;min-width:0}
@@ -173,5 +161,5 @@ body.stl-noscroll{overflow:hidden}
 .stl-head .chev svg{transition:transform .12s;transform:rotate(90deg)}.stl-head .chev.c svg{transform:rotate(0)}
 .stl-row.collapsed{height:18px!important;overflow:hidden}.stl-row.collapsed .stl-clip{opacity:.55;pointer-events:none;height:10px!important;top:3px!important}
 .stl-row.collapsed .stl-head .bt{display:none}
-@media (max-width:980px){.stl-clipmon{display:none}.stl-mixer{display:none}}
+@media (max-width:980px){.stl-mixer{display:none}}
 .cm-tc{font:12px var(--mono);color:var(--muted);margin-left:6px}

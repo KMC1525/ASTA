@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .canvas.engine import CanvasEngine
+from . import archives
 from .canvas.media import MIME_EXT, build_media, describe_media_presets, sniff_mime
 from .canvas.schema import ASPECTS, CAPS, NODE_TYPES, SIZES, TEMPLATES, describe_types, normalize_params, normalize_result
 from .jobs import HttpError, Job
@@ -81,11 +82,10 @@ class CanvasRoutes:
 
         limit = int(self.store.get_settings()["server"].get("max_upload_mb", 200)) * 1024 * 1024
         files, texts = [], []
-        for uid in ids:
-            meta = self.store.get_upload(uid)
-            if not meta:
-                continue
+        for meta in self.store.get_uploads(ids, limit=20, max_members=60):   # pacotes (ZIP, RAR…) já vêm abertos: cada arquivo de dentro é um anexo
             path = Path(meta["path"])
+            if meta.get("error"):
+                continue
             if not path.is_file() or path.stat().st_size > limit:
                 continue
             data = path.read_bytes()
@@ -181,6 +181,8 @@ class CanvasRoutes:
             raise HttpError(413, f"Arquivo maior que o limite de {limit // 1024 // 1024} MB")
         name = safe_filename(urllib.parse.unquote(req.headers.get("X-Filename", "arquivo")), "arquivo")
         data = req.body_bytes(limit)
+        if archives.archive_kind(name):   # ZIP, RAR, 7z, TAR…: as imagens, vídeos e áudios de dentro viram arquivos do canvas (uma resposta com `also` quando há mais de um)
+            return self._asset_upload_archive(req, cid, name, data)
         mime = sniff_mime(data)  # o tipo vem do conteúdo, nunca do nome nem do Content-Type enviado
         kind = mime.split("/")[0] if mime.split("/")[0] in ("image", "audio", "video") else ""
         if not data or not kind:
@@ -196,6 +198,25 @@ class CanvasRoutes:
             if node and node["type"] in ("upload", "style_folder"):
                 self.cs.patch_node_params(cid, node_id, {"files": node["params"]["files"] + [a["id"]]})
         req.json(a, 201)
+
+    def _asset_upload_archive(self, req, cid: str, name: str, data: bytes) -> None:
+        try:
+            members = archives.media_members(data, name, sniff_mime)
+        except archives.ArchiveError as exc:
+            raise HttpError(400, str(exc))
+        node_id = text(req.query.get("node", [""])[0], "", 24)
+        recs = []
+        for mname, mdata, mime in members:
+            a = self.cs.add_asset(cid, mdata, MIME_EXT.get(mime, "bin"), mime.split("/")[0], name=mname, mime=mime, node=node_id, provider="upload")
+            if a:
+                recs.append(a)
+        if not recs:
+            raise HttpError(400, "O pacote não tem imagens, vídeos nem áudios que o Canvas aceite (PNG, JPG, WebP, GIF, MP4, WebM, MP3, WAV, OGG…).")
+        if node_id:
+            node = next((n for n in self._canvas(cid)["nodes"] if n["id"] == node_id), None)
+            if node and node["type"] in ("upload", "style_folder"):
+                self.cs.patch_node_params(cid, node_id, {"files": node["params"]["files"] + [a["id"] for a in recs]})
+        req.json(dict(recs[0], also=recs[1:]), 201)
 
     def r_asset_get(self, req, cid: str, fname: str) -> None:
         c = self._canvas(cid)

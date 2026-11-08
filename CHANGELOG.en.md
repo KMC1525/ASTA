@@ -7,6 +7,49 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-11-08
+
+### Added — installers and a standalone Android app
+- **Installers for every platform**, built by the `release` workflow and published on the Release: **`ASTA-0-14-Win.exe`** (Windows, per-user, no administrator, with an embedded Python), **`ASTA-0-14-macOS.pkg`** (macOS, Apple Silicon and Intel), **`ASTA-0-14-Linux.appimage`** (x86_64; also `-arm64`) and **`ASTA-0-14-Android.apk`**. The **pre-built Rust core** for each platform (`asta-core-*`) and `SHA256SUMS.txt` ship alongside. The `curl … | sh` and `irm … | iex` commands still work.
+- **The Android app no longer depends on the ASTA on a computer.** The APK carries the **ASTA engine (Python, via Chaquopy) running inside the device**: it opens by itself with the same interface, cloud AI providers, web search, 3D worlds, avatars, 2D games, Canvas and Studio. Connecting to a computer (QR code/address) is still an option on the start screen and in *Configuration → Mobile and tablet*. The app's server runs in **strict mode**: even the local address requires the app's pairing cookie, so other apps on the phone can't get in. The Rust core is compiled for arm64, armeabi-v7a and x86_64. The app tells you about a new APK on the Releases.
+- **ZIP, RAR, 7z and TAR (`.tar.gz`, `.tgz`…) as attachments in every section** (Chat, Worlds, Avatars, 2D games, Canvas and Studio, including direct media upload in the Canvas and the timeline): the package is opened **safely** (`..`/absolute/`C:` paths never leave the folder, links are ignored, limits on file count and on the size **actually written**, packages inside packages up to 2 levels, accented names from Windows ZIPs fixed) and every file inside becomes an attachment (in Chat the package stays a single attachment, with its listing and contents). RAR and 7z use the system's `unrar`, `unar`, `7z` or `tar` (bsdtar); if none is present the message says what to install.
+- **256K, 512K and 1M-token context windows** (for models that support them). Chat: 256K/512K/1M shortcuts and a 2M limit; Hugging Face GGUF: 262144/524288/1048576 in the list. The Rust core now uses a **4-bit attention cache** when even the 8-bit one does not fit a long context, warns when the request goes past what the model was **trained** on, and the screen shows each local model's training context and the **estimated cache memory**. Claude: asks for the 1M window (beta header) when Chat goes above 200K and falls back to normal if the model does not accept it.
+- **An agent team in Chat** (*Configuration → Chat → Agent team*): *Plan and write* (Planner → Writer) or *Plan, write and review* (+ Reviewer, and the Writer improves the text once). If an agent fails, the answer goes on without it.
+- **Storage** (*Configuration → Performance*): how much each part takes, leftovers (stalled model downloads, forgotten attachments) and **identical files**, which become **a single file on disk** through hard links (verified byte by byte by the Rust core; only models/media/packages; always with a preview and confirmation).
+- **`docs/asta-principles.md`** (the project's principles) and **`docs/asta-dev-guide.md`** (the guide developers and AI models follow).
+
+### Changed — long, high-quality answers
+- Chat **answer size** up to **128,000 tokens**, **Answer style** (*Balanced*, *Detailed* — the new default — and *Long and deep*: length comes from substance, never filler) and **automatic continuation**: when an answer hits the token limit ASTA asks the model to carry on where it stopped (up to 3 times by default) instead of handing you cut-off text.
+- **Output ceiling learned per model.** When a provider refuses a `max_tokens` that is too large (OpenAI, Anthropic, Gemini, DeepSeek, OpenRouter…), ASTA **reads the limit from the error message itself**, repeats the request with the right value and remembers it (the notice shows in Chat).
+- **Local models:** the automatic window now **grows to fit the requested answer** (before, the answer was squeezed to half of a 2K window on weak PCs) and never shrinks back; JSON agents double their room up to 16K when an answer comes back cut; an avatar line cut by the limit ends at the last complete sentence.
+- Chat history: up to 1,000 remembered turns; large attachments fit the configured window (per-file and total limits follow it).
+
+### Changed — mandatory, more efficient Rust core (interface 3)
+- **The Rust core is a mandatory part of ASTA**: the installers ship it; from the terminal, `asta native setup` downloads the **pre-built library from the Release** (verified by SHA-256, no compiler) and only compiles locally if that fails; on start ASTA fetches it by itself in the background if missing (at most once a day). Python stays the orchestrator and the **mirror** of every function: without the library ASTA keeps working, just slower. CI now builds and tests the Rust core on all three platforms.
+- **Multiple local AI agents:** the embedded model is served through a **priority queue** (the conversation you are waiting on goes ahead of a long background generation), a **pool of resident models** decided by free memory, and an execution plan from the core (`asta_plan_agents`).
+- **RAM/VRAM:** when models are unloaded (text and media), the weights leave the page cache and the memory the allocator was holding **goes back to the system** (`malloc_trim`/`posix_fadvise`).
+- **Storage:** multi-threaded folder scanning and duplicate search in Rust (`asta_scan_dir`, `asta_dup_groups`).
+- **Less CPU:** in Light and Balanced modes ffmpeg uses fewer threads and runs at **low priority** (`nice`/"below normal" class); the result is the same.
+- The Rust build directory (`asta/native/target/`) had been committed by mistake: it was removed from git and ignored.
+
+### Changed — Studio
+- **The clip monitor was removed** from the timeline. Bin media is placed by double-click, drag, or the right-click menu (*Insert at the cursor*, which pushes what follows, *Place at the cursor*, which leaves other clips alone, and *Remove from the project*).
+- **All 11 text providers** now also pass Studio generation and **automatic editing** (extended conformance battery).
+
+### Fixed
+- **Studio — export with inverted layers:** on the timeline V2 sits above V1 (as in the preview), but the exported video stacked them the other way round and V2 ended up **hidden behind V1** (layered automatic editing and any manual overlay came out wrong). Fixed, with a test that checks the pixels.
+- **Studio — manual editing:** the razor near a clip's edge cut clips on **other tracks**; changing **speed** did not change the clip's duration (2× now uses the same stretch of media in half the time); loose media went to **A3** (now audio goes to A1 and video to V1, moving up to the next track if the spot is taken); **Join** merged clips with different volume/position/scale; switching tabs right after editing, or closing the page, could **lose the last edit**; a failed save stayed on "Saving…" forever (now it retries and tells you); dragging clips rebuilt the whole mixer on every mouse move (now only what is needed, at most once per frame).
+- **macOS (terminal install/update):** **python.org's Python came without root certificates** and every HTTPS call failed (updates, providers, downloads) — ASTA now uses the Keychain's certificates, without turning verification off; Apple's `/usr/bin/python3` stub (which pops up a window asking for the command line tools) is no longer executed; **Apple Silicon Homebrew** (`/opt/homebrew`) is found even off the PATH; Homebrew Python detection (`brew upgrade`) works with the `python` alias; the PATH hint uses `~/.zshrc`/`~/.bash_profile` (it was `~/.profile`, which zsh does not read); without the command line tools ASTA **no longer downloads 300 MB of Rust for nothing**.
+- **Windows embedded Python (installer):** `pip` is installed the first time `asta libs`/`asta update` need it; `asta update` and the new-version notice work on `.exe` and AppImage installs.
+
+### Notes and limits
+- **The installers and the APK are built by GitHub CI and were not run on real Windows, macOS or Android devices by whoever made this change.** What could be verified here: the AppImage was built and run (version, Rust core, server); the Android app engine starts and refuses anyone without the cookie (test); the Android project patcher is idempotent; scripts pass `sh -n`/`bash -n`. The workflow checks each installer's contents and runs a Windows install test.
+- **Unsigned installers** (needs a paid certificate): Windows shows SmartScreen ("More info → Run anyway"); on macOS right-click the `.pkg` → Open.
+- **Android app:** heavy local models (GGUF/PyTorch) do not run inside the phone — use a server on the network (Ollama, LM Studio) or connect to the ASTA on a computer. Features that use ffmpeg depend on the APK shipping one (`libffmpeg.so`/`libffprobe.so`); without it, video analysis and export are unavailable on the device.
+- 256K–1M contexts need a lot of memory (the 1M-token attention cache of an 8B model takes tens of GB even at 4 bits): ASTA warns, but **never overrides the value you chose**.
+- RAR and 7z need a system tool (`unrar`, `unar`, `7z` or `bsdtar`); ZIP and TAR work with nothing extra.
+
+
 ## [0.13.0] — 2026-11-06
 
 ### Improved — Studio timeline (Kdenlive-inspired)

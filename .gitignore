@@ -20,3 +20,17 @@ Thumbs.db
 
 # Saídas de testes
 tests/_out/
+
+# Rust (núcleo nativo): artefatos de compilação nunca vão para o git
+target/
+*.so
+*.dylib
+*.dll
+
+# Saídas de empacotamento (instaladores)
+dist-installers/
+*.AppImage
+installers/windows/stage/
+mobile-app/node_modules/
+mobile-app/android/
+mobile-app/jniLibs/

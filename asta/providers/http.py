@@ -21,7 +21,9 @@ USER_AGENT = f"ASTA/{__version__} (+https://github.com/KMC1525/ASTA)"
 
 
 def _ctx() -> ssl.SSLContext:
-    return ssl.create_default_context()
+    from ..util import ssl_context
+
+    return ssl_context()   # no macOS com o Python do python.org o contexto padrão não tem certificados: ver util.ssl_context
 
 
 def _read_error(exc: urllib.error.HTTPError) -> str:

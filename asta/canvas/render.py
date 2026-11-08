@@ -50,8 +50,11 @@ def has_audio(path: Path) -> bool:
 
 
 def _run(cmd: List[str], ctl: Ctl, timeout: int = 3600) -> Tuple[int, str]:
+    from .. import perf
+
+    cmd, extra = perf.wrap_command(cmd)   # a exportação gasta menos CPU (menos threads e prioridade baixa) fora do modo máximo
     with tempfile.TemporaryFile() as err:
-        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=err)
+        proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=err, **extra)
         start = time.time()
         try:
             while proc.poll() is None:
@@ -91,11 +94,14 @@ def _tempo(speed: float) -> str:
 
 
 def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: str, resolve: Callable[[Dict[str, Any]], Optional[Resolved]], out_path: Path,
-                    ctl: Optional[Ctl] = None, mode: str = "full") -> List[str]:
+                    ctl: Optional[Ctl] = None, mode: str = "full", top_first: bool = False) -> List[str]:
     """Renderiza `tl` em `out_path`. Devolve avisos (clipes ignorados, legendas sem fonte…). Levanta ProviderError se não der.
 
     `mode`: "full" (vídeo + áudio), "video" (sem áudio) ou "audio" (só o áudio; o formato vem da extensão: .m4a, .mp3 ou .wav).
-    Os clipes podem ter `speed` (velocidade), `mute` (silenciar o clipe) e `filter` (cor); sem essas chaves o comportamento é o de sempre."""
+    Os clipes podem ter `speed` (velocidade), `mute` (silenciar o clipe) e `filter` (cor); sem essas chaves o comportamento é o de sempre.
+
+    `top_first`: a ordem das camadas. No Editor do Canvas as trilhas de baixo para cima vêm na ordem da lista (a última fica por cima); na timeline do Studio (como no
+    Kdenlive) a primeira da lista é a de CIMA (V2 acima de V1). Com `top_first=True` o vídeo exportado empilha as trilhas como a prévia mostra."""
     ctl = ctl or Ctl()
     ff = shutil.which("ffmpeg")
     if not ff:
@@ -110,7 +116,8 @@ def render_timeline(tl: Dict[str, Any], width: int, height: int, fps: int, bg: s
     order = {t["id"]: i for i, t in enumerate(tl["tracks"])}
     warnings: List[str] = []
     items: List[Tuple[Dict[str, Any], Dict[str, Any], Optional[Resolved]]] = []
-    for c in sorted(tl["clips"], key=lambda c: (order.get(c["track"], 0), c["start"])):
+    sign = -1 if top_first else 1
+    for c in sorted(tl["clips"], key=lambda c: (sign * order.get(c["track"], 0), c["start"])):
         t = tracks.get(c["track"])
         if not t:
             continue

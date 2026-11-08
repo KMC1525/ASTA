@@ -29,6 +29,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 
 from .. import native as _native
+from .. import perf
 from .. import perf as _perf
 from ..util import hardware_info
 from ..providers import http
@@ -989,6 +990,16 @@ def _device() -> Tuple[str, Any]:
     return "cpu", torch.float32
 
 
+def _give_back_memory() -> None:
+    """Depois de descarregar um modelo de mídia: tira os pesos do cache de páginas e devolve ao sistema a RAM que o alocador ainda segura (núcleo Rust)."""
+    try:
+        for f in (_PLAN.get("files") or [])[:64]:
+            _native.evict_file(f)
+        _native.release_memory()
+    except Exception:  # noqa: BLE001
+        pass
+
+
 def _media_unload() -> None:
     with _LOCAL_LOCK:
         _LOCAL_CACHE.clear()
@@ -1000,6 +1011,7 @@ def _media_unload() -> None:
             torch.cuda.empty_cache()
     except ImportError:
         pass
+    _give_back_memory()
 
 
 _MEDIA_IDLE = _perf.IdleUnloader(_media_unload)
@@ -1057,6 +1069,7 @@ def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
     with _LOCAL_LOCK:
         key = (cap, model)
         if key not in _LOCAL_CACHE:
+            had = bool(_LOCAL_CACHE)
             _LOCAL_CACHE.clear()
             gc.collect()
             try:
@@ -1066,6 +1079,8 @@ def _local_load(cap: str, model: str, loader: Callable[[], Any]) -> Any:
                     torch.cuda.empty_cache()
             except ImportError:
                 pass
+            if had:
+                _give_back_memory()   # trocou de modelo: a RAM do anterior volta antes de carregar o novo
             plan = _media_plan(model)
             _PLAN.clear()
             _PLAN.update(plan)
@@ -1261,7 +1276,7 @@ def _frames_to_mp4(frames: Any, fps: int) -> Media:
         for i, fr in enumerate(frames):
             fr.save(Path(tmp) / f"f{i:05d}.png")
         dst = Path(tmp) / "o.mp4"
-        r = subprocess.run([ff, "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(Path(tmp) / "f%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)],
+        r = perf.run([ff, "-y", "-loglevel", "error", "-framerate", str(fps), "-i", str(Path(tmp) / "f%05d.png"), "-c:v", "libx264", "-pix_fmt", "yuv420p", "-movflags", "+faststart", str(dst)],
                            capture_output=True, timeout=600)
         if r.returncode != 0 or not dst.exists():
             raise ProviderError("ffmpeg falhou ao montar o vídeo: " + r.stderr.decode("utf-8", "replace")[-200:])

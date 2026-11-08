@@ -47,6 +47,7 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 ## Testes e PRs
 
 - Toda correção/recurso precisa de teste em `tests/` quando possível.
+- Leia antes [docs/asta-principles.md](docs/asta-principles.md) e [docs/asta-dev-guide.md](docs/asta-dev-guide.md): definem os princípios (open source, foco local, controle dos dados, interoperabilidade, IA em tudo, sistemas multi-agentes, federation) e as regras de toda mudança (atualizar os dois READMEs e os dois changelogs, manter todos os instaladores em dia, dar a toda ferramenta um fluxo multi-agente, permitir SFW e NSFW livremente).
 - Descreva **o que** mudou e **por quê**; registre no `CHANGELOG.md` em *Não lançado*. Registre também no `CHANGELOG.en.md`. O `README.md` é em inglês e o `README.pt-BR.md` em português; o `CONTRIBUTING.md` (inglês) é o gêmeo deste arquivo: mantenha cada par em sincronia.
 - Adaptadores de APIs de terceiros: siga a documentação pública do serviço e teste contra um servidor simulado — não dá para testar serviços pagos no CI; diga no PR o que você verificou de verdade.
 - Mudanças no motor 3D: anexe um screenshot (antes/depois) — o Chromium headless funciona (`--use-angle=swiftshader`).

@@ -10,7 +10,7 @@ import re
 import urllib.parse
 from typing import Any, Dict, Iterator, List
 
-from . import http, images, thinking as think
+from . import http, images, limits, thinking as think
 from .base import Provider, ProviderError, content_images, content_text, split_system
 
 
@@ -35,6 +35,14 @@ def _text(content: Any) -> str:
     if isinstance(content, list):
         return "".join(str(p.get("text", "")) if isinstance(p, dict) else str(p) for p in content)
     return str(content or "")
+
+
+def _stop(reason: Any) -> str:
+    """O motivo de parada da API → «length» (cortada pelo limite de tokens), «stop» (terminou) ou «»."""
+    r = str(reason or "").lower()
+    if r in ("length", "max_tokens", "max_output_tokens"):
+        return "length"
+    return "stop" if r else ""
 
 
 class OpenAICompatProvider(Provider):
@@ -92,6 +100,7 @@ class OpenAICompatProvider(Provider):
     def _payload(self, messages, system, temperature, max_tokens, json_mode, stream) -> dict:
         if not self.model:
             raise ProviderError("Nenhum modelo selecionado. Escolha um modelo em Configuração → Provedores.")
+        max_tokens = limits.cap(self.cfg.get("id", ""), self.model, int(max_tokens))   # o teto que este modelo já mostrou aceitar (sem outra ida e volta)
         body: Dict[str, Any] = {
             "model": self.model,
             "messages": self._convert(messages, system),
@@ -126,6 +135,8 @@ class OpenAICompatProvider(Provider):
         if "max_completion_tokens" in msg and "max_tokens" in body:
             body["max_completion_tokens"] = body.pop("max_tokens")
             return True
+        if self._shrink_tokens(body, err):   # pediu mais resposta do que o modelo aguenta: usa o teto dele (lido do erro) e lembra
+            return True
         if "temperature" in msg and "temperature" in body:
             body.pop("temperature")
             return True
@@ -133,6 +144,19 @@ class OpenAICompatProvider(Provider):
             body.pop("response_format")
             return True
         return False
+
+    def _shrink_tokens(self, body: dict, err: ProviderError) -> bool:
+        key = "max_tokens" if "max_tokens" in body else "max_completion_tokens" if "max_completion_tokens" in body else ""
+        if not key:
+            return False
+        new = limits.fit_from_error(str(err), int(body[key]))
+        if not new or new >= int(body[key]):
+            return False
+        body[key] = new
+        self._answer_tokens = min(getattr(self, "_answer_tokens", new), new)
+        limits.learn(self.cfg.get("id", ""), self.model, new)
+        self.notes.append(f"Este modelo aceita no máximo {new:,} tokens por resposta: o limite foi ajustado para esse valor.".replace(",", "."))
+        return True
 
     def _strip_images(self, body: dict) -> bool:
         """Troca as imagens das mensagens por uma nota de texto. True se havia imagens."""
@@ -166,7 +190,9 @@ class OpenAICompatProvider(Provider):
         else:  # pragma: no cover
             raise ProviderError("O provedor rejeitou os parâmetros da requisição.")
         try:
-            msg = data["choices"][0]["message"]
+            choice = data["choices"][0]
+            msg = choice["message"]
+            self.last_stop = _stop(choice.get("finish_reason"))
             return _text(msg.get("content")).strip()
         except (KeyError, IndexError, TypeError):
             raise ProviderError(f"Resposta inesperada do provedor: {json.dumps(data)[:300]}") from None
@@ -187,6 +213,8 @@ class OpenAICompatProvider(Provider):
                             raise ProviderError(str(err_obj.get("message") if isinstance(err_obj, dict) else err_obj)[:400] or "O provedor interrompeu a resposta.")
                         choice = (obj.get("choices") or [{}])[0]
                         delta = _text((choice.get("delta") or {}).get("content"))
+                        if choice.get("finish_reason"):
+                            self.last_stop = _stop(choice.get("finish_reason"))
                     except (json.JSONDecodeError, AttributeError, IndexError, TypeError):
                         continue
                     if delta:

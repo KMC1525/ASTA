@@ -6,9 +6,9 @@
 
 Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
-[Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
+[Baixar](#baixe-os-instaladores) · [Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
 
-`MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `zero dependências obrigatórias`
+`MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `núcleo Rust` · `zero dependências obrigatórias`
 
 </div>
 
@@ -34,6 +34,19 @@ Tudo o que você cria vai para uma só **Biblioteca** de projetos atualizáveis.
 - 🧠 **Geração multi-agentes e multi-etapas** (Analista → Planejador → Designer → Revisor → Empacotador) com validação determinística e gerador de regras como reserva: algo jogável sempre é entregue.
 - 🪶 **Leve por design**: o núcleo usa só a biblioteca padrão do Python; não há etapa de build; mundos e jogos se adaptam ao seu hardware.
 - 🔒 **Local e privado**: o servidor escuta em `127.0.0.1`, as chaves nunca chegam ao navegador e a IA escreve **dados (JSON)**, nunca código que seja executado.
+
+## Baixe os instaladores
+
+Escolha o arquivo do seu sistema na [**Release mais recente**](https://github.com/KMC1525/ASTA/releases/latest) — sem terminal, sem precisar do Python:
+
+| Sistema | Arquivo | Como |
+|---|---|---|
+| **Windows 10/11** (64 bits) | `ASTA-0-14-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
+| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-14-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
+| **Linux** (x86_64; também `-arm64`) | `ASTA-0-14-Linux.appimage` | `chmod +x ASTA-0-14-Linux.appimage && ./ASTA-0-14-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-14-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
+
+Cada Release traz também o **núcleo Rust pré-compilado** de cada plataforma (`asta-core-*`) e o `SHA256SUMS.txt` (confira com `sha256sum -c`). Os instaladores não têm assinatura de código (exige certificado pago): o Windows pode mostrar o SmartScreen («Mais informações → Executar assim mesmo»). Eles são gerados pelo [GitHub Actions](.github/workflows/release.yml) e **não foram executados em Windows/macOS/Android reais por quem fez esta alteração** (o que deu para conferir está no [changelog](CHANGELOG.md)). Os instaladores de terminal abaixo continuam disponíveis.
 
 ## Instalação
 
@@ -83,7 +96,8 @@ A WebUI abre em `http://localhost:8787`. Para atualizar, rode o comando de insta
 | `ASTA_PYTHON=auto` (padrão) | instala o Python se faltar e o atualiza (com `pip`, `setuptools`, `wheel`, `venv`) pelo gerenciador de pacotes do sistema |
 | `ASTA_PYTHON=keep` | nunca instala nem atualiza o Python do sistema (o `pip`/`setuptools`/`wheel` do próprio ASTA continuam em dia) |
 | `ASTA_FORCE=1` | reinstala o ASTA mesmo que a versão instalada já seja a última publicada |
-| `ASTA_RUST=yes` (padrão) | **instala o Rust para você** (rustup, na sua pasta de usuário, sem sudo) se faltar, atualiza e compila o núcleo rápido do ASTA; `no` pula, `ask` pergunta antes |
+| `ASTA_RUST=yes` (padrão) | o **núcleo Rust** (parte obrigatória do ASTA): baixa a biblioteca pronta da Release e, só se isso falhar, instala o Rust (rustup, na sua pasta de usuário, sem sudo) e compila; `no` pula, `ask` pergunta antes |
+| `ASTA_NATIVE_FILE=<arquivo>` | um núcleo já compilado para copiar em vez de baixar (os instaladores usam isto) |
 | `ASTA_LANG=pt\|en` | idioma dos textos do terminal (padrão: o idioma do seu computador) |
 | `ASTA_SOURCE=<url\|pasta>` | instala de outra origem (fork, branch, pasta local) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | onde ficam o programa e o comando `asta` |
@@ -106,7 +120,7 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 | **`asta mobile`** | **libera o ASTA para o celular/tablet** e mostra o QR code de pareamento (só aparelhos pareados entram) |
 | `asta libs` | instala/atualiza as bibliotecas opcionais (`docs`, `media`, `local`) |
 | `asta models list\|install` | os modelos locais pré-instalados |
-| `asta native setup` | instala/atualiza o Rust e recompila o núcleo rápido (também `install`, `update`, `build`, `status`) |
+| `asta native setup` | garante o **núcleo Rust** ativo: baixa a biblioteca pré-compilada da Release (conferida por SHA-256, sem compilador) e só compila na máquina se isso falhar (também `install`, `update`, `build`, `status`) |
 | `asta doctor` | diagnóstico do ambiente (hardware, Python, Rust, ffmpeg, provedores, idioma do terminal) |
 | `asta version` · `asta --help` | versão · todas as opções |
 
@@ -125,11 +139,11 @@ O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O
 
 > O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
 
-**Sem computador por perto (app Android):** escaneie este QR code (ou abra [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest)) para baixar o **app ASTA** (APK, gerado pelo GitHub Actions a cada release; permita «instalar apps desconhecidos» uma vez). Abra, escaneie o QR code de pareamento do seu ASTA ou digite o endereço, e pronto. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**.
+**O app Android não precisa de computador.** Baixe o `ASTA-0-14-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
 
 <img src="docs/android-app-qr.svg" alt="QR code: app Android mais recente do ASTA" width="140">
 
-> O app é uma casca nativa (a janela); **o ASTA em si ainda precisa rodar em algum lugar** — seu computador, um servidor caseiro ou uma VPN como o Tailscale. iPhone/iPad não recebe app fora da App Store, então lá continua «Adicionar à Tela de Início» pelo endereço do seu ASTA. O APK é gerado pelo CI e não foi executado em um aparelho por quem fez esta alteração.
+> **Limites honestos do ASTA no aparelho:** modelos locais pesados (GGUF/PyTorch) não rodam dentro de um celular — aponte os provedores para um servidor Ollama/LM Studio na sua rede, ou conecte o app ao ASTA de um computador. Recursos que precisam do `ffmpeg` (análise de vídeo, exportação do Canvas/Studio) só funcionam se o APK o trouxer (`libffmpeg.so`/`libffprobe.so`). O servidor do app escuta no loopback do celular em **modo estrito** — até o endereço local exige o cookie de pareamento do app, então outros apps do celular não o usam. O APK é gerado pelo CI e **não foi executado em um aparelho real por quem fez esta alteração** (o motor em si é testado na máquina do CI). iPhone/iPad não recebe app fora da App Store, então lá continua «Adicionar à Tela de Início» pelo endereço do seu ASTA.
 
 **Segurança:** `asta mobile` abre o ASTA para a sua rede, mas **só aparelhos pareados entram** (o próprio computador nunca precisa parear). *Gerar novo código* em *Configuração → Celular e tablet* despareia todos. Atrás de proxy ou túnel, o pareamento também é exigido.
 
@@ -154,7 +168,10 @@ O **Chat** é um assistente de uso geral, limpo: peça uma receita de bolo, estu
 - **Tela dividida (estilo Firefox).** Botão direito numa aba → *Dividir a tela com…* mostra duas conversas lado a lado na mesma tela, cada painel com a própria rolagem e resposta em tempo real; a caixa de texto vai para o painel com foco. A barra de abas também desliza para os lados (roda do mouse, arrastar ou touchpad) quando há muitas abas.
 - **Painel de fontes (canto direito da conversa).** Todas as fontes pesquisadas ficam listadas ali **na ordem em que a busca as devolveu**, agrupadas por pesquisa (Pesquisa 1, 2… com a consulta usada), cada uma com número, título (abre em nova aba), site, trecho e o selo *lida* quando a página foi lida por inteiro. Abre sozinho quando chega uma pesquisa (vira uma gaveta em telas estreitas), enche ao vivo e tem o botão **Fontes (n)** no topo. As marcas `[1]`, `[2]` da resposta são botões que levam à fonte e a destacam.
 - **Tempo de pensamento** (ao lado do nome do modelo, só quando o modelo escolhido tem o recurso): **Desligado · Slow · Medium · High · Extra high · Ultra**. O Claude recebe orçamentos de pensamento estendido (1K → 32K tokens, além do tamanho da resposta); modelos de raciocínio da OpenAI (o-series, GPT-5), Gemini 2.5+, gpt-oss (LM Studio/Ollama) e modelos com raciocínio no OpenRouter recebem `reasoning_effort` (Extra high e Ultra usam o esforço mais alto do provedor com mais folga de tokens). Modelos sem o recurso não mostram o seletor e nada é enviado; se um modelo recusar o modo, o ASTA refaz sem ele e avisa.
-- **Ajustes do Chat** (*Configuração → Chat*): **tamanho das respostas** (tokens), **janela de contexto** (o que o ASTA envia — as mensagens mais antigas saem primeiro), turnos lembrados, criatividade, **instruções personalizadas**, nível de pensamento padrão e as opções da busca na web.
+- **Respostas longas e de qualidade.** *Configuração → Chat*: **tamanho das respostas** até 128.000 tokens; **estilo das respostas** — *Equilibrado*, *Detalhado* (padrão: respostas completas, com raciocínio, exemplos e passos) ou *Longo e profundo*; **continuação automática** — quando a resposta bate no limite de tokens o ASTA pede ao modelo que siga de onde parou, em vez de entregar texto cortado; e o **teto de saída de cada modelo é aprendido** do próprio erro do provedor (um tamanho grande demais é ajustado, não vira falha). Uma **equipe de agentes** opcional (*Planejar e escrever* / *Planejar, escrever e revisar*) põe um Planejador e um Revisor em volta do Redator.
+- **Contextos longos: 256K, 512K e 1M tokens** (modelos que suportam). Ajuste a **janela de contexto** em *Configuração → Chat* (o que o ASTA envia — as mensagens mais antigas saem primeiro) e, nos modelos GGUF embutidos, em *Provedores → Hugging Face GGUF* (a tela mostra o contexto de treino do modelo e a memória estimada do cache de atenção; o núcleo Rust comprime o cache para 8 ou 4 bits para caber e avisa, mas nunca contraria o seu valor). O Claude recebe o cabeçalho beta de 1M automaticamente acima de 200K.
+- **Anexe ZIP, RAR, 7z e TAR — em todas as seções.** O pacote é aberto com segurança (sem fuga de pasta, sem zip-bomb, links ignorados) e os arquivos de dentro viram anexos (imagens, documentos, áudio, vídeo, texto…). RAR/7z usam uma ferramenta do sistema (`unrar`, `unar`, `7z` ou `bsdtar`); ZIP/TAR não precisam de nada.
+- **Ajustes do Chat** (*Configuração → Chat*): turnos lembrados (até 1.000), criatividade, **instruções personalizadas**, nível de pensamento padrão e as opções da busca na web.
 - Sem provedor, vale o motor Demo e o Chat avisa com honestidade — ele não responde perguntas de verdade. Escolha um modelo para resolver.
 
 ## As ferramentas de criação
@@ -263,11 +280,11 @@ O *Studio* (logo abaixo de Canvas) gera, edita e revisa vídeos com um **pipelin
 - **Estilos:** Realista, Cartoon, Anime ou **Custom** (você descreve o visual). **Projetos:** **Único** (um vídeo) ou **Série** (episódios que compartilham uma «bíblia» — personagens, mundo, tom — e os resumos dos episódios anteriores).
 - **Geração, uma cena de cada vez:** um Showrunner escreve o roteiro (em atos nos vídeos longos) e **cada cena** passa por *recebe → analisa → gera → revisa → entrega* antes de a próxima começar. Cenas entregues ficam salvas: cancele e **continue**, ou **refaça uma cena sozinha**. O quadro de cenas ao vivo mostra os cinco passos de cada uma.
 - **Edição automática:** anexe vários vídeos/imagens/áudios + um prompt e escolha um **estilo de edição** — **Gameplay**, **Documentário**, **Edit Phonk**, **Trailer**, **Vlog**, **Tutorial**, **Clipe musical**, **Apresentação de fotos**. Um Analista, um Diretor e um Revisor montam os cortes (picos de volume, trocas de cena, silêncios, grade de batidas) e você refina na timeline.
-- **Timeline estilo Kdenlive:** bin de mídias, monitor de preview, inspetor e trilhas com **cortar** (`S` / lâmina `C`), **juntar** (`J`), **silenciar** (`M`), excluir / excluir fechando o espaço, duplicar, aparar, **ímã**, modo ripple, texto, marcadores, velocidade, volume, fades, filtros de cor, travar/ocultar/silenciar trilhas, **desfazer/refazer**, zoom e salvamento automático.
+- **Timeline estilo Kdenlive:** bin de mídias (dois cliques, arrastar ou botão direito → *Inserir*/*Colocar*/*Tirar*), monitor do projeto, inspetor, mixer de áudio e trilhas com **cortar** (`S` / lâmina `C`), **juntar** (`J`), **silenciar** (`M`), excluir / excluir fechando o espaço, duplicar, aparar, **ímã**, modo ripple, texto, marcadores, velocidade, volume, fades, filtros de cor, travar/ocultar/silenciar trilhas, **desfazer/refazer**, zoom e salvamento automático.
 - **Exportação:** **Completo** (MP4), **Somente vídeo** ou **Somente áudio** (M4A/MP3/WAV) em 480p/720p/1080p.
 - Limites honestos: a qualidade depende dos seus provedores de mídia (o Demo é sintético); um longa de 90 minutos são centenas de planos (horas de trabalho, e custo com provedores pagos); o preview do navegador aproxima os filtros com CSS — a exportação do ffmpeg é a referência.
 
-- **Timeline como o Kdenlive**: biblioteca de mídias, **monitor do clipe** (marcas de entrada/saída, *Inserir*/*Sobrescrever*) ao lado do monitor do projeto, painel de propriedades, trilhas com lâmina/ripple/ímã, trilhas recolhíveis, **zoom deslizante** embaixo e **mixer de áudio** (faders em dB por trilha, medidores ao vivo, volume geral — valem na prévia e na exportação).
+- **Timeline como o Kdenlive**: biblioteca de mídias, monitor do projeto, painel de propriedades, trilhas com lâmina/ripple/ímã, trilhas recolhíveis, **zoom deslizante** embaixo e **mixer de áudio** (faders em dB por trilha, medidores ao vivo, volume geral — valem na prévia e na exportação). *(A v0.14 removeu o monitor do clipe separado; a V2 agora fica acima da V1 também no vídeo exportado, como na prévia; a velocidade muda o tamanho do clipe; e a última edição nunca se perde ao trocar de aba.)*
 
 ## Rebuild — reconstrua um jogo existente em HTML/CSS/JS puro
 
@@ -287,12 +304,15 @@ O jogo reconstruído mantém a **mesma estrutura do original** (mesmos mapas/lab
 
 ## Desempenho — núcleo Rust e modo Leve
 
-O backend do ASTA continua em Python, agora com um **núcleo Rust** opcional e um **modo de desempenho** para PCs modestos.
+A orquestração do ASTA continua em Python (o máximo possível), sobre um **núcleo Rust obrigatório** e um **modo de desempenho** para PCs modestos.
 
-- **Núcleo Rust (`asta_core`).** Uma biblioteca Rust pequena e sem dependências (só a biblioteca padrão, sem crates, carregada por `ctypes`) que faz a conta pesada — hoje a **síntese de áudio** do Canvas (música, efeitos, voz → PCM). Ela trabalha em buffers compartilhados em vez de um objeto Python por amostra: no nosso teste, uma música de 20 s foi de ~15 s para ~0,05 s. **É opcional:** toda função tem um equivalente em Python puro, então sem Rust nada quebra. Ative com **`asta native setup`** — ele **instala o Rust para você** (rustup, perfil mínimo, na sua pasta de usuário, sem sudo) se faltar, **atualiza** se já existir e **recompila** o núcleo. Os instaladores (`install.sh`, `install.ps1`) e o `asta update` oferecem a mesma etapa: por padrão fazem **automaticamente**, como os outros códigos e bibliotecas (sem perguntar; `ASTA_RUST=ask` pergunta antes, `ASTA_RUST=no` pula). Também: `asta native install | update | build | status`, `asta update --rust yes|no`. Para compilar é preciso o compilador C do sistema (Linux: `build-essential`; macOS: `xcode-select --install`; Windows: Visual Studio Build Tools) — o ASTA avisa quando faltar. `asta native` / `asta doctor` mostram se está ativo; `ASTA_NO_NATIVE=1` desliga.
-- **Núcleo Rust v2 — carga mais rápida e inferência mais esperta para qualquer modelo local.** A cada carregamento o núcleo lê o **cabeçalho** do modelo (GGUF e safetensors: arquitetura, camadas, contexto de treino, quantização, custo do cache de atenção por token) e a **RAM/VRAM livres e os núcleos físicos naquele momento**, e planeja: **camadas na GPU** que cabem, a **janela de contexto** que cabe (ou cache de atenção em 8 bits para caber mais), **threads = núcleos físicos**, tamanhos de lote, `mlock` quando sobra memória e um **cache de prompt** para não recalcular o começo repetido da conversa. Modelos de imagem/vídeo/áudio ganham um plano pelo **tamanho real dos pesos** (tudo na GPU, descarga do modelo, descarga sequencial para pouca VRAM ou CPU, mais fatias de atenção/VAE). Os pesos são **pré-lidos em paralelo** para o cache do sistema antes de carregar (bem mais rápido em disco frio). Um contexto definido por você nunca é contrariado. *Configuração → Desempenho* mostra o último plano. Sem o Rust tudo tem um equivalente em Python com as mesmas contas.
-- **Modo de desempenho** (*Configuração → Desempenho*): **Automático** (pelo nível do hardware), **Leve**, **Equilibrado** ou **Máximo**. O modo Leve limita a janela de contexto do modelo local (um valor definido por você sempre vence), carrega os pesos com `mmap` e lote menor, usa **flash attention e cache KV de 8 bits** (cerca de metade da memória do cache de atenção) quando a build do llama-cpp suporta, **descarrega modelos ociosos** (configurável) e, nos modelos locais de imagem/vídeo, ativa fatias de atenção/VAE e descarga para a CPU — o que reduz os picos de **VRAM**. Opções que um llama-cpp-python antigo não conhece são puladas automaticamente.
-- Limites honestos: o ganho do Rust foi medido só na síntese de áudio; a economia de RAM/VRAM do modo Leve vem de recursos documentados do llama.cpp/diffusers e não foi medida em GPUs ou modelos reais aqui.
+- **Núcleo Rust (`asta_core`) — parte obrigatória do ASTA.** Uma biblioteca Rust pequena e sem dependências (só a biblioteca padrão, carregada por `ctypes`) que faz o trabalho pesado: síntese de áudio do Canvas, **planejamento dos modelos locais**, **agendamento de vários agentes**, **varredura de armazenamento** e **devolução de memória**. Os instaladores (`.exe`, `.pkg`, AppImage, APK) **já trazem a biblioteca pronta**; pelo terminal, `asta native setup` (rodado pelo instalador e pelo `asta update`) baixa a **biblioteca pré-compilada da Release** — conferida por SHA-256, **sem precisar de compilador** — e só compila na sua máquina se isso falhar (instalando o Rust para você, na sua pasta de usuário). Ao abrir, o ASTA também a baixa sozinho em segundo plano se faltar (no máximo 1 vez por dia). **O Python espelha cada função**: se a biblioteca não carregar, nada quebra, só fica mais lento (`ASTA_NO_NATIVE=1` desliga; `asta native` / `asta doctor` / *Configuração → Desempenho* mostram o estado). O CI compila e testa o núcleo no Linux, macOS e Windows, e uma bateria compara Rust e Python em centenas de casos.
+- **Carregar e rodar qualquer modelo local.** A cada carregamento o núcleo lê o **cabeçalho** do modelo (GGUF, safetensors) e a **RAM/VRAM livres e os núcleos físicos agora**, e planeja: camadas na GPU, a **janela de contexto que cabe** (até **1M tokens**, com cache de atenção de 8 bits ou de **4 bits** quando preciso), threads, lotes, `mlock`, **cache de prompt**; modelos de mídia recebem um plano pelo tamanho real dos pesos. Os pesos são **pré-lidos em paralelo**. Ao descarregar um modelo, os pesos saem do cache de páginas e a memória que o alocador segurava **volta ao sistema**. Um contexto definido por você nunca é contrariado.
+- **Vários agentes de IA locais.** O modelo embutido atende os agentes por uma **fila com prioridade** (a conversa que você espera passa na frente de uma geração longa em segundo plano), e um **pool de modelos residentes**, dimensionado pela memória livre, só mantém mais de um carregado quando cabe.
+- **Armazenamento (HDD/SSD).** *Configuração → Desempenho → Armazenamento* mostra o que ocupa espaço, acha sobras (downloads parados, anexos esquecidos) e **arquivos idênticos** (conferidos byte a byte pelo núcleo Rust), que viram um só arquivo no disco por links físicos — sempre com prévia e confirmação, e só em arquivos que o ASTA nunca reescreve no lugar.
+- **Menos poder computacional.** Nos modos Leve e Equilibrado o ffmpeg usa menos threads e roda com prioridade baixa, então a interface continua fluida durante a exportação; o resultado é o mesmo.
+- **Modo de desempenho** (*Configuração → Desempenho*): **Automático**, **Leve**, **Equilibrado** ou **Máximo** — o Leve limita a janela de contexto automática, usa flash attention e cache KV de 8 bits, descarrega modelos ociosos e fatia atenção/VAE nos modelos de imagem/vídeo.
+- Limites honestos: o ganho do Rust foi medido só na síntese de áudio; a economia de RAM/VRAM vem de recursos documentados do llama.cpp/diffusers/sistema e não foi medida em GPUs ou modelos reais aqui; o cache de 1M tokens de um modelo de 8B ainda precisa de dezenas de GB.
 - **Idioma do terminal.** Tudo o que o terminal mostra — `asta`, `asta update`, `asta doctor` e os instaladores — aparece no **idioma do seu computador** (português ou inglês; qualquer outro idioma cai no inglês). `ASTA_LANG=pt|en` força um.
 
 ## A interface
@@ -416,10 +436,16 @@ asta/
   canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural
   studio/        projetos de vídeo: esquema, pipeline cena a cena, edição automática, exportação, ferramentas ffmpeg
   rebuild/       leitores e conversores de Ren'Py / RPG Maker (+ a revisão de texto por IA, opcional)
-  native/        núcleo Rust opcional (só biblioteca padrão), com equivalente em Python para cada função
-  perf.py  termi18n.py  term_en.py   modos de desempenho · idioma do terminal (pt/en)
+  attachments.py  archives.py    anexos de qualquer tipo; extração segura de ZIP/RAR/7z/TAR
+  native/        núcleo Rust obrigatório (só biblioteca padrão), com equivalente em Python para cada função
+  perf.py  scheduler.py  storage_opt.py  modos de desempenho · fila com prioridade dos agentes locais · otimização de armazenamento
+  termi18n.py  term_en.py   idioma do terminal (pt/en)
   web/           a WebUI (HTML/CSS/JS puros, sem build)
 tests/           testes (unittest) — API, pipelines, motores, provedores, Canvas — e testes de navegador opcionais
+installers/      Windows (Inno Setup), macOS (.pkg), Linux (AppImage) e notas da Release
+mobile-app/      app Android: casca Capacitor + o motor do ASTA embutido (Chaquopy)
+docs/            asta-principles.md · asta-dev-guide.md · imagens do README
+.github/workflows/  ci.yml (testes) · release.yml (instaladores + Release)
 install.sh  install.ps1
 ```
 
@@ -431,9 +457,10 @@ python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activa
 pip install -e .
 asta --home ./asta-data                            # dados de desenvolvimento isolados
 python -m unittest discover -s tests -t .          # testes, sem rede
+cargo test --release --manifest-path asta/native/Cargo.toml   # o núcleo Rust
 ```
 
-Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) (em inglês: [CONTRIBUTING.md](CONTRIBUTING.md)). O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md).
+Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript rodam automaticamente quando o Node.js (e o Playwright) estão disponíveis, e são pulados caso contrário. Veja [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md) (em inglês: [CONTRIBUTING.md](CONTRIBUTING.md)). **Os princípios do projeto estão em [docs/asta-principles.md](docs/asta-principles.md) e as regras que todo desenvolvedor (humano ou IA) segue estão em [docs/asta-dev-guide.md](docs/asta-dev-guide.md).** O histórico de mudanças está em [CHANGELOG.md](CHANGELOG.md) ([inglês](CHANGELOG.en.md)).
 
 ## Roadmap
 
@@ -442,6 +469,9 @@ Os testes de navegador (Chromium via Playwright) e os dos motores em JavaScript 
 - Multiplayer local (vários jogadores no mesmo mundo).
 - Scripts de comportamento gerados por IA em *sandbox*.
 - Exportar o mundo como aplicativo desktop/mobile.
+- **Federation** (veja [asta-principles](docs/asta-principles.md)): ASTAs independentes trocando pacotes assinados e versionados, por escolha — uma direção, ainda não implementada.
+- Sincronização/backup opcional e criptografado, num destino à sua escolha.
+- Instaladores do Windows/macOS assinados (exige certificados).
 - Ideias na mesa (sem data): levar mais trechos críticos para o núcleo Rust; projetos do Studio compartilhados (vários usuários).
 
 ## Licença e créditos

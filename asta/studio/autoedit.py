@@ -355,7 +355,7 @@ class AutoEditPipeline(Runner):
 
         # ---- anexos
         self._step("attachments", "running")
-        metas = [m for m in (self.store.get_upload(u) for u in (req.get("attachment_ids") or [])[:60] if isinstance(u, str)) if m]
+        metas = self.store.get_uploads(req.get("attachment_ids") or [], limit=60, max_members=200)   # pacotes (ZIP, RAR…) já vêm abertos: os vídeos, imagens e áudios de dentro entram na edição
         if not metas:
             raise ValueError("Anexe os vídeos, imagens e áudios que você quer editar.")
         aspect = req.get("aspect") if req.get("aspect") in S.ASPECTS else ("9:16" if style_id in ("phonk",) else "16:9")

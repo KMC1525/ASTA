@@ -23,6 +23,8 @@ class MobileRoutes:
         req.json({"version": __version__})
 
     def _local_only(self, req) -> None:
+        if self.mobile.strict and self.mobile.cookie_ok(req.headers.get("Cookie", "")):
+            return   # app Android: quem tem o cookie do app é o dono do aparelho
         if self.mobile.is_remote(req.h.client_address[0], req.headers):
             raise HttpError(403, "Só no computador onde o ASTA roda.")
 

@@ -10,6 +10,7 @@ Os pesos continuam sendo mapeados do disco (mmap): só as páginas usadas ocupam
 """
 from __future__ import annotations
 
+import os
 import platform
 import shutil
 import subprocess
@@ -79,6 +80,58 @@ class IdleUnloader:
             self._unload()
         except Exception:  # noqa: BLE001
             pass
+
+
+# --------------------------------------------------------------------------- menos CPU: subprocessos (ffmpeg…) com prioridade baixa e menos threads
+_FFMPEG_NAMES = ("ffmpeg", "ffmpeg.exe")
+CURRENT: Dict[str, Any] = {}   # settings["performance"] em vigor (o Store atualiza ao abrir e ao salvar): quem roda o ffmpeg não precisa receber as configurações
+
+
+def configure(perf_cfg: Optional[Dict[str, Any]]) -> None:
+    CURRENT.clear()
+    CURRENT.update(perf_cfg if isinstance(perf_cfg, dict) else {})
+
+
+def run(cmd: list, **kw: Any) -> "subprocess.CompletedProcess":
+    """`subprocess.run` que gasta menos CPU nas chamadas do ffmpeg (ver `wrap_command`)."""
+    cmd, extra = wrap_command(cmd)
+    for k, v in extra.items():
+        kw[k] = kw.get(k, 0) | v if k == "creationflags" else kw.setdefault(k, v)
+    return subprocess.run(cmd, **kw)
+
+
+def cpu_profile(perf_cfg: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
+    """Quanto da CPU as tarefas pesadas fora do Python (ffmpeg) podem usar. Leve: metade dos núcleos físicos e prioridade baixa; equilibrado: todos os físicos menos um e prioridade
+    baixa (a interface continua fluida enquanto exporta); máximo: tudo, prioridade normal. O resultado é o mesmo — muda só o tempo e o calor/ruído/bateria."""
+    from . import native
+    from .util import hardware_info
+
+    mode = resolve(str((perf_cfg or {}).get("mode") or "auto"), hardware_info())
+    si = native.sys_info()
+    phys = max(1, int(si.get("physical") or 1))
+    threads = {"light": max(1, phys // 2), "balanced": max(1, phys - 1 if phys > 2 else phys), "max": 0}[mode]
+    return {"mode": mode, "ffmpeg_threads": threads, "low_priority": mode != "max"}
+
+
+def wrap_command(cmd: list, perf_cfg: Optional[Dict[str, Any]] = None) -> tuple:
+    """(comando, kwargs do subprocess) para rodar `cmd` gastando menos CPU conforme o modo de desempenho. Só mexe em chamadas do ffmpeg:
+    acrescenta `-threads N` e, onde existe, baixa a prioridade (`nice` no macOS/Linux; classe «abaixo do normal» no Windows). Qualquer outro comando passa intacto."""
+    cmd = list(cmd)
+    perf_cfg = CURRENT if perf_cfg is None else perf_cfg
+    kwargs: Dict[str, Any] = {}
+    if not cmd or os.path.basename(str(cmd[0])).lower() not in _FFMPEG_NAMES:
+        return cmd, kwargs
+    prof = cpu_profile(perf_cfg)
+    if prof["ffmpeg_threads"] and "-threads" not in cmd and len(cmd) > 2:
+        n = str(prof["ffmpeg_threads"])
+        # `-threads` vale para o próximo arquivo: antes da primeira entrada limita a decodificação; antes da saída (o último argumento) limita o codificador
+        cmd = [cmd[0], "-threads", n, *cmd[1:-1], "-threads", n, cmd[-1]]
+    if prof["low_priority"]:
+        if os.name == "nt":
+            kwargs["creationflags"] = 0x00004000   # BELOW_NORMAL_PRIORITY_CLASS
+        elif shutil.which("nice"):
+            cmd = ["nice", "-n", "10", *cmd]
+    return cmd, kwargs
 
 
 # --------------------------------------------------------------------------- memória livre agora (para o planejador do núcleo Rust)

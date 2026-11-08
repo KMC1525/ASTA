@@ -68,6 +68,16 @@ pub extern "C" fn asta_plan_llm(
             notes.push("cache de atenção em 8 bits para caber mais contexto".to_string());
         }
     }
+    // contexto longo (64K ou mais — 256K, 512K, 1M…): se nem o cache de 8 bits cabe, usa o de 4 bits (mais compacto, com uma perda pequena de qualidade)
+    let mut kv_q4 = false;
+    if kv_q8 && ctx_max < want && want >= 65536.0 {
+        let q = ctx_for(0.28);
+        if q > ctx_max {
+            kv_q4 = true;
+            ctx_max = q;
+            notes.push("cache de atenção em 4 bits para caber o contexto longo".to_string());
+        }
+    }
     let mut ctx = if explicit != 0 { want } else { want.min(ctx_max) };
     if ctx < 512.0 {
         ctx = 512.0;
@@ -75,6 +85,9 @@ pub extern "C" fn asta_plan_llm(
     }
     if explicit != 0 && want > ctx_max && ctx_max > 0.0 {
         notes.push(format!("o contexto pedido ({}) passa do que cabe na memória livre ({})", want as i64, ctx_max as i64));
+    }
+    if explicit != 0 && ctx_train > 0 && want > ctx_train as f64 {
+        notes.push(format!("o contexto pedido ({}) passa do que o modelo foi treinado ({}): a qualidade pode cair", want as i64, ctx_train));
     }
 
     // 3) threads, lotes e memória
@@ -93,7 +106,7 @@ pub extern "C" fn asta_plan_llm(
     let s = Obj::new()
         .i("n_ctx", ctx as i64).i("ctx_max", ctx_max as i64).i("n_gpu_layers", if all_gpu { -1 } else { ngl as i64 }).i("gpu_layers_fit", ngl as i64)
         .i("n_threads", threads as i64).i("n_threads_batch", threads_batch as i64).i("n_batch", n_batch as i64).i("n_ubatch", n_ubatch as i64)
-        .b("kv_q8", kv_q8).b("flash", flash).b("mlock", mlock).b("prefetch", prefetch).i("cache_bytes", cache_bytes as i64)
+        .b("kv_q8", kv_q8).b("kv_q4", kv_q4).b("flash", flash).b("mlock", mlock).b("prefetch", prefetch).i("cache_bytes", cache_bytes as i64)
         .strs("notes", &notes).end();
     put(out, cap, &s)
 }

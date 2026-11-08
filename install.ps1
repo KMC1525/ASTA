@@ -12,7 +12,7 @@
 #                      $env:ASTA_STEP = "python" → só instala/atualiza o Python e as ferramentas dele.
 #                      $env:ASTA_SOURCE = <url|pasta>   (padrão: GitHub, branch main)
 #                      $env:ASTA_FORCE = "1" → reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
-#                      $env:ASTA_RUST = "yes" (padrão: instala o Rust se faltar, atualiza e recompila o núcleo do ASTA, sozinho, na pasta do usuário) | "ask" (pergunta) | "no" (pula)
+#                      $env:ASTA_RUST = "yes" (padrão: baixa o núcleo Rust pronto da Release e, só se isso falhar, instala o Rust e compila, sozinho, na pasta do usuário) | "ask" (pergunta) | "no" (pula)
 #                      $env:ASTA_LANG = "pt" | "en" → idioma dos textos (padrão: o idioma do computador).
 # O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o winget tiver versão nova, o ambiente (venv) é reaproveitado,
 # o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.

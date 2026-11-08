@@ -1,0 +1,13 @@
+#!/bin/sh
+# Ponto de entrada do ASTA (AppImage): usa o Python que vai dentro do arquivo. Dados e bibliotecas opcionais ficam na pasta do usuário (o AppImage é somente leitura).
+HERE="$(dirname "$(readlink -f "$0")")"
+ASTA_DIR="${ASTA_HOME:-$HOME/.asta}"
+export PATH="$HERE/usr/python/bin:$PATH"
+export ASTA_INSTALLER="appimage"
+export ASTA_NATIVE_LIB="${ASTA_NATIVE_LIB:-$HERE/usr/lib/asta-core/libasta_core.so}"
+# bibliotecas opcionais (asta libs / asta update): pip instala na pasta do usuário, que entra no caminho do Python antes do que veio no AppImage
+export PYTHONUSERBASE="$ASTA_DIR/pyuser"
+export PIP_USER=1
+export PIP_DISABLE_PIP_VERSION_CHECK=1
+unset PYTHONHOME PYTHONPATH
+exec "$HERE/usr/python/bin/python3" -m asta "$@"

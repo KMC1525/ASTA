@@ -21,7 +21,7 @@ import zlib
 from pathlib import Path
 from typing import List, Optional, Tuple
 
-from .. import native
+from .. import native, perf
 from ..providers.base import ProviderError
 
 SR = 22050
@@ -367,7 +367,7 @@ def video_from_image(png: bytes, seconds: int, size: Tuple[int, int], fps: int =
         src.write_bytes(png)
         vf = (f"scale={w * 2}:{h * 2}:force_original_aspect_ratio=increase,crop={w * 2}:{h * 2},"
               f"zoompan=z='min(zoom+0.0012,1.28)':x='(iw-iw/zoom)*{zx:.2f}':y='(ih-ih/zoom)*{zy:.2f}':d={frames}:s={w}x{h}:fps={fps},format=yuv420p")
-        r = subprocess.run([ff, "-y", "-loglevel", "error", "-i", str(src), "-vf", vf, "-frames:v", str(frames), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
+        r = perf.run([ff, "-y", "-loglevel", "error", "-i", str(src), "-vf", vf, "-frames:v", str(frames), "-c:v", "libx264", "-preset", "veryfast", "-crf", "23", "-pix_fmt", "yuv420p",
                             "-movflags", "+faststart", str(dst)], capture_output=True, timeout=300)
         if r.returncode != 0 or not dst.exists():
             raise ProviderError("ffmpeg falhou ao gerar o vídeo: " + r.stderr.decode("utf-8", "replace")[-300:])

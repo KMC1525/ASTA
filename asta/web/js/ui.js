@@ -58,6 +58,7 @@ const ICONS = {
   image: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.8"/><path d="m4 18 5-5 4 4 3-3 4 4"/>',
   video: '<rect x="3" y="6" width="13" height="12" rx="3"/><path d="m16 10 5-3v10l-5-3"/>',
   audio: '<path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/>',
+  archive: '<rect x="4" y="7" width="16" height="13" rx="2"/><path d="M3 4h18v3H3zM12 7v4m0 2v2m-1.5-6h3m-3 4h3"/>',
   doc: '<path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7M9 8h3"/>',
   sheet: '<rect x="4" y="4" width="16" height="16" rx="2"/><path d="M4 10h16M4 15h16M10 4v16"/>',
   slides: '<rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/>',
@@ -94,7 +95,7 @@ export function icon(name, size = 18) {
   s.innerHTML = ICONS[name] || ICONS.file; // conteúdo estático, nunca vindo do usuário
   return s;
 }
-export const kindIcon = (kind) => icon({ image: 'image', video: 'video', audio: 'audio', document: 'doc', spreadsheet: 'sheet', presentation: 'slides', text: 'file' }[kind] || 'file', 16);
+export const kindIcon = (kind) => icon({ image: 'image', video: 'video', audio: 'audio', document: 'doc', spreadsheet: 'sheet', presentation: 'slides', archive: 'archive', text: 'file' }[kind] || 'file', 16);
 
 export function toast(msg, type = '') {
   const box = document.getElementById('toasts');

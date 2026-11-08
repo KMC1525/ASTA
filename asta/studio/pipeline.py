@@ -197,7 +197,7 @@ class StudioPipeline(Runner):
 
     def _attachments(self, req: Dict[str, Any]) -> str:
         ids = [x for x in (req.get("attachment_ids") or []) if isinstance(x, str)][:20] if isinstance(req.get("attachment_ids"), list) else []
-        metas = [m for m in (self.store.get_upload(u) for u in ids) if m]
+        metas = self.store.get_uploads(ids, limit=20)
         if not metas:
             return ""
         tr = voice.transcriber(self.settings)

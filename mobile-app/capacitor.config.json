@@ -4,5 +4,5 @@
   "webDir": "www",
   "backgroundColor": "#000000",
   "server": { "androidScheme": "http", "cleartext": true, "allowNavigation": ["*"] },
-  "android": { "allowMixedContent": true }
+  "android": { "allowMixedContent": true, "appendUserAgent": "ASTA-Android" }
 }

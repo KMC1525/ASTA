@@ -13,7 +13,7 @@ pub fn logical_cores() -> usize {
 /// Núcleos físicos (sem contar o hyper-threading/SMT). Linux: pares de threads irmãs em /sys; nos demais, estimativa pelos lógicos.
 pub fn physical_cores() -> usize {
     let logical = logical_cores();
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         let mut seen: Vec<String> = Vec::new();
         for i in 0..logical.max(1) {
@@ -54,7 +54,7 @@ pub fn features() -> Vec<String> {
 
 /// (total, disponível) em bytes. Dentro de contêiner (cgroup) vale o limite dele.
 pub fn memory() -> (u64, u64, bool) {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "android"))]
     {
         if let Some(m) = read("/proc/meminfo") {
             let kb = |k: &str| -> u64 {

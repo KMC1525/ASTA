@@ -6,6 +6,7 @@ import mimetypes
 import urllib.parse
 from typing import Any, Dict
 
+from . import archives
 from .canvas.media import MIME_EXT, sniff_mime
 from .jobs import HttpError, Job
 from .studio import schema as S
@@ -266,6 +267,15 @@ class StudioRoutes:
             raise HttpError(413, f"Arquivo maior que o limite de {limit // 1024 // 1024} MB")
         name = safe_filename(urllib.parse.unquote(req.headers.get("X-Filename", "arquivo")), "arquivo")
         data = req.body_bytes(limit)
+        if archives.archive_kind(name):   # ZIP, RAR, 7z, TAR…: as mídias de dentro entram no projeto (resposta com `also` quando há mais de uma)
+            try:
+                members = archives.media_members(data, name, sniff_mime)
+            except archives.ArchiveError as exc:
+                raise HttpError(400, str(exc))
+            recs = [r for r in (self.ss.add_asset(pid, d, MIME_EXT.get(m, "bin"), m.split("/")[0], name=n, mime=m, source="upload") for n, d, m in members) if r]
+            if not recs:
+                raise HttpError(400, "O pacote não tem imagens, vídeos nem áudios.")
+            return req.json(dict(recs[0], also=recs[1:]), 201)
         mime = sniff_mime(data)
         kind = mime.split("/")[0] if mime.split("/")[0] in ("image", "audio", "video") else ""
         if not data or not kind:

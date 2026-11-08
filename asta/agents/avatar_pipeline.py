@@ -53,7 +53,7 @@ class AvatarPipeline(Runner):
 
         # ---------- anexos
         self._step("attachments", "running")
-        uploads = [m for m in (st.get_upload(u) for u in (req.get("attachment_ids") or [])[:40]) if m]
+        uploads = st.get_uploads(req.get("attachment_ids") or [])   # pacotes (ZIP, RAR…) já vêm abertos: cada arquivo de dentro é um anexo
         analyzed: List[Dict[str, Any]] = []
         transcribe = voice.transcriber(settings)
         for meta in uploads:

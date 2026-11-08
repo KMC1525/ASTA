@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=ASTA
+GenericName=AI creation hub
+Comment=Open source AI: chat, 3D worlds, avatars, 2D games, Canvas and video Studio
+Exec=AppRun
+Icon=asta
+Terminal=true
+Categories=Utility;Graphics;Development;
+X-AppImage-Version=@VERSION@

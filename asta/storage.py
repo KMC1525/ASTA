@@ -41,6 +41,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "language": "auto",  # auto | pt-BR | en
     # Chat geral (a tela «Chat»): tamanho da resposta, janela de contexto, tempo de pensamento e busca na web
     "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000, "context_tokens": 16000, "thinking": "off", "instructions": "",
+             "reply_style": "detailed",  # balanced | detailed (padrão: respostas completas e de qualidade) | epic (longas e profundas)
+             "auto_continue": True, "continue_rounds": 3,  # resposta cortada pelo limite de tokens → continua sozinha de onde parou
+             "agents": "off",  # off | plan (Planejador → Redator) | review (Planejador → Redator → Revisor → Redator): equipe de agentes para respostas mais completas
+
              "web": {"default": False, "engine": "auto", "results": 5, "read_pages": 2, "language": "auto", "brave_key": "", "tavily_key": "", "searxng_url": ""}},
     "ui": DEFAULT_UI,  # aparência, atalhos, barra lateral, chat (ver uiprefs.py)
     "active": {"generation": "demo", "characters": "auto"},  # characters "auto": IA de verdade sempre que houver (ver providers/auto.py)
@@ -234,6 +238,9 @@ class Store:
         for d in (self.projects_dir, self.uploads_dir, self.models_dir, self.avatar_portraits_dir, self.avatar_memory_dir):
             d.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
+        from . import perf
+
+        perf.configure(self.get_settings().get("performance"))
 
     # ------------------------------------------------------------------ settings
     def get_settings(self) -> dict:
@@ -280,6 +287,9 @@ class Store:
             merged = conform(DEFAULT_SETTINGS, deep_merge(current, patch))  # valor do tipo errado (API/edição manual) nunca chega ao disco
             merged["ui"] = normalize_ui(merged.get("ui"))
             write_json(self.settings_path, merged, private=True)
+            from . import perf
+
+            perf.configure(merged.get("performance"))
             return merged
 
     def public_settings(self) -> dict:
@@ -544,7 +554,53 @@ class Store:
         return meta
 
     def delete_upload(self, uid: str) -> bool:
+        uid = str(uid or "").split(":", 1)[0]   # «u_abc:3» = um arquivo de dentro de um pacote: apagar o anexo apaga o pacote inteiro
         if not self.get_upload(uid):
             return False
         shutil.rmtree(self.uploads_dir / uid, ignore_errors=True)
         return True
+
+    def get_uploads(self, ids, limit: int = 40, expand: bool = True, max_members: int = 120) -> list:
+        """Os anexos de uma lista de ids. Com `expand`, um pacote (ZIP, RAR, 7z, TAR…) é aberto e **cada arquivo de dentro vira um anexo** (id «u_abc:3», nome «pacote.zip/pasta/arquivo.txt»),
+        então todas as seções tratam o conteúdo do pacote como se o usuário tivesse anexado os arquivos soltos. Pacote ilegível/com senha vira um anexo só, com `error`."""
+        from . import archives
+
+        out: list = []
+        for uid in [u for u in (ids or []) if isinstance(u, str)][:limit]:
+            meta = self.get_upload(uid)
+            if not meta:
+                continue
+            kind = archives.archive_kind(meta["name"], Path(meta["path"])) if expand else ""
+            if not kind:
+                out.append(meta)
+                continue
+            try:
+                members = self._unpack(meta, max_members)
+            except archives.ArchiveError as exc:
+                out.append(dict(meta, error=str(exc), archive_kind=kind))
+                continue
+            if not members:
+                out.append(dict(meta, error="O pacote não tem nenhum arquivo utilizável.", archive_kind=kind))
+                continue
+            out.extend(members)
+        return out
+
+    def _unpack(self, meta: dict, max_members: int) -> list:
+        """Abre o pacote do anexo `meta` (uma vez; fica em uploads/<id>/_unpacked) e devolve os arquivos de dentro como metadados de anexo."""
+        from . import archives
+
+        folder = self.uploads_dir / meta["id"] / "_unpacked"
+        index = folder / "_index.json"
+        data = read_json(index) if index.is_file() else None
+        if not isinstance(data, dict):
+            shutil.rmtree(folder, ignore_errors=True)
+            res = archives.expand(meta["path"], folder, meta["name"])   # resolve() abaixo: no macOS /var é um link para /private/var
+            data = {"files": [{"name": f["name"], "path": str(Path(f["path"]).resolve().relative_to(folder.resolve())).replace("\\", "/"), "size": f["size"]} for f in res["files"]], "skipped": res["skipped"]}
+            write_json(index, data)
+        out = []
+        for i, f in enumerate(data["files"][:max_members]):
+            p = folder / f["path"]
+            if p.is_file():
+                out.append({"id": f"{meta['id']}:{i}", "name": f"{meta['name']}/{f['name']}", "mime": "", "size": f["size"], "created": meta.get("created", ""), "path": str(p),
+                            "archive": meta["name"], "skipped": data["skipped"] if i == 0 else []})
+        return out
