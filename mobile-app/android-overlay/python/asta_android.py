@@ -48,7 +48,7 @@ def start(files_dir: str, native_lib_dir: str = "") -> str:
         os.environ.update({"ASTA_HOME": home, "ASTA_NO_UPDATE": "1", "ASTA_ANDROID": "1", "ASTA_STRICT_LOOPBACK": "1", "ASTA_NO_NATIVE_FETCH": "1", "ASTA_LANG": os.environ.get("ASTA_LANG", "")})
         lib = os.path.join(native_lib_dir, "libasta_core.so") if native_lib_dir else ""
         if lib and os.path.isfile(lib):
-            os.environ["ASTA_NATIVE_LIB"] = lib   # núcleo Rust compilado para o Android (arm64/armeabi/x86_64)
+            os.environ["ASTA_NATIVE_LIB"] = lib   # núcleo Rust compilado para o Android (arm64/x86_64)
         _link_tools(files_dir, native_lib_dir)
         from asta.server import make_server
         from asta.storage import Store

@@ -23,6 +23,9 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - **Rule-based fallback with no AI** (`computer/rulebased.py`): with the Demo it understands simple requests in Portuguese and English (create folder/file, organize a folder, open a program/game/site, search, several chained steps); anything else says clearly that it needs an AI model. An invalid model answer → automatic method.
 - API: `GET/POST /api/computer/tasks`, `…/tasks/<id>` (+ `cancel`, `answer`, `undo`, `retry`, `shots/<file>`), `GET /api/computer/events` (SSE), `status`, `inventory`, `prompts`, `history/clear`. The `computer` settings section (`enabled`, `mode`, `max_parallel`, `max_steps`, `team`, `revisions`, `ask_for`, `game_dirs`, `app_wait`).
 
+### Fixed
+- **APK/installers Release:** the Android app build failed (`Python 3.12 is not available for the ABI armeabi-v7a`) and took the whole Release down. The app is now built for `arm64-v8a` and `x86_64` (Chaquopy with Python 3.12 has no `armeabi-v7a`; 32-bit devices get no APK).
+
 ### Changed
 - **Linux/X11: screen, keyboard and mouse work with nothing to install** (`computer/x11.py`: libX11 + XTEST via `ctypes`, PNG capture with `zlib`, accents and any Unicode, shortcuts, click and scroll; tested on a virtual X server with Xvfb). External tools (`xdotool`, `grim`, `ydotool`…) are only used on pure Wayland sessions. On Wayland with XWayland, X11 only reaches X windows.
 - The sidebar now has **10 screens**: `Alt+0` opens the 10th (Configuration); the command palette shows the right shortcut; *Configuration* gained the **Computer Use** tab (18 tabs) and a card in *Chat*. Start page and hide-from-sidebar accept the new section.

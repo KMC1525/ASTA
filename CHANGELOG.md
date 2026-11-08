@@ -21,6 +21,9 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - **Fallback por regras sem IA** (`computer/rulebased.py`): com o Demo, entende pedidos simples em português e inglês (criar pasta/arquivo, organizar pasta, abrir programa/jogo/site, pesquisar, vários passos encadeados); o resto diz com clareza que precisa de um modelo de IA. Resposta inválida do modelo → método automático.
 - API: `GET/POST /api/computer/tasks`, `…/tasks/<id>` (+ `cancel`, `answer`, `undo`, `retry`, `shots/<arquivo>`), `GET /api/computer/events` (SSE), `status`, `inventory`, `prompts`, `history/clear`. Configuração `computer` em `settings.json` (`enabled`, `mode`, `max_parallel`, `max_steps`, `team`, `revisions`, `ask_for`, `game_dirs`, `app_wait`).
 
+### Corrigido
+- **Release do APK/instaladores:** o build do app Android falhava (`Python 3.12 is not available for the ABI armeabi-v7a`) e derrubava a Release inteira. O app passa a ser gerado para `arm64-v8a` e `x86_64` (o Chaquopy com Python 3.12 não tem `armeabi-v7a`; aparelhos de 32 bits ficam sem o APK).
+
 ### Alterado
 - **Linux/X11: tela, teclado e mouse funcionam sem instalar nada** (`computer/x11.py`: libX11 + XTEST por `ctypes`, captura em PNG com `zlib`, acentos e qualquer Unicode, atalhos, clique e rolagem; testado num X virtual com o Xvfb). Ferramentas externas (`xdotool`, `grim`, `ydotool`…) só entram em sessões Wayland puras. Em Wayland com XWayland, o X11 só alcança janelas X.
 - Barra lateral com **10 telas**: `Alt+0` abre a 10ª (Configuração); a paleta de comandos mostra o atalho certo; *Configuração* ganhou a aba **Computer Use** (18 abas) e um cartão no *Chat*. Tela inicial e esconder-da-barra aceitam a nova seção.
