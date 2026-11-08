@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.2] — 2026-11-08
+
+### Corrigido
+- **`/api/mobile` travava no macOS:** a busca dos IPs da rede local usava `getaddrinfo(gethostname())`, que pode demorar muito; agora roda com limite de 1 s e o resultado fica em cache por 30 s.
+- **Rebuild:** o arquivo ZIP enviado ficava aberto (vazamento de handle, trava de arquivo no Windows); agora é fechado e reaberto a cada leitura.
+- **Release:** os executores do macOS passaram de `macos-14` para `macos-latest` (os jobs eram cancelados).
+- **Testes portáteis:** `AutoEditTests` do Studio é pulado sem ffmpeg; os testes que chamam `node` leem a saída em UTF-8 (falhavam no Windows).
+
+### Observações
+- Os testes de macOS/Windows ainda têm falhas antigas fora deste escopo; o Linux está verde.
+
 ## [0.15.1] — 2026-11-08
 
 ### Corrigido — Computer Use

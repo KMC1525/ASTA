@@ -74,11 +74,16 @@ class Source:
         for meta in metas:
             path = Path(meta["path"])
             if zipfile.is_zipfile(path):
-                zf = zipfile.ZipFile(path)
-                for info in zf.infolist():
+                def read_member(n: str, p: Path = path) -> bytes:   # abre o ZIP só na hora de ler: nenhum arquivo fica preso (no Windows isso impedia apagar o anexo)
+                    with zipfile.ZipFile(p) as z:
+                        return z.read(n)
+
+                with zipfile.ZipFile(path) as zf:
+                    infos = list(zf.infolist())
+                for info in infos:
                     if info.is_dir() or not info.filename.lower().endswith(TEXT_EXT) or info.file_size > MAX_READ:
                         continue
-                    src.add(info.filename, lambda zf=zf, n=info.filename: zf.read(n))
+                    src.add(info.filename, lambda n=info.filename, rm=read_member: rm(n))
             elif str(meta.get("name", "")).lower().endswith(TEXT_EXT):
                 src.add(meta["name"], lambda p=path: p.read_bytes()[:MAX_READ])
         return src

@@ -12,6 +12,8 @@ import json
 import os
 import secrets
 import socket
+import threading
+import time
 from pathlib import Path
 from typing import Dict, List, Optional
 
@@ -33,8 +35,29 @@ def is_loopback(addr: str) -> bool:
     return ip.is_loopback
 
 
+_LAN_CACHE: Dict[str, object] = {"t": 0.0, "ips": []}
+
+
+def _hostname_ips(timeout: float = 1.0) -> List[str]:
+    """IPv4 do nome do computador. `getaddrinfo(gethostname())` pode travar por muitos segundos (macOS sem DNS para o próprio nome, mDNS): roda numa thread e desiste depois de `timeout`."""
+    box: List[str] = []
+
+    def work() -> None:
+        try:
+            box.extend(info[4][0] for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET))
+        except OSError:
+            pass
+
+    th = threading.Thread(target=work, daemon=True)
+    th.start()
+    th.join(timeout)
+    return list(box)
+
+
 def lan_ips() -> List[str]:
-    """Endereços IPv4 do computador na rede local (o primeiro é o da saída padrão), sem loopback."""
+    """Endereços IPv4 do computador na rede local (o primeiro é o da saída padrão), sem loopback. O resultado vale por 30 s (a tela consulta isto com frequência)."""
+    if time.time() - float(_LAN_CACHE["t"]) < 30 and _LAN_CACHE["ips"]:
+        return list(_LAN_CACHE["ips"])  # type: ignore[arg-type]
     found: List[str] = []
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -44,15 +67,12 @@ def lan_ips() -> List[str]:
         s.close()
     except OSError:
         pass
-    try:
-        for info in socket.getaddrinfo(socket.gethostname(), None, socket.AF_INET):
-            found.append(info[4][0])
-    except OSError:
-        pass
+    found.extend(_hostname_ips())
     out: List[str] = []
     for ip in found:
         if ip and not ip.startswith(("127.", "0.", "169.254.")) and ip not in out:
             out.append(ip)
+    _LAN_CACHE.update(t=time.time(), ips=list(out))
     return out
 
 

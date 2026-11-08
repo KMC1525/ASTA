@@ -30,7 +30,7 @@ class RuntimeTests(unittest.TestCase):
     def test_core_pure_functions(self):
         import json
 
-        r = subprocess.run(["node", "-e", SCRIPT, str(RUNTIME)], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["node", "-e", SCRIPT, str(RUNTIME)], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         out = json.loads(r.stdout.strip().splitlines()[-1])
         self.assertTrue(out["rngDeterministic"])
@@ -46,7 +46,7 @@ class RuntimeTests(unittest.TestCase):
         for f in files:
             is_module = "web" in f.parts
             cmd = ["node", "--input-type=module", "--check"] if is_module else ["node", "--check", str(f)]
-            r = subprocess.run(cmd, input=f.read_text("utf-8") if is_module else None, capture_output=True, text=True, timeout=30)
+            r = subprocess.run(cmd, input=f.read_text("utf-8") if is_module else None, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
             self.assertEqual(r.returncode, 0, f"{f}: {r.stderr}")
 
     def test_vendor_three_loads_as_classic_script(self):
@@ -56,7 +56,7 @@ class RuntimeTests(unittest.TestCase):
         vm.runInContext(fs.readFileSync(process.argv[1], 'utf8'), ctx);
         console.log(ctx.THREE.REVISION);
         """
-        r = subprocess.run(["node", "-e", script, str(RUNTIME / "vendor" / "three.min.js")], capture_output=True, text=True, timeout=30)
+        r = subprocess.run(["node", "-e", script, str(RUNTIME / "vendor" / "three.min.js")], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
         self.assertEqual(r.stdout.strip(), "159", r.stderr)
 
 
