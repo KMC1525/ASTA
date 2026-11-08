@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.3] — 2026-11-08
+
+### Verified
+- Project-wide bug sweep: full suite (711 tests, 8 skipped for lack of optional tools), route audit (fuzz) and static checks (mutable defaults, `open()` without encoding, piped processes) — **no new defect found on Linux**.
+
+### Notes
+- Older macOS/Windows test failures remain (e.g. a `TypeError` in `test_cli` on Windows); they do not reproduce on Linux, so they were not changed blindly.
+- The Release publishes only when all jobs (core, AppImage, Windows, macOS, Android) pass.
+
 ## [0.15.2] — 2026-11-08
 
 ### Fixed
