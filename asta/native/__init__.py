@@ -587,6 +587,18 @@ def sys_info() -> Dict[str, Any]:
                 pass
     except (OSError, ValueError, IndexError):
         pass
+    if not total and os.name == "nt":
+        try:
+            import ctypes
+
+            class _MS(ctypes.Structure):
+                _fields_ = [("l", ctypes.c_ulong), ("load", ctypes.c_ulong), ("tp", ctypes.c_ulonglong), ("ap", ctypes.c_ulonglong), ("tpf", ctypes.c_ulonglong), ("apf", ctypes.c_ulonglong), ("tv", ctypes.c_ulonglong), ("av", ctypes.c_ulonglong), ("ae", ctypes.c_ulonglong)]
+            ms = _MS()
+            ms.l = ctypes.sizeof(_MS)
+            if ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(ms)):
+                total, avail = int(ms.tp), int(ms.ap)
+        except (AttributeError, OSError, ValueError):
+            pass
     if not total:
         try:
             total = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")

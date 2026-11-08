@@ -267,7 +267,7 @@ class ContextWindowTests(TmpCase):
         model = Path(self.tmp) / "Qwen3.8-2B-Q8_0.gguf"
         model.write_bytes(b"x")
         local_llama._CACHE.clear()
-        with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(local_llama, "hardware_info", return_value={"tier": "low", "ram_gb": 8, "cpus": 2, "gpu": "", "os": "Linux", "arch": "x86_64"}):
+        with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(local_llama, "hardware_info", return_value={"tier": "low", "ram_gb": 8, "cpus": 2, "gpu": "", "os": "Linux", "arch": "x86_64"}), mock.patch.object(local_llama.perf, "memory_state", return_value={"ram_total": 64 << 30, "ram_avail": 48 << 30, "vram_total": 0, "vram_free": 0, "unified": False, "phys": 4, "logical": 8, "features": []}):
             from asta.providers import provider_config
 
             for ctx in (None, None, 8192, 8192):

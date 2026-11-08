@@ -164,7 +164,7 @@ class RustTests(unittest.TestCase):
         self.assertEqual((code, calls), (0, ["install"]))                              # não deu para instalar: segue sem quebrar
         code, calls, _, out = self.run_setup("yes", have=True, build_code=1)
         self.assertEqual(code, 0)
-        self.assertTrue(any(w in out for w in ("gcc", "xcode-select", "Build Tools")))  # dica do compilador do sistema
+        self.assertTrue(any(w in out for w in ("gcc", "xcode-select", "Build Tools", "Ferramentas de Build")))  # dica do compilador do sistema
 
     def test_find_tool_looks_in_the_rustup_folder(self):
         import tempfile
@@ -216,6 +216,7 @@ class InstallerScriptTests(unittest.TestCase):
         self.assertIn('ASTA_RUST="${ASTA_RUST:-yes}"', sh)                              # automático por padrão
         self.assertNotIn("command -v cargo", sh)                                      # a lógica do Rust agora vive no `asta native setup`
 
+    @unittest.skipIf(os.name == "nt", "o sh do Git for Windows não repassa argumentos UTF-8 de forma confiável; o instalador .sh é para macOS/Linux")
     def test_sh_messages_are_printed_in_the_detected_language(self):
         sh = (ROOT / "install.sh").read_text(encoding="utf-8")
         head = sh[sh.index("# Idioma dos textos"):sh.index("say \"$(L \"ASTA — instalação/atualização\"")]
@@ -259,7 +260,7 @@ class FolderCommandTests(unittest.TestCase):
                 self.assertEqual(cli.main(["folder", "--print", "--home", str(home)]), 0)
                 run.assert_not_called()
             self.assertEqual(o2.getvalue().strip(), str(home))
-            with mock.patch.object(cli.subprocess, "run", side_effect=OSError("sem xdg-open")), contextlib.redirect_stdout(io.StringIO()):
+            with mock.patch.object(cli.subprocess, "run", side_effect=OSError("sem xdg-open")), contextlib.redirect_stdout(io.StringIO()), mock.patch.object(cli.sys, "platform", "linux"), mock.patch.object(cli.os, "name", "posix"):
                 self.assertEqual(cli.main(["folder", "--home", str(home)]), 1)   # sem gerenciador de arquivos: avisa e devolve erro
             with mock.patch.object(cli.sys, "platform", "darwin"), mock.patch.object(cli.os, "name", "posix"), mock.patch.object(cli.subprocess, "run") as run, contextlib.redirect_stdout(io.StringIO()):
                 cli.main(["folder", "--home", str(home)])
