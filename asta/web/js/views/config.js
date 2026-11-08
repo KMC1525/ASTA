@@ -194,15 +194,17 @@ function pcBox(draft, detect) {
   const manual = () => {
     let v = addr.value.trim();
     if (!v) { out.textContent = t('Digite o IP do computador (ex.: 192.168.0.10).'); return; }
-    const scheme = (v.match(/^(https?):\/\//i) || [, ''])[1].toLowerCase();   // https:// (túnel/proxy reverso) é mantido; sem esquema vale http + porta 1234
-    v = v.replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    const scheme = (v.match(/^(https?):\/\//i) || [, ''])[1].toLowerCase();   // https:// (túnel) é mantido; sem esquema vale http + porta 1234
+    v = v.replace(/^https?:\/\//i, '');
+    const path = /^[^/]+\/lm\/[\w-]+/.test(v) ? v.slice(v.indexOf('/')).replace(/\/(v1|api\/v0)(\/.*)?$/, '').replace(/\/$/, '') : '';   // link «…/lm/<código>» do acesso de fora de casa
+    v = v.replace(/\/.*$/, '');
     if (!scheme && !/:\d+$/.test(v)) v += ':1234';
-    point((scheme || 'http') + '://' + v);
+    point((scheme || 'http') + '://' + v + path);
   };
   return h('div', { class: 'lms-pc', id: 'lms-pc', style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line, rgba(255,255,255,.1))' } },
     h('b', null, t('LM Studio no computador')),
     h('p', { class: 'muted small', style: { margin: '4px 0 8px' } }, t('Use os modelos do LM Studio do seu computador por este aparelho, na mesma rede Wi-Fi.')),
-    h('p', { class: 'muted small', style: { margin: '0 0 8px' } }, t('Fora de casa: instale o Tailscale (gratuito) no computador e neste aparelho, entre na mesma conta e digite aqui o IP do computador no Tailscale (100.x.x.x) ou o nome dele (….ts.net). Sem VPN, o endereço de casa (192.168…) não é alcançado de fora.')),
+    h('p', { class: 'muted small', style: { margin: '0 0 8px' } }, t('Fora de casa, sem VPN: no computador, abra Configuração → Celular e tablet → «LM Studio fora de casa», ligue e copie o link; cole-o aqui. (Ou use o Tailscale: digite o IP 100.x.x.x ou o nome ….ts.net do computador.)')),
     h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn sm primary', type: 'button', id: 'lms-pc-scan', onclick: scan }, icon('refresh', 13), t('Procurar na rede')), addr,
       h('button', { class: 'btn sm', type: 'button', id: 'lms-pc-go', onclick: manual }, t('Conectar'))), out);
 }
@@ -722,6 +724,35 @@ async function data() {
 }
 
 // ---------------------------------------------------------------------------------- celular e tablet
+
+// Computador: libera o LM Studio para o celular FORA de casa, sem VPN (túnel da Cloudflare + proxy com código secreto; ver asta/remote.py)
+function remoteCard() {
+  const box = h('div', { id: 'remote-lm' });
+  let timer = null;
+  const call = async (action, extra) => { try { return await api('/api/remote', { method: 'POST', body: Object.assign({ action }, extra || {}) }); } catch (e) { toast(e.message, 'err'); return null; } };
+  async function paint(st) {
+    if (!st) { try { st = await api('/api/remote'); } catch (e) { box.textContent = e.message; return; } }
+    clearTimeout(timer);
+    if (st.state === 'installing' || st.state === 'starting') timer = setTimeout(() => paint(), 1500);
+    const msg = { off: t('Desligado'), installing: t('Baixando o cloudflared…'), starting: t('Ligando o túnel…'), on: t('Ligado'), error: t('Erro') }[st.state] || st.state;
+    const link = st.link ? h('div', { class: 'codebox', id: 'remote-link' }, h('span', { class: 'mono small' }, st.link),
+      h('button', { class: 'btn sm ghost', type: 'button', onclick: () => { navigator.clipboard.writeText(st.link).then(() => toast(t('Copiado'))); } }, icon('copy', 13))) : null;
+    box.replaceChildren(
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Use o LM Studio deste computador pelo app do celular de qualquer lugar (4G/5G, outro Wi-Fi), sem instalar VPN no celular. O ASTA cria um endereço https temporário da Cloudflare e só deixa passar a API do LM Studio, protegida por um código secreto do link. O LM Studio precisa estar com o servidor ligado.')),
+      h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', alignItems: 'center' } }, h('b', null, msg),
+        !st.installed && st.state !== 'installing' ? (st.can_download ? h('button', { class: 'btn sm primary', type: 'button', id: 'remote-install', onclick: async () => { paint(await call('install')); } }, t('Baixar o cloudflared'))
+          : h('span', { class: 'muted small' }, t('Instale o cloudflared pelo gerenciador de pacotes do sistema.'))) : null,
+        st.installed && st.state !== 'on' && st.state !== 'starting' ? h('button', { class: 'btn sm primary', type: 'button', id: 'remote-start', onclick: async () => { paint(await call('start')); } }, t('Ligar o acesso de fora de casa')) : null,
+        st.state === 'on' || st.state === 'starting' ? h('button', { class: 'btn sm', type: 'button', id: 'remote-stop', onclick: async () => { paint(await call('stop')); } }, t('Desligar')) : null,
+        st.enabled ? h('button', { class: 'btn sm danger', type: 'button', id: 'remote-rotate', onclick: async () => { if (await confirmDialog(t('Gerar um código novo? O link antigo deixa de funcionar.'), true, t('Gerar novo código'))) paint(await call('rotate')); } }, t('Gerar novo código')) : null),
+      st.error ? h('p', { class: 'err small' }, st.error) : null,
+      link,
+      link ? h('p', { class: 'muted small' }, t('No celular: Configuração → Provedores → LM Studio → «LM Studio no computador», cole este link e toque em Conectar. O endereço muda toda vez que o acesso é ligado; quem tiver o link usa o seu LM Studio, então não o compartilhe.')) : null);
+  }
+  paint();
+  return cfgCard(t('LM Studio fora de casa (sem VPN)'), box);
+}
+
 async function mobileTab() {
   if (/ASTA-Android/.test(navigator.userAgent || '')) {   // app Android: o ASTA roda neste aparelho; QR de pareamento e «asta mobile» são do computador
     return h('div', null, cfgCard(t('ASTA neste aparelho'),
@@ -760,7 +791,7 @@ async function mobileTab() {
       h('div', { style: { flex: 1, minWidth: '220px' } },
         h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Aponte a câmera do celular Android para baixar o app pelo repositório do ASTA (APK); o app avisa quando sai versão nova e pergunta se você quer baixar. No iPhone/iPad, use «Adicionar à Tela de Início» pelo endereço do ASTA. O app é a janela: o ASTA em si precisa estar rodando num computador ou servidor seu.')),
         h('a', { href: info.app_url, target: '_blank', rel: 'noopener', class: 'small mono' }, info.app_url))));
-  return h('div', null, pairing, appCard,
+  return h('div', null, pairing, remoteCard(), appCard,
     cfgCard(t('Este aparelho'), h('table', { class: 'mob-table', id: 'mob-device' },
       row(t('Tipo'), ({ phone: t('Smartphone'), foldable: t('Smartphone dobrável'), tablet: t('Tablet'), desktop: t('Computador') })[d.device] || '—'),
       row(t('Tela'), (d.width || '?') + '×' + (d.height || '?') + ' · ' + (d.orient === 'landscape' ? t('deitado') : t('em pé')) + (d.fold ? ' · ' + t('dobrável') + ': ' + d.fold : '')),

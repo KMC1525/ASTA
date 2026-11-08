@@ -2,6 +2,7 @@
 import json
 import socket
 import sys
+import os
 import threading
 import time
 import unittest
@@ -318,6 +319,133 @@ class ChoiceTests(LMStudioBase, TmpCase):
         s = self.settings({"generation": "lmstudio"}, {"base_url": f"http://127.0.0.1:{free_port()}/v1", "model": "meu"})
         self.assertTrue(auto.usable(s, "lmstudio", self.tmp))
         self.assertFalse(auto.usable(self.settings(lm={"base_url": f"http://127.0.0.1:{free_port()}/v1"}), "lmstudio", self.tmp))
+
+
+class RemoteProxyTests(ServerCase):
+    """Acesso de fora de casa: /lm/<código>/… repassa só a API do LM Studio, só com o código e só se ligado."""
+
+    def setUp(self):
+        lmstudio.forget()
+        self.addCleanup(lmstudio.forget)
+        self.fake = FakeLMStudio(reply=("Oi", ", ", "de fora!"))
+        self.addCleanup(self.fake.close)
+        self.c.json("PUT", "/api/settings", {"providers": {"lmstudio": {"base_url": self.fake.url + "/v1"}}})
+        self.addCleanup(lambda: self.c.json("PUT", "/api/settings", {"providers": {"lmstudio": {"base_url": ""}}}))
+        self.addCleanup(lambda: self.c.json("POST", "/api/remote", {"action": "enable", "on": False}))
+
+    def test_off_by_default_and_wrong_code_is_refused(self):
+        tok = self.app.remote.token()
+        st, r = self.c.json("GET", f"/lm/{tok}/api/v0/models")
+        self.assertEqual(st, 403)  # desligado
+        self.c.json("POST", "/api/remote", {"action": "enable", "on": True})
+        st, r = self.c.json("GET", "/lm/codigo-errado/api/v0/models")
+        self.assertEqual(st, 403)
+
+    def test_proxies_models_and_streams_chat_with_the_right_code(self):
+        self.c.json("POST", "/api/remote", {"action": "enable", "on": True})
+        tok = self.app.remote.token()
+        st, r = self.c.json("GET", f"/lm/{tok}/api/v0/models")
+        self.assertEqual(st, 200)
+        self.assertTrue(any(m["id"] == "llama-3.2-3b" for m in r["data"]))
+        # a sonda do próprio ASTA, apontada para o endereço do proxy (como o celular faz), enxerga o LM Studio
+        info = lmstudio.probe(f"http://127.0.0.1:{self.port}/lm/{tok}", timeout=3)
+        self.assertTrue(info["running"] and info["loaded"])
+        st, h, body = self.c.req("POST", f"/lm/{tok}/v1/chat/completions", {"model": "llama-3.2-3b", "stream": True, "messages": [{"role": "user", "content": "oi"}]})
+        self.assertEqual(st, 200)
+        self.assertIn(b"de fora!", body)
+
+    def test_only_the_lm_studio_api_passes(self):
+        self.c.json("POST", "/api/remote", {"action": "enable", "on": True})
+        tok = self.app.remote.token()
+        for bad in ("api/settings", "api/chats", "v2/x", "../api/settings", "v1/../api/settings"):
+            st, _ = self.c.json("GET", f"/lm/{tok}/{bad}")
+            self.assertIn(st, (403, 404), bad)
+
+    def test_rotating_the_code_invalidates_the_old_link(self):
+        self.c.json("POST", "/api/remote", {"action": "enable", "on": True})
+        old = self.app.remote.token()
+        self.c.json("POST", "/api/remote", {"action": "rotate"})
+        self.assertEqual(self.c.json("GET", f"/lm/{old}/api/v0/models")[0], 403)
+        self.assertEqual(self.c.json("GET", f"/lm/{self.app.remote.token()}/api/v0/models")[0], 200)
+
+    def test_the_proxy_never_forwards_to_the_internet(self):
+        from asta.remote import Remote
+
+        r = Remote(self.tmp)
+        self.assertEqual(r.lm_root({"providers": {"lmstudio": {"base_url": "http://example.com:1234/v1"}}}), lmstudio.DEFAULT_URL)
+        self.assertEqual(r.lm_root({"providers": {"lmstudio": {"base_url": "http://192.168.0.7:1234/v1"}}}), "http://192.168.0.7:1234")
+
+    def test_status_endpoint_is_local_only_and_never_leaks_the_code_without_a_tunnel(self):
+        st, r = self.c.json("GET", "/api/remote")
+        self.assertEqual(st, 200)
+        self.assertEqual(r["link"], "")
+        self.assertNotIn(self.app.remote.token(), json.dumps(r))
+
+
+class TunnelManagerTests(TmpCase):
+    @unittest.skipIf(os.name == "nt", "usa um script de shell como cloudflared falso")
+    def test_start_reads_the_public_address_and_stop_turns_it_off(self):
+        import stat
+
+        from asta.remote import Remote
+
+        fake = self.tmp / "bin"
+        fake.mkdir()
+        exe = fake / "cloudflared"
+        exe.write_text("#!/bin/sh\necho 'INF Requesting new quick Tunnel' >&2\necho '| https://abc-def-123.trycloudflare.com |' >&2\nexec sleep 30\n")
+        exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+        old = os.environ["PATH"]
+        os.environ["PATH"] = str(fake) + os.pathsep + old
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", old))
+        r = Remote(self.tmp / "home", local_port=8787)
+        self.addCleanup(r.stop)
+        self.assertTrue(r.status()["installed"])
+        self.assertEqual(r.status()["link"], "")  # desligado: nenhum link
+        r.start()
+        for _ in range(60):
+            if r.state == "on":
+                break
+            time.sleep(0.1)
+        st = r.status()
+        self.assertEqual((st["state"], st["url"]), ("on", "https://abc-def-123.trycloudflare.com"))
+        self.assertEqual(st["link"], f"https://abc-def-123.trycloudflare.com/lm/{r.token()}")
+        self.assertTrue(r.tunnel_active())
+        r.stop()
+        self.assertEqual((r.status()["state"], r.status()["link"]), ("off", ""))
+
+    @unittest.skipIf(os.name == "nt", "usa um script de shell como cloudflared falso")
+    def test_a_failing_cloudflared_is_an_error_not_a_tunnel_at_the_cloudflare_api_host(self):
+        import stat
+
+        from asta.remote import Remote
+
+        fake = self.tmp / "bin2"
+        fake.mkdir()
+        exe = fake / "cloudflared"
+        exe.write_text("#!/bin/sh\necho '2026-11-08T16:00:00Z ERR failed to request quick Tunnel: Post \"https://api.trycloudflare.com/tunnel\": dial tcp: no such host' >&2\nexit 1\n")
+        exe.chmod(exe.stat().st_mode | stat.S_IXUSR)
+        old = os.environ["PATH"]
+        os.environ["PATH"] = str(fake) + os.pathsep + old
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", old))
+        r = Remote(self.tmp / "home3", local_port=8787)
+        r.start()
+        for _ in range(60):
+            if r.state != "starting":
+                break
+            time.sleep(0.1)
+        self.assertEqual((r.state, r.url), ("error", ""))
+        self.assertIn("no such host", r.error)
+
+    def test_start_without_cloudflared_explains_what_to_do(self):
+        from asta.remote import Remote
+
+        old = os.environ["PATH"]
+        os.environ["PATH"] = ""
+        self.addCleanup(lambda: os.environ.__setitem__("PATH", old))
+        r = Remote(self.tmp / "home2", local_port=8787)
+        r.start()
+        self.assertEqual(r.state, "error")
+        self.assertIn("cloudflared", r.error)
 
 
 class ReasoningTests(unittest.TestCase):

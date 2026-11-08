@@ -75,6 +75,11 @@ run('chat_settings', async ({ open, api, check, base }) => {
   // v0.15.8: celular/app — «LM Studio no computador» (procura na rede ou IP digitado); no computador o cartão não aparece
   check('lmstudio:computador-nao-mostra-o-cartao-do-celular', (await (await open({ width: 1300, height: 900 })).evaluate(async () => { location.hash = '#/config'; await new Promise((r) => setTimeout(r, 1200)); return document.querySelectorAll('#lms-pc').length; })) === 0);
   await S({ providers: { lmstudio: { base_url: url + '/v1' } }, active: { generation: 'lmstudio' } });   // o cartão do provedor em uso já vem aberto
+  // v0.15.11: no computador, Celular e tablet → «LM Studio fora de casa» (túnel + proxy com código)
+  const pc = await open({ width: 1300, height: 900 });
+  await pc.evaluate(() => { location.hash = '#/config'; }); await pc.waitForSelector('.cfgtabs');
+  await pc.locator('.cfgtabs button[data-tab="mobile"]').click(); await pc.waitForSelector('#remote-lm');
+  check('remoto:cartao-no-computador', (await pc.locator('#remote-lm').innerText()).includes('LM Studio') && ((await pc.locator('#remote-install').count()) + (await pc.locator('#remote-start').count())) === 1);
   const mob = await open({ width: 390, height: 800 });
   await mob.addInitScript(() => Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 14) ASTA-Android' }));
   await mob.goto(base + '/#/config'); await mob.reload(); await mob.waitForSelector('#lms-pc');
