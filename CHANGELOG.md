@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.12] — 2026-11-08
+
+### Corrigido — app Android: o Chat não falava com o LM Studio do computador
+- A checagem do LM Studio no Chat esperava só **1 segundo**, curto demais para outro computador pelo Wi-Fi (primeira conexão, economia de energia do Wi-Fi do celular). Para endereços da rede (`192.168…`, VPN, `.local`) agora espera **5 s** e **tenta de novo uma vez**; no próprio aparelho continua 1 s. Uma falha só fica em cache por 2 s (antes 8 s), então ligar o servidor e tentar de novo funciona logo.
+- A mensagem de erro do Chat dizia sempre «abra o LM Studio e ligue Start Server», mesmo quando o servidor já estava rodando em **outro** computador. Agora diz a causa: **«Serve on Local Network» desligado** (conexão recusada), **firewall/Wi-Fi isolado** (tempo esgotado) ou **IP/Wi-Fi errado**; no app Android, `127.0.0.1` é explicado como «o próprio celular» e aponta para «LM Studio no computador».
+- O aviso de «perdi a conexão» também deixou de mandar «ligar o servidor» quando o LM Studio é de outro computador.
+
 ## [0.15.11] — 2026-11-08
 
 ### Adicionado — LM Studio fora de casa SEM VPN no celular

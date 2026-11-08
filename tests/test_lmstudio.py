@@ -188,6 +188,40 @@ class WhyNotConnectedTests(LMStudioBase):
         self.assertEqual(info["kind"], "refused")
 
 
+class ExplainTests(LMStudioBase):
+    def test_chat_error_for_a_computer_on_the_network_says_what_to_fix_not_just_start_the_server(self):
+        refused = {"running": False, "kind": "refused", "error": "x"}
+        self.assertIn("Serve on Local Network", lmstudio.explain(refused, "http://192.168.100.115:1234"))
+        self.assertIn("firewall", lmstudio.explain({"running": False, "kind": "timeout"}, "http://192.168.100.115:1234"))
+        self.assertIn("mesmo Wi-Fi", lmstudio.explain({"running": False, "kind": "dns"}, "http://pc.local:1234"))
+        self.assertIn("Start Server", lmstudio.explain({"running": False}, "http://127.0.0.1:1234"))  # no próprio computador: o conselho de sempre
+
+    def test_in_the_android_app_loopback_means_the_phone_itself(self):
+        old = os.environ.get("ASTA_STRICT_LOOPBACK")
+        os.environ["ASTA_STRICT_LOOPBACK"] = "1"
+        self.addCleanup(lambda: os.environ.pop("ASTA_STRICT_LOOPBACK", None) if old is None else os.environ.__setitem__("ASTA_STRICT_LOOPBACK", old))
+        msg = lmstudio.explain({"running": False}, "http://127.0.0.1:1234")
+        self.assertIn("não roda neste aparelho", msg)
+        self.assertIn("LM Studio no computador", msg)
+
+    def test_a_failed_check_is_cached_only_briefly_and_remote_hosts_get_more_time(self):
+        calls = []
+        real = lmstudio.probe
+
+        def fake(base, key="", timeout=2.0):
+            calls.append(timeout)
+            return {"running": False, "url": base, "models": [], "loaded": [], "native": False, "error": "timed out", "kind": "timeout"}
+
+        lmstudio.probe = fake
+        self.addCleanup(lambda: setattr(lmstudio, "probe", real))
+        lmstudio.detect("http://192.168.0.9:1234")
+        self.assertEqual(calls, [5.0, 5.0])  # rede: 5 s e uma segunda tentativa
+        calls.clear()
+        lmstudio.forget()
+        lmstudio.detect("http://127.0.0.1:1234")
+        self.assertEqual(calls, [1.0])  # no próprio aparelho: 1 s, sem repetir
+
+
 class RemoteAccessTests(unittest.TestCase):
     def test_vpn_and_tailscale_addresses_are_treated_as_direct_not_through_the_system_proxy(self):
         from asta.providers import http

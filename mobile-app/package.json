@@ -1,6 +1,6 @@
 {
   "name": "asta-mobile",
-  "version": "0.15.11",
+  "version": "0.15.12",
   "private": true,
   "description": "ASTA mobile app (Android): the ASTA engine (Python via Chaquopy) runs inside the app; it can also connect to an ASTA server by QR code or address.",
   "scripts": { "sync": "cap sync android" },
