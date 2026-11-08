@@ -7,12 +7,16 @@ Os de nuvem (OpenAI, OpenRouter, xAI…) vêm dos provedores (`/api/media/models
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any, Dict, List
 
 from .. import hf
 from .media import MEDIA_PRESETS, media_config
 from .localmodels import MARKER, PRECISIONS
+
+
+SUPPORT_RE = re.compile(r"(qwen2[._]?5.*vl|qwen3-|t5xxl|clip[_-]?[lg]\b|umt5|mmproj)", re.I)
 
 
 def hf_cache_dir() -> Path:
@@ -47,7 +51,12 @@ def installed(settings: Dict[str, Any], models_dir: Path, cap: str) -> List[Dict
     """[{provider, model, label, size?, detail}] dos modelos locais utilizáveis para a capacidade `cap` (image, video, sound, voice, stt)."""
     items: List[Dict[str, Any]] = []
     if cap in ("image", "video"):
+        from .. import preinstalled
+
+        support = {Path(c["file"]).name for e in preinstalled.CATALOG for c in e.get("companions", [])}
         for m in hf.local_models(models_dir, cap):
+            if m["name"] in support or SUPPORT_RE.search(m["name"]):   # codificadores de texto e afins são arquivos de apoio de outro modelo, não modelos para escolher
+                continue
             items.append({"provider": "gguf_local", "model": m["name"], "label": m["name"], "size": m.get("size", 0), "detail": " · ".join(x for x in (m.get("quant") or "", "GGUF") if x)})
     preset = MEDIA_PRESETS.get("local_hf") or {}
     if cap in preset.get("caps", []):

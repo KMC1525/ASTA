@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.6] — 2026-11-08
+
+### Fixed — «NULL pointer access» when generating an image with a diffusion-only GGUF (Qwen-Image, FLUX…)
+- **Cause:** a GGUF that carries only the diffusion model (Qwen-Image, FLUX…) was loaded as a single file (`model_path`); stable-diffusion.cpp cannot build the model without the VAE and the text encoder, the context ends up null and generation ends in «NULL pointer access».
+- **Automatic loading for known families** (`GGUFMedia.FAMILIES`): for **Qwen-Image** (VAE + Qwen2.5-VL encoder, `cfg_scale` 2.5) and **FLUX** (ae + clip_l + t5xxl), ASTA looks for the support files **in the model's own folder** (`models/image`) and loads with `diffusion_model_path`, `vae_path` and `llm_path`/`clip_l_path`/`t5xxl_path`. It only applies if **all** support files exist; an `extra.load` saved in the node or a pre-installed model still wins.
+- **Clear error:** if the library still fails with «NULL pointer», the node shows what happened and, for known families, **which files to download and where to put them** (instead of a bare «NULL pointer access»).
+- **Support files out of the model list:** text encoders (Qwen2.5-VL, Qwen3, t5xxl, clip, mmproj) and the pre-installed models' support files no longer show as «installed models» in the node's picker.
+- Tests: `QwenImageGGUFTests` in `tests/test_v017_models.py`.
+- Android app and screens version bumped to 0.17.6 (the Rust core did not change).
+
+### Notes (honest limits)
+- **I did not run a real Qwen-Image/FLUX model** (no library or files in this environment): the automatic loading was tested with a fake module and follows stable-diffusion.cpp's documentation. The parameter names (`llm_path`, `clip_l_path`, `t5xxl_path`) and `cfg_scale` may need adjusting for the installed library version, and the model may ask for other parameters (for example `flow_shift`).
+- The support files must be **in the same folder as the model** and have recognisable names (`*vae*.safetensors`, `Qwen2.5-VL*.gguf`, `clip_l*.safetensors`, `t5xxl*`); ASTA does not download these files for you (only the pre-installed models' ones).
+- Without the extra-parameters field on screen (removed in 0.17.1), a model that is not from a known family and needs another loading can only be tuned through `extra` in `canvas.json`.
+- `test_v017_models`, `test_canvas` and `test_preinstalled` ran; the full suite was **not run again**.
+
 ## [0.17.5] — 2026-11-08
 
 ### Changed — media nodes without «Provider»: just the Model
