@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.6] — 2026-11-08
+
+### Fixed
+- **Release (installers and APK):** the AppImage job failed because python-build-standalone's «latest» release no longer ships Python 3.12. The portable Python now comes from a **pinned** release (3.12.7, 20241016, x86_64 and arm64), which also makes the build reproducible. The Release can publish the APK and the installers (Windows, macOS, Linux) again.
+
 ## [0.15.5] — 2026-11-08
 
 ### Changed
