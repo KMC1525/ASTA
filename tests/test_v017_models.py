@@ -189,6 +189,45 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertIn("VAE do Qwen-Image", str(cm.exception))
         self.assertIn("[[asta-support:", str(cm.exception))
 
+    def test_a_null_pointer_is_retried_without_flash_attention_and_cpu_offload(self):
+        from tests.test_canvas import PNG
+
+        from asta.canvas import media as M
+
+        M._SD_LITE.clear()
+
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        loads = []
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class SD:
+            def __init__(self, **kw):
+                self.kw = kw
+                loads.append(kw)
+
+            def generate_image(self, **kw):
+                if self.kw.get("diffusion_flash_attn"):
+                    raise ValueError("NULL pointer access")   # o backend não suporta flash attention
+                return [Img()]
+
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mock.MagicMock(StableDiffusion=SD)}):
+            out = self.prov().image("x", size="512x512")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(len(loads), 2)
+        self.assertNotIn("diffusion_flash_attn", loads[1])
+        self.assertNotIn("offload_params_to_cpu", loads[1])
+        self.assertIn("llm_path", loads[1])   # os arquivos de apoio continuam
+        from asta.canvas import media as M
+
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mock.MagicMock(StableDiffusion=SD)}):
+            self.prov().image("y", size="512x512")
+        self.assertEqual(len(loads), 2)   # na próxima imagem já começa sem as opções: não recarrega o modelo à toa
+        M._SD_LITE.clear()
+
     def test_without_a_log_reason_the_error_lists_the_support_files_that_were_loaded(self):
         from asta.providers.base import ProviderError
 

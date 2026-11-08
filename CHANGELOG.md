@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.12] — 2026-11-08
+
+### Corrigido — «NULL pointer access» no Qwen-Image GGUF mesmo com VAE e codificador de texto certos
+- A mensagem mostrou que os arquivos de apoio certos estavam carregados e que a biblioteca não registra motivo nenhum: a falha é silenciosa dentro da stable-diffusion.cpp. As opções que o ASTA ligava por padrão no Qwen-Image/FLUX (`diffusion_flash_attn` e `offload_params_to_cpu`) não funcionam em todos os backends (CPU, Vulkan, placas antigas) e fazem a geração voltar nula.
+- Agora, se a geração falha com ponteiro nulo, o ASTA tenta de novo (1) com resolução menor e (2) recarregando o modelo **sem** flash attention e sem descarregar pesos para a RAM, e lembra disso para o modelo na mesma sessão (não recarrega a cada imagem).
+- O erro final traz a versão da stable-diffusion-cpp-python e o backend em uso, para identificar o que a sua máquina usa.
+- Versão 0.17.12 (o núcleo Rust não mudou).
+
 ## [0.17.11] — 2026-11-08
 
 ### Corrigido — «NULL pointer access» no Qwen-Image GGUF: VAE errado
