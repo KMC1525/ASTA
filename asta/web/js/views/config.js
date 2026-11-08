@@ -5,6 +5,7 @@ import { accentSwatches, themeCards } from '../appearance.js';
 import { CONFIG_GROUPS, CONFIG_TABS, ui } from '../prefs.js';
 import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
 import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
+import { RISK } from '../computer_ui.js';
 
 export default async function render(root, ctx) {
   let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers');   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
@@ -12,7 +13,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -20,8 +21,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -246,6 +247,10 @@ async function chat() {
         checkbox(t('Continuar sozinho quando a resposta for cortada pelo limite'), c.auto_continue !== false, (v) => { c.auto_continue = v; }),
         num('continue_rounds', 0, 8, 1, t('Continuações no máximo'), t('Quantas vezes o ASTA pede para o modelo seguir de onde parou. 0 = nunca.'))),
       field(t('Instruções personalizadas'), h('textarea', { rows: 3, id: 'cc-instructions', maxlength: 3000, placeholder: t('Ex.: Responda sempre em português, de forma curta e com exemplos.'), oninput: (e) => { c.instructions = e.target.value; } }, c.instructions || ''), t('Entram em toda conversa do Chat, como um pedido seu ao assistente.'))),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, 'Computer Use'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Recurso opcional do Chat: o botão Computer Use ao lado do Run manda a IA fazer tarefas no seu computador (arquivos, programas, jogos, pesquisa e escrita), no modo Ask (pergunta antes) ou Full Access (sem perguntar). Fica desligado até você ligar.')),
+      h('div', { class: 'row' }, h('span', { class: 'chip ' + ((state.settings.computer || {}).enabled ? 'on' : '') }, (state.settings.computer || {}).enabled ? t('Ligado') : t('Desligado')),
+        h('button', { class: 'btn sm', type: 'button', id: 'cfg-open-cu', onclick: () => go('config', { tab: 'computer' }) }, icon('config', 13), t('Ajustes do Computer Use')))),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Janela de contexto')),
       h('div', { class: 'grid2' },
         h('div', null, num('context_tokens', 1000, 2000000, 1000, t('Janela de contexto (tokens)'), t('Quanto da conversa (mais anexos e fontes da web) o ASTA envia ao modelo. Passou disso, as mensagens mais antigas saem primeiro. Nunca ponha mais do que o modelo aguenta: 256K, 512K e 1M só em modelos que suportam (Gemini, GPT-4.1, Claude com 1M, Llama 4, Qwen-Plus… e locais com contexto longo).')), quick('context_tokens', [4000, 8000, 16000, 32000, 128000, 256000, 512000, 1000000], (v) => kb(v), 'cc-context_tokens')),
@@ -439,7 +444,7 @@ async function appearance() {
 async function sections() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
   return h('div', null,
@@ -447,9 +452,9 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
       h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
     cfgCard(t('Tela inicial'),
-      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
     cfgCard(t('Teclado'),
-      checkbox(t('Atalhos de teclado (Alt+1…9, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
+      checkbox(t('Atalhos de teclado (Alt+1…9 e 0, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
       field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
         t('Com Enter, use Shift+Enter para quebrar a linha; com Ctrl+Enter, o Enter quebra a linha. Vale para o chat e para a caixa de criação.')),
       h('div', { class: 'row', style: { marginTop: '8px' } }, h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: '?', bubbles: true })) }, t('Ver atalhos')),
@@ -458,7 +463,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
       h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('generation', 'Mundos 3D', 'perspectiva, conteúdo, realismo, NPCs'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
         jump('games', 'Jogos 2D', 'tamanho, revisão, criatividade'), jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
-        jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
+        jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
 }
 
 // ---------------------------------------------------------------------------------- canvas
@@ -505,6 +510,64 @@ async function studioTab() {
       h('div', { class: 'grid2' }, field(t('Estilo padrão'), select(meta.edit_styles.map((x) => [x.id, t(x.label)]), st.autoedit_style, (v) => { st.autoedit_style = v; })),
         field(t('Duração alvo (segundos; 0 = automática)'), numInput(st, 'autoedit_target', 0, 21600, 5)))),
     saveRow(async () => { setT(); await saveSettings({ studio: st }); }));
+}
+
+// ---------------------------------------------------------------------------------- computer use
+async function computerTab() {
+  const cu = Object.assign({ enabled: false, mode: 'ask', max_parallel: 8, max_steps: 40, team: 'full', revisions: 1, ask_for: ['write', 'delete', 'run', 'input', 'screen'], game_dirs: [], app_wait: 2 }, JSON.parse(JSON.stringify(state.settings.computer || {})));
+  let status = null, inv = null, prompts = [];
+  try { status = await api('/api/computer/status'); } catch (e) { /* servidor antigo: segue sem o painel */ }
+  try { inv = await api('/api/computer/inventory'); } catch (e) { /* idem */ }
+  try { prompts = (await api('/api/computer/prompts')).prompts; } catch (e) { /* idem */ }
+  const asks = ['write', 'delete', 'run', 'input', 'screen'];
+  const askSet = new Set((cu.ask_for || []).filter((x) => asks.includes(x)));
+  const caps = (status && status.capabilities) || {};
+  const capLabel = { files: t('Arquivos e pastas'), open: t('Abrir arquivos e sites'), apps: t('Programas instalados'), screenshot: t('Ver a tela'), keyboard: t('Digitar e apertar teclas'), mouse: t('Mouse') };
+  const capList = h('ul', { class: 'cu-capul', style: { listStyle: 'none', margin: 0, padding: 0 } }, Object.keys(capLabel).map((k) => {
+    const c = caps[k] || {};
+    return h('li', { class: c.ok ? 'ok' : 'no', style: { display: 'flex', gap: '8px', margin: '4px 0' } }, icon(c.ok ? 'check' : 'x', 14), h('span', null, capLabel[k], c.ok ? (c.how ? ' · ' + c.how : '') : ' · ' + (c.hint ? t(c.hint) : t('indisponível')), c.note ? h('span', { class: 'dim small' }, ' — ' + t(c.note)) : null));
+  }));
+  const dirs = h('textarea', { rows: 3, id: 'cu-gamedirs', placeholder: '~/Games\n/mnt/jogos', oninput: (e) => { cu.game_dirs = e.target.value.split('\n').map((x) => x.trim()).filter(Boolean); } }, (cu.game_dirs || []).join('\n'));
+  const promptsBox = h('div', { class: 'cu-cfg-prompts' }, prompts.map((name) => {
+    const pre = h('pre', null, '…');
+    let loaded = false;
+    return h('details', { ontoggle: async (e) => { if (!e.target.open || loaded) return; loaded = true; try { pre.textContent = (await api('/api/computer/prompts/' + name)).text; } catch (err) { pre.textContent = err.message; } } }, h('summary', { class: 'mono small' }, name), pre);
+  }));
+  return h('div', null, secHead('computer', ['computer']),
+    cfgCard(t('Computer Use'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Uma equipe de agentes de IA (Planejador, Operador, Revisor e Relator) faz tarefas no seu computador com o modelo que você escolheu no Chat: digitar e escrever, pesquisar, usar programas instalados (Krita, OBS Studio, Audacity…), organizar e criar arquivos e pastas e abrir jogos da Steam, do Lutris e de pastas. Até 8 tarefas ao mesmo tempo.')),
+      checkbox(t('Ligar o Computer Use (recurso opcional, desligado por padrão)'), cu.enabled, (v) => { cu.enabled = v; }),
+      field(t('Modo padrão'), seg([['ask', 'Ask'], ['full', 'Full Access']], cu.mode, (v) => { cu.mode = v; }),
+        t('Ask: antes de cada ação que muda algo, aparece Sim ou Não. Full Access: executa tudo sem perguntar. Dá para escolher o modo em cada tarefa.'))),
+    cfgCard(t('Quando perguntar (modo Ask)'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Só listar, ler e pesquisar nunca pergunta. Marque o que deve pedir um Sim ou Não:')),
+      h('div', { class: 'cu-asks' }, asks.map((r) => checkbox(RISK()[r], askSet.has(r), (on) => { on ? askSet.add(r) : askSet.delete(r); cu.ask_for = asks.filter((x) => askSet.has(x)); })))),
+    cfgCard(t('Equipe e limites'),
+      h('div', { class: 'grid2' },
+        field(t('Equipe de agentes'), seg([['full', t('Completa')], ['fast', t('Rápida')]], cu.team, (v) => { cu.team = v; }),
+          t('Completa: Planejador → Operador → Revisor → Relator. Rápida: só o Operador age, com relatório automático (menos chamadas à IA; bom para modelos locais lentos).')),
+        field(t('Tarefas ao mesmo tempo'), range(1, 8, 1, cu.max_parallel, (v) => { cu.max_parallel = v; }), t('No máximo 8. As que passam disso esperam na fila. Tela, teclado e mouse são um só: só uma tarefa por vez os usa; arquivos, pesquisa e programas de linha de comando seguem em paralelo.'))),
+      h('div', { class: 'grid2' },
+        field(t('Máximo de passos por tarefa'), numInput(cu, 'max_steps', 5, 200, 5), t('Cada passo é uma ação. Ao chegar no limite a tarefa para e conta o que conseguiu.')),
+        field(t('Rodadas de correção do Revisor'), select([['0', t('Nenhuma')], ['1', '1'], ['2', '2']], String(cu.revisions), (v) => { cu.revisions = parseInt(v, 10); }), t('Se o Revisor achar que faltou algo, o Operador tenta corrigir.')))),
+    cfgCard(t('Jogos'),
+      field(t('Pastas de jogos'), dirs, t('Uma pasta por linha. A Steam e o Lutris são achados sozinhos; aqui entram jogos soltos em pastas (executáveis, AppImage, .app e jogos de navegador).'))),
+    saveRow(async () => { cu.max_steps = Math.max(5, Math.min(200, cu.max_steps)); await saveSettings({ computer: cu }); await refreshState(); }),
+    cfgCard(t('O que o ASTA enxerga neste computador'),
+      status ? h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Sistema: {s}.', { s: status.platform_label })) : null, capList,
+      inv ? h('p', { class: 'dim small', style: { margin: '10px 0 0' } }, t('{a} programa(s) e {g} jogo(s) encontrados.', { a: inv.apps, g: inv.game_count }) + (inv.games.length ? ' ' + inv.games.slice(0, 8).map((g) => g.name).join(', ') + (inv.game_count > 8 ? '…' : '') : '')) : null,
+      h('div', { class: 'row', style: { marginTop: '10px' } }, h('button', { class: 'btn sm', type: 'button', onclick: () => go('config', { tab: 'computer' }) }, icon('refresh', 13), t('Atualizar')))),
+    cfgCard(t('Segurança — o que vale em qualquer modo'),
+      h('ul', { class: 'muted small', style: { margin: 0, paddingLeft: '18px' } }, [
+        t('Nunca lê nem escreve senhas, chaves SSH/GPG/nuvem, perfis de navegador, arquivos .env nem a pasta de dados do ASTA (onde ficam as chaves de API e estas configurações).'),
+        t('Nunca escreve em pastas do sistema, nem apaga a pasta pessoal ou um disco inteiro.'),
+        t('Nunca roda shells, interpretadores (bash, PowerShell, Python…), sudo, apagadores de disco nem scripts: a IA só pede ações de um catálogo fechado, validadas pelo ASTA.'),
+        t('«Apagar» manda para a lixeira do ASTA e tudo que muda arquivos pode ser desfeito na seção Computer Use.'),
+        t('Ver a tela envia a imagem ao modelo de IA escolhido; com um modelo na nuvem, isso sai do seu computador. Por isso o modo Ask pergunta antes.')].map((x) => h('li', null, x)))),
+    cfgCard(t('System prompts internos'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Os textos que orientam cada agente são arquivos .md abertos, no código do ASTA (asta/computer/prompts). Aqui você só os lê.')), promptsBox),
+    cfgCard(t('Seus dados'),
+      h('p', { class: 'muted small', style: { margin: 0 } }, t('O histórico passo a passo, as capturas de tela e a lixeira ficam em arquivos comuns na pasta do ASTA (~/.asta/computer). Apague quando quiser: na seção Computer Use, em «Limpar o histórico».'))));
 }
 
 // ---------------------------------------------------------------------------------- rebuild
@@ -603,7 +666,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 

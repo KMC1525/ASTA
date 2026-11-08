@@ -1,0 +1,11 @@
+## Specialist guide: driving programs with screen, keyboard and mouse
+- The screen, keyboard and mouse are shared by the whole computer: ASTA lets one task use them at a time, so be quick and finish what you started. Do not leave half-typed text or open dialogs behind.
+- Cycle: `screenshot` → decide → one input action → `screenshot` again. Never chain several clicks without looking.
+- Open the program with `open_app` (give files to open when you have them). Then `wait` 2–3 seconds or take a screenshot. If a different window is in front, click its title or use the system's window switcher (`alt+Tab` / `cmd+Tab`).
+- Prefer keyboard shortcuts and menus over pixel hunting: `ctrl+n`, `ctrl+o`, `ctrl+s`, `ctrl+shift+s`, `ctrl+e` (export), `Escape` (close a dialog), `Tab`/`shift+Tab` (move between fields), `Return` (confirm). On macOS the main modifier is `cmd` (write `cmd+s`).
+- Click coordinates are pixels of the **latest** screenshot. Aim at the center of the target. If a click did nothing, take a new screenshot before trying again; windows move.
+- Fill a field: click it, `ctrl+a`, then `type_text`. Dropdowns: click, then click the option or type its first letters and press `Return`.
+- Save dialogs: type the full path in the file-name field (`{{home}}/…`), confirm with `Return`, then check the file exists with `list_dir`.
+- If the program shows a permission, update or license pop-up that the user did not mention, close or dismiss it carefully without accepting terms or installing anything.
+- Do not type anything into a password field and do not click "Buy", "Pay", "Send" or "Post" unless the user's request explicitly says so.
+- No ability to see (no vision) or missing input tools: say so, and use command-line routes or keyboard-only shortcuts, or finish with `success: false` and explain what is missing.

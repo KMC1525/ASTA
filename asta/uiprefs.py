@@ -15,8 +15,8 @@ MOTIONS = ("auto", "reduce", "full")  # auto = respeita o sistema; reduce = sem 
 FONTS = ("system", "serif", "mono")
 CHAT_SIZES = ("small", "medium", "large")
 SEND_KEYS = ("enter", "ctrl_enter")  # enter: Enter envia (Shift+Enter quebra a linha) · ctrl_enter: Ctrl/⌘+Enter envia (Enter quebra a linha)
-START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "library")
-HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
+START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "studio", "computer", "library")
+HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "computer", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
 LANGS = ("auto", "pt-BR", "en")
 
 DEFAULT_UI: Dict[str, Any] = {
@@ -78,8 +78,8 @@ def normalize_ui(data: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- exportar / importar configurações (sem segredos)
 
 EXPORT_SCHEMA = "asta.settings.v1"
-EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance", "active")
-RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
+EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "performance", "active")
+RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
 _PROVIDER_FIELDS = ("base_url", "model", "vision", "n_ctx")  # nunca `api_key`
 
 
@@ -102,6 +102,8 @@ def import_patch(payload: Any) -> Dict[str, Any]:
     for key in ("generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "performance"):
         if isinstance(src.get(key), dict):
             patch[key] = src[key]
+    if isinstance(src.get("computer"), dict):   # um arquivo importado nunca liga o Computer Use, nem troca o modo, nem tira as perguntas do modo Ask: isso só quem está na frente do computador decide
+        patch["computer"] = {k: v for k, v in src["computer"].items() if k in ("max_parallel", "max_steps", "team", "revisions", "app_wait")}
     if src.get("language") in LANGS:
         patch["language"] = src["language"]
     if isinstance(src.get("ui"), dict):

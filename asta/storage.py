@@ -105,6 +105,10 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
                "language": "auto", "motion": "auto", "captions": True, "music": True, "revisions": 1, "voice": "",
                "export_quality": "720p", "audio_format": "m4a", "autoedit_style": "gameplay", "autoedit_target": 0},
     "rebuild": {"refine": True, "max_calls": 40},
+    # Computer Use (opcional, desligado por padrão): equipe de agentes que faz tarefas no computador. Ver computer/manager.py (normalize_config)
+    "computer": {"enabled": False, "mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
+                 "max_parallel": 8, "max_steps": 40, "team": "full",  # team: full (Planejador → Operador → Revisor → Relator) | fast (só o Operador; para modelos locais lentos)
+                 "revisions": 1, "ask_for": ["write", "delete", "run", "input", "screen"], "game_dirs": [], "app_wait": 2.0},
     "canvas": {"template": "text_image"},
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},

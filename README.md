@@ -6,7 +6,7 @@
 
 A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a playable 3D world, a companion to chat with, a complete 2D game, or a node flow that produces images, videos, sounds and voices.
 
-[Download](#download-the-installers) · [Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
+[Download](#download-the-installers) · [Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `Rust core` · `no required dependencies`
 
@@ -41,10 +41,10 @@ Pick the file for your system on the [**latest Release**](https://github.com/KMC
 
 | System | File | How |
 |---|---|---|
-| **Windows 10/11** (64-bit) | `ASTA-0-14-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
-| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-14-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
-| **Linux** (x86_64; `-arm64` too) | `ASTA-0-14-Linux.appimage` | `chmod +x ASTA-0-14-Linux.appimage && ./ASTA-0-14-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-14-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
+| **Windows 10/11** (64-bit) | `ASTA-0-15-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
+| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-15-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
+| **Linux** (x86_64; `-arm64` too) | `ASTA-0-15-Linux.appimage` | `chmod +x ASTA-0-15-Linux.appimage && ./ASTA-0-15-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-15-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
 
 Every release also carries the **pre-built Rust core** of each platform (`asta-core-*`) and `SHA256SUMS.txt` (verify with `sha256sum -c`). The installers are not code-signed (that needs a paid certificate): Windows may show SmartScreen ("More info → Run anyway"). They are built by [GitHub Actions](.github/workflows/release.yml) and were **not run on real Windows/macOS/Android devices by the author of this change** (what could be checked is listed in the [changelog](CHANGELOG.en.md)). The terminal installers below remain available.
 
@@ -139,7 +139,7 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
-**The Android app needs no computer.** Download `ASTA-0-14-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
+**The Android app needs no computer.** Download `ASTA-0-15-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
 
 <img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
 
@@ -171,6 +171,7 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 - **Long, high-quality answers.** *Configuration → Chat*: **answer size** up to 128,000 tokens; **answer style** — *Balanced*, *Detailed* (default: complete answers with reasoning, examples and steps) or *Long and deep*; **automatic continuation** — when an answer hits the token limit ASTA asks the model to carry on where it stopped instead of handing you cut-off text; and the **output ceiling of each model is learned** from the provider's own error (so a too-large size is adjusted, not a failure). An optional **agent team** (*Plan and write* / *Plan, write and review*) adds a Planner and a Reviewer around the Writer.
 - **Long contexts: 256K, 512K and 1M tokens** (models that support them). Set the **context window** in *Configuration → Chat* (what ASTA sends — oldest messages leave first) and, for embedded GGUF models, in *Providers → Hugging Face GGUF* (the screen shows the model's trained context and the estimated attention-cache memory; the Rust core compresses the cache to 8 or 4 bits to fit and warns, but never overrides your value). Claude gets the 1M beta header automatically above 200K.
 - **Attach ZIP, RAR, 7z and TAR files — in every section.** The package is opened safely (no path escapes, no zip bombs, links ignored) and its files are used as attachments (images, documents, audio, video, text…). RAR/7z use a system tool (`unrar`, `unar`, `7z` or `bsdtar`); ZIP/TAR need nothing.
+- **Computer Use (optional).** The **Computer Use** button next to Run makes the AI do tasks on your computer — files, programs, games, search and writing —, in **Ask** mode (asks Yes/No before acting) or **Full Access** (does not ask), with a live card in the conversation. See [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer).
 - **Chat settings** (*Configuration → Chat*): remembered turns (up to 1,000), creativity, **custom instructions**, default thinking level and the web-search options.
 - Without a provider the Demo engine is used and Chat says so honestly — it cannot really answer questions. Pick a model to fix it.
 
@@ -286,6 +287,21 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 
 - **Timeline like Kdenlive**: media bin, project monitor, properties panel, tracks with razor/ripple/snap, collapsible tracks, a bottom **zoom slider**, and an **audio mixer** (dB faders per track, live meters, master volume — applied to the preview and the export). *(v0.14 removed the separate clip monitor; V2 now stacks above V1 in the exported video exactly as in the preview, speed changes the clip's length, and the last edit is never lost when you leave the tab.)*
 
+## Computer Use — an AI team that works on your computer
+
+**Computer Use** is an **optional** feature (off until you turn it on) in which the AI you picked does **tasks inside your computer** for you: **type and write**, **search**, **use installed programs** (Krita, OBS Studio, Audacity, the file manager…), **organize and create files of any format** and **folders and sub-folders**, and **open and play games** from Steam, Lutris and folders on the computer. Turn it on in **Configuration → Computer Use** (or from the Chat button); it is available on every platform ASTA runs on.
+
+- **In the Chat:** the **Computer Use** button next to Run (like *Web* and *Create*). Pick the mode, write what the computer should do and press **Run**: the conversation gets a **live card** for the task (progress, the *Yes/No* question and, at the end, the summary).
+- **Two modes.** **Ask:** before every action that changes something (create, move, trash, open a program/game/site, type, click, see the screen) ASTA asks **Yes or No** — with a "Yes, and don't ask this kind again in this task" option. **Full Access:** runs everything **without asking anything**. Reading, listing and searching never ask; Configuration lets you choose what asks. The mode is per task (the default lives in Configuration).
+- **A side section, «Computer Use»** (next to Chat, Canvas, Studio…): the **running** tasks (with a badge on the sidebar when one is waiting for you) and the **history** of previous ones. Each task shows the **agent team**, the plan, the **step by step** (the action, the tool, the risk, the result and screenshots, if any), the summary and the review — with **Cancel**, **Redo**, **Undo** and **Delete**. It all updates live; on a phone, list and detail alternate.
+- **Up to 8 tasks at the same time**, each run by **several AI agents in several steps**: **Planner** (plan) → **Operator** (one action at a time, with the specialist guide — files, programs with a screen, games, research, writing — and the guide of the program named) → **Reviewer** (checks against evidence ASTA collects itself: does the file really exist?; it can send the Operator back to fix things) → **Reporter** (summary in your language). Anything past 8 waits in line. Screen, keyboard and mouse are just one on a computer: only **one task at a time** uses them; files, search and command-line programs run in parallel.
+- **Internal system prompts as `.md`** (`asta/computer/prompts/`: shared rules, safety, one per agent, one per specialist and guides for Krita, OBS, Audacity, browser, Steam…): plain open text you can read in *Configuration → Computer Use*.
+- **Works with any provider** (the AI returns validated JSON; no provider-specific function calling). With no AI (Demo), a **rule-based fallback** understands simple requests: create folders/files, organize a folder, open a program, game or site, search. Invalid AI answers fall back to the automatic method instead of failing the task.
+- **The AI never writes code for ASTA to run.** It asks for actions from a **closed catalog** of tools (list/read/find, create, copy, move, organize, zip, trash, web search, open address/file/program/game, run a command-line program **without a shell**, screenshot, type, keys, click, scroll…); ASTA validates every argument.
+- **Limits that hold in any mode, Full Access included:** it never reads or writes passwords, SSH/GPG/cloud keys, browser profiles, `.env` files or **ASTA's data folder** (where your API keys and these settings live — the AI cannot switch Full Access on by itself); it does not write to system folders nor delete the home folder or a drive; it **does not run shells, interpreters (bash, PowerShell, Python…), `sudo`, disk wipers or scripts**; it opens only `http(s)`/`mailto` addresses; web text, files and screens are treated as **untrusted data**, never as instructions.
+- **Nothing is really deleted:** "delete" moves to the **ASTA trash** and overwriting keeps the original; every file the task creates, moves, copies or trashes goes into a journal, and **Undo** reverts it in reverse order. The history, screenshots and trash are plain files in `~/.asta/computer`.
+- **Platforms and honest limits.** Windows, macOS and Linux have their own drivers, standard library only. Seeing the screen, typing and clicking depend on the system: on **Linux** they need `xdotool` (X11) or `ydotool`/`wtype` (Wayland) and a capture tool (`scrot`, `maim`, `gnome-screenshot` or `grim`); on **macOS**, the *Screen Recording* and *Accessibility* permissions (and `cliclick` for steadier clicks); on **Windows**, PowerShell (administrator windows do not receive keys). *Configuration → Computer Use* shows what is available and what to install. **Seeing the screen and clicking need a vision model**, and the screen image goes to the chosen model (with a cloud model it leaves the computer — that is why Ask asks first). In the **Android app** the engine runs on the device, which does not let one app list or control the others: file work and search apply there, and to control a computer connect the app to its ASTA. Devices **paired by QR code** can also use the computer's Computer Use. The Windows, macOS and Android drivers were written without access to real machines of those systems (only Linux was exercised by the tests): see the changelog.
+
 ## Rebuild — rebuild an existing game in plain HTML/CSS/JS
 
 *Home → Rebuild.* Attach a game you already have (a **ZIP** or the loose files) and ASTA rebuilds its **structure** as a new game that runs in any browser with no engine, no installer and no external libraries. **This version supports only two engines:**
@@ -325,9 +341,10 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 | **2D games** | Your games: play, download, update. |
 | **Canvas** | Your canvases and the node editor. |
 | **Studio** | Your video projects (single or series): generate scene by scene, automatic editing, the timeline editor and export. |
+| **Computer Use** | The tasks the AI team does on your computer (up to 8 at once): live follow-up, the Yes/No questions of Ask mode and the step-by-step history, with Cancel, Redo and Undo. |
 | **Rebuild** | Rebuild Ren'Py / RPG Maker games and see the ones you rebuilt. |
 | **Library** | Everything you created as updatable projects, plus the **local AI models you installed**, with search and automatic + custom tags. Press *Select* to pick several items and delete them at once; models can be deleted one at a time or in bulk. |
-| **Configuration** | 16 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
+| **Configuration** | 17 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Computer Use, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
 
 ### Make it yours (Configuration → Appearance)
 
@@ -336,7 +353,7 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 - **Comfort:** interface size 90–150%, comfortable or compact density, system/serif/monospace font, avatar chat text size, and **reduce animations** (also respects your system setting).
 - **Usage:** interface language, **send with Enter or Ctrl+Enter** (chat and creation box), **start screen** (Chat, a specific screen or *the last one I used*), keyboard shortcuts on/off.
 - **Sidebar:** hide the screens you do not use (*Chat* and *Configuration* always stay; hidden ones remain reachable by search).
-- **Command palette — `Ctrl/⌘ + K`:** type to jump to any screen or Configuration tab, chat with or edit an avatar, open a project or canvas, or run an action (new avatar, toggle theme, export settings…). Shortcuts: `Alt+1…7` screens, `Alt+B` sidebar, `Alt+T` theme, `Ctrl+J`/`Alt+N` new Chat tab, `Alt+W` close it, `?` help.
+- **Command palette — `Ctrl/⌘ + K`:** type to jump to any screen or Configuration tab, chat with or edit an avatar, open a project or canvas, or run an action (new avatar, toggle theme, export settings…). Shortcuts: `Alt+1…9` and `Alt+0` screens, `Alt+B` sidebar, `Alt+T` theme, `Ctrl+J`/`Alt+N` new Chat tab, `Alt+W` close it, `?` help.
 - **Backup:** *Export settings* (a JSON **without API keys or tokens**), *Import* on another computer, and *Reset appearance defaults* (keys, avatars and projects are never touched).
 - **First run:** a short welcome lets you pick theme, color and language and shows whether an AI is ready — only on a fresh install, never for people who already use ASTA.
 - Accessibility: visible keyboard focus, a *skip to content* link, accessible names on icon buttons, dialogs announced as such, and page titles per screen.
@@ -419,6 +436,7 @@ ASTA **adds no content filters**: the default mode follows your prompt and your 
 - Everything runs locally. The server listens **only on `127.0.0.1`** by default (`--host 0.0.0.0` exposes it to the network and warns you).
 - API keys live in `~/.asta/settings.json` (permission `600`) and are **never** sent back to the browser.
 - Protection against *DNS rebinding* (`Host` check) and cross-site requests (`Origin` check); uploads and served files go through path validation; uploaded media is identified by content, not by name.
+- **Computer Use** is optional and off by default; it has fixed limits in any mode (no passwords, keys, ASTA data folder, system folders, shells or scripts), a trash and **Undo** — see [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer). Devices paired by QR code have the same access to ASTA as you do, Computer Use included.
 - Worlds and games do not run AI-generated code: the model writes **data** (JSON), and the engine is the same auditable code every time.
 
 ## Repository layout
@@ -435,6 +453,8 @@ asta/
   assistant_chat.py  routes_chat.py  websearch.py  general-purpose Chat (history, streaming, tool suggestion, web search)
   canvas/        node schema, store, engine, media providers, timeline renderer, procedural Demo
   studio/        video projects: schema, scene-by-scene pipeline, automatic editing, export, ffmpeg tools
+  computer/      Computer Use: the agent-team engine, the tool catalog, fixed limits (guard), OS drivers, files with trash/undo, the rule-based fallback and prompts/*.md
+  routes_computer.py   Computer Use API (tasks, live events, approvals)
   rebuild/       Ren'Py / RPG Maker readers and converters (+ the optional AI text review)
   attachments.py  archives.py    attachments of any type; safe ZIP/RAR/7z/TAR extraction
   native/        mandatory Rust core (std only) with a Python twin for every function

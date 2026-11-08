@@ -323,5 +323,16 @@ class BrowserTests(unittest.TestCase):
         self.run_script("studio_edit_ui.js")
 
 
+    def test_32_computer_use_section_ask_mode_chat_card_settings_and_phone(self):
+        home = Path(tempfile.mkdtemp(prefix="asta-cu-home-"))
+        (home / "Documents").mkdir()
+        try:
+            with mock.patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
+                self.run_script("computer_ui.js", {"ASTA_TEST_HOME": str(home)})
+            self.assertTrue((home / "Documents" / "UiNegada").exists() is False)
+        finally:
+            shutil.rmtree(home, ignore_errors=True)
+
+
 if __name__ == "__main__":
     unittest.main()
