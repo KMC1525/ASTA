@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.9] — 2026-11-08
+
+### Corrigido — o motivo do «NULL pointer access» não aparecia, e a geração não tentava de novo com menos memória
+- A stable-diffusion-cpp-python troca o callback de log ao criar o modelo, o que apagava o nosso: a mensagem vinha sem «Motivo informado pela biblioteca». Agora o callback é reinstalado antes de cada geração.
+- Sem avisos ou erros no log, a mensagem mostra as últimas linhas dele (até onde a biblioteca chegou).
+- Se a geração falha com ponteiro nulo em tamanho grande (causa mais comum: memória), o ASTA tenta uma vez de novo com resolução menor antes de mostrar o erro.
+- Versão 0.17.9 (o núcleo Rust não mudou).
+
 ## [0.17.8] — 2026-11-08
 
 ### Corrigido — «NULL pointer access» no Qwen-Image GGUF mesmo com os arquivos de apoio na pasta

@@ -229,6 +229,33 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertIn("falta de memória", msg)
         M._SD_CB = None
 
+    def test_a_null_pointer_at_a_big_size_is_retried_once_smaller_and_the_log_callback_is_reinstalled(self):
+        from asta.canvas import media as M
+
+        mod, _, runs = self.fake()
+        installs = []
+        mod.sd_log_callback = lambda f: f
+        mod.sd_set_log_callback = lambda f, d: installs.append(f)
+        inner = mod.StableDiffusion
+        calls = []
+
+        class Flaky(inner):
+            def generate_image(self, **kw):
+                calls.append((kw["width"], kw["height"]))
+                if len(calls) == 1:
+                    raise ValueError("NULL pointer access")
+                return super().generate_image(**kw)
+
+        mod.StableDiffusion = Flaky
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            out = self.prov().image("x", size="1280x720")
+        self.assertEqual(len(out), 1)
+        self.assertEqual(calls[0], (1024, 576))
+        self.assertLess(calls[1][0], 1024)
+        self.assertTrue(calls[1][0] % 16 == 0 and calls[1][1] % 16 == 0)
+        self.assertGreaterEqual(len(installs), 2)   # reinstalado antes de cada tentativa
+        M._SD_CB = None
+
     def test_image_sizes_are_multiples_of_16(self):
         (self.img / "meu-modelo-Q4_K_M.gguf").write_bytes(b"g")
         from asta.canvas import media as M
