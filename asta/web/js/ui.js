@@ -85,6 +85,7 @@ const ICONS = {
   undo: '<path d="M9 7 4 12l5 5M4 12h11a5 5 0 0 1 0 10h-3"/>', redo: '<path d="m15 7 5 5-5 5M20 12H9a5 5 0 0 0 0 10h3"/>', magnet: '<path d="M6 3v8a6 6 0 0 0 12 0V3M6 8h4M14 8h4"/>',
   zoomout: '<circle cx="11" cy="11" r="7"/><path d="m20 20-4-4M8 11h6"/>', music: '<path d="M9 18V5l11-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="17" cy="16" r="3"/>',
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
+  computer: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m9.5 7.5 5 2.2-2 .7-.7 2-2.3-4.9Z"/>',
   wand: '<path d="m4 20 11-11M14 6l1-2 1 2 2 1-2 1-1 2-1-2-2-1 2-1ZM18 14l.7-1.4L20 12l-1.3-.6L18 10l-.7 1.4L16 12l1.3.6L18 14Z"/>',
 };
 export function icon(name, size = 18) {

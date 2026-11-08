@@ -21,6 +21,7 @@
 | `asta/server.py`, `routes_*.py`, `jobs.py` | servidor HTTP local (`127.0.0.1`), rotas por seção, tarefas em segundo plano com eventos (SSE) |
 | `asta/providers/` | provedores de IA (OpenAI-compatível, Anthropic, GGUF local, LM Studio, Demo); `limits.py` aprende o teto de tokens; `local_llama.py` carrega modelos locais |
 | `asta/agents/`, `studio/`, `canvas/`, `rebuild/`, `games2d/`, `avatars*.py`, `assistant_chat.py` | as seções e suas equipes de agentes |
+| `asta/computer/`, `routes_computer.py` | **Computer Use**: `engine.py` (Planejador → Operador → Revisor → Relator), `manager.py` (até 8 tarefas, fila, histórico, aprovações), `tools.py` (catálogo fechado de ações), `guard.py` (limites fixos), `files.py` (lixeira + desfazer), `osdrv.py` (drivers de SO), `rulebased.py` (fallback sem IA), `prompts/*.md` (system prompts internos) |
 | `asta/attachments.py`, `archives.py` | leitura de anexos de qualquer tipo; ZIP/RAR/7z/TAR com extração segura |
 | `asta/native/` | **núcleo em Rust** (`src/*.rs`) + `__init__.py` com o espelho em Python de cada função |
 | `asta/perf.py`, `scheduler.py`, `storage_opt.py` | modos de desempenho, fila com prioridade, otimização de armazenamento |
@@ -59,6 +60,8 @@
 - [ ] PR para a `main`, merge, e conferir a Release `vX.Y.Z` com `ASTA-X-Y-Win.exe`, `-macOS.pkg`, `-Linux.appimage`, `-Android.apk`, `asta-core-*` e `SHA256SUMS.txt`.
 
 ## Armadilhas conhecidas
+
+- **Computer Use:** a IA só devolve JSON que o `tools.py` valida; **nunca** adicione uma ferramenta que execute texto escrito pela IA (shell, `eval`, script). Toda ferramenta nova declara uma **classe de risco** (`read|write|delete|run|input|screen`) — é ela que o modo Ask usa para perguntar — e todo caminho passa por `guard.check_path`. A pasta de dados do ASTA fica fora do alcance da IA (ela guarda as chaves de API e o modo do próprio Computer Use). Tela/teclado/mouse têm **uma trava única** (`GuiLease`): não ignore. Mudou um prompt em `computer/prompts/`? Ele vai no pacote (`pyproject.toml`, `package-data`); o teste `test_computer` confere. Os drivers de Windows/macOS/Android não são exercitados no CI: diga isso no changelog quando mexer neles.
 
 - **Camadas do Studio:** a primeira trilha da lista é a de **cima** (V2 sobre V1) na prévia *e* na exportação (`render_timeline(..., top_first=True)`); o Editor do Canvas usa a ordem contrária. Não unifique sem migrar os projetos.
 - **Janela de contexto escolhida pelo usuário nunca é contrariada** (só se avisa). Respostas cortadas pelo limite de tokens continuam sozinhas (`last_stop == "length"`); o teto de saída de cada modelo é **aprendido** do erro do provedor (`providers/limits.py`).

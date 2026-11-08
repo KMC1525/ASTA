@@ -6,7 +6,7 @@
 
 Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
-[Baixar](#baixe-os-instaladores) · [Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
+[Baixar](#baixe-os-instaladores) · [Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `núcleo Rust` · `zero dependências obrigatórias`
 
@@ -41,10 +41,10 @@ Escolha o arquivo do seu sistema na [**Release mais recente**](https://github.co
 
 | Sistema | Arquivo | Como |
 |---|---|---|
-| **Windows 10/11** (64 bits) | `ASTA-0-14-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
-| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-14-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
-| **Linux** (x86_64; também `-arm64`) | `ASTA-0-14-Linux.appimage` | `chmod +x ASTA-0-14-Linux.appimage && ./ASTA-0-14-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-14-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
+| **Windows 10/11** (64 bits) | `ASTA-0-15-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
+| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-15-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
+| **Linux** (x86_64; também `-arm64`) | `ASTA-0-15-Linux.appimage` | `chmod +x ASTA-0-15-Linux.appimage && ./ASTA-0-15-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-15-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
 
 Cada Release traz também o **núcleo Rust pré-compilado** de cada plataforma (`asta-core-*`) e o `SHA256SUMS.txt` (confira com `sha256sum -c`). Os instaladores não têm assinatura de código (exige certificado pago): o Windows pode mostrar o SmartScreen («Mais informações → Executar assim mesmo»). Eles são gerados pelo [GitHub Actions](.github/workflows/release.yml) e **não foram executados em Windows/macOS/Android reais por quem fez esta alteração** (o que deu para conferir está no [changelog](CHANGELOG.md)). Os instaladores de terminal abaixo continuam disponíveis.
 
@@ -139,7 +139,7 @@ O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O
 
 > O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
 
-**O app Android não precisa de computador.** Baixe o `ASTA-0-14-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
+**O app Android não precisa de computador.** Baixe o `ASTA-0-15-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
 
 <img src="docs/android-app-qr.svg" alt="QR code: app Android mais recente do ASTA" width="140">
 
@@ -171,6 +171,7 @@ O **Chat** é um assistente de uso geral, limpo: peça uma receita de bolo, estu
 - **Respostas longas e de qualidade.** *Configuração → Chat*: **tamanho das respostas** até 128.000 tokens; **estilo das respostas** — *Equilibrado*, *Detalhado* (padrão: respostas completas, com raciocínio, exemplos e passos) ou *Longo e profundo*; **continuação automática** — quando a resposta bate no limite de tokens o ASTA pede ao modelo que siga de onde parou, em vez de entregar texto cortado; e o **teto de saída de cada modelo é aprendido** do próprio erro do provedor (um tamanho grande demais é ajustado, não vira falha). Uma **equipe de agentes** opcional (*Planejar e escrever* / *Planejar, escrever e revisar*) põe um Planejador e um Revisor em volta do Redator.
 - **Contextos longos: 256K, 512K e 1M tokens** (modelos que suportam). Ajuste a **janela de contexto** em *Configuração → Chat* (o que o ASTA envia — as mensagens mais antigas saem primeiro) e, nos modelos GGUF embutidos, em *Provedores → Hugging Face GGUF* (a tela mostra o contexto de treino do modelo e a memória estimada do cache de atenção; o núcleo Rust comprime o cache para 8 ou 4 bits para caber e avisa, mas nunca contraria o seu valor). O Claude recebe o cabeçalho beta de 1M automaticamente acima de 200K.
 - **Anexe ZIP, RAR, 7z e TAR — em todas as seções.** O pacote é aberto com segurança (sem fuga de pasta, sem zip-bomb, links ignorados) e os arquivos de dentro viram anexos (imagens, documentos, áudio, vídeo, texto…). RAR/7z usam uma ferramenta do sistema (`unrar`, `unar`, `7z` ou `bsdtar`); ZIP/TAR não precisam de nada.
+- **Computer Use (opcional).** O botão **Computer Use** ao lado do Run manda a IA fazer tarefas no seu computador — arquivos, programas, jogos, pesquisa e escrita —, no modo **Ask** (pergunta Sim/Não antes de agir) ou **Full Access** (sem perguntar), com um cartão ao vivo na conversa. Veja [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador).
 - **Ajustes do Chat** (*Configuração → Chat*): turnos lembrados (até 1.000), criatividade, **instruções personalizadas**, nível de pensamento padrão e as opções da busca na web.
 - Sem provedor, vale o motor Demo e o Chat avisa com honestidade — ele não responde perguntas de verdade. Escolha um modelo para resolver.
 
@@ -286,6 +287,21 @@ O *Studio* (logo abaixo de Canvas) gera, edita e revisa vídeos com um **pipelin
 
 - **Timeline como o Kdenlive**: biblioteca de mídias, monitor do projeto, painel de propriedades, trilhas com lâmina/ripple/ímã, trilhas recolhíveis, **zoom deslizante** embaixo e **mixer de áudio** (faders em dB por trilha, medidores ao vivo, volume geral — valem na prévia e na exportação). *(A v0.14 removeu o monitor do clipe separado; a V2 agora fica acima da V1 também no vídeo exportado, como na prévia; a velocidade muda o tamanho do clipe; e a última edição nunca se perde ao trocar de aba.)*
 
+## Computer Use — uma equipe de IA que trabalha no seu computador
+
+O **Computer Use** é um recurso **opcional** (desligado até você ligar) em que a IA que você escolheu faz **tarefas dentro do seu computador**, por você: **digitar e escrever**, **pesquisar**, **usar os programas instalados** (Krita, OBS Studio, Audacity, o gerenciador de arquivos…), **organizar e criar arquivos de qualquer formato** e **pastas e subpastas**, e **abrir e jogar jogos** da Steam, do Lutris e de pastas do computador. Liga-se em **Configuração → Computer Use** (ou pelo botão do Chat) e vale em todas as plataformas do ASTA.
+
+- **No Chat:** o botão **Computer Use** ao lado do Run (como o *Web* e o *Criar*). Escolha o modo, escreva o que o computador deve fazer e aperte **Run**: a conversa ganha um **cartão ao vivo** da tarefa (progresso, a pergunta *Sim/Não* e, no fim, o resumo).
+- **Dois modos.** **Ask:** antes de cada ação que muda algo (criar, mover, mandar para a lixeira, abrir programa/jogo/site, digitar, clicar, ver a tela) o ASTA pergunta **Sim ou Não** — com a opção «Sim, e não perguntar mais deste tipo nesta tarefa». **Full Access:** executa tudo **sem perguntar nada**. Ler, listar e pesquisar nunca perguntam; em Configuração dá para escolher o que pergunta. O modo vale por tarefa (o padrão fica em Configuração).
+- **Seção lateral «Computer Use»** (junto de Chat, Canvas, Studio…): a lista de tarefas **em andamento** (com um selo na barra lateral quando alguma espera por você) e o **histórico** das anteriores. Cada tarefa mostra o **time de agentes**, o roteiro, o **passo a passo** (a ação, a ferramenta, o risco, o resultado e as capturas de tela, se houve), o resumo e a revisão — e tem **Cancelar**, **Refazer**, **Desfazer** e **Apagar**. Tudo se atualiza ao vivo; no celular, lista e detalhe se alternam.
+- **Até 8 tarefas ao mesmo tempo**, cada uma com **vários agentes de IA em várias etapas**: **Planejador** (roteiro) → **Operador** (uma ação por vez, com o guia do especialista — arquivos, programas com tela, jogos, pesquisa, escrita — e do programa citado) → **Revisor** (confere com evidências do próprio ASTA: o arquivo existe mesmo?; pode mandar o Operador corrigir) → **Relator** (resumo no seu idioma). O que passar de 8 espera na fila. Tela, teclado e mouse são um só no computador: só **uma tarefa por vez** os usa; arquivos, pesquisa e programas de linha de comando seguem em paralelo.
+- **System prompts internos em `.md`** (`asta/computer/prompts/`: regras comuns, segurança, um por agente, um por especialista e guias de Krita, OBS, Audacity, navegador, Steam…): texto aberto, que dá para ler em *Configuração → Computer Use*.
+- **Funciona com qualquer provedor** (a IA devolve JSON validado; nada de chamadas de função específicas de um provedor). Sem IA (Demo), um **fallback por regras** entende os pedidos simples: criar pastas/arquivos, organizar uma pasta, abrir um programa, jogo ou site, pesquisar. Respostas inválidas da IA caem no método automático em vez de derrubar a tarefa.
+- **A IA nunca escreve código para o ASTA executar.** Ela pede ações de um **catálogo fechado** de ferramentas (listar/ler/procurar, criar, copiar, mover, organizar, compactar, lixeira, pesquisar na web, abrir endereço/arquivo/programa/jogo, rodar um programa de linha de comando **sem shell**, captura de tela, digitar, teclas, clique, rolagem…); o ASTA valida cada argumento.
+- **Limites que valem em qualquer modo, inclusive no Full Access:** não lê nem escreve senhas, chaves SSH/GPG/nuvem, perfis de navegador, `.env` nem a **pasta de dados do ASTA** (onde ficam suas chaves de API e estas configurações — a IA não consegue ligar o Full Access sozinha); não escreve em pastas do sistema nem apaga a pasta pessoal ou um disco; **não roda shells, interpretadores (bash, PowerShell, Python…), `sudo`, apagadores de disco nem scripts**; abre só endereços `http(s)`/`mailto`; textos da web, arquivos e telas são tratados como **dados não confiáveis**, nunca como instruções.
+- **Nada é apagado de verdade:** «apagar» manda para a **lixeira do ASTA** e sobrescrever guarda o original; todo arquivo que a tarefa cria, move, copia ou manda para a lixeira entra num diário, e **Desfazer** reverte na ordem inversa. O histórico, as capturas e a lixeira são arquivos comuns em `~/.asta/computer`.
+- **Plataformas e limites honestos.** Windows, macOS e Linux têm drivers próprios, só com a biblioteca padrão. Ver a tela, digitar e clicar dependem do sistema: no **Linux** precisam de `xdotool` (X11) ou `ydotool`/`wtype` (Wayland) e de uma ferramenta de captura (`scrot`, `maim`, `gnome-screenshot` ou `grim`); no **macOS**, das permissões de *Gravação de tela* e *Acessibilidade* (e `cliclick` para cliques mais firmes); no **Windows**, do PowerShell (janelas de administrador não recebem teclas). *Configuração → Computer Use* mostra o que está disponível e o que instalar. **Ver a tela e clicar exigem um modelo com visão**, e a imagem da tela vai ao modelo escolhido (na nuvem, sai do computador — por isso o Ask pergunta antes). No **app Android** o motor roda no aparelho, que não deixa um app listar ou controlar os outros: lá vale o trabalho com arquivos e pesquisa, e para controlar um computador conecte o app ao ASTA dele. Aparelhos **pareados por QR code** também podem usar o Computer Use do computador. Os drivers do Windows, do macOS e do Android foram escritos sem acesso a máquinas reais desses sistemas (só o Linux foi exercitado nos testes): veja o changelog.
+
 ## Rebuild — reconstrua um jogo existente em HTML/CSS/JS puro
 
 *Início → Rebuild.* Anexe um jogo que você já tem (um **ZIP** ou os arquivos soltos) e o ASTA reconstrói a **estrutura** dele como um jogo novo que roda em qualquer navegador, sem engine, instalador nem bibliotecas externas. **Esta versão suporta só dois motores:**
@@ -325,9 +341,10 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós. |
 | **Studio** | Seus projetos de vídeo (únicos ou em série): geração cena a cena, edição automática, o editor de timeline e a exportação. |
+| **Computer Use** | As tarefas que a equipe de IA faz no seu computador (até 8 ao mesmo tempo): acompanhamento ao vivo, perguntas Sim/Não do modo Ask e o histórico passo a passo, com Cancelar, Refazer e Desfazer. |
 | **Rebuild** | Reconstrua jogos Ren'Py / RPG Maker e veja os que você reconstruiu. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
-| **Configuração** | 16 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
+| **Configuração** | 18 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Computer Use, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
 
 ### Deixe do seu jeito (Configuração → Aparência)
 
@@ -336,7 +353,7 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 - **Conforto:** tamanho da interface de 90 a 150%, densidade confortável ou compacta, fonte do sistema/serifada/monoespaçada, tamanho do texto do chat dos avatares e **reduzir animações** (também respeita a configuração do sistema).
 - **Uso:** idioma da interface, **enviar com Enter ou Ctrl+Enter** (chat e caixa de criação), **tela inicial** (Chat, uma tela específica ou *a última que usei*), atalhos de teclado ligados/desligados.
 - **Barra lateral:** esconda as telas que você não usa (*Chat* e *Configuração* ficam sempre; as escondidas continuam acessíveis pela busca).
-- **Paleta de comandos — `Ctrl/⌘ + K`:** digite para ir a qualquer tela ou aba da Configuração, conversar com/editar um avatar, abrir um projeto ou canvas, ou rodar uma ação (novo avatar, alternar tema, exportar configurações…). Atalhos: `Alt+1…7` telas, `Alt+B` barra lateral, `Alt+T` tema, `Ctrl+J`/`Alt+N` abrir aba do Chat, `Alt+W` fechar, `?` ajuda.
+- **Paleta de comandos — `Ctrl/⌘ + K`:** digite para ir a qualquer tela ou aba da Configuração, conversar com/editar um avatar, abrir um projeto ou canvas, ou rodar uma ação (novo avatar, alternar tema, exportar configurações…). Atalhos: `Alt+1…9` e `Alt+0` telas, `Alt+B` barra lateral, `Alt+T` tema, `Ctrl+J`/`Alt+N` abrir aba do Chat, `Alt+W` fechar, `?` ajuda.
 - **Backup:** *Exportar configurações* (um JSON **sem chaves de API nem tokens**), *Importar* em outro computador e *Restaurar padrões da aparência* (chaves, avatares e projetos nunca são tocados).
 - **Primeira vez:** uma boas-vindas curta deixa escolher tema, cor e idioma e mostra se há uma IA pronta — só numa instalação nova, nunca para quem já usa o ASTA.
 - Acessibilidade: foco visível no teclado, link *ir para o conteúdo*, nomes acessíveis nos botões de ícone, diálogos anunciados como tal e título da página por tela.
@@ -420,6 +437,7 @@ O ASTA **não adiciona filtros de conteúdo**: o modo padrão segue o seu prompt
 - Tudo roda localmente. O servidor escuta **só em `127.0.0.1`** por padrão (`--host 0.0.0.0` expõe na rede e avisa).
 - Chaves de API ficam em `~/.asta/settings.json` (permissão `600`) e **nunca** são devolvidas ao navegador.
 - Proteção contra *DNS rebinding* (checagem de `Host`) e requisições entre sites (checagem de `Origin`); uploads e arquivos servidos passam por validação de caminho; mídias enviadas são identificadas pelo conteúdo, não pelo nome.
+- **Computer Use** é opcional e desligado por padrão; tem limites fixos em qualquer modo (sem senhas, chaves, pasta de dados do ASTA, pastas do sistema, shells ou scripts), lixeira e **Desfazer** — veja [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador). Aparelhos pareados por QR code têm o mesmo acesso que você ao ASTA, inclusive a ele.
 - Mundos e jogos não executam código gerado por IA: o modelo escreve **dados** (JSON), e o motor é sempre o mesmo código auditável.
 
 ## Estrutura do repositório
@@ -435,6 +453,8 @@ asta/
   avatars.py  avatar_chat.py  routes_avatars.py    cards de avatar, diretor da conversa, API
   canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural
   studio/        projetos de vídeo: esquema, pipeline cena a cena, edição automática, exportação, ferramentas ffmpeg
+  computer/      Computer Use: motor da equipe de agentes, catálogo de ferramentas, limites (guard), drivers de SO, arquivos com lixeira/desfazer, fallback por regras e prompts/*.md
+  routes_computer.py   API do Computer Use (tarefas, eventos ao vivo, aprovações)
   rebuild/       leitores e conversores de Ren'Py / RPG Maker (+ a revisão de texto por IA, opcional)
   attachments.py  archives.py    anexos de qualquer tipo; extração segura de ZIP/RAR/7z/TAR
   native/        núcleo Rust obrigatório (só biblioteca padrão), com equivalente em Python para cada função

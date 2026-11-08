@@ -23,7 +23,7 @@ Os oito princípios, em ordem de importância quando dois deles disputam a mesma
 ela vê onde está, copia, move, exporta, apaga e leva embora — sem pedir permissão a ninguém, sem conta, sem prazo.
 
 **Como se aplica.**
-- Dados em arquivos comuns, em formatos abertos e legíveis (JSON, PNG/JPG, MP4/WAV/MP3, GGUF, ZIP), dentro de uma pasta que o usuário conhece (`~/.asta`, `asta folder`). Nada de banco de dados opaco ou formato fechado.
+- Dados em arquivos comuns, em formatos abertos e legíveis (JSON, PNG/JPG, MP4/WAV/MP3, GGUF, ZIP), dentro de uma pasta que o usuário conhece (`~/.asta`, `asta folder`). Nada de banco de dados opaco ou formato fechado. O histórico passo a passo do Computer Use, as capturas de tela e a lixeira dele também (`~/.asta/computer`), e o usuário os apaga quando quiser.
 - **Atualizar ou desinstalar nunca apaga os dados.** Qualquer limpeza (órfãos, duplicados) mostra a **prévia** e só age com confirmação (`Configuração → Desempenho → Armazenamento`).
 - Exportar e importar tudo (configurações sem chaves, ZIP de canvases/jogos/mundos, cards de personagem em PNG) e **apagar de verdade** (a biblioteca e as conversas têm *Apagar*).
 - Chaves de API ficam em `settings.json` com permissão `600` e **nunca** voltam ao navegador; segredos não entram em backups exportados.
@@ -100,6 +100,7 @@ ela vê onde está, copia, move, exporta, apaga e leva embora — sem pedir perm
 - A IA escreve **dados validados**; se a resposta vier inválida, há **fallback determinístico** (regras do ASTA) e a entrega nunca falha por culpa do modelo.
 - Ferramentas de criação só começam quando o usuário aciona (✦ Criar → Run). O Chat apenas **sugere**.
 - Respostas **longas e de qualidade** são prioridade: estilo Detalhado/Longo e profundo, continuação automática quando bate no limite, teto de tokens aprendido por modelo, contextos de até 1M de tokens.
+- **Computer Use** (opcional, desligado por padrão) é o único lugar em que a decisão da IA vira **ação no computador** — por isso ela só escolhe entre ações de um **catálogo fechado** (JSON validado, nunca código ou shell), em dois modos escolhidos pelo usuário: **Ask** (Sim/Não antes de agir) e **Full Access** (sem perguntar). Limites fixos valem nos dois (segredos, dados do ASTA, pastas do sistema, interpretadores), nada é apagado de verdade (lixeira) e tudo se **desfaz**.
 
 **O que NÃO fazer.** Chamar a IA sem o usuário saber; esconder o provedor/modelo usado; gastar tokens sem necessidade (emojis, enrolação); executar código escrito pela IA.
 
@@ -108,7 +109,7 @@ ela vê onde está, copia, move, exporta, apaga e leva embora — sem pedir perm
 **O que significa.** O trabalho de qualidade sai de **equipes de agentes pequenos e focados**, em **etapas** com conferência (Analista → Planejador → Criador → Revisor → Empacotador), e não de um prompt gigante em um modelo só.
 
 **Como se aplica.**
-- Cada seção/ferramenta tem sua equipe: Mundos (analista, planejador, personagens, arquiteto, som/UX, revisor), Avatars (analista, designer, revisor), Jogos (analista, designer, revisor), Studio (showrunner + cena a cena; edição automática com Analista, Diretor, Revisor), Canvas (fluxo de nós), Rebuild (Perfilador, Polidor, Auditor) e **Chat** (modo *Equipe de agentes*: Planejador → Redator → Revisor).
+- Cada seção/ferramenta tem sua equipe: **Computer Use** (Planejador → Operador → Revisor → Relator, até 8 tarefas em paralelo, com fallback por regras), Mundos (analista, planejador, personagens, arquiteto, som/UX, revisor), Avatars (analista, designer, revisor), Jogos (analista, designer, revisor), Studio (showrunner + cena a cena; edição automática com Analista, Diretor, Revisor), Canvas (fluxo de nós), Rebuild (Perfilador, Polidor, Auditor) e **Chat** (modo *Equipe de agentes*: Planejador → Redator → Revisor).
 - Cada agente tem entrada/saída em JSON validada, **fallback** e registro (`prompts/` no pacote). Falha de um agente nunca derruba a entrega.
 - Vários agentes **locais** dividem o mesmo modelo por uma **fila com prioridade** (o que a pessoa espera passa à frente do que roda em segundo plano), um pool de modelos residentes decidido pela memória livre, e plano de execução do núcleo Rust.
 - Qualquer modo, seção ou ferramenta **nova** nasce com ao menos um desenho multi-agente/multi-step, mesmo que simples (planejar → fazer → conferir).

@@ -118,7 +118,7 @@ class RequestBodyTests(ServerCase):
 class RouteFuzzTests(ServerCase):
     """Nenhuma rota /api devolve erro 500 para corpos de tipo errado ou campos com tipo trocado."""
 
-    SKIP = re.compile(r"/hf/|/web/|download|preinstalled|/providers|/voice|/tts|/stt|uploads|/lmstudio|rebuild|/play/|/api/jobs|cancel|/media/")
+    SKIP = re.compile(r"/computer/events|/hf/|/web/|download|preinstalled|/providers|/voice|/tts|/stt|uploads|/lmstudio|rebuild|/play/|/api/jobs|cancel|/media/")
 
     def test_wrong_typed_bodies_never_cause_a_500(self):
         av = self.c.json("POST", "/api/avatars", {"name": "Seed", "age": 30})[1]

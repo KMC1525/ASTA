@@ -170,6 +170,9 @@ def normalize_message(m: Any) -> Optional[Dict[str, Any]]:
         if srcs:
             out["sources"] = srcs
             out["search"] = text(m.get("search"), "", 300)
+    c = m.get("computer")   # mensagem ligada a uma tarefa do Computer Use (o cartão ao vivo no Chat)
+    if isinstance(c, dict) and text(c.get("task_id"), "", 40):
+        out["computer"] = {"task_id": text(c.get("task_id"), "", 40), "mode": "full" if c.get("mode") == "full" else "ask", "status": text(c.get("status"), "", 12)}
     return out
 
 
@@ -328,6 +331,8 @@ class AssistantChat:
             idx = next((i for i in range(len(msgs) - 1, -1, -1) if msgs[i]["role"] == "user"), -1)
             if idx < 0:
                 raise ValueError("Ainda não há uma mensagem sua para responder de novo.")
+            if msgs[idx].get("computer") or (msgs[-1].get("computer") if msgs else None):
+                raise ValueError("Esta mensagem é de uma tarefa do Computer Use: para repetir, use «Refazer» na seção Computer Use.")
             dropped = [m["id"] for m in msgs[idx + 1:]]
             chat["messages"] = msgs[:idx + 1]
             self._save(chat)

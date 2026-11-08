@@ -25,6 +25,7 @@ from .jobs import HttpError, Job, JobManager  # noqa: F401  (reexportados)
 from .providers import ProviderError, build_provider, describe_presets, provider_config, resolve_provider
 from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
+from .routes_computer import ComputerRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
 from .routes_mobile import MobileRoutes
@@ -210,6 +211,8 @@ class App:
         self.studio_routes.register()
         self.preinstalled_routes = PreinstalledRoutes(self)
         self.preinstalled_routes.register()
+        self.computer_routes = ComputerRoutes(self)   # cria `self.computer` (o gerenciador de tarefas)
+        self.computer_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:
