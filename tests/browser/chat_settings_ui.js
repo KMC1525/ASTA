@@ -1,7 +1,7 @@
 // v0.4.1: aba Chat nas configurações (tamanho da resposta, janela de contexto, tempo de pensamento, busca na web), botão Web no Chat com fontes,
 // seletor de tempo de pensamento ao lado do modelo (só quando o modelo tem o recurso) e busca nas ferramentas de criação.
 const { run, useTool } = require('./_common.js');
-run('chat_settings', async ({ open, api, check }) => {
+run('chat_settings', async ({ open, api, check, base }) => {
   const url = process.env.ASTA_FAKE_LM;
   const S = (m) => api('/api/settings', { method: 'PUT', body: m });
   await S({ providers: { lmstudio: { base_url: url + '/v1', model: 'gemma-3-12b' } }, active: { generation: 'lmstudio', characters: 'auto' }, chat: { max_tokens: 2000, context_tokens: 16000, thinking: 'off', instructions: '', web: { default: false, engine: 'auto', results: 5, read_pages: 2 } } });
@@ -72,6 +72,14 @@ run('chat_settings', async ({ open, api, check }) => {
   await page.fill('.composer textarea', 'Um jogo de plataforma sobre o dólar'); await page.locator('.composer .send').click();
   await page.waitForSelector('.result', { timeout: 90000 });
   check('ferramenta:cria-com-a-busca', (await page.locator('.result a[href*="/play/"]').count()) === 1);
+  // v0.15.8: celular/app — «LM Studio no computador» (procura na rede ou IP digitado); no computador o cartão não aparece
+  check('lmstudio:computador-nao-mostra-o-cartao-do-celular', (await (await open({ width: 1300, height: 900 })).evaluate(async () => { location.hash = '#/config'; await new Promise((r) => setTimeout(r, 1200)); return document.querySelectorAll('#lms-pc').length; })) === 0);
+  await S({ providers: { lmstudio: { base_url: url + '/v1' } }, active: { generation: 'lmstudio' } });   // o cartão do provedor em uso já vem aberto
+  const mob = await open({ width: 390, height: 800 });
+  await mob.addInitScript(() => Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 14) ASTA-Android' }));
+  await mob.goto(base + '/#/config'); await mob.reload(); await mob.waitForSelector('#lms-pc');
+  await mob.fill('#lms-pc-addr', '127.0.0.1:' + new URL(url).port); await mob.locator('#lms-pc-go').click(); await mob.waitForTimeout(800);
+  check('lmstudio:celular-aponta-para-o-computador', (await api('/api/settings')).providers.lmstudio.base_url === url);
   await S({ providers: { lmstudio: { base_url: '', model: '' } }, active: { generation: 'demo' }, chat: { thinking: 'off', max_tokens: 2000, context_tokens: 16000, instructions: '', web: { default: false, engine: 'auto', results: 5 } } });
   await api('/api/settings', { method: 'PUT', body: { chat: { web: { brave_key: null } } } });
 });

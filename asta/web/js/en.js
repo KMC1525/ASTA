@@ -1760,6 +1760,16 @@ export default {
   "Executando no seu computador": "Running on your computer",
   "As tarefas rodam no computador conectado; este aparelho é só a janela.": "Tasks run on the connected computer; this device is just the window.",
   "Voltar ao ASTA deste aparelho": "Back to this device's ASTA",
+  // v0.15.8
+  "Endereço do computador": "Computer address",
+  "Procurando o LM Studio na rede…": "Looking for LM Studio on the network…",
+  "Não achei. No computador: LM Studio → Developer → ligue «Serve on Local Network» e «Start Server»; o celular precisa estar no mesmo Wi-Fi. Ou digite o IP do computador.": "Not found. On the computer: LM Studio → Developer → turn on «Serve on Local Network» and «Start Server»; the phone must be on the same Wi-Fi. Or type the computer's IP.",
+  "{n} modelo(s)": "{n} model(s)",
+  "Digite o IP do computador (ex.: 192.168.0.10).": "Type the computer's IP (e.g. 192.168.0.10).",
+  "LM Studio no computador": "LM Studio on the computer",
+  "Use os modelos do LM Studio do seu computador por este aparelho, na mesma rede Wi-Fi.": "Use your computer's LM Studio models from this device, on the same Wi-Fi network.",
+  "Procurar na rede": "Search the network",
+  "Conectar": "Connect",
   // v0.15.1
   "Python 3.9+ (biblioteca padrão)": "Python 3.9+ (standard library)",
   "todo o Computer Use": "all of Computer Use",

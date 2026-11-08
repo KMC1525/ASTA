@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.8] — 2026-11-08
+
+### Added
+- **The computer's LM Studio from the phone/tablet:** in *Configuration → Providers → LM Studio*, on the phone/app a **«LM Studio on the computer»** card appears: **Search the network** finds the LM Studio server on the same Wi-Fi (port 1234, only on request) or you type the computer's IP; ASTA points the provider at it and lists its models. On the computer, turn on **Serve on Local Network** and **Start Server** (Developer) in LM Studio.
+- New route `POST /api/lmstudio/scan` and `lmstudio.scan()` (scans only the device's /24, only LM Studio's port, read-only model list).
+
 ## [0.15.7] — 2026-11-08
 
 ### Added

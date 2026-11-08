@@ -174,6 +174,17 @@ class ProbeTests(LMStudioBase):
             self.assertEqual(p.call_count, 1)
 
 
+class ScanTests(LMStudioBase):
+    def test_scan_finds_the_lm_studio_of_another_computer_on_the_network(self):
+        fake = FakeLMStudio()
+        self.addCleanup(fake.close)
+        port = int(fake.url.rsplit(":", 1)[1])
+        found = lmstudio.scan(["127.0.0.1", "127.0.0.2"], port=port, timeout=0.5)
+        self.assertEqual([f["url"] for f in found][:1], [fake.url])
+        self.assertEqual(found[0]["models"], 3)  # só os de chat (embeddings fora)
+        self.assertEqual(lmstudio.scan(["127.0.0.1"], port=free_port(), timeout=0.2), [])  # nada escutando: lista vazia, sem erro
+
+
 class ProviderTests(LMStudioBase):
     def provider(self, fake, **user):
         s = json.loads(json.dumps(DEFAULT_SETTINGS))
