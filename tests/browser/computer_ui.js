@@ -3,7 +3,7 @@
 const { run, until } = require('./_common');
 run('computer', async ({ api, open, check, base }) => {
   const home = process.env.ASTA_TEST_HOME;
-  await api('/api/settings', { method: 'PUT', body: { computer: { enabled: false, mode: 'ask' } } });
+  await api('/api/settings', { method: 'PUT', body: { active: { generation: 'demo' }, computer: { enabled: false, mode: 'ask' } } });   // sem IA: as regras entendem o pedido (outros testes deixam um provedor falso ativo)
   const page = await open();
   check('cu:item-na-barra-lateral', (await page.locator('#side nav a[href="#/computer"]').count()) === 1);
   await page.goto(base + '/#/computer'); await page.waitForSelector('#cu-enable');

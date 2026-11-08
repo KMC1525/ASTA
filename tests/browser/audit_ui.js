@@ -27,7 +27,7 @@ run('audit', async ({ open, api, check }) => {
   // ---- Configuração: as 17 abas (em 4 grupos) cabem (quebram de linha) em vez de ficarem escondidas
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForTimeout(700);
   const boxes = await page.locator('.tabs button').evaluateAll((els) => els.map((e) => { const r = e.getBoundingClientRect(); return { l: r.left, r: r.right, vis: r.width > 0 }; }));
-  check('config:abas-todas-visiveis', boxes.length === 17 && boxes.every((b) => b.vis && b.r <= 1360 && b.l >= 0) && !(await page.locator('.tabs').evaluate((el) => el.scrollWidth > el.clientWidth + 2)));
+  check('config:abas-todas-visiveis', boxes.length === 18 && boxes.every((b) => b.vis && b.r <= 1360 && b.l >= 0) && !(await page.locator('.tabs').evaluate((el) => el.scrollWidth > el.clientWidth + 2)));
 
   // ---- Chat: título legível, aviso do Demo e rótulo do modelo traduzido na resposta
   await page.evaluate(() => { location.hash = '#/main'; }); await page.waitForSelector('.chx-hero h1', { timeout: 8000 }); await page.waitForTimeout(500);
