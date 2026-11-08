@@ -13,6 +13,20 @@ const lsSet = (k, v) => { try { localStorage.setItem(k, v); } catch (e) { /* ok 
 const idFromHash = () => { const m = location.hash.match(/^#\/computer\/([\w-]+)/); return m ? m[1] : ''; };
 const cfg = () => (state.settings && state.settings.computer) || {};
 
+// App Android: o ASTA do aparelho não controla o próprio celular, mas pode mandar as tarefas para o ASTA do seu computador (a janela do app abre o Computer Use dele)
+function pcBridge() {
+  if (!/ASTA-Android/.test(navigator.userAgent || '')) return null;
+  const local = /^(127\.0\.0\.1|localhost)$/.test(location.hostname);
+  return h('div', { class: 'card cu-pc', id: 'cu-pc', style: { margin: '0 0 12px' } },
+    local
+      ? [h('b', null, t('Executar no seu computador')),
+        h('p', { class: 'muted small', style: { margin: '4px 0 8px' } }, t('Este aparelho não controla outros apps. Mande as tarefas para o ASTA do seu computador: elas rodam lá e você acompanha e aprova daqui.')),
+        h('button', { class: 'btn primary', type: 'button', id: 'cu-pc-go', onclick: () => { location.href = 'http://localhost/?goto=computer'; } }, icon('globe', 14), t('Executar no meu computador'))]
+      : [h('b', null, t('Executando no seu computador')),
+        h('p', { class: 'muted small', style: { margin: '4px 0 8px' } }, t('As tarefas rodam no computador conectado; este aparelho é só a janela.')),
+        h('button', { class: 'btn', type: 'button', id: 'cu-pc-back', onclick: () => { location.href = 'http://localhost/?local=1'; } }, t('Voltar ao ASTA deste aparelho'))]);
+}
+
 export default async function render(root, ctx) {
   const st = { tasks: [], status: null, sel: (ctx && ctx.task) || idFromHash(), cur: null, filter: '', open: new Set(), mode: cfg().mode === 'full' ? 'full' : 'ask', inv: null };
   const listEl = h('aside', { class: 'cu-list', 'aria-label': t('Tarefas') });
@@ -23,7 +37,7 @@ export default async function render(root, ctx) {
     h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Computer Use')),
       h('p', null, t('Uma equipe de agentes de IA que faz tarefas no seu computador: arquivos e pastas, programas, jogos, pesquisa e escrita. Até 8 ao mesmo tempo.'))),
       h('div', { class: 'row' }, capBadge, h('a', { class: 'btn sm', href: '#/config', onclick: () => { state.ctx = { tab: 'computer' }; } }, icon('config', 13), t('Configurar')))),
-    split));
+    pcBridge(), split));
 
   // ------------------------------------------------------------------ dados
   async function loadList() {

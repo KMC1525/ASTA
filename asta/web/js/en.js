@@ -1753,6 +1753,13 @@ export default {
   "O Android não deixa um app listar ou controlar os outros. Para controlar um computador, conecte o app ao ASTA dele (Configuração → Celular e tablet).": "Android does not let an app list or control the others. To control a computer, connect the app to its ASTA (Configuration → Mobile and tablet).",
   "Sem X11 nesta sessão: instale o ydotool ou o wtype (Wayland) para o ASTA digitar e apertar teclas.": "No X11 in this session: install ydotool or wtype (Wayland) so ASTA can type and press keys.",
   "Sem X11 nesta sessão: instale o ydotool (Wayland) para o ASTA mexer o mouse.": "No X11 in this session: install ydotool (Wayland) so ASTA can move the mouse.",
+  // v0.15.7
+  "Executar no seu computador": "Run on your computer",
+  "Este aparelho não controla outros apps. Mande as tarefas para o ASTA do seu computador: elas rodam lá e você acompanha e aprova daqui.": "This device cannot control other apps. Send the tasks to your computer's ASTA: they run there and you follow and approve them from here.",
+  "Executar no meu computador": "Run on my computer",
+  "Executando no seu computador": "Running on your computer",
+  "As tarefas rodam no computador conectado; este aparelho é só a janela.": "Tasks run on the connected computer; this device is just the window.",
+  "Voltar ao ASTA deste aparelho": "Back to this device's ASTA",
   // v0.15.1
   "Python 3.9+ (biblioteca padrão)": "Python 3.9+ (standard library)",
   "todo o Computer Use": "all of Computer Use",
