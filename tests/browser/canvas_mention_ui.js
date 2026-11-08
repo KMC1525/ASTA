@@ -35,5 +35,26 @@ run('canvas_mention', async ({ api, open, check }) => {
   await page.waitForTimeout(1500);
   const saved = (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im');
   check('prompt-salvo-com-as-menções', saved.params.prompt === 'fundo @fnaf-1-office e @fnaf-1-office @foto-perfil @fantasma');
+
+  // ---- v0.17.4: nó Texto e vídeos/sons
+  const cv2 = await api('/api/canvases', { method: 'POST', body: { name: 'Menções 2', template: 'blank' } });
+  const mp4 = path.join(dir, 'Cena Teste.mp4'), wav = path.join(dir, 'chuva.wav'), png = path.join(dir, 'praia.png');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc=d=2:s=96x96:r=10', '-pix_fmt', 'yuv420p', mp4]);
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=f=300:d=1', wav]);
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=green:s=64x64', '-frames:v', '1', png]);
+  for (const [f, name, type] of [[png, 'praia.png', 'image/png'], [mp4, 'Cena Teste.mp4', 'video/mp4'], [wav, 'chuva.wav', 'audio/wav']]) await fetch(`${base}api/canvases/${cv2.id}/assets`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(name), 'Content-Type': type }, body: fs.readFileSync(f) });
+  await api(`/api/canvases/${cv2.id}`, { method: 'PUT', body: { name: 'Menções 2', edges: [], nodes: [{ id: 'tx', type: 'text', x: 20, y: 20, params: {} }, { id: 'li', type: 'llm', x: 400, y: 20, params: {} }] } });
+  await page.evaluate((id) => { location.hash = '#/canvas/edit/' + id; }, cv2.id); await page.waitForSelector('.cv-node.t-text', { timeout: 10000 }); await page.waitForTimeout(600);
+  const tx = page.locator('.cv-node[data-id="tx"] .mwrap textarea');
+  check('no-texto-e-no-texto-ia-aceitam-menção', (await tx.count()) === 1 && (await page.locator('.cv-node[data-id="li"] .mwrap textarea').count()) === 1);
+  await tx.click(); await tx.pressSequentially('fundo @');
+  await page.waitForSelector('.mpop:not(.hidden) .mi[data-slug]', { timeout: 5000 });
+  const kinds = await page.locator('.mpop .mi[data-slug]').evaluateAll((els) => els.map((e) => e.dataset.slug + ':' + (e.querySelector('video') ? 'video' : e.querySelector('.aud') ? 'audio' : 'image')));
+  check('lista-mostra-imagem-video-e-som', kinds.length === 3 && kinds.includes('praia:image') && kinds.includes('cena-teste:video') && kinds.includes('chuva:audio'));
+  await tx.pressSequentially('cena'); await page.keyboard.press('Enter'); await page.waitForTimeout(200);
+  await tx.pressSequentially('e @chuva '); await page.keyboard.press('Escape'); await page.waitForTimeout(500);
+  check('fichas-de-video-e-som', (await page.locator('.cv-node[data-id="tx"] .mchip.video').count()) === 1 && (await page.locator('.cv-node[data-id="tx"] .mchip.audio').count()) === 1);
+  await page.waitForTimeout(1300);
+  check('texto-salvo-com-as-menções', (await api(`/api/canvases/${cv2.id}`)).nodes.find((n) => n.id === 'tx').params.text === 'fundo @cena-teste e @chuva');
   fs.rmSync(dir, { recursive: true, force: true });
 });

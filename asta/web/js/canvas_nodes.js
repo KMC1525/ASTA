@@ -152,14 +152,14 @@ function fileThumbs(c, n) {
 }
 
 const BODY = {
-  text: (c, n) => [ta(c, n, 'text', t('Escreva o texto…'), 4)],
-  llm: (c, n) => [ta(c, n, 'instruction', t('O que fazer com o texto de entrada? Ex.: “Descreva a cena com detalhes visuais”.'), 3),
+  text: (c, n) => [ta(c, n, 'text', t('Escreva o texto… (digite @ para citar uma imagem, vídeo ou som do canvas)'), 4, true)],
+  llm: (c, n) => [ta(c, n, 'instruction', t('O que fazer com o texto de entrada? Ex.: “Descreva a cena com detalhes visuais”.'), 3, true),
     h('div', { class: 'dim small' }, t('Usa o modelo de texto ativo em Configuração → Provedores.')),
     checkbox(t('Ignorar estilos globais'), n.params.ignore_global_styles, (v) => c.change(n, 'ignore_global_styles', v, true))],
   upload: (c, n) => fileThumbs(c, n),
   image: (c, n) => [
     seg([['generate', t('Gerar')], ['edit', t('Editar')]], n.params.mode, (v) => c.change(n, 'mode', v, true)),
-    ta(c, n, 'prompt', n.params.mode === 'edit' ? t('O que mudar na imagem ligada em “Referências” (ou citada com @)?') : t('Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem do canvas.'), 3, true),
+    ta(c, n, 'prompt', n.params.mode === 'edit' ? t('O que mudar na imagem ligada em “Referências” (ou citada com @)?') : t('Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem, vídeo ou som do canvas.'), 3, true),
     lab(t('Quantidade'), select([1, 2, 3, 4].map((i) => [String(i), String(i)]), String(n.params.count), (v) => c.change(n, 'count', Number(v)))),
     ...providerBlock(c, n, 'image', lab(t('Resolução'), select(c.meta.sizes.map((s) => [s, sizeLabel(s)]), n.params.size, (v) => c.change(n, 'size', v))))],
   video: (c, n) => [

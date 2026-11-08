@@ -5,6 +5,27 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.4] — 2026-11-08
+
+### Adicionado — menções com «@» também em nós de Texto e para vídeos e sons
+- **O `@` funciona nos nós Texto e Texto IA** (`canvas_nodes.js`): digitar `@` abre a mesma lista e as mesmas fichas dos prompts de Imagem e Vídeo. Como o texto de um nó **Texto ligado** a um nó de Imagem ou Vídeo entra no prompt dele, uma menção escrita ali **vale como se tivesse sido digitada no próprio nó**; mudar a menção deixa o nó de Imagem/Vídeo desatualizado (o hash agora olha o texto ligado, não só o prompt do nó). O nó **Texto IA** é instruído a manter os `@nomes` exatamente como estão na saída.
+- **Vídeos e sons podem ser citados** (`asta/canvas/mentions.py`): a lista e as fichas mostram a miniatura do vídeo (primeiro quadro) e um ícone de som; o apelido segue a mesma regra (`Cena Praia.mp4` → `@cena-praia`, `chuva.mp3` → `@chuva`, nomes repetidos com `-2`…, o mesmo espaço de apelidos para os três tipos). Na geração:
+  - **imagem** → referência numerada (como antes);
+  - **vídeo** → entra como referência pelo **quadro do meio** e o prompt vira `cena-praia (reference image N, a frame of the video)`; num nó de **Vídeo**, a primeira imagem ou quadro citado vira a **imagem inicial**;
+  - **som** → não é imagem: fica no prompt como `chuva (audio reference)` e o nó **avisa** que modelos de imagem/vídeo não usam áudio como referência.
+  Só imagens e quadros recebem número de referência. A rota `GET /api/canvases/{id}/mentions` agora devolve também o `kind` de cada item.
+- Testes: `MediaMentionTests` e `EngineMediaMentionTests` em `tests/test_v017_mentions.py` e novas verificações em `tests/browser/canvas_mention_ui.js`.
+
+### Alterado
+- Versão do app Android e das telas atualizada para 0.17.4 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- Nenhum provedor/modelo atual do ASTA usa **áudio como referência** de imagem ou vídeo, nem um **vídeo inteiro** como referência: o som só aparece no texto (com aviso) e o vídeo entra por **um quadro** (o do meio).
+- O `@` não está nos nós de **Som** e **Voz**, na caixa do Chat nem no Studio; num Texto ligado a eles a menção fica como texto.
+- Num nó de Vídeo só **uma** imagem inicial é usada.
+- Quanto uma referência guia o resultado **depende do modelo** (a Demo aceita referências mas só varia o resultado).
+- Rodaram `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, o JS de i18n e os testes de navegador do Canvas; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.3] — 2026-11-08
 
 ### Adicionado — seletor de modelos nos nós do Canvas

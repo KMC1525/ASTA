@@ -284,12 +284,12 @@ class CanvasRoutes:
         req.json({"cap": cap, "items": installed.installed(self.store.get_settings(), self.store.models_dir, cap)})
 
     def r_mentions(self, req, cid: str) -> None:
-        """As imagens que podem ser citadas com «@» nos prompts deste canvas (apelido, nome, miniatura), da mais nova para a mais antiga; `q` filtra pelo apelido."""
+        """As imagens, vídeos e sons que podem ser citados com «@» neste canvas (apelido, nome, tipo, arquivo), do mais novo para o mais antigo; `q` filtra pelo apelido."""
         from .canvas import mentions
 
         c = self._canvas(cid)
         q = text(req.query.get("q", [""])[0], "", 60).lower()
-        items = [{"id": m["id"], "slug": m["slug"], "name": m["name"], "url": f"/api/canvases/{cid}/assets/{m['file']}"} for m in mentions.table(c) if not q or q in m["slug"]]
+        items = [{"id": m["id"], "slug": m["slug"], "name": m["name"], "kind": m["kind"], "url": f"/api/canvases/{cid}/assets/{m['file']}"} for m in mentions.table(c) if not q or q in m["slug"]]
         req.json({"items": items[:50]})
 
     def r_to_studio(self, req, cid: str) -> None:
