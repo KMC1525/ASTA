@@ -7,6 +7,24 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.5] — 2026-11-08
+
+### Changed — media nodes without «Provider»: just the Model
+- The **«Provider» selector is gone from the Image, Video, Sound, Voice and Transcribe nodes.** The **Model** list is now a single one that joins: **Installed on this computer** (GGUF and local Hugging Face), the models of **every cloud provider ready to use** — with a key (OpenAI/ChatGPT, OpenRouter, xAI/Grok, Google, ElevenLabs…) or a local/compatible server with an address —, one group per provider (the suggestions always; the full list of the node's provider, and of all of them when clicking ↻), and Demo / the Configuration voice where they exist. **Choosing a model also sets the provider that runs it**; *Default* goes back to what is in Configuration → Media; *Set up providers and keys…* opens that screen; *Other model…* still lets you type a name.
+- **Old nodes keep working:** the provider already saved in a node is still used (the model shows as «current» in the list) and the «No API key» warning still appears when the node's provider has no key.
+- Tests: `canvas_model_picker_ui.js` and `canvas_simple_nodes_ui.js` updated (no provider selector; group of the provider with a key; choosing a cloud model sets the provider).
+
+### Fixed
+- **«Unexpected error: 'StableDiffusion' object has no attribute 'txt2img'»** when generating an image with a local GGUF model: the new stable-diffusion-cpp-python calls the generator `generate_image` (the old one, `txt2img`). ASTA now uses whichever exists and, if neither does, explains how to update the library (`asta libs`) instead of an unexpected error.
+- **Image GGUF lost the aspect ratio:** each side was capped at 1024 on its own, so `1280×720` became `1024×720`. Now the larger side goes up to 1024 keeping the ratio (`1280×720` → `1024×576`).
+- Tests: `GGUFApiCompatTests` in `tests/test_v017_models.py`.
+
+### Notes (honest limits)
+- The new stable-diffusion-cpp-python generator was covered with a **fake module**; I **did not run a real GGUF model** (no library or model in this environment), so the names of the new generator's extra parameters may need adjusting for the installed version.
+- Listing «all models» of a provider needs a key and network and may bring many models (OpenRouter); without that only the suggestions show.
+- Whoever needed to pick a provider **without picking a model** now uses the provider's option in the list (Demo, Configuration voice) or *Default*; cloud providers with no suggested model only show up after ↻ or «Other model…».
+- `test_v017_models`, `test_canvas`, the Canvas browser tests and the i18n JS check ran; the full suite was **not run again**.
+
 ### Changed
 - README (Portuguese and English): the modes table now lists the **eight tools** (including **Computer Use** and **Code**), the Studio and Canvas rows mention the 0.17 news (Tools, free layers, 4K/120 fps, `@`, model bar, model picker, Send to Studio), and the sections table and repository map were updated.
 

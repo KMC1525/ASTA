@@ -10,8 +10,8 @@ run('canvas_simple_nodes', async ({ api, open, check }) => {
   const text = async (id) => page.locator(`.cv-node[data-id="${id}"]`).innerText();
   const labels = async (id) => page.locator(`.cv-node[data-id="${id}"] label.f`).allInnerTexts();
   const li = await labels('im'), lv = await labels('vi'), ls = await labels('so');
-  check('imagem:provedor-modelo-resolucao', li.some((x) => /Provedor|Provider/.test(x)) && li.some((x) => /Modelo|Model/.test(x)) && li.some((x) => /Resolução|Resolution/.test(x)));
-  check('video:provedor-modelo-resolucao', lv.some((x) => /Resolução|Resolution/.test(x)) && lv.some((x) => /Modelo|Model/.test(x)));
+  check('imagem:so-modelo-e-resolucao-sem-provedor', !li.some((x) => /Provedor|Provider/.test(x)) && li.some((x) => /Modelo|Model/.test(x)) && li.some((x) => /Resolução|Resolution/.test(x)));
+  check('video:modelo-e-resolucao-sem-provedor', !lv.some((x) => /Provedor|Provider/.test(x)) && lv.some((x) => /Resolução|Resolution/.test(x)) && lv.some((x) => /Modelo|Model/.test(x)));
   check('som:so-modelo-sem-resolucao', ls.some((x) => /Modelo|Model/.test(x)) && !ls.some((x) => /Resolução|Resolution/.test(x)));
   const all = (await text('im')) + (await text('vi')) + (await text('so')) + (await text('vo'));
   check('sem-bloco-avancado', !/Avançado|Advanced|Prompt negativo|Negative prompt|Parâmetros extras|Extra parameters|Semente|Seed|Ignorar estilos|Ignore global/.test(all) && (await page.locator('.cv-node textarea.mono').count()) === 0);

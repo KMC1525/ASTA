@@ -14,15 +14,17 @@ run('canvas_model_picker', async ({ api, open, check }) => {
   await page.evaluate((id) => { location.hash = '#/canvas/edit/' + id; }, cv.id); await page.waitForSelector('.cv-node', { timeout: 10000 }); await page.waitForTimeout(800);
   const sel = page.locator('#mp_imim .mpick select, .cv-node[data-id="im"] .mpick select').first();
   const opts = await sel.locator('option').allTextContents();
+  check('sem-seletor-de-provedor-no-no', (await page.locator('.cv-node[data-id="im"] label.f').allInnerTexts()).every((x) => !/Provedor|Provider/.test(x)) && (await page.locator('.cv-node[data-id="im"] select').count()) >= 2);
   check('seletor-no-lugar-do-campo-de-texto', (await page.locator('.cv-node[data-id="im"] .mpick select').count()) === 1);
   check('instalados-aparecem-com-detalhe', opts.some((o) => /z-image-Q4_K_M\.gguf · Q4_K_M · GGUF/.test(o)) && opts.some((o) => /stabilityai\/sd-turbo · fp16/.test(o)));
+  check('nuvem-aparece-em-grupo-do-provedor-com-chave', (await sel.locator('optgroup').evaluateAll((g) => g.map((x) => x.label))).some((l) => /OpenAI/.test(l)));
   check('grupo-instalados-neste-computador', (await sel.locator('optgroup').evaluateAll((g) => g.map((x) => x.label))).some((l) => /Instalados|Installed/.test(l)));
   // escolher um GGUF instalado troca o provedor e o modelo e salva
   await sel.selectOption({ label: opts.find((o) => /z-image/.test(o)) }); await page.waitForTimeout(1500);
   const saved = (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im');
   check('instalado-define-provedor-e-modelo', saved.params.provider === 'gguf_local' && saved.params.model === 'z-image-Q4_K_M.gguf');
   const sel2 = page.locator('.cv-node[data-id="im"] .mpick select');
-  check('selecao-fica-marcada-apos-redesenhar', (await sel2.inputValue()) === 'L|gguf_local|z-image-Q4_K_M.gguf');
+  check('selecao-fica-marcada-apos-redesenhar', (await sel2.inputValue()) === 'P|gguf_local|z-image-Q4_K_M.gguf');
   // nuvem: provedor com chave lista os modelos dele
   const cloud = page.locator('.cv-node[data-id="im2"] .mpick select');
   await page.waitForTimeout(500);
@@ -30,7 +32,7 @@ run('canvas_model_picker', async ({ api, open, check }) => {
   check('nuvem-lista-os-modelos-do-provedor', calls.models.includes('openai') && cl.includes('modelo-so-da-nuvem') && cl.includes('dall-e-3'));
   await cloud.selectOption({ label: 'modelo-so-da-nuvem' }); await page.waitForTimeout(1500);
   const s2 = (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im2');
-  check('nuvem-escolhe-so-o-modelo-e-mantem-o-provedor', s2.params.model === 'modelo-so-da-nuvem' && s2.params.provider === 'openai');
+  check('nuvem-escolhe-o-modelo-e-o-provedor-dele', s2.params.model === 'modelo-so-da-nuvem' && s2.params.provider === 'openai');
   // sem chave não consulta a nuvem
   check('provedor-sem-instalados-nao-consulta-a-nuvem-do-padrao', !calls.models.includes('demo') && !calls.models.includes('gguf_local'));
   // outro modelo: campo livre

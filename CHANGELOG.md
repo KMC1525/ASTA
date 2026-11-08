@@ -5,6 +5,24 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.5] — 2026-11-08
+
+### Alterado — nós de mídia sem «Provedor»: só o Modelo
+- O seletor **«Provedor» saiu dos nós Imagem, Vídeo, Som, Voz e Transcrever.** A lista de **Modelo** agora é única e junta: **Instalados neste computador** (GGUF e Hugging Face local), os modelos de **cada provedor de nuvem pronto para uso** — com chave (OpenAI/ChatGPT, OpenRouter, xAI/Grok, Google, ElevenLabs…) ou servidor local/compatível com endereço —, um grupo por provedor (as sugestões sempre; a lista completa do provedor do nó, e a de todos ao clicar em ↻), e a Demo / a Voz da Configuração onde existirem. **Escolher um modelo define também o provedor que o executa**; *Padrão* volta ao que está em Configuração → Mídia; *Configurar provedores e chaves…* abre essa tela; *Outro modelo…* ainda deixa digitar um nome.
+- **Nós antigos continuam valendo:** o provedor já salvo num nó segue sendo usado (o modelo aparece como «atual» na lista) e o aviso «Sem chave de API» continua aparecendo quando falta a chave do provedor do nó.
+- Testes: `canvas_model_picker_ui.js` e `canvas_simple_nodes_ui.js` atualizados (sem seletor de provedor; grupo do provedor com chave; escolher modelo da nuvem define o provedor).
+
+### Corrigido
+- **«Erro inesperado: 'StableDiffusion' object has no attribute 'txt2img'»** ao gerar imagem com um modelo GGUF local: a stable-diffusion-cpp-python nova chama o gerador de `generate_image` (a antiga, `txt2img`). O ASTA agora usa o que existir e, se não houver nenhum dos dois, explica como atualizar a biblioteca (`asta libs`) em vez de um erro inesperado.
+- **GGUF de imagem perdia a proporção:** cada lado era limitado a 1024 sozinho, então `1280×720` virava `1024×720`. Agora o lado maior vai até 1024 mantendo a proporção (`1280×720` → `1024×576`).
+- Testes: `GGUFApiCompatTests` em `tests/test_v017_models.py`.
+
+### Observações (limites honestos)
+- O gerador novo da stable-diffusion-cpp-python foi coberto com um **módulo falso**; **não rodei um modelo GGUF de verdade** (sem a biblioteca nem o modelo neste ambiente), então o nome dos parâmetros extras do gerador novo pode precisar de ajuste conforme a versão instalada.
+- Listar «todos os modelos» de um provedor pede chave e rede e pode trazer muitos modelos (OpenRouter); sem isso aparecem só as sugestões.
+- Quem precisava escolher um provedor **sem escolher modelo** usa agora a opção do provedor na lista (Demo, Voz da Configuração) ou *Padrão*; provedores de nuvem sem modelo sugerido só aparecem depois de ↻ ou de «Outro modelo…».
+- Rodaram `test_v017_models`, `test_canvas`, os testes de navegador do Canvas e o JS de i18n; a suíte completa **não foi rodada de novo**.
+
 ### Alterado
 - README (pt-BR e inglês): a tabela de modos agora lista as **oito ferramentas** (inclui **Computer Use** e **Code**), as linhas do Studio e do Canvas citam as novidades da 0.17 (Tools, camadas livres, 4K/120 fps, `@`, barra de modelos, seletor de modelo, Enviar ao Studio), e a tabela de seções e o mapa do repositório foram atualizados.
 
