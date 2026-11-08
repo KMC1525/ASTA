@@ -1406,7 +1406,9 @@ class GGUFMedia(MediaProvider):
         if not base and not (extra or {}).get("load"):
             base = self._auto_load(path)   # famílias conhecidas (Qwen-Image, FLUX): acha o VAE e o codificador de texto ao lado do modelo
         extra = {**base.get("run", {}), **(extra or {})}
-        sd = self._engine("image", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
+        load = {**base.get("load", {}), **(extra.pop("load", None) or {})}
+        sd = self._engine("image", path, load)
+        used = ", ".join(Path(v).name for k, v in load.items() if k.endswith("_path") and isinstance(v, str) and v != "@model")   # os arquivos de apoio de fato carregados (para o erro)
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
         w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)   # múltiplos de 16: Qwen-Image/FLUX/Z-Image falham com tamanhos que não são
@@ -1456,7 +1458,7 @@ class GGUFMedia(MediaProvider):
                     info = support.missing(path.parent, path.name)
                     fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
                            f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
-                    why = _sd_reason()
+                    why = _sd_reason() or ("a biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda" + (f"; arquivos de apoio carregados: {used}" if used else "; nenhum arquivo de apoio foi carregado"))
                     mem = (" Parece falta de memória: feche outros programas, use uma quantização menor (Q3/Q2) ou uma resolução menor." if re.search(r"alloc|out of memory|oom", why, re.I) else "")
                     raise ProviderError(f"A geração com {path.name} falhou na stable-diffusion.cpp («{exc}»)." + (f" Motivo informado pela biblioteca: {why}." if why else "")
                                         + mem + " Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a biblioteca precisa ser recente (asta libs)." + fix) from None

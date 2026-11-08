@@ -177,6 +177,29 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertEqual(runs[0]["cfg_scale"], 2.5)
         self.assertEqual((runs[0]["width"], runs[0]["height"]), (1024, 576))
 
+    def test_the_vae_of_flux_and_z_image_is_never_used_for_qwen_image(self):
+        from asta.providers.base import ProviderError
+
+        (self.img / "ae.safetensors").write_bytes(b"flux-vae")          # fica na mesma pasta quando o Z-Image pré-instalado está instalado
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        mod, loads, _ = self.fake(fail=ValueError("NULL pointer access"))
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+            self.prov().image("x")
+        self.assertEqual(loads[0], {"model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf")})   # sem o VAE certo: não monta o carregamento com o VAE errado
+        self.assertIn("VAE do Qwen-Image", str(cm.exception))
+        self.assertIn("[[asta-support:", str(cm.exception))
+
+    def test_without_a_log_reason_the_error_lists_the_support_files_that_were_loaded(self):
+        from asta.providers.base import ProviderError
+
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        mod, _, runs = self.fake(fail=ValueError("NULL pointer access"))
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+            self.prov().image("x", size="512x512")
+        self.assertIn("não registrou nenhum motivo", str(cm.exception))
+        self.assertIn("qwen_image_vae.safetensors", str(cm.exception))
+
     def test_missing_companions_fall_back_to_the_single_file_and_the_error_says_what_to_download(self):
         from asta.providers.base import ProviderError
 

@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.11] — 2026-11-08
+
+### Fixed — «NULL pointer access» on Qwen-Image GGUF: wrong VAE
+- Likely cause: Qwen-Image accepted any `ae.safetensors` or `vae` in the folder as its VAE. `ae.safetensors` is the **FLUX and Z-Image** VAE (the pre-installed Z-Image leaves it in the same folder) and does not work for Qwen-Image: the model loaded with the wrong VAE and generation failed with no clear reason. Now only `qwen_image_vae.safetensors` counts; without it the node offers to download the right file («Download the support files» button).
+- Qwen-Image generation parameters as in the stable-diffusion.cpp docs: `flow_shift` 3 and the `euler` sampler.
+- When the library logs no reason at all, the message says so and lists the support files that were loaded (so a wrong one is visible at once).
+- Version 0.17.11 (the Rust core did not change).
+
 ## [0.17.10] — 2026-11-08
 
 ### Fixed — editing images with local models and node connections
