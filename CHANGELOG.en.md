@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.1] — 2026-11-08
+
+### Changed — simpler Canvas media nodes: Provider, Model and Resolution
+- The **«Advanced»** block of the **Image, Video, Sound, Voice and Transcribe** nodes (negative prompt, seed, extra parameters as JSON and «ignore global styles») was **replaced by Model + Resolution**: the node shows *Provider*, *Model* and, on Image and Video, *Resolution*. On Image the old size list became the **Resolution**, now with the ratio (`1280×720 (16:9)`); on Video there is a new **Resolution** (*Automatic*, 480p, 720p or 1080p, long side).
+- **Video resolution** (`resolution`, `long_side` in the providers): applies to the **Demo and local models** (local Hugging Face and GGUF), which use the requested size; cloud providers pick their own sizes and ignore it. Changing the resolution makes the node outdated (the hash changes).
+- **Nothing is lost:** whatever was already saved in canvases (negative prompt, seed, `extra`, `ignore_global_styles`) **still applies in the engine**; it just no longer shows on screen. Old canvases open unchanged.
+- «Regenerate» already draws another seed, so a seed on screen is no longer needed.
+- README: GGUF load options (VAE etc.) are now set in the node's `extra` in `canvas.json` or through the API; the text was updated.
+- Android app and screens version bumped to 0.17.1 (the Rust core did not change).
+- Tests: `SimpleNodeTests` and `SimpleNodeApi` in `tests/test_v017_canvas.py` and the browser test `canvas_simple_nodes_ui.js`.
+
+### Notes (honest limits)
+- **Anyone who used negative prompt, a fixed seed or extra JSON on screen lost that access**: it now only works by editing `canvas.json` or through the API (there is no field for it anymore). If it is missed, it can come back as an option in Configuration → Media.
+- Video resolution **does not change** the size on cloud providers (OpenAI, Google, Replicate, Hugging Face Inference…).
+- `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, `test_all_providers`, the i18n JS check and the Canvas browser tests ran; the full suite was **not run again**.
+
 ## [0.17.0] — 2026-11-08
 
 ### Added — Studio and Canvas for real creative production

@@ -232,7 +232,8 @@ class MediaProvider:
         raise self._no("image")
 
     def video(self, prompt: str, *, duration: int = 5, aspect: str = "16:9", image: Optional[Ref] = None, model: str = "",
-              extra: Optional[Dict[str, Any]] = None, seed: int = 0) -> Media:
+              extra: Optional[Dict[str, Any]] = None, seed: int = 0, long_side: int = 0) -> Media:
+        """`long_side`: lado maior da resolução pedida (480, 720, 1080; 0 = a do provedor). Só vale onde o ASTA escolhe o tamanho (Demo e modelos locais); a nuvem usa os tamanhos dela."""
         raise self._no("video")
 
     def sound(self, prompt: str, *, kind: str = "sfx", duration: int = 5, model: str = "", extra: Optional[Dict[str, Any]] = None, seed: int = 0) -> Media:
@@ -264,8 +265,8 @@ class DemoMedia(MediaProvider):
         mix = proc.seed_of(*[len(r[0]) for r in refs]) if refs else 0  # com referência, o resultado muda (não edita de verdade)
         return [Media(proc.image(prompt, f"{w}x{h}", seed + i + mix), "image/png", {"note": "demo"}) for i in range(max(1, count))]
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
-        w, h = size_of_aspect(aspect, 640)
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
+        w, h = size_of_aspect(aspect, long_side or 640)
         png = image[0] if image and sniff_mime(image[0]) == "image/png" else proc.image(prompt, f"{w}x{h}", seed)
         return Media(proc.video_from_image(png, duration, (w, h), 24, seed), "video/mp4", {"note": "demo"})
 
@@ -373,7 +374,7 @@ class OpenAIMedia(MediaProvider):
         out = _retry(self.ctl, lambda: http.post_multipart(self.base + "/audio/transcriptions", fields, "file", filename or "audio.mp3", data, mime or "audio/mpeg", h, timeout=600))
         return str(out.get("text", "") if isinstance(out, dict) else out).strip()
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         """Sora (API de vídeos da OpenAI): cria o trabalho, acompanha até concluir e baixa o MP4."""
         h = self._h()
         model = self.model_for("video", model) or "sora-2"
@@ -540,7 +541,7 @@ class GoogleMedia(MediaProvider):
             raise ProviderError(f"{self.label}: nenhuma imagem devolvida" + (f" (bloqueado: {block})" if block else f" — o modelo respondeu: {' '.join(texts)[:200]}" if texts else "."))
         return imgs
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         h = self._h()
         model = self.model_for("video", model) or "veo-3.0-fast-generate-001"
         inst: Dict[str, Any] = {"prompt": prompt}
@@ -622,7 +623,7 @@ class OpenRouterMedia(MediaProvider):
                 break
         return out[:max(1, count)]
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         h = self._h()
         model = self.model_for("video", model) or "google/veo-3.1"
         body: Dict[str, Any] = {"model": model, "prompt": prompt, "duration": int(duration), "aspect_ratio": aspect}
@@ -842,7 +843,7 @@ class ReplicateMedia(MediaProvider):
                 wanted.pop(k, None)
         return self._run(self.model_for("image", model), wanted, extra, "image", data_uri(*refs[0]) if refs else None)[:max(1, count)]
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         wanted: Dict[str, Any] = {"prompt": prompt, "duration": int(duration), "aspect_ratio": aspect}
         if seed:
             wanted["seed"] = seed
@@ -1225,7 +1226,7 @@ class LocalHFMedia(MediaProvider):
             res = pipe(str(p), **kw)
         return str(res.get("text", "")).strip()
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         """Vídeo local exige GPU com bastante memória. Os quadros viram MP4 pelo ffmpeg."""
         model = self._pick("video", model, "Lightricks/LTX-Video")
         (diffusers,) = _local_import("diffusers")
@@ -1236,7 +1237,7 @@ class LocalHFMedia(MediaProvider):
         ready = self._ready(model)
         vkw = {"torch_dtype": ready["dtype"], "local_files_only": True, **({"variant": ready["variant"]} if ready["variant"] else {})}
         pipe = _local_load("video", model, lambda: _slim(diffusers.DiffusionPipeline.from_pretrained(model, **vkw), dev))
-        w, h = size_of_aspect(aspect, 704 if dev != "cpu" else 384)
+        w, h = size_of_aspect(aspect, long_side or (704 if dev != "cpu" else 384))
         w, h = w // 32 * 32 or 32, h // 32 * 32 or 32
         fps = 24
         kw: Dict[str, Any] = {"prompt": prompt, "width": w, "height": h, "num_frames": int(max(9, min(161, duration * fps)) // 8 * 8 + 1)}
@@ -1341,14 +1342,14 @@ class GGUFMedia(MediaProvider):
                 out.append(Media(buf.getvalue(), "image/png"))
         return out
 
-    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0):
+    def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         extra = dict(extra or {})
         path = self._path("video", model)
         sd = self._engine("video", path, extra.pop("load", None) or {})
         fn = getattr(sd, "txt2vid", None) or getattr(sd, "generate_video", None)
         if fn is None:
             raise ProviderError("A versão instalada da stable-diffusion-cpp-python não gera vídeo. Atualize-a (asta libs) ou use outro provedor de vídeo.")
-        w, h = size_of_aspect(aspect, 640)
+        w, h = size_of_aspect(aspect, long_side or 640)
         self.ctl.note("Gerando vídeo com o modelo GGUF (pode demorar)…")
         frames = fn(prompt=prompt, width=w // 8 * 8, height=h // 8 * 8, seed=int(seed) if seed else -1, **extra)
         return _frames_to_mp4(frames, 16)

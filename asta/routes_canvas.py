@@ -12,7 +12,7 @@ from typing import Any, Dict
 from .canvas.engine import CanvasEngine
 from . import archives
 from .canvas.media import MIME_EXT, build_media, describe_media_presets, sniff_mime
-from .canvas.schema import ASPECTS, CAPS, NODE_TYPES, SIZES, TEMPLATES, describe_types, normalize_params, normalize_result
+from .canvas.schema import ASPECTS, CAPS, NODE_TYPES, SIZES, TEMPLATES, VIDEO_RESOLUTIONS, describe_types, normalize_params, normalize_result
 from .jobs import HttpError, Job
 from .providers import ProviderError
 from .hf import REPO_RE
@@ -64,7 +64,7 @@ class CanvasRoutes:
         return self.app.jobs.running(f"canvas:{cid}")
 
     def r_templates(self, req) -> None:
-        req.json({"templates": TEMPLATES, "types": describe_types(), "caps": list(CAPS), "sizes": list(SIZES), "aspects": list(ASPECTS),
+        req.json({"templates": TEMPLATES, "types": describe_types(), "caps": list(CAPS), "sizes": list(SIZES), "aspects": list(ASPECTS), "resolutions": list(VIDEO_RESOLUTIONS),
                   "defaults": {k: normalize_params(k, {}) for k in NODE_TYPES}, "default_result": normalize_result({})})
 
     def r_list(self, req) -> None:

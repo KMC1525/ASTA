@@ -474,7 +474,7 @@ class CanvasEngine:
                 raise ValueError("O nó Vídeo precisa de um prompt (ou de uma imagem inicial ligada).")
             start = first
             prompt = (base or "Animate this image with gentle, natural motion") + (f"\n\nStyle: {style.text}" if style.text else "")
-            m = prov.video(prompt, duration=p["duration"], aspect=p["aspect"], image=start, model=p["model"], extra=p["extra"], seed=seed)
+            m = prov.video(prompt, duration=p["duration"], aspect=p["aspect"], image=start, model=p["model"], extra=p["extra"], seed=seed, long_side=p["resolution"])
             return {"assets": [self._save(node, m, "video", self._title(node, "Vídeo"), prompt, pid, model)], "text": "", "warnings": warnings}
         if t == "sound":
             prompt = p["prompt"].strip() or self.inputs(canvas, node, "prompt")["text"]
