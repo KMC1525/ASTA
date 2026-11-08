@@ -39,6 +39,7 @@ class CanvasRoutes:
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/nodes/(?P<nid>[\w-]+)/autofill", self.r_autofill)
         a("GET", r"/api/canvases/(?P<cid>[\w-]+)/download", self.r_download)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/to-studio", self.r_to_studio)
+        a("GET", r"/api/canvases/(?P<cid>[\w-]+)/mentions", self.r_mentions)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/assets", self.r_asset_upload)
         a("GET", r"/api/canvases/(?P<cid>[\w-]+)/assets/(?P<fname>[\w][\w.-]*)", self.r_asset_get)
         a("DELETE", r"/api/canvases/(?P<cid>[\w-]+)/assets/(?P<aid>[\w-]+)", self.r_asset_delete)
@@ -271,6 +272,15 @@ class CanvasRoutes:
             req.json({"models": build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
+
+    def r_mentions(self, req, cid: str) -> None:
+        """As imagens que podem ser citadas com «@» nos prompts deste canvas (apelido, nome, miniatura), da mais nova para a mais antiga; `q` filtra pelo apelido."""
+        from .canvas import mentions
+
+        c = self._canvas(cid)
+        q = text(req.query.get("q", [""])[0], "", 60).lower()
+        items = [{"id": m["id"], "slug": m["slug"], "name": m["name"], "url": f"/api/canvases/{cid}/assets/{m['file']}"} for m in mentions.table(c) if not q or q in m["slug"]]
+        req.json({"items": items[:50]})
 
     def r_to_studio(self, req, cid: str) -> None:
         """Leva o fluxo (ou os nós escolhidos) para a timeline de um projeto do Studio — novo (`project_id` vazio) ou existente."""

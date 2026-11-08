@@ -2287,4 +2287,9 @@ export default {
   "Base": "Bottom",
   "Efeito": "Effect",
   "Automática": "Automatic",
+  "Não há imagem com esse apelido neste canvas": "There is no image with that nickname in this canvas",
+  "Nenhuma imagem neste canvas. Envie ou gere uma imagem e cite com @.": "No images in this canvas. Upload or generate one and mention it with @.",
+  "O que mudar na imagem ligada em “Referências” (ou citada com @)?": "What to change in the image connected to “References” (or mentioned with @)?",
+  "Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem do canvas.": "Describe the image (or connect a text node). Type @ to mention an image from the canvas.",
+  "Descreva o vídeo (ou ligue um texto e/ou uma imagem inicial). Digite @ para citar a imagem inicial.": "Describe the video (or connect a text and/or a start image). Type @ to mention the start image.",
 };

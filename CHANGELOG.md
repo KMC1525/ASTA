@@ -5,6 +5,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.2] — 2026-11-08
+
+### Adicionado — comando «@» para citar uma imagem específica nos prompts
+- **Menções com `@` nos prompts dos nós Imagem e Vídeo do Canvas** (`asta/canvas/mentions.py`, `canvas_mention.js`): digitar `@` abre a lista das imagens do canvas (enviadas ou geradas, com miniatura), filtrada pelo que se digita; setas, `Enter`/`Tab` escolhem, `Esc` fecha, e o apelido é inserido no texto. Fichas embaixo do prompt mostram as imagens citadas (vermelho = apelido sem imagem).
+- **Apelido de cada imagem:** o nome sem extensão, em minúsculas, sem acentos e com hífens (`Foto Perfil.png` → `@foto-perfil`); nomes repetidos ficam com `-2`, `-3`… (a mais antiga mantém o simples), então um apelido aponta sempre para uma imagem só (o id do arquivo também vale). `a@b.com` nunca é tomado por menção.
+- **Na geração:** cada `@apelido` vira `apelido (reference image N)` no prompt e a imagem entra como **referência N**, na ordem da 1ª citação (até 6), **antes** das imagens ligadas em «Referências». No modo **Editar** a menção basta como imagem a editar. No **Vídeo**, a primeira imagem citada vira a **imagem inicial** (se nenhuma estiver ligada); as outras ficam só como texto, com aviso. `@` sem imagem fica como texto e gera um aviso no nó.
+- **Cache:** as imagens citadas entram no hash do nó — citar outra imagem deixa o nó desatualizado.
+- Rota `GET /api/canvases/{id}/mentions?q=` (apelido, nome e miniatura).
+- Testes: `tests/test_v017_mentions.py` (apelidos, reescrita, referências de imagem e vídeo, hash, rota) e o teste de navegador `canvas_mention_ui.js`.
+
+### Alterado
+- Os textos de ajuda dos prompts de Imagem e Vídeo lembram do `@`. Versão do app Android e das telas atualizada para 0.17.2 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- As menções valem **nos prompts de Imagem e Vídeo do Canvas**; não há `@` na caixa do Chat, no Studio nem em outros nós (texto, som, voz).
+- Só **imagens** do canvas podem ser citadas (não vídeos nem áudios).
+- Quanto a imagem de referência realmente guia o resultado **depende do modelo**: provedores/modelos sem suporte a referências recebem só o texto (com aviso); a Demo aceita referências mas só varia o resultado, não edita de verdade.
+- No Vídeo só **uma** imagem inicial é usada.
+- Rodaram `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, o JS de i18n e os testes de navegador do Canvas; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.1] — 2026-11-08
 
 ### Alterado — nós de mídia do Canvas mais simples: Provedor, Modelo e Resolução

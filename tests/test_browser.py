@@ -376,5 +376,10 @@ class BrowserTests(unittest.TestCase):
     def test_37_canvas_media_nodes_show_only_model_and_resolution(self):
         self.run_script("canvas_simple_nodes_ui.js")
 
+    def test_38_canvas_at_mentions_pick_images_for_the_prompt(self):
+        if not shutil.which("ffmpeg"):
+            self.skipTest("ffmpeg não instalado")
+        self.run_script("canvas_mention_ui.js")
+
 if __name__ == "__main__":
     unittest.main()

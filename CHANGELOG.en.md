@@ -7,6 +7,26 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.2] — 2026-11-08
+
+### Added — the «@» command to mention a specific image in prompts
+- **`@` mentions in the Canvas Image and Video node prompts** (`asta/canvas/mentions.py`, `canvas_mention.js`): typing `@` opens the list of the canvas's images (uploaded or generated, with thumbnails), filtered as you type; arrows, `Enter`/`Tab` pick, `Esc` closes, and the nickname is inserted in the text. Chips under the prompt show the images cited (red = nickname without an image).
+- **Each image's nickname:** the file name without extension, lowercase, no accents and with hyphens (`Foto Perfil.png` → `@foto-perfil`); repeated names get `-2`, `-3`… (the oldest keeps the plain one), so a nickname always points to one image (the file id works too). `a@b.com` is never taken as a mention.
+- **When generating:** each `@nickname` becomes `nickname (reference image N)` in the prompt and the image goes in as **reference N**, in order of first mention (up to 6), **before** the images connected to «References». In **Edit** mode the mention alone is enough as the image to edit. In **Video**, the first mentioned image becomes the **start image** (if none is connected); the others stay as text only, with a warning. An `@` with no image stays as text and raises a warning on the node.
+- **Cache:** the mentioned images enter the node's hash — mentioning another image makes the node outdated.
+- Route `GET /api/canvases/{id}/mentions?q=` (nickname, name and thumbnail).
+- Tests: `tests/test_v017_mentions.py` (nicknames, rewriting, image and video references, hash, route) and the browser test `canvas_mention_ui.js`.
+
+### Changed
+- The help texts of the Image and Video prompts mention `@`. Android app and screens version bumped to 0.17.2 (the Rust core did not change).
+
+### Notes (honest limits)
+- Mentions work **in the Canvas Image and Video prompts**; there is no `@` in the Chat box, in the Studio or in other nodes (text, sound, voice).
+- Only **images** of the canvas can be mentioned (not videos or audios).
+- How much a reference image really guides the result **depends on the model**: providers/models without reference support get the text only (with a warning); Demo accepts references but only varies the result, it does not really edit.
+- Video uses only **one** start image.
+- `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, the i18n JS check and the Canvas browser tests ran; the full suite was **not run again**.
+
 ## [0.17.1] — 2026-11-08
 
 ### Changed — simpler Canvas media nodes: Provider, Model and Resolution
