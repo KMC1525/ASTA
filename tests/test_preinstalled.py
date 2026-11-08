@@ -78,7 +78,7 @@ class CatalogTests(unittest.TestCase):
     def test_english_translation_exists_for_every_hint(self):
         if not shutil.which("node"):
             self.skipTest("Node.js não instalado")
-        script = "import EN from '%s'; console.log(JSON.stringify(%s.filter((h) => !(h in EN))));" % ((ROOT / "asta/web/js/en.js").as_posix(), json.dumps([e["hint"] for e in pre.CATALOG]))
+        script = "import EN from '%s'; console.log(JSON.stringify(%s.filter((h) => !(h in EN))));" % ((ROOT / "asta/web/js/en.js").as_uri(), json.dumps([e["hint"] for e in pre.CATALOG]))
         r = subprocess.run(["node", "--input-type=module", "-e", script], capture_output=True, text=True, encoding="utf-8", errors="replace")
         self.assertEqual(json.loads(r.stdout), [])
 

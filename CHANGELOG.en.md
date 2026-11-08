@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.4] — 2026-11-08
+
+### Fixed
+- **Streaming (SSE) answers cut off on macOS (`Connection reset by peer`):** streaming routes that never read the request body — such as avatar «regenerate», which sends `{}` — closed the socket with unread data, and macOS answers with an RST, losing the response. The server now consumes the unread body (up to 1 MB) when any stream starts.
+- **Windows:** the pre-installed models hint-translation test imported `en.js` by a `C:/…` path, which Node (ESM) rejects; it now uses a `file://` URL. The update-on-launch test followed the macOS/Linux path (`execve`), but on Windows ASTA exits and the installer continues in another window (correct behavior, now tested as such).
+- **macOS/Windows without a full ffmpeg:** the Canvas tests that run the «scene» template (video and editor nodes) are now skipped when ffmpeg is missing instead of failing.
+
 ## [0.15.3] — 2026-11-08
 
 ### Verified

@@ -772,6 +772,7 @@ class Request:
         n = self.content_length()
         if n > limit:
             raise HttpError(413, "Corpo da requisição muito grande")
+        self._body_read = True
         return self.rfile.read(n) if n else b""
 
     def body_json(self, limit: int = 8 * 1024 * 1024) -> Any:
@@ -855,6 +856,14 @@ class Request:
         self._head(302, "text/plain", 0, {"Location": url})
 
     def sse_start(self) -> None:
+        if not getattr(self, "_body_read", False):  # corpo não lido (ex.: «regenerar» manda {}): fechar o socket com dados pendentes dá RST (macOS) e corta a resposta
+            try:
+                n = self.content_length()
+                if 0 < n <= 1024 * 1024:
+                    self._body_read = True
+                    self.rfile.read(n)
+            except (HttpError, OSError, ValueError):
+                pass
         self._sse = True
         self.h.send_response(200)
         self.h.send_header("Content-Type", "text/event-stream; charset=utf-8")

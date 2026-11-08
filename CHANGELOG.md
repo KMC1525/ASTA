@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.4] — 2026-11-08
+
+### Corrigido
+- **Respostas em streaming cortadas no macOS (`Connection reset by peer`):** rotas de streaming (SSE) que não liam o corpo da requisição — como «regenerar» resposta de avatar, que envia `{}` — fechavam o socket com dados pendentes, e o macOS responde com RST, perdendo a resposta. O servidor agora consome o corpo não lido (até 1 MB) ao iniciar qualquer stream.
+- **Windows:** o teste de traduções das dicas dos modelos pré-instalados importava o `en.js` por caminho `C:/…`, que o Node (ESM) recusa; agora usa URL `file://`. O teste de atualização ao abrir seguia o caminho do macOS/Linux (`execve`), mas no Windows o ASTA encerra e o instalador continua em outra janela (comportamento correto, agora testado como tal).
+- **macOS/Windows sem ffmpeg completo:** os testes do Canvas que rodam o modelo «cena» (nós de vídeo e editor) agora são pulados quando o ffmpeg não está instalado, em vez de falhar.
+
 ## [0.15.3] — 2026-11-08
 
 ### Verificado
