@@ -18,16 +18,18 @@ Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto
 
 O ASTA é o **primeiro super app open source**: um único app para conversar, pesquisar, criar e jogar, com todos os modelos de IA que você quiser num só lugar. É **open source e o mais livre possível**: roda no seu computador, não exige conta nem nuvem, aceita conteúdo **SFW e NSFW** (o ASTA não adiciona filtros próprios) e funciona com os modelos que você quiser — Claude, ChatGPT, Grok, Gemini, OpenRouter, Hugging Face ou modelos 100% locais.
 
-Ele é uma central universal de criação com seis ferramentas, que você inicia na mesma caixa de prompt ou nas próprias seções:
+Ele é uma central universal de criação com oito ferramentas, que você inicia na mesma caixa de prompt ou nas próprias seções:
 
 | Modo | Você recebe |
 |---|---|
 | 🌍 **Mundos 3D** | Mundos 3D jogáveis e persistentes (1ª ou 3ª pessoa), habitados por NPCs que são agentes de IA embutidos. |
 | 🙂 **Avatars** | Amigos, namorados(as), esposas/maridos, companheiros e mentores para conversar por **texto e voz** — um de cada vez ou **vários conversando entre si**. |
 | 🎮 **Jogos 2D** | Jogos 2D completos de qualquer tipo: visual novels, RPGs, plataformas, side scrollers e point & clicks. |
-| 🎬 **Studio** | **Vídeos audiovisuais com IA, cena a cena** — Shorts/Reels, curtas e longas de qualquer duração, únicos ou em série, nos estilos Realista, Cartoon, Anime ou personalizado, com **edição automática** (Gameplay, Documentário, Phonk…), **timeline estilo Kdenlive** e exportação (completo, só vídeo, só áudio). |
+| 🎬 **Studio** | **Vídeos audiovisuais com IA, cena a cena** — Shorts/Reels, curtas e longas de qualquer duração, únicos ou em série, nos estilos Realista, Cartoon, Anime ou personalizado, com **edição automática** (Gameplay, Documentário, Phonk…), **timeline estilo Kdenlive** com **Tools** ligáveis (efeitos, efeitos sonoros, captura de tela, legendas, transcrição, navegador de mídia), camadas livres (vídeo, imagem, áudio, texto, efeitos) e exportação até **4K / 120 fps**. |
 | ♻️ **Rebuild** | Reconstrói a *estrutura* de um jogo **Ren'Py** ou **RPG Maker (2000 → MZ)** existente em HTML/CSS/JS puros (só para uso pessoal). |
-| 🧩 **Canvas** | Um fluxo simples de nós (inspirado no ElevenLabs Flow, bem mais leve que o ComfyUI) para gerar e editar **imagens, vídeos, sons e vozes**, com **Editor** de vídeo embutido e **estilos** para o projeto todo. |
+| 💻 **Computer Use** | Uma equipe de IA **opcional** que faz **tarefas no seu computador**: escreve, pesquisa, usa programas instalados, organiza arquivos e abre jogos — modo Ask (Sim/Não) ou Full Access. |
+| </> **Code** | **Vibe coding em bases de código longas** com uma equipe de até 8 agentes por sessão, pastas de sessões, 8 níveis de esforço e GitHub (modo nuvem e git), com testes, revisão e desfazer. |
+| 🧩 **Canvas** | Um fluxo simples de nós (inspirado no ElevenLabs Flow, bem mais leve que o ComfyUI) para gerar e editar **imagens, vídeos, sons e vozes**, com **Editor** de vídeo embutido, **estilos** para o projeto todo, menções com `@` de imagens/vídeos/sons nos prompts, **barra de pesquisa de modelos** da Hugging Face, **seletor de modelo** por nó e *Enviar ao Studio*. |
 
 Tudo o que você cria vai para uma só **Biblioteca** de projetos atualizáveis.
 
@@ -378,8 +380,8 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 | **Mundos** | Tudo sobre os mundos 3D em três abas: **Mundos** (personalizar os mundos gerados: bioma, clima, hora, ciclo dia/noite, NPCs, áudio, interface, qualidade — cada salvamento vira uma nova versão **sem gastar IA**), **Personagens** (cards dos NPCs e do jogador: nome, tags, system prompt, voz, aparência; importa/exporta JSON e cards de PNG, Character Card V2/V3) e **Worldbuilding** (regras gerais dos mundos — cenário, tom, convenções — também salvas como cards). |
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
 | **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
-| **Canvas** | Seus canvases e o editor de nós. |
-| **Studio** | Seus projetos de vídeo (únicos ou em série): geração cena a cena, edição automática, o editor de timeline e a exportação. |
+| **Canvas** | Seus canvases e o editor de nós: **barra de pesquisa de modelos** (Hugging Face) no topo, seletor de modelo e menções `@` nos nós e *Enviar ao Studio*. |
+| **Studio** | Seus projetos de vídeo (únicos ou em série): geração cena a cena, edição automática, o editor de timeline (com as **Tools** e as camadas livres) e a exportação até 4K / 120 fps. |
 | **Computer Use** | As tarefas que a equipe de IA faz no seu computador (até 8 ao mesmo tempo): acompanhamento ao vivo, perguntas Sim/Não do modo Ask e o histórico passo a passo, com Cancelar, Refazer e Desfazer. |
 | **Code** | Vibe coding com uma equipe de IA em bases de código longas: pastas e subpastas (8 cores) de sessões, uma bolinha de estado colorida por sessão, até 8 agentes por sessão e várias sessões em segundo plano, 8 níveis de esforço, Ask / Full Access, GitHub (branch, pull request, releases, CI), VS Code / Cursor. |
 | **Rebuild** | Reconstrua jogos Ren'Py / RPG Maker e veja os que você reconstruiu. |
@@ -492,15 +494,15 @@ asta/
   runtime2d/     motores 2D: visual novel, RPG, plataforma, side scroller, point & click
   games2d/       spec dos jogos 2D: esquema, validação, empacotamento
   avatars.py  avatar_chat.py  routes_avatars.py    cards de avatar, diretor da conversa, API
-  canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural
-  studio/        projetos de vídeo: esquema, pipeline cena a cena, edição automática, exportação, ferramentas ffmpeg
+  canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural, menções `@`, lista de modelos instalados, enviar ao Studio
+  studio/        projetos de vídeo: esquema, pipeline cena a cena, edição automática, exportação, ferramentas ffmpeg, análise de mídia, legendas, efeitos sonoros, navegador de mídia, transcrição
   computer/      Computer Use: motor da equipe de agentes, catálogo de ferramentas, limites (guard), drivers de SO, arquivos com lixeira/desfazer, fallback por regras e prompts/*.md
   routes_computer.py   API do Computer Use (tarefas, eventos ao vivo, aprovações)
   code/          Code: motor da equipe de agentes (trabalhadores em paralelo), ferramentas, limites fixos, workspace com desfazer, cliente do GitHub (nuvem + git), gerenciador (pastas, sessões), prompts/*.md
   routes_code.py       API do Code (pastas, sessões, aprovações, arquivos, GitHub, eventos ao vivo)
   rebuild/       leitores e conversores de Ren'Py / RPG Maker (+ a revisão de texto por IA, opcional)
   attachments.py  archives.py    anexos de qualquer tipo; extração segura de ZIP/RAR/7z/TAR
-  native/        núcleo Rust obrigatório (só biblioteca padrão), com equivalente em Python para cada função
+  native/        núcleo Rust obrigatório (só biblioteca padrão; interface 4: modelos, agentes, armazenamento, análise de mídia, ordem de grafos), com equivalente em Python para cada função
   perf.py  scheduler.py  storage_opt.py  modos de desempenho · fila com prioridade dos agentes locais · otimização de armazenamento
   termi18n.py  term_en.py   idioma do terminal (pt/en)
   web/           a WebUI (HTML/CSS/JS puros, sem build)
