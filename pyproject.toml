@@ -24,6 +24,8 @@ dependencies = []
 # Modelos locais rodando dentro do próprio ASTA (GGUF baixado do Hugging Face)
 # Modelos GGUF embutidos: texto (llama.cpp) e imagem/vídeo (stable-diffusion.cpp)
 local = ["llama-cpp-python>=0.2.90", "stable-diffusion-cpp-python"]
+# Computer Use: reduz as capturas de tela enviadas ao modelo (a biblioteca padrão faz o resto)
+computer = ["pillow"]
 # Extração de texto de PDFs mais precisa
 docs = ["pypdf>=4.0"]
 # Modelos locais do Hugging Face para o Canvas (imagem, vídeo, som, voz e transcrição)

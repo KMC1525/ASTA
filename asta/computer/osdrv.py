@@ -218,7 +218,7 @@ class Driver:
 
     def _game_dirs(self, extra: List[str]) -> List[Path]:
         h = guard.home()
-        cands = [h / "Games", h / "Jogos", h / "games", h / "Desktop" / "Games", h / "Documents" / "Games", h / "Downloads"]
+        cands = [h / "Games", h / "Jogos", h / "games", h / "Desktop" / "Games", h / "Documents" / "Games"]
         dirs = []
         for d in [*cands, *[Path(x).expanduser() for x in extra if x]]:
             try:
@@ -597,9 +597,8 @@ class MacDriver(Driver):
             raise DriverError("A captura de tela falhou. Libere a «Gravação de tela» para o ASTA em Ajustes do Sistema → Privacidade e segurança.")
 
     def type_text(self, text: str) -> None:
-        # o texto vai por uma variável do AppleScript lida do ambiente (nunca concatenado no script): sem injeção
-        env = dict(os.environ, ASTA_TYPE=text)
-        r = _run(["osascript", "-e", 'tell application "System Events" to keystroke (system attribute "ASTA_TYPE")'], 30 + len(text) * 0.05, env=env)
+        # o texto vai como argumento do script (nunca concatenado nele): sem injeção e com UTF-8 correto
+        r = _run(["osascript", "-e", "on run argv", "-e", 'tell application "System Events" to keystroke (item 1 of argv)', "-e", "end run", text], 30 + len(text) * 0.05)
         if r.returncode != 0:
             raise DriverError("O macOS recusou digitar: " + r.stderr.decode("utf-8", "ignore").strip()[:200] + " (libere a Acessibilidade para o ASTA).")
 
@@ -610,8 +609,7 @@ class MacDriver(Driver):
         if k["key"] in _MAC_KEYS:
             self._osa(f'tell application "System Events" to key code {_MAC_KEYS[k["key"]]}{suffix}')
         elif len(k["key"]) == 1:
-            env = dict(os.environ, ASTA_KEY=k["key"])
-            r = _run(["osascript", "-e", f'tell application "System Events" to keystroke (system attribute "ASTA_KEY"){suffix}'], 10, env=env)
+            r = _run(["osascript", "-e", "on run argv", "-e", f'tell application "System Events" to keystroke (item 1 of argv){suffix}', "-e", "end run", k["key"]], 10)
             if r.returncode != 0:
                 raise DriverError("O macOS recusou a tecla: " + r.stderr.decode("utf-8", "ignore").strip()[:200])
         else:

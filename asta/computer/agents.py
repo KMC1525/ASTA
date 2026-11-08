@@ -5,6 +5,7 @@ Resposta inválida depois do reparo = o agente usa o método automático (regras
 """
 from __future__ import annotations
 
+import json
 import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -88,6 +89,17 @@ def fallback_plan(goal: str) -> Dict[str, Any]:
             "steps": [{"id": "s1", "title": _s(goal, 200) or "Executar o pedido", "tools": [], "done_when": "", "status": "pending"}]}
 
 
+TOOL_ALIASES = {"list_directory": "list_dir", "ls": "list_dir", "read": "read_file", "cat": "read_file", "search_files": "find_files", "find": "find_files", "create_folder": "make_dir", "mkdir": "make_dir",
+                "create_directory": "make_dir", "make_directory": "make_dir", "write_file": "create_file", "create": "create_file", "copy_file": "copy", "cp": "copy", "move_file": "move", "mv": "move", "rename": "move",
+                "delete": "trash", "delete_file": "trash", "remove": "trash", "rm": "trash", "organize": "organize_folder", "zip": "zip_files", "compress": "zip_files", "web_search": "search_web",
+                "search": "search_web", "open_application": "open_app", "launch_app": "open_app", "open_program": "open_app", "launch": "open_app", "take_screenshot": "screenshot", "type": "type_text",
+                "keyboard_type": "type_text", "write": "type_text", "press_key": "press_keys", "key": "press_keys", "hotkey": "press_keys", "left_click": "click", "mouse_click": "click",
+                "play_game": "launch_game", "open_game": "launch_game", "sleep": "wait", "ask": "ask_user"}   # «delete» vira lixeira: sempre desfazível
+ARG_ALIASES = {"path": ("file_path", "filepath", "file", "folder", "directory", "dir", "pathname"), "src": ("source", "from", "origin"), "dst": ("destination", "dest", "to", "target"),
+               "query": ("q", "search", "keywords", "search_query"), "url": ("link", "address", "href"), "name": ("app", "app_name", "application", "program"), "keys": ("key", "combo", "shortcut", "hotkey"),
+               "content": ("text", "contents", "body", "data"), "text": ("content", "string", "value"), "root": ("path", "folder", "directory", "dir"), "program": ("command", "cmd", "executable", "exe")}
+
+
 def normalize_turn(obj: Optional[Dict[str, Any]]) -> Dict[str, Any]:
     """Saída do Operador → {"kind": "action"|"finish"|"bad", …}. Aceita os formatos que modelos pequenos costumam devolver."""
     if not isinstance(obj, dict):
@@ -104,11 +116,18 @@ def normalize_turn(obj: Optional[Dict[str, Any]]) -> Dict[str, Any]:
         act = {"tool": obj.get("tool") or obj.get("name"), "args": obj.get("args") or obj.get("arguments") or {}}
     if isinstance(act, dict):
         tool = _s(act.get("tool") or act.get("name"), 40)
+        tool = TOOL_ALIASES.get(tool.lower(), tool)
         if tool == "finish":
             a = act.get("args") if isinstance(act.get("args"), dict) else {}
             return {"kind": "finish", "success": a.get("success") is not False, "summary": _s(a.get("summary"), 1500), "thought": thought, "step": step, "memo": memo}
         if tool:
-            args = act.get("args") if isinstance(act.get("args"), dict) else (act.get("arguments") if isinstance(act.get("arguments"), dict) else {})
+            args = act.get("args") if act.get("args") not in (None, "") else act.get("arguments")
+            if isinstance(args, str):   # modelos pequenos mandam os argumentos como texto JSON
+                try:
+                    args = json.loads(args)
+                except ValueError:
+                    args = {}
+            args = args if isinstance(args, dict) else {}
             return {"kind": "action", "tool": tool, "args": args, "thought": thought, "step": step, "memo": memo}
     return {"kind": "bad", "why": "nem «action» nem «finish» na resposta"}
 

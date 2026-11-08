@@ -7,6 +7,25 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.1] — 2026-11-08
+
+### Fixed — Computer Use
+- **`run_program` safety:** an argument with the path **glued to the option** (`-o/path`, `-I~/x`) and the `..` argument slipped past the path filter (the ASTA data folder, where API keys live, could be read by a program such as `grep -r … ..`). Every option with an embedded path, `.`/`..` and any name that exists next to the program now goes through the same filter as files.
+- **Small models got the format wrong:** an AI that sends the arguments as **JSON text**, uses look-alike tool names (`mkdir`, `write_file`, `open_application`, `hotkey`…; "delete" becomes the trash, always undoable) or look-alike argument names (`file_path`, `destination`, `app_name`…) is now understood instead of wasting steps on errors.
+- **Games:** the Downloads folder is no longer scanned by default (installers and stray pages showed up as "games"); your own game folders stay in *Configuration → Computer Use → Game folders*.
+- **macOS:** typed text and keys go as an AppleScript argument (correct UTF-8 for accents), not through an environment variable.
+- Raising the **simultaneous tasks limit in settings** now releases queued tasks right away.
+- Missing install hints in the report (macOS and Windows).
+
+### Added
+- **Libraries and tools** in *Configuration → Computer Use*: what is installed and what is missing (with the install command), per system: libX11/libXtst (X11), `xdg-open`, `grim`/`ydotool` (Wayland), `cliclick` (macOS), PowerShell (Windows), Pillow, `ffmpeg` and `pypdf`. Only the standard Python is mandatory; Pillow got the extra `pip install "asta[computer]"` (shrinks captures of large screens; without it `ffmpeg` does the job).
+- New tests: program arguments, forgiving names, the dependency report and provider failure.
+
+### Verified in this version (Linux, virtual X server with Xvfb)
+- All **27 tools** ran with the real driver: files (including valid `.docx`/`.xlsx`/`.pdf`), `zip`, organize, trash, `ffmpeg`/`pandoc`/`soffice` through `run_program`, opening a program through a `.desktop` entry, folder games, URL, screenshot (with downscaling on a 2560×1440 screen: correct click scale, with Pillow and with `ffmpeg`), click, typing with accents/Unicode, shortcuts and scroll.
+- **The whole team end to end** with a scripted "vision" model: open the terminal, capture the screen (the image reaches the model), click, type and check the written file.
+- Still not verified on real machines: Windows, macOS and Android.
+
 ## [0.15.0] — 2026-11-08
 
 ### Added — Computer Use
