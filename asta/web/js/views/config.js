@@ -160,13 +160,30 @@ async function providers() {
   return container;
 }
 
+// Por que o LM Studio não respondeu: separa «está no próprio aparelho» de «está em outro computador da rede» (cada um tem uma causa típica diferente)
+function lmWhy(r) {
+  let host = ''; try { host = new URL(r.url).hostname; } catch (e) { /* ok */ }
+  const own = /^(127\.|localhost$|\[?::1)/.test(host);
+  if (own) return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '') ? t('O LM Studio não roda neste aparelho. Para usar o do seu computador, use «LM Studio no computador» abaixo (IP do computador, não 127.0.0.1).') : t(r.hint);
+  if (r.kind === 'refused') return t('O computador respondeu que a porta está fechada: no LM Studio (Developer) ligue «Serve on Local Network» — sem isso ele só aceita conexões do próprio computador — e reinicie o servidor.');
+  if (r.kind === 'timeout') return t('O computador não respondeu a tempo: libere a porta 1234 no firewall (no Windows: «Permitir um aplicativo» para o LM Studio, rede privada), e confira se o celular está no mesmo Wi-Fi (redes de visitantes isolam os aparelhos).');
+  if (r.kind === 'dns') return t('Não achei esse endereço. Digite o IP do computador (ex.: 192.168.0.10), que aparece no LM Studio em Developer, ao lado de «Serve on Local Network».');
+  if (r.kind === 'unreachable') return t('Sem caminho até esse endereço: confira se o celular está no mesmo Wi-Fi do computador e o IP digitado.');
+  return t(r.hint);
+}
+
 // LM Studio do COMPUTADOR, usado pelo celular/tablet: acha o servidor na rede (ou usa o IP digitado) e aponta o endereço do provedor para ele.
 // No computador o LM Studio precisa estar com «Serve on Local Network» ligado (Developer → Server Settings) e na mesma rede Wi-Fi.
 function pcBox(draft, detect) {
   if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return null;
   const out = h('div', { class: 'muted small', style: { marginTop: '6px' } });
   const addr = h('input', { id: 'lms-pc-addr', inputmode: 'url', autocapitalize: 'off', placeholder: '192.168.0.10  ·  192.168.0.10:1234', 'aria-label': t('Endereço do computador') });
-  const point = async (url) => { draft.base_url = url; await saveSettings({ providers: { lmstudio: { base_url: url } } }); detect(); };
+  const point = async (url) => {
+    draft.base_url = url; await saveSettings({ providers: { lmstudio: { base_url: url } } });
+    let ok = false; try { ok = (await api('/api/lmstudio?url=' + encodeURIComponent(url))).running; } catch (e) { /* o detect mostra o motivo */ }
+    if (ok) { await saveSettings({ active: { generation: 'lmstudio', characters: 'lmstudio' } }); toast(t('Conectado ao LM Studio do computador.'), 'ok'); await refreshState(); renderSide(); }   // quem conectou quer usar: o Chat e os avatares passam a usar os modelos dele
+    detect();
+  };
   const scan = async () => {
     out.replaceChildren(h('div', { class: 'spinner' }), ' ', t('Procurando o LM Studio na rede…'));
     let r;
@@ -204,7 +221,7 @@ function lmStudioBox(p, draft, getModelInput) {
       h('button', { class: 'btn sm', onclick: detect }, icon('refresh', 13), t('Detectar de novo')),
       r.running ? h('button', { class: 'btn sm primary', onclick: () => use('characters') }, t('Usar nos avatares')) : null,
       r.running ? h('button', { class: 'btn sm', onclick: () => use('generation') }, t('Usar na geração')) : null);
-    if (!r.running) { note.textContent = t(r.hint) + (r.error ? ' (' + r.error + ')' : ''); return; }
+    if (!r.running) { note.textContent = lmWhy(r) + (r.error ? ' (' + r.error + ')' : ''); return; }
     list.replaceChildren(...(r.models.length ? r.models.map((m) => h('button', { class: 'chip' + (draft.model === m.id || (!draft.model && r.selected === m.id) ? ' on' : ''), title: [m.loaded ? t('carregado') : t('não carregado'), m.quant, m.vision ? t('visão') : ''].filter(Boolean).join(' · '),
       onclick: () => { draft.model = m.id; const inp = getModelInput(); if (inp) inp.value = m.id; detect(); } }, (m.loaded ? '● ' : '○ ') + m.id + (m.vision ? ' 👁' : ''))) : [h('span', { class: 'dim small' }, t('Nenhum modelo instalado: baixe um na aba «Discover» do LM Studio.'))]));
     note.textContent = r.loaded.length ? t('● carregado agora · ○ instalado (o LM Studio pode carregar sob demanda). Sem escolher, o ASTA usa o modelo carregado.') : t('Nenhum modelo está carregado no LM Studio: carregue um (ou escolha um acima).');

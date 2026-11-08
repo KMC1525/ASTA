@@ -1761,6 +1761,12 @@ export default {
   "As tarefas rodam no computador conectado; este aparelho é só a janela.": "Tasks run on the connected computer; this device is just the window.",
   "Voltar ao ASTA deste aparelho": "Back to this device's ASTA",
   // v0.15.8
+  "O LM Studio não roda neste aparelho. Para usar o do seu computador, use «LM Studio no computador» abaixo (IP do computador, não 127.0.0.1).": "LM Studio does not run on this device. To use your computer's, use «LM Studio on the computer» below (the computer's IP, not 127.0.0.1).",
+  "O computador respondeu que a porta está fechada: no LM Studio (Developer) ligue «Serve on Local Network» — sem isso ele só aceita conexões do próprio computador — e reinicie o servidor.": "The computer answered that the port is closed: in LM Studio (Developer) turn on «Serve on Local Network» — without it, it only accepts connections from the computer itself — and restart the server.",
+  "O computador não respondeu a tempo: libere a porta 1234 no firewall (no Windows: «Permitir um aplicativo» para o LM Studio, rede privada), e confira se o celular está no mesmo Wi-Fi (redes de visitantes isolam os aparelhos).": "The computer did not answer in time: allow port 1234 in the firewall (on Windows: «Allow an app» for LM Studio, private network), and check that the phone is on the same Wi-Fi (guest networks isolate devices).",
+  "Não achei esse endereço. Digite o IP do computador (ex.: 192.168.0.10), que aparece no LM Studio em Developer, ao lado de «Serve on Local Network».": "I could not find that address. Type the computer's IP (e.g. 192.168.0.10), shown in LM Studio under Developer, next to «Serve on Local Network».",
+  "Sem caminho até esse endereço: confira se o celular está no mesmo Wi-Fi do computador e o IP digitado.": "No route to that address: check that the phone is on the same Wi-Fi as the computer and the IP you typed.",
+  "Conectado ao LM Studio do computador.": "Connected to the computer's LM Studio.",
   "Endereço do computador": "Computer address",
   "Procurando o LM Studio na rede…": "Looking for LM Studio on the network…",
   "Não achei. No computador: LM Studio → Developer → ligue «Serve on Local Network» e «Start Server»; o celular precisa estar no mesmo Wi-Fi. Ou digite o IP do computador.": "Not found. On the computer: LM Studio → Developer → turn on «Serve on Local Network» and «Start Server»; the phone must be on the same Wi-Fi. Or type the computer's IP.",
