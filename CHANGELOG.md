@@ -5,6 +5,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.8] — 2026-11-08
+
+### Corrigido — «NULL pointer access» no Qwen-Image GGUF mesmo com os arquivos de apoio na pasta
+- **O que o erro realmente era:** lendo o código da stable-diffusion-cpp-python (0.4.x), o modelo **carrega** (`Stable Diffusion model not loaded` seria outro erro); o «NULL pointer access» vem de **`generate_image` devolver um ponteiro nulo** — a geração falhou dentro da stable-diffusion.cpp e o motivo fica só no log dela. Por isso a mensagem antiga («não carregou… precisa do VAE») apontava para o lugar errado quando os arquivos de apoio já estavam lá.
+- **Agora o motivo aparece:** o ASTA guarda as últimas mensagens de aviso/erro da biblioteca (callback de log) e as mostra no nó — «Motivo informado pela biblioteca: … failed to allocate buffer of size …». Se for falta de memória, o erro diz isso e sugere quantização/resolução menores.
+- **Padrões como na documentação da stable-diffusion.cpp para Qwen-Image e FLUX:** `offload_params_to_cpu` e `diffusion_flash_attn` ligados no carregamento (reduzem muito o pico de memória), além do `cfg_scale` 2,5 do Qwen-Image.
+- **Resolução em múltiplos de 16** (antes 8): Qwen-Image/FLUX/Z-Image podem falhar com alturas/larguras que não são (`1536×1024` virava `1024×680`, agora `1024×672`).
+- Mensagem: «A geração com … falhou» (antes «O modelo … não carregou»), com o botão de baixar apoios só quando eles realmente faltam.
+- Testes: `tests/test_v017_models.py` (motivo do log, múltiplos de 16, opções da família).
+- Versão do app Android e das telas atualizada para 0.17.8 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- **Não consegui reproduzir a falha com o modelo real** (sem a biblioteca compilada nem o Qwen-Image neste ambiente): a causa exata na sua máquina ainda é desconhecida — o mais provável é memória, mas pode ser outra coisa. **Esta versão faz o ASTA dizer o motivo**; se o erro continuar, a nova mensagem terá a linha da biblioteca e dá para corrigir o ponto certo.
+- O Qwen-Image Q4_K_M (≈ 12 GB) + o codificador Qwen2.5-VL (≈ 4,7 GB) pedem bastante RAM; `offload_params_to_cpu` ajuda a GPU, não a RAM.
+- O callback de log substitui o da biblioteca: as mensagens continuam indo para o terminal (nível aviso/erro e info), mas sem o formato original dela.
+- Rodaram `test_v017_models`, `test_canvas` e `test_preinstalled`; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.7] — 2026-11-08
 
 ### Corrigido — GGUF de difusão sem arquivos de apoio (Qwen-Image, FLUX): agora dá para baixá-los do próprio nó

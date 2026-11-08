@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.8] — 2026-11-08
+
+### Fixed — «NULL pointer access» on Qwen-Image GGUF even with the support files in the folder
+- **What the error really was:** reading stable-diffusion-cpp-python's code (0.4.x), the model **loads** (`Stable Diffusion model not loaded` would be a different error); «NULL pointer access» comes from **`generate_image` returning a null pointer** — generation failed inside stable-diffusion.cpp and the reason is only in its log. That is why the old message («did not load… needs the VAE») pointed to the wrong place when the support files were already there.
+- **Now the reason shows:** ASTA keeps the library's last warning/error messages (log callback) and shows them on the node — «Reason reported by the library: … failed to allocate buffer of size …». If it is out of memory, the error says so and suggests a smaller quantization/resolution.
+- **Defaults as in stable-diffusion.cpp's documentation for Qwen-Image and FLUX:** `offload_params_to_cpu` and `diffusion_flash_attn` on at load (they cut the memory peak a lot), plus Qwen-Image's `cfg_scale` 2.5.
+- **Resolution in multiples of 16** (was 8): Qwen-Image/FLUX/Z-Image can fail with widths/heights that are not (`1536×1024` became `1024×680`, now `1024×672`).
+- Message: «Generation with … failed» (before «The model … did not load»), with the support-file download button only when they are really missing.
+- Tests: `tests/test_v017_models.py` (log reason, multiples of 16, family options).
+- Android app and screens version bumped to 0.17.8 (the Rust core did not change).
+
+### Notes (honest limits)
+- **I could not reproduce the failure with the real model** (no compiled library or Qwen-Image in this environment): the exact cause on your machine is still unknown — memory is the most likely, but it may be something else. **This version makes ASTA say the reason**; if the error continues, the new message will carry the library's line and the right spot can be fixed.
+- Qwen-Image Q4_K_M (≈ 12 GB) + the Qwen2.5-VL encoder (≈ 4.7 GB) need a lot of RAM; `offload_params_to_cpu` helps the GPU, not the RAM.
+- The log callback replaces the library's own: messages still go to the terminal (info and above), but without its original format.
+- `test_v017_models`, `test_canvas` and `test_preinstalled` ran; the full suite was **not run again**.
+
 ## [0.17.7] — 2026-11-08
 
 ### Fixed — diffusion GGUF without support files (Qwen-Image, FLUX): you can now download them from the node itself
