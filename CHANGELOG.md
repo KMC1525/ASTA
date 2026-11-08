@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.9] — 2026-11-08
+
+### Corrigido
+- **LM Studio do computador não conectava pelo celular sem dizer por quê:** agora a Configuração explica a causa — porta fechada («Serve on Local Network» desligado: sem isso o LM Studio só aceita o próprio computador), tempo esgotado (firewall do computador ou Wi-Fi de visitantes que isola aparelhos), endereço inexistente ou sem rota — e avisa quando o endereço ainda é `127.0.0.1` (que no celular é o próprio celular).
+- Ao conectar pelo cartão **«LM Studio no computador»** e o servidor responder, o Chat/geração e os avatares passam a usar o LM Studio automaticamente (antes era preciso clicar em «Usar…»).
+- A sonda do LM Studio devolve o tipo de falha (`kind`: `refused`, `timeout`, `dns`, `unreachable`).
+- Lembrete: o cartão existe a partir do app v0.15.8; o APK v0.13.0 não o tem.
+
 ## [0.15.8] — 2026-11-08
 
 ### Adicionado

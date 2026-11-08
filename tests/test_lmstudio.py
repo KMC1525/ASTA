@@ -174,6 +174,19 @@ class ProbeTests(LMStudioBase):
             self.assertEqual(p.call_count, 1)
 
 
+class WhyNotConnectedTests(LMStudioBase):
+    def test_errors_are_classified_so_the_ui_can_say_what_to_fix(self):
+        for msg, kind in (("Não foi possível conectar a 192.168.0.10:1234: [Errno 111] Connection refused", "refused"), ("[WinError 10061] recusou", "refused"),
+                          ("Não foi possível conectar a x: timed out", "timeout"), ("<urlopen error [Errno -2] Name or service not known>", "dns"),
+                          ("[Errno 113] No route to host", "unreachable"), ("algo estranho", "other")):
+            self.assertEqual(lmstudio.classify_error(msg), kind, msg)
+
+    def test_probe_of_a_closed_port_reports_why(self):
+        info = lmstudio.probe(f"http://127.0.0.1:{free_port()}", timeout=1)
+        self.assertFalse(info["running"])
+        self.assertEqual(info["kind"], "refused")
+
+
 class ScanTests(LMStudioBase):
     def test_scan_finds_the_lm_studio_of_another_computer_on_the_network(self):
         fake = FakeLMStudio()

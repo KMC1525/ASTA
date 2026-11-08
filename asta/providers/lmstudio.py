@@ -51,10 +51,24 @@ def _model(item: Dict[str, Any], native: bool = True) -> Optional[Dict[str, Any]
             "max_ctx": int(item.get("max_context_length") or 0), "ctx": int(item.get("loaded_context_length") or 0)}
 
 
+def classify_error(msg: str) -> str:
+    """Por que não conectou: «refused» (a porta está fechada para esta origem: LM Studio só aceitando o próprio computador), «timeout» (firewall / outra rede / Wi-Fi com isolamento), «dns» (nome ou IP inexistente), «unreachable» (sem rota)."""
+    m = (msg or "").lower()
+    if any(x in m for x in ("refused", "errno 111", "10061", "recusou")):
+        return "refused"
+    if any(x in m for x in ("timed out", "timeout", "10060")):
+        return "timeout"
+    if any(x in m for x in ("name or service", "getaddrinfo", "nodename", "11001", "11002", "temporary failure in name")):
+        return "dns"
+    if any(x in m for x in ("unreachable", "no route", "errno 113", "errno 101", "10051", "10065")):
+        return "unreachable"
+    return "other"
+
+
 def probe(base_url: str = "", api_key: str = "", timeout: float = 2.0) -> Dict[str, Any]:
     """Estado do LM Studio: {running, url, models: [...só chat...], loaded: [ids], native, error}. Nunca levanta exceção."""
     root = root_url(base_url)
-    out: Dict[str, Any] = {"running": False, "url": root, "models": [], "loaded": [], "native": False, "error": ""}
+    out: Dict[str, Any] = {"running": False, "url": root, "models": [], "loaded": [], "native": False, "error": "", "kind": ""}
     items: Optional[List[Any]] = None
     try:
         data = http.get_json(root + "/api/v0/models", _headers(api_key), timeout=timeout)
@@ -63,6 +77,7 @@ def probe(base_url: str = "", api_key: str = "", timeout: float = 2.0) -> Dict[s
     except ProviderError as exc:
         if exc.status is None:  # sem conexão: não adianta tentar a outra rota
             out["error"] = str(exc)
+            out["kind"] = classify_error(str(exc))
         else:  # servidor respondeu mas é uma versão sem /api/v0 (ou exige chave): tenta a rota compatível
             try:
                 data = http.get_json(root + "/v1/models", _headers(api_key), timeout=timeout)
