@@ -172,8 +172,10 @@ class QwenImageGGUFTests(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
             out = self.prov().image("um gato", size="1280x720")
         self.assertEqual(out[0].mime, "image/png")
-        self.assertEqual(loads[0], {"diffusion_model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf"), "vae_path": str(self.img / "qwen_image_vae.safetensors"), "llm_path": str(self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf")})
+        self.assertEqual(loads[0], {"diffusion_model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf"), "vae_path": str(self.img / "qwen_image_vae.safetensors"), "llm_path": str(self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"),
+                                    "offload_params_to_cpu": True, "diffusion_flash_attn": True})       # memória e atenção como na documentação da stable-diffusion.cpp
         self.assertEqual(runs[0]["cfg_scale"], 2.5)
+        self.assertEqual((runs[0]["width"], runs[0]["height"]), (1024, 576))
 
     def test_missing_companions_fall_back_to_the_single_file_and_the_error_says_what_to_download(self):
         from asta.providers.base import ProviderError
@@ -195,8 +197,48 @@ class QwenImageGGUFTests(unittest.TestCase):
         mod, _, _ = self.fake(fail=ValueError("NULL pointer access"))
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
             self.prov().image("x")
-        self.assertIn("não carregou", str(cm.exception))
+        self.assertIn("falhou na stable-diffusion.cpp", str(cm.exception))
         self.assertNotIn("Erro inesperado", str(cm.exception))
+
+    def test_the_real_reason_from_the_library_log_is_shown_instead_of_just_null_pointer(self):
+        from asta.canvas import media as M
+        from asta.providers.base import ProviderError
+
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        M._SD_CB = None
+        M._SD_LOG.clear()
+        cbs = []
+        mod, _, _ = self.fake(fail=ValueError("NULL pointer access"))
+        mod.sd_log_callback = lambda f: f
+        mod.sd_set_log_callback = lambda f, d: cbs.append(f)
+        orig = mod.StableDiffusion
+
+        class Noisy(orig):
+            def generate_image(self, **kw):
+                cbs[0](3, b"ggml_backend_cpu_buffer_type_alloc_buffer: failed to allocate buffer of size 12884901888\n", None)
+                cbs[0](1, b"info line that is not an error\n", None)
+                return super().generate_image(**kw)
+
+        mod.StableDiffusion = Noisy
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+            self.prov().image("x")
+        msg = str(cm.exception)
+        self.assertIn("failed to allocate buffer", msg)
+        self.assertNotIn("info line", msg)
+        self.assertIn("falta de memória", msg)
+        M._SD_CB = None
+
+    def test_image_sizes_are_multiples_of_16(self):
+        (self.img / "meu-modelo-Q4_K_M.gguf").write_bytes(b"g")
+        from asta.canvas import media as M
+
+        mod, _, runs = self.fake()
+        prov = M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(self.tmp), "models": {"image": "meu-modelo-Q4_K_M.gguf"}, "needs_key": False})
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            prov.image("x", size="1536x1024")
+        self.assertEqual((runs[0]["width"], runs[0]["height"]), (1024, 672))
+        self.assertTrue(runs[0]["width"] % 16 == 0 and runs[0]["height"] % 16 == 0)
 
     def test_other_models_keep_loading_as_a_single_file_and_support_files_are_not_listed_as_models(self):
         from asta.canvas import installed as INST

@@ -15,12 +15,14 @@ o campo "extra" (JSON) de cada nó permite ajustar qualquer parâmetro específi
 from __future__ import annotations
 
 import base64
+import collections
 import gc
 import io
 import json
 import re
 import shutil
 import subprocess
+import sys
 import tempfile
 import threading
 import time
@@ -1285,6 +1287,39 @@ def _frames_to_mp4(frames: Any, fps: int) -> Media:
         return Media(dst.read_bytes(), "video/mp4")
 
 
+_SD_LOG: "collections.deque[Tuple[int, str]]" = collections.deque(maxlen=120)   # (nível, texto) das mensagens da stable-diffusion.cpp; níveis: 0 debug, 1 info, 2 aviso, 3 erro
+_SD_CB: Any = None
+
+
+def _install_sd_log(sdc: Any) -> None:
+    """Troca o callback de log da stable-diffusion-cpp-python por um que guarda as últimas mensagens (e continua mostrando-as no terminal)."""
+    global _SD_CB
+    if _SD_CB is not None:
+        return
+    try:
+        import ctypes
+
+        def cb(level, text, data):  # noqa: ANN001
+            try:
+                line = (text or b"").decode("utf-8", "replace").rstrip()
+                _SD_LOG.append((int(level), line))
+                if level >= 1 and line:
+                    print(line, file=sys.stderr, flush=True)
+            except Exception:  # noqa: BLE001 — um callback nunca pode derrubar a geração
+                pass
+
+        _SD_CB = sdc.sd_log_callback(cb)
+        sdc.sd_set_log_callback(_SD_CB, ctypes.c_void_p(0))
+    except Exception:  # noqa: BLE001 — versões sem esse recurso: segue sem capturar
+        _SD_CB = None
+
+
+def _sd_reason() -> str:
+    """O motivo da falha, das últimas mensagens de aviso/erro da biblioteca («failed to allocate…», «unknown tensor…»); vazio se não há."""
+    lines = [t for lvl, t in list(_SD_LOG) if lvl >= 2 and t][-4:]
+    return " | ".join(l[:220] for l in lines)
+
+
 class GGUFMedia(MediaProvider):
     """Modelos GGUF de imagem e vídeo (FLUX, Stable Diffusion, Wan…) rodando dentro do ASTA pela stable-diffusion.cpp (`pip install "asta[local]"`).
 
@@ -1309,6 +1344,7 @@ class GGUFMedia(MediaProvider):
 
     def _engine(self, cap: str, path: Path, load: Dict[str, Any]) -> Any:
         (sdc,) = _local_import("stable_diffusion_cpp", extra="local")
+        _install_sd_log(sdc)   # guarda as mensagens da stable-diffusion.cpp: quando a geração falha com «NULL pointer access», o motivo de verdade está nelas
         kw: Dict[str, Any] = {}
         for k, v in load.items():
             if isinstance(v, str) and v == "@model":
@@ -1330,7 +1366,7 @@ class GGUFMedia(MediaProvider):
         found = support.find_companions(path.parent, path, fam)
         if any(v is None for v in found.values()):
             return {}
-        return {"load": {"diffusion_model_path": "@model", **found}, "run": dict(fam["run"])}
+        return {"load": {"diffusion_model_path": "@model", **found, **fam.get("options", {})}, "run": dict(fam["run"])}   # `options`: memória e atenção como na documentação da stable-diffusion.cpp
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
         from .. import preinstalled
@@ -1343,7 +1379,7 @@ class GGUFMedia(MediaProvider):
         sd = self._engine("image", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
-        w, h = max(256, int(w * k) // 8 * 8), max(256, int(h * k) // 8 * 8)
+        w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)   # múltiplos de 16: Qwen-Image/FLUX/Z-Image falham com tamanhos que não são
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
@@ -1354,6 +1390,7 @@ class GGUFMedia(MediaProvider):
             gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)   # a stable-diffusion-cpp-python nova chama `generate_image`; a antiga, `txt2img`
             if gen is None:
                 raise ProviderError("A versão instalada da stable-diffusion-cpp-python não tem um gerador de imagem conhecido (generate_image/txt2img). Atualize-a (asta libs).")
+            _SD_LOG.clear()
             try:
                 imgs = gen(**kw)
             except (ValueError, RuntimeError, OSError) as exc:
@@ -1361,8 +1398,10 @@ class GGUFMedia(MediaProvider):
                     info = support.missing(path.parent, path.name)
                     fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
                            f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
-                    raise ProviderError(f"O modelo {path.name} não carregou na stable-diffusion.cpp («{exc}»). Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a "
-                                        f"biblioteca precisa ser recente (asta libs).{fix}") from None
+                    why = _sd_reason()
+                    mem = (" Parece falta de memória: feche outros programas, use uma quantização menor (Q3/Q2) ou uma resolução menor." if re.search(r"alloc|out of memory|oom", why, re.I) else "")
+                    raise ProviderError(f"A geração com {path.name} falhou na stable-diffusion.cpp («{exc}»)." + (f" Motivo informado pela biblioteca: {why}." if why else "")
+                                        + mem + " Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a biblioteca precisa ser recente (asta libs)." + fix) from None
                 raise
             for img in (imgs if isinstance(imgs, (list, tuple)) else [imgs])[:1]:
                 buf = io.BytesIO()
