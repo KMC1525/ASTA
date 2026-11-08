@@ -89,7 +89,12 @@ jobs:
       - name: Python portátil (python-build-standalone)
         env: { GH_TOKEN: "${{ github.token }}" }
         run: |
-          URL=$(gh api repos/astral-sh/python-build-standalone/releases/latest --jq '.assets[].browser_download_url' | grep -E "cpython-3\.12\.[0-9]+\+[0-9]+-${{ matrix.pbs }}-install_only\.tar\.gz$" | head -1)
+          # a release «latest» traz centenas de arquivos e o JSON dela lista só os primeiros: pagina pela API de assets
+          ID=$(gh api repos/astral-sh/python-build-standalone/releases/latest --jq .id)
+          gh api --paginate "repos/astral-sh/python-build-standalone/releases/$ID/assets?per_page=100" --jq '.[].browser_download_url' > assets.txt
+          URL=$(grep -E "cpython-3\.12\.[0-9]+\+[0-9]+-${{ matrix.pbs }}-install_only\.tar\.gz$" assets.txt | head -1)
+          test -n "$URL" || URL=$(grep -E "cpython-3\.12\.[0-9]+\+[0-9]+-${{ matrix.pbs }}-install_only_stripped\.tar\.gz$" assets.txt | head -1)
+          test -n "$URL" || { echo "Python portátil não encontrado para ${{ matrix.pbs }}"; exit 1; }
           echo "Python: $URL"
           curl -fsSL "$URL" -o py.tar.gz && mkdir pyportable && tar -xzf py.tar.gz -C pyportable --strip-components=1
       - name: Montar o AppImage

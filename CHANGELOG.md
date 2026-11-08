@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.5] — 2026-11-08
+
+### Alterado
+- **App Android: conectar a um computador agora é opcional.** Com o motor embutido no aparelho, o app abre direto o ASTA local e **não mostra mais** a tela de «Escanear o QR code / digitar o endereço». Quem quiser usar o ASTA de um computador toca em «Conectar a um ASTA em outro computador (opcional)». Se o motor local não iniciar, essa opção aparece sozinha.
+
+### Corrigido
+- **Release nunca publicava (por isso o APK mais recente era o v0.13.0, com a tela obrigatória):** o job do AppImage não achava o Python portátil porque a lista de arquivos da release «latest» do python-build-standalone vem truncada; agora a busca pagina pela API de assets e falha com mensagem clara se não achar. *Não consegui reproduzir o job aqui: confirme na aba Actions se o Release foi publicado.*
+
 ## [0.15.4] — 2026-11-08
 
 ### Corrigido
