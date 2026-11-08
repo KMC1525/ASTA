@@ -41,10 +41,10 @@ Pick the file for your system on the [**latest Release**](https://github.com/KMC
 
 | System | File | How |
 |---|---|---|
-| **Windows 10/11** (64-bit) | `ASTA-0-15-10-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
-| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-15-10-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
-| **Linux** (x86_64; `-arm64` too) | `ASTA-0-15-10-Linux.appimage` | `chmod +x ASTA-0-15-10-Linux.appimage && ./ASTA-0-15-10-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-15-10-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
+| **Windows 10/11** (64-bit) | `ASTA-0-15-11-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
+| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-15-11-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
+| **Linux** (x86_64; `-arm64` too) | `ASTA-0-15-11-Linux.appimage` | `chmod +x ASTA-0-15-11-Linux.appimage && ./ASTA-0-15-11-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-15-11-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
 
 Every release also carries the **pre-built Rust core** of each platform (`asta-core-*`) and `SHA256SUMS.txt` (verify with `sha256sum -c`). The installers are not code-signed (that needs a paid certificate): Windows may show SmartScreen ("More info → Run anyway"). They are built by [GitHub Actions](.github/workflows/release.yml) and were **not run on real Windows/macOS/Android devices by the author of this change** (what could be checked is listed in the [changelog](CHANGELOG.en.md)). The terminal installers below remain available.
 
@@ -139,7 +139,7 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
-**The Android app needs no computer.** Download `ASTA-0-15-10-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
+**The Android app needs no computer.** Download `ASTA-0-15-11-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
 
 <img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
 
@@ -296,6 +296,8 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 **LM Studio on the computer, from the phone:** in *Configuration → Providers → LM Studio* the phone/app offers **Search the network** (or type the computer's IP) to use the computer's LM Studio models — turn on *Serve on Local Network* in LM Studio.
 
 **Away from home:** the computer's `192.168…` address is not reachable from outside the home network. Install **Tailscale** (free) on the computer and the phone, sign in to the same account, and use the Tailscale IP (`100.x.x.x`) or `….ts.net` name — for the connected ASTA and for the computer's LM Studio.
+
+**Away from home, no VPN:** in *Configuration → Mobile and tablet → LM Studio away from home*, turn on the access (ASTA downloads Cloudflare's `cloudflared` and creates a temporary https link protected by a secret code), copy the link and paste it in the phone's *LM Studio on the computer* card. Nothing to install on the phone; only the LM Studio API goes through. Tailscale also still works.
 
 - **In the Chat:** the **Computer Use** button next to Run (like *Web* and *Create*). Pick the mode, write what the computer should do and press **Run**: the conversation gets a **live card** for the task (progress, the *Yes/No* question and, at the end, the summary).
 - **Two modes.** **Ask:** before every action that changes something (create, move, trash, open a program/game/site, type, click, see the screen) ASTA asks **Yes or No** — with a "Yes, and don't ask this kind again in this task" option. **Full Access:** runs everything **without asking anything**. Reading, listing and searching never ask; Configuration lets you choose what asks. The mode is per task (the default lives in Configuration).

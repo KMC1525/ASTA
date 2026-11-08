@@ -7,6 +7,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.11] — 2026-11-08
+
+### Added — LM Studio away from home with NO VPN on the phone
+- In **Configuration → Mobile and tablet → «LM Studio away from home (no VPN)»** (on the computer): one click on **Download cloudflared** (Cloudflare's official binary, into ASTA's folder) and another on **Turn on access from outside home** create a **temporary https address** (Cloudflare «quick» tunnel — no account, no router port, nothing to install on the phone). ASTA shows a **link** `https://….trycloudflare.com/lm/<code>`.
+- On the phone (app), in **Configuration → Providers → LM Studio → «LM Studio on the computer»**, paste the link and tap **Connect**: the provider uses the computer's LM Studio from anywhere (4G/5G, another Wi-Fi), with streaming.
+- **Security:** off by default; only the LM Studio API (`v1/…` and `api/v0/…`) passes through the tunnel, never the rest of ASTA, and only with the link's **secret code** (24 random bytes, constant-time comparison; **Generate new code** invalidates the old link). The proxy only forwards to the computer's own/home-network LM Studio (never to the internet). The address changes every time access is turned on; the tunnel closes when ASTA exits. Anyone with the link can use your LM Studio: do not share it.
+- New: `asta/remote.py`, routes `GET/POST /api/remote` (computer only) and `/lm/<code>/…`.
+- Tailscale (v0.15.10) still works; it is now just an alternative.
+
+### Fixed
+- The tunnel mistook Cloudflare's server (`api.trycloudflare.com`, which shows up in error messages) for the tunnel address; a failure now appears as an error with the reason.
+
+### Notes
+- I could not create a real tunnel in the test environment (no access to Cloudflare): the proxy, the code and the tunnel manager were tested with a fake LM Studio and a fake `cloudflared`; the official binary download was verified.
+
 ## [0.15.10] — 2026-11-08
 
 ### Reviewed — using the app away from home

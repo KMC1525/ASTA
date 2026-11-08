@@ -5,6 +5,21 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.11] — 2026-11-08
+
+### Adicionado — LM Studio fora de casa SEM VPN no celular
+- Em **Configuração → Celular e tablet → «LM Studio fora de casa (sem VPN)»** (no computador): um clique em **Baixar o cloudflared** (binário oficial da Cloudflare, para a pasta do ASTA) e outro em **Ligar o acesso de fora de casa** criam um **endereço https temporário** (túnel «quick» da Cloudflare — sem conta, sem abrir porta no roteador, sem instalar nada no celular). O ASTA mostra um **link** `https://….trycloudflare.com/lm/<código>`.
+- No celular (app), em **Configuração → Provedores → LM Studio → «LM Studio no computador»**, cole o link e toque em **Conectar**: o provedor passa a usar o LM Studio do computador de qualquer lugar (4G/5G, outro Wi-Fi), com streaming.
+- **Segurança:** desligado por padrão; pelo túnel só passa a API do LM Studio (`v1/…` e `api/v0/…`), nunca o resto do ASTA, e só com o **código secreto** do link (24 bytes aleatórios, comparação em tempo constante; **Gerar novo código** invalida o link antigo). O proxy só repassa ao LM Studio do próprio computador/rede de casa (nunca à internet). O endereço muda a cada vez que o acesso é ligado; o túnel é encerrado quando o ASTA fecha. Quem tem o link usa o seu LM Studio: não o compartilhe.
+- Novos: `asta/remote.py`, rotas `GET/POST /api/remote` (só no computador) e `/lm/<código>/…`.
+- O Tailscale (v0.15.10) continua funcionando; agora é só uma alternativa.
+
+### Corrigido
+- O túnel confundia o servidor da Cloudflare (`api.trycloudflare.com`, que aparece em mensagens de erro) com o endereço do túnel; agora a falha aparece como erro com o motivo.
+
+### Observações
+- Não consegui criar um túnel de verdade no ambiente de testes (sem acesso à Cloudflare): o proxy, o código e o gerenciador do túnel foram testados com um LM Studio falso e um `cloudflared` falso; o download do binário oficial foi verificado.
+
 ## [0.15.10] — 2026-11-08
 
 ### Revisado — usar o app fora de casa

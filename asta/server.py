@@ -30,7 +30,8 @@ from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
 from .routes_mobile import MobileRoutes
 from .routes_auth import AuthRoutes
-from .mobile import Mobile, PAIR_REQUIRED_HTML
+from .mobile import Mobile, PAIR_REQUIRED_HTML, is_loopback, _FORWARD_HEADERS
+from .remote import Remote
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
@@ -206,6 +207,10 @@ class App:
         self.mobile = Mobile(self.store.home, self.bind_host)
         self.mobile_routes = MobileRoutes(self)
         self.mobile_routes.register()
+        self.remote = Remote(self.store.home)
+        a = self.add
+        a("GET", r"/api/remote", self.r_remote)
+        a("POST", r"/api/remote", self.r_remote_do)
         self.auth_routes = AuthRoutes(self)
         self.auth_routes.register()
         self.studio_routes = StudioRoutes(self)
@@ -299,6 +304,36 @@ class App:
         info["selected"] = cfg.get("model") or (info["loaded"][0] if info["loaded"] else "")
         info["hint"] = lmstudio.HOW_TO_START
         req.json(info)
+
+    def _remote_guard(self, req: "Request") -> None:
+        if self.mobile.strict and self.mobile.cookie_ok(req.headers.get("Cookie", "")):
+            return
+        if self.mobile.is_remote(req.h.client_address[0], req.headers):
+            raise HttpError(403, "Só no computador onde o ASTA roda.")
+        self.remote.local_port = req.h.server.server_address[1]
+
+    def r_remote(self, req: "Request") -> None:
+        """Acesso de fora de casa ao LM Studio (túnel + proxy com código): estado."""
+        self._remote_guard(req)
+        req.json(self.remote.status())
+
+    def r_remote_do(self, req: "Request") -> None:
+        self._remote_guard(req)
+        body = req.body_json()
+        act = str(body.get("action") or "")
+        if act == "enable":
+            self.remote.set_enabled(bool(body.get("on", True)))
+        elif act == "install":
+            self.remote.install()
+        elif act == "start":
+            self.remote.start()
+        elif act == "stop":
+            self.remote.stop()
+        elif act == "rotate":
+            self.remote.rotate()
+        else:
+            raise HttpError(400, "Ação desconhecida")
+        req.json(self.remote.status())
 
     def r_lmstudio_scan(self, req: "Request") -> None:
         """Procura o LM Studio de outro computador na rede local (a pedido do usuário; o celular usa isto para achar o do computador)."""
@@ -890,6 +925,11 @@ class Request:
         self.h.wfile.flush()
 
 
+def is_tunnel_request(client_ip: str, headers) -> bool:
+    """Veio pelo túnel do cloudflared: ele conecta de 127.0.0.1 e acrescenta os cabeçalhos «cf-…»."""
+    return is_loopback(client_ip) and any(k.lower().startswith("cf-") or k.lower() in _FORWARD_HEADERS for k, v in headers.items() if v)
+
+
 class Handler(BaseHTTPRequestHandler):
     app: App
     server_version = "ASTA/" + __version__
@@ -909,6 +949,11 @@ class Handler(BaseHTTPRequestHandler):
                     if urllib.parse.urlsplit(origin).netloc != self.headers.get("Host", ""):
                         raise HttpError(403, "Origem não permitida")
             path = req.path
+            if path.startswith("/lm/"):   # LM Studio do computador para fora de casa: tem código próprio (ver remote.py), não usa o cookie de pareamento
+                self.app.remote.handle(req, self.app.store.get_settings())
+                return
+            if self.app.remote.tunnel_active() and is_tunnel_request(self.client_address[0], self.headers):   # pelo túnel só passa o LM Studio
+                raise HttpError(404, "Rota não encontrada")
             if not self.app.mobile.allowed(self.client_address[0], self.headers, path):  # fora do computador, só aparelhos pareados (QR)
                 if method in ("GET", "HEAD") and not path.startswith("/api/"):
                     req.bytes(PAIR_REQUIRED_HTML.encode("utf-8"), "text/html; charset=utf-8", 401)
