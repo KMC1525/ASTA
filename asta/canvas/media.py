@@ -1133,7 +1133,7 @@ class LocalHFMedia(MediaProvider):
 
     id, label = "local_hf", "Hugging Face local (embutido)"
     caps = ("image", "video", "sound", "voice", "stt")
-    supports_refs = False
+    supports_refs = True   # imagem → imagem pelo mesmo modelo
 
     def _pick(self, cap: str, model: str, default: str) -> str:
         """O modelo pedido; se ele ainda não foi baixado, usa outro já baixado da mesma função (o padrão ou uma sugestão) em vez de falhar. Se nenhum foi baixado, devolve o pedido
@@ -1182,6 +1182,12 @@ class LocalHFMedia(MediaProvider):
         w, h = parse_wh(size)
         w, h = (min(w, 768), min(h, 768)) if dev == "cpu" else (w, h)
         w, h = max(256, w // 8 * 8), max(256, h // 8 * 8)
+        pil = _pil_refs(refs, 1) if refs else []
+        if refs and not pil:
+            raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
+        if pil:   # imagem → imagem: reaproveita os pesos já carregados
+            w, h = _size_like(pil[0], w, h, 8)
+            i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
@@ -1190,8 +1196,13 @@ class LocalHFMedia(MediaProvider):
                   "generator": torch.Generator("cpu").manual_seed(int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i)}
             if negative and not fast:
                 kw["negative_prompt"] = negative
+            if pil:
+                kw.pop("width"), kw.pop("height")
+                kw.update(image=pil[0].resize((w, h)), strength=0.8 if fast else 0.75)
+                if fast:
+                    kw["num_inference_steps"] = 4   # modelos «turbo»: com strength < 1 sobram menos passos, e precisam de pelo menos 1
             kw.update(extra or {})
-            img = pipe(**kw).images[0]
+            img = (i2i if pil else pipe)(**kw).images[0]
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             out.append(Media(buf.getvalue(), "image/png"))
@@ -1287,6 +1298,27 @@ def _frames_to_mp4(frames: Any, fps: int) -> Media:
         return Media(dst.read_bytes(), "video/mp4")
 
 
+def _pil_refs(refs: Sequence[Ref], limit: int = 4) -> List[Any]:
+    """Imagens de referência (bytes, mime) como imagens RGB da PIL; as ilegíveis são ignoradas."""
+    from PIL import Image  # type: ignore
+
+    out: List[Any] = []
+    for data, _mime in list(refs)[:limit]:
+        try:
+            out.append(Image.open(io.BytesIO(data)).convert("RGB"))
+        except Exception:  # noqa: BLE001 — arquivo que não é imagem
+            continue
+    return out
+
+
+def _size_like(ref: Any, w: int, h: int, mult: int) -> Tuple[int, int]:
+    """Tamanho com a proporção da imagem de referência e o mesmo lado maior do tamanho pedido (editar não deve esticar a imagem)."""
+    rw, rh = ref.size
+    long = max(w, h)
+    k = long / max(rw, rh)
+    return max(256, int(rw * k) // mult * mult), max(256, int(rh * k) // mult * mult)
+
+
 _SD_LOG: "collections.deque[Tuple[int, str]]" = collections.deque(maxlen=120)   # (nível, texto) das mensagens da stable-diffusion.cpp; níveis: 0 debug, 1 info, 2 aviso, 3 erro
 _SD_CB: Any = None
 
@@ -1329,7 +1361,7 @@ class GGUFMedia(MediaProvider):
 
     id, label = "gguf_local", "GGUF local (stable-diffusion.cpp)"
     caps = ("image", "video")
-    supports_refs = False
+    supports_refs = True   # imagem → imagem (init_image) ou, em modelos de edição (Qwen-Image-Edit, FLUX Kontext), ref_images
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1374,15 +1406,37 @@ class GGUFMedia(MediaProvider):
         if not base and not (extra or {}).get("load"):
             base = self._auto_load(path)   # famílias conhecidas (Qwen-Image, FLUX): acha o VAE e o codificador de texto ao lado do modelo
         extra = {**base.get("run", {}), **(extra or {})}
-        sd = self._engine("image", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
+        load = {**base.get("load", {}), **(extra.pop("load", None) or {})}
+        sd = self._engine("image", path, load)
+        used = ", ".join(Path(v).name for k, v in load.items() if k.endswith("_path") and isinstance(v, str) and v != "@model")   # os arquivos de apoio de fato carregados (para o erro)
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
         w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)   # múltiplos de 16: Qwen-Image/FLUX/Z-Image falham com tamanhos que não são
+        pil = _pil_refs(refs) if refs else []
+        if refs and not pil:
+            raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
+        ref_kw: Dict[str, Any] = {}
+        if pil:
+            import inspect
+
+            gen_fn = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)
+            try:
+                params = set(inspect.signature(gen_fn).parameters) if gen_fn else set()
+            except (TypeError, ValueError):
+                params = set()
+            w, h = _size_like(pil[0], w, h, 16)
+            if re.search(r"edit|kontext", path.name, re.I) and "ref_images" in params:
+                ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
+            elif "init_image" in params:
+                ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem
+                ref_kw.setdefault("strength", 0.75)
+            else:
+                raise ProviderError("A versão instalada da stable-diffusion-cpp-python não aceita imagens de entrada (init_image/ref_images). Atualize-a (asta libs) ou use um modelo de nuvem para editar.")
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
             self.ctl.note("Gerando imagem com o modelo GGUF…")
-            kw = {"prompt": prompt, "width": w, "height": h, "seed": int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i, **extra}
+            kw = {"prompt": prompt, "width": w, "height": h, "seed": int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i, **ref_kw, **extra}
             if negative:
                 kw.setdefault("negative_prompt", negative)
             gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)   # a stable-diffusion-cpp-python nova chama `generate_image`; a antiga, `txt2img`
@@ -1404,7 +1458,7 @@ class GGUFMedia(MediaProvider):
                     info = support.missing(path.parent, path.name)
                     fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
                            f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
-                    why = _sd_reason()
+                    why = _sd_reason() or ("a biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda" + (f"; arquivos de apoio carregados: {used}" if used else "; nenhum arquivo de apoio foi carregado"))
                     mem = (" Parece falta de memória: feche outros programas, use uma quantização menor (Q3/Q2) ou uma resolução menor." if re.search(r"alloc|out of memory|oom", why, re.I) else "")
                     raise ProviderError(f"A geração com {path.name} falhou na stable-diffusion.cpp («{exc}»)." + (f" Motivo informado pela biblioteca: {why}." if why else "")
                                         + mem + " Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a biblioteca precisa ser recente (asta libs)." + fix) from None

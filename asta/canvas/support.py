@@ -13,7 +13,7 @@ from .. import hf
 
 FAMILIES: List[Dict[str, Any]] = [
     {"id": "qwen-image", "name": r"qwen[-_ ]?image", "label": "Qwen-Image",
-     "load": {"vae_path": r"(qwen.*image.*vae|(^|[-_.])vae([-_.]|$)|^ae\.safetensors$)", "llm_path": r"qwen2[._]?5.*vl.*\.gguf$"}, "run": {"cfg_scale": 2.5}, "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
+     "load": {"vae_path": r"qwen.*image.*vae", "llm_path": r"qwen2[._]?5.*vl.*\.gguf$"}, "run": {"cfg_scale": 2.5, "flow_shift": 3.0, "sample_method": "euler"}, "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
      "need": "o VAE (qwen_image_vae.safetensors, em Comfy-Org/Qwen-Image_ComfyUI) e o codificador de texto Qwen2.5-VL (um .gguf, ex.: unsloth/Qwen2.5-VL-7B-Instruct-GGUF)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/Qwen-Image_ComfyUI", "file": "split_files/vae/qwen_image_vae.safetensors", "label": "VAE do Qwen-Image", "approx": 0.25},
                    "llm_path": {"repo": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf", "label": "Codificador de texto Qwen2.5-VL (Q4_K_M)", "approx": 4.7}}},
