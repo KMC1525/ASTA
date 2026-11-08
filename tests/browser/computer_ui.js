@@ -86,6 +86,12 @@ run('computer', async ({ api, open, check, base }) => {
   check('cu:celular-detalhe-com-voltar', (await phone.locator('.cu-back').isVisible()) && !(await phone.locator('.cu-list').isVisible()));
   const overflow = await phone.evaluate(() => document.documentElement.scrollWidth > window.innerWidth + 2);
   check('cu:celular-sem-rolagem-horizontal', !overflow);
+  check('cu:navegador-comum-nao-mostra-ponte-do-app', (await phone.locator('#cu-pc').count()) === 0);
+  // app Android (APK): oferece «Executar no meu computador» (abre o ASTA do computador conectado)
+  const app = await open({ width: 390, height: 800 });
+  await app.addInitScript(() => Object.defineProperty(navigator, 'userAgent', { get: () => 'Mozilla/5.0 (Linux; Android 14) ASTA-Android' }));
+  await app.goto(base + '/#/computer'); await app.reload(); await app.waitForSelector('#cu-pc');
+  check('cu:app-oferece-executar-no-computador', (await app.locator('#cu-pc-go').count()) === 1 && (await app.locator('#cu-pc-back').count()) === 0);
   await api('/api/computer/history/clear', { method: 'POST', body: { purge: true } });
   await api('/api/settings', { method: 'PUT', body: { computer: { enabled: false } } });
 });

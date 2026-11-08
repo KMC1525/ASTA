@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.7] — 2026-11-08
+
+### Adicionado
+- **Computer Use pelo celular (app Android):** na seção Computer Use do app aparece **«Executar no meu computador»**: ele abre direto o ASTA do computador já conectado, na seção Computer Use, e as tarefas rodam lá (o celular é só a janela: você acompanha o passo a passo e responde Sim/Não). Sem computador conectado, o app mostra a conexão (QR code ou endereço). Lá, **«Voltar ao ASTA deste aparelho»** retorna ao ASTA do celular.
+- O Android não deixa um app controlar os outros, então o ASTA do próprio aparelho continua sem controlar o celular; o recurso serve para **mandar as tarefas ao computador**.
+
 ## [0.15.6] — 2026-11-08
 
 ### Corrigido

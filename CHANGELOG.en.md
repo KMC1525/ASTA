@@ -7,6 +7,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.7] — 2026-11-08
+
+### Added
+- **Computer Use from the phone (Android app):** the app's Computer Use section now shows **«Run on my computer»**: it opens the already-connected computer's ASTA directly at Computer Use, and the tasks run there (the phone is just the window: you follow the step-by-step and answer Yes/No). With no computer connected, the app shows the connection screen (QR code or address). There, **«Back to this device's ASTA»** returns to the phone's ASTA.
+- Android does not let an app control others, so the device's own ASTA still cannot control the phone; the feature is for **sending tasks to the computer**.
+
 ## [0.15.6] — 2026-11-08
 
 ### Fixed
