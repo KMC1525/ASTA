@@ -160,6 +160,33 @@ async function providers() {
   return container;
 }
 
+// LM Studio do COMPUTADOR, usado pelo celular/tablet: acha o servidor na rede (ou usa o IP digitado) e aponta o endereço do provedor para ele.
+// No computador o LM Studio precisa estar com «Serve on Local Network» ligado (Developer → Server Settings) e na mesma rede Wi-Fi.
+function pcBox(draft, detect) {
+  if (!/Android|iPhone|iPad|iPod/i.test(navigator.userAgent || '')) return null;
+  const out = h('div', { class: 'muted small', style: { marginTop: '6px' } });
+  const addr = h('input', { id: 'lms-pc-addr', inputmode: 'url', autocapitalize: 'off', placeholder: '192.168.0.10  ·  192.168.0.10:1234', 'aria-label': t('Endereço do computador') });
+  const point = async (url) => { draft.base_url = url; await saveSettings({ providers: { lmstudio: { base_url: url } } }); detect(); };
+  const scan = async () => {
+    out.replaceChildren(h('div', { class: 'spinner' }), ' ', t('Procurando o LM Studio na rede…'));
+    let r;
+    try { r = await api('/api/lmstudio/scan', { method: 'POST', body: {} }); } catch (e) { out.textContent = e.message; return; }
+    if (!r.servers.length) { out.textContent = t('Não achei. No computador: LM Studio → Developer → ligue «Serve on Local Network» e «Start Server»; o celular precisa estar no mesmo Wi-Fi. Ou digite o IP do computador.'); return; }
+    out.replaceChildren(...r.servers.map((sv) => h('button', { class: 'btn sm', type: 'button', onclick: () => point(sv.url) }, sv.url + ' · ' + t('{n} modelo(s)', { n: sv.models }))));
+  };
+  const manual = () => {
+    let v = addr.value.trim().replace(/^https?:\/\//i, '').replace(/\/.*$/, '');
+    if (!v) { out.textContent = t('Digite o IP do computador (ex.: 192.168.0.10).'); return; }
+    if (!/:\d+$/.test(v)) v += ':1234';
+    point('http://' + v);
+  };
+  return h('div', { class: 'lms-pc', id: 'lms-pc', style: { marginTop: '12px', paddingTop: '10px', borderTop: '1px solid var(--line, rgba(255,255,255,.1))' } },
+    h('b', null, t('LM Studio no computador')),
+    h('p', { class: 'muted small', style: { margin: '4px 0 8px' } }, t('Use os modelos do LM Studio do seu computador por este aparelho, na mesma rede Wi-Fi.')),
+    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, h('button', { class: 'btn sm primary', type: 'button', id: 'lms-pc-scan', onclick: scan }, icon('refresh', 13), t('Procurar na rede')), addr,
+      h('button', { class: 'btn sm', type: 'button', id: 'lms-pc-go', onclick: manual }, t('Conectar'))), out);
+}
+
 // LM Studio: detecta o servidor, lista os modelos (carregados primeiro), escolhe com um clique e usa nos avatares.
 function lmStudioBox(p, draft, getModelInput) {
   const box = h('div', { class: 'card', style: { background: 'var(--bg2, rgba(255,255,255,.03))', margin: '4px 0 12px', padding: '12px 14px' } });
@@ -182,7 +209,7 @@ function lmStudioBox(p, draft, getModelInput) {
       onclick: () => { draft.model = m.id; const inp = getModelInput(); if (inp) inp.value = m.id; detect(); } }, (m.loaded ? '● ' : '○ ') + m.id + (m.vision ? ' 👁' : ''))) : [h('span', { class: 'dim small' }, t('Nenhum modelo instalado: baixe um na aba «Discover» do LM Studio.'))]));
     note.textContent = r.loaded.length ? t('● carregado agora · ○ instalado (o LM Studio pode carregar sob demanda). Sem escolher, o ASTA usa o modelo carregado.') : t('Nenhum modelo está carregado no LM Studio: carregue um (ou escolha um acima).');
   }
-  box.append(status, list, note); detect();
+  box.append(status, list, note, pcBox(draft, detect)); detect();
   return box;
 }
 

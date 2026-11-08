@@ -94,6 +94,42 @@ def detect(base_url: str = "", api_key: str = "", max_age: float = 8.0, timeout:
     return info
 
 
+def scan(hosts: Optional[List[str]] = None, port: int = 1234, timeout: float = 0.4, budget: float = 8.0) -> List[Dict[str, Any]]:
+    """Procura servidores do LM Studio na rede local (a /24 de cada IP deste aparelho; ou `hosts`): só a porta do LM Studio, só leitura da lista de modelos.
+    Serve para o celular achar o LM Studio do computador sem digitar o IP. Devolve [{url, running, loaded:[ids]}]."""
+    import socket
+    from concurrent.futures import ThreadPoolExecutor
+
+    if hosts is None:
+        from ..mobile import lan_ips
+
+        hosts = []
+        for ip in lan_ips():
+            parts = ip.split(".")
+            if len(parts) == 4 and not ip.startswith("127."):
+                hosts += [".".join(parts[:3] + [str(i)]) for i in range(1, 255) if str(i) != parts[3]]
+    hosts = list(dict.fromkeys(hosts))[:1024]
+    t0 = time.time()
+
+    def open_port(h: str) -> Optional[str]:
+        if time.time() - t0 > budget:
+            return None
+        try:
+            with socket.create_connection((h, port), timeout=timeout):
+                return h
+        except OSError:
+            return None
+
+    with ThreadPoolExecutor(max_workers=64) as ex:
+        found = [h for h in ex.map(open_port, hosts) if h]
+    out: List[Dict[str, Any]] = []
+    for h in found[:8]:
+        info = probe(f"http://{h}:{port}", timeout=2.0)
+        if info["running"]:
+            out.append({"url": info["url"], "running": True, "loaded": info["loaded"], "models": len(info["models"])})
+    return out
+
+
 def forget() -> None:
     with _LOCK:
         _CACHE.clear()

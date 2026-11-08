@@ -147,6 +147,7 @@ class App:
         a("POST", r"/api/providers/test", self.r_provider_test)
         a("POST", r"/api/providers/models", self.r_provider_models)
         a("GET", r"/api/lmstudio", self.r_lmstudio)
+        a("POST", r"/api/lmstudio/scan", self.r_lmstudio_scan)
 
         for kind, store in (("characters", self.store.characters), ("worldbuildings", self.store.worldbuildings)):
             a("GET", rf"/api/{kind}", self._cards_list(store))
@@ -298,6 +299,13 @@ class App:
         info["selected"] = cfg.get("model") or (info["loaded"][0] if info["loaded"] else "")
         info["hint"] = lmstudio.HOW_TO_START
         req.json(info)
+
+    def r_lmstudio_scan(self, req: "Request") -> None:
+        """Procura o LM Studio de outro computador na rede local (a pedido do usuário; o celular usa isto para achar o do computador)."""
+        from .providers import lmstudio
+
+        req.body_json()
+        req.json({"servers": lmstudio.scan()})
 
     # ----- cards
     def _cards_list(self, store):
