@@ -5,6 +5,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.6] — 2026-11-08
+
+### Corrigido — «NULL pointer access» ao gerar imagem com GGUF de difusão (Qwen-Image, FLUX…)
+- **Causa:** um GGUF que traz só a difusão (Qwen-Image, FLUX…) era carregado como arquivo único (`model_path`); a stable-diffusion.cpp não consegue montar o modelo sem o VAE e o codificador de texto, o contexto fica nulo e a geração termina em «NULL pointer access».
+- **Carregamento automático para famílias conhecidas** (`GGUFMedia.FAMILIES`): para **Qwen-Image** (VAE + codificador Qwen2.5-VL, `cfg_scale` 2,5) e **FLUX** (ae + clip_l + t5xxl), o ASTA procura os arquivos de apoio **na mesma pasta do modelo** (`models/image`) e carrega com `diffusion_model_path`, `vae_path` e `llm_path`/`clip_l_path`/`t5xxl_path`. Só vale se **todos** os apoios existem; um `extra.load` salvo no nó ou um pré-instalado continuam mandando.
+- **Erro claro:** se a biblioteca ainda falhar com «NULL pointer», o nó mostra o que aconteceu e, para as famílias conhecidas, **quais arquivos baixar e onde pôr** (em vez de «NULL pointer access» solto).
+- **Apoios fora da lista de modelos:** codificadores de texto (Qwen2.5-VL, Qwen3, t5xxl, clip, mmproj) e os arquivos de apoio dos pré-instalados não aparecem mais como «modelos instalados» no seletor do nó.
+- Testes: `QwenImageGGUFTests` em `tests/test_v017_models.py`.
+- Versão do app Android e das telas atualizada para 0.17.6 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- **Não rodei um modelo Qwen-Image/FLUX de verdade** (sem a biblioteca nem os arquivos neste ambiente): o carregamento automático foi testado com um módulo falso e segue a documentação da stable-diffusion.cpp. Os nomes dos parâmetros (`llm_path`, `clip_l_path`, `t5xxl_path`) e o `cfg_scale` podem precisar de ajuste conforme a versão instalada da biblioteca, e o modelo pode pedir outros parâmetros (por exemplo `flow_shift`).
+- Os arquivos de apoio precisam estar **na mesma pasta do modelo** e ter nomes reconhecíveis (`*vae*.safetensors`, `Qwen2.5-VL*.gguf`, `clip_l*.safetensors`, `t5xxl*`); o ASTA não baixa esses arquivos por você (só os dos pré-instalados).
+- Sem o campo de parâmetros extras na tela (removido na 0.17.1), um modelo que não é de uma família conhecida e precisa de outro carregamento só se ajusta pelo `extra` no `canvas.json`.
+- Rodaram `test_v017_models`, `test_canvas` e `test_preinstalled`; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.5] — 2026-11-08
 
 ### Alterado — nós de mídia sem «Provedor»: só o Modelo
