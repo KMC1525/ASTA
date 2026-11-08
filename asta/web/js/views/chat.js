@@ -387,6 +387,9 @@ export default async function render(root, ctx) {
       ctl.sources = ev.sources; ctl.query = ev.query; tb.live = { query: ev.query, sources: ev.sources }; tb.banner.replaceChildren(); if (front()) autoOpenSide();
       ctl.cite = citeFor(() => ctl.sources || [], () => '');
       if (ctl.el) { const old = ctl.el.querySelector('.csources'); if (old) old.remove(); const el = sourcesEl(ctl.sources, ctl.query, ''); if (el) ctl.el.insertBefore(el, ctl.el.querySelector('.cacts')); }
+    } else if (ev.type === 'links') {
+      const bits = (ev.links || []).map(l => (l.title || l.host) + (l.error ? ' ✗' : '') + (l.images ? ' · ' + l.images + ' 🖼' : '') + (l.videos ? ' · ' + l.videos + ' 🎬' : ''));
+      tb.banner.replaceChildren(h('div', { class: 'chx-note' }, '🔗 ' + bits.join(' | ')));
     } else if (ev.type === 'notice') tb.banner.replaceChildren(h('div', { class: 'chx-note' }, t(ev.message)));
     else if (ev.type === 'typing') { if (!ctl.el) startBubble(ctl); }
     else if (ev.type === 'delta' && ctl.body) { ctl.buf += ev.text; ctl.el.classList.remove('typing'); drawStream(ctl); }

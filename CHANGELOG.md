@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.14.1] — 2026-11-08
+
+### Melhorado — Chat lê links, inclusive de páginas com imagens e vídeos
+- **Links colados na mensagem são lidos sozinhos** (até 4 por mensagem, sem precisar ligar a busca na web): o ASTA abre a página, extrai o texto (com título e descrição) e entrega ao modelo, marcado como texto da web não confiável.
+- **Imagens da página**: a imagem de destaque (`og:image`), capas de vídeo e as imagens do conteúdo (ícones e pixels de rastreio ficam de fora) são listadas com o texto alternativo e, se o modelo enxerga imagens, até 4 por página seguem junto da mensagem. Link direto para uma imagem vira imagem anexada.
+- **Vídeos da página**: `<video>`, `<source>`, `og:video`, links `.mp4/.webm` e embeds do YouTube, Vimeo, TikTok e outros entram na lista com título; o modelo é avisado de que não assiste vídeos e usa título e texto ao redor.
+- Segurança como na busca: só endereços públicos (inclusive a cada redirecionamento), tamanho e tempo limitados. A interface mostra quais links foram lidos, com a contagem de imagens e vídeos.
+
 ## [0.14.0] — 2026-11-08
 
 ### Adicionado — instaladores e app Android sem computador
