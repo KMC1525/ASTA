@@ -344,7 +344,7 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 | **Computer Use** | The tasks the AI team does on your computer (up to 8 at once): live follow-up, the Yes/No questions of Ask mode and the step-by-step history, with Cancel, Redo and Undo. |
 | **Rebuild** | Rebuild Ren'Py / RPG Maker games and see the ones you rebuilt. |
 | **Library** | Everything you created as updatable projects, plus the **local AI models you installed**, with search and automatic + custom tags. Press *Select* to pick several items and delete them at once; models can be deleted one at a time or in bulk. |
-| **Configuration** | 17 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Computer Use, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
+| **Configuration** | 18 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Computer Use, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
 
 ### Make it yours (Configuration → Appearance)
 

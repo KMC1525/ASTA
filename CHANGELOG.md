@@ -22,7 +22,7 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - API: `GET/POST /api/computer/tasks`, `…/tasks/<id>` (+ `cancel`, `answer`, `undo`, `retry`, `shots/<arquivo>`), `GET /api/computer/events` (SSE), `status`, `inventory`, `prompts`, `history/clear`. Configuração `computer` em `settings.json` (`enabled`, `mode`, `max_parallel`, `max_steps`, `team`, `revisions`, `ask_for`, `game_dirs`, `app_wait`).
 
 ### Alterado
-- Barra lateral com **10 telas**: `Alt+0` abre a 10ª (Configuração); a paleta de comandos mostra o atalho certo; *Configuração* ganhou a aba **Computer Use** (17 abas) e um cartão no *Chat*. Tela inicial e esconder-da-barra aceitam a nova seção.
+- Barra lateral com **10 telas**: `Alt+0` abre a 10ª (Configuração); a paleta de comandos mostra o atalho certo; *Configuração* ganhou a aba **Computer Use** (18 abas) e um cartão no *Chat*. Tela inicial e esconder-da-barra aceitam a nova seção.
 - Importar configurações **nunca liga o Computer Use, troca o modo nem remove perguntas do Ask** (só limites numéricos); exportar leva a seção `computer`.
 
 ### Observações e limites

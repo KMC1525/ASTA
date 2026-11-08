@@ -327,8 +327,7 @@ class BrowserTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp(prefix="asta-cu-home-"))
         (home / "Documents").mkdir()
         try:
-            with mock.patch.dict(os.environ, {"HOME": str(home), "USERPROFILE": str(home)}):
-                self.run_script("computer_ui.js", {"ASTA_TEST_HOME": str(home)})
+            self.run_script("computer_ui.js", {"ASTA_TEST_HOME": str(home)})   # caminhos absolutos: a pasta pessoal de verdade não é tocada
             self.assertTrue((home / "Documents" / "UiNegada").exists() is False)
         finally:
             shutil.rmtree(home, ignore_errors=True)

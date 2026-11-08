@@ -344,7 +344,7 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 | **Computer Use** | As tarefas que a equipe de IA faz no seu computador (até 8 ao mesmo tempo): acompanhamento ao vivo, perguntas Sim/Não do modo Ask e o histórico passo a passo, com Cancelar, Refazer e Desfazer. |
 | **Rebuild** | Reconstrua jogos Ren'Py / RPG Maker e veja os que você reconstruiu. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
-| **Configuração** | 17 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Computer Use, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
+| **Configuração** | 18 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Computer Use, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
 
 ### Deixe do seu jeito (Configuração → Aparência)
 
