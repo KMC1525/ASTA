@@ -1,8 +1,8 @@
 // Canvas: tipos de nó na interface (paleta, controles de cada nó e área de resultado) e regras de compatibilidade das portas.
 import { t } from './i18n.js';
-import { api } from './api.js';
+import { api, events } from './api.js';
 import { withMentions } from './canvas_mention.js';
-import { checkbox, h, icon, seg, select } from './ui.js';
+import { checkbox, h, icon, seg, select, toast } from './ui.js';
 
 export const compatible = (out, accepts) => accepts.includes(out)
   || (out === 'media' && accepts.some((a) => ['image', 'video', 'audio', 'media'].includes(a)))
@@ -268,7 +268,25 @@ export function nodeResult(c, n) {
   else if (st.state === 'skipped') box.append(h('div', { class: 'dim small' }, t('Pulado: um nó de entrada falhou.')));
   const error = st.state === 'error' ? st.message : (r.state === 'error' ? r.error : '');
   if (error) {
-    box.append(h('div', { class: 'err' }, error));
+    const sup = /\[\[asta-support:([^\]]+)\]\]/.exec(error);   // GGUF de difusão sem VAE/codificador de texto: oferece baixar o que falta
+    box.append(h('div', { class: 'err' }, error.replace(/\s*\[\[asta-support:[^\]]+\]\]/, '')));
+    if (sup) {
+      const btn = h('button', { class: 'btn sm primary nodrag', type: 'button', id: 'sup-' + n.id, style: { marginTop: '6px' } }, icon('download', 13), t('Baixar os arquivos de apoio'));
+      btn.onclick = async () => {
+        btn.disabled = true;
+        try {
+          const r = await api('/api/media/support/download', { method: 'POST', body: { model: sup[1] } });
+          toast(t('Baixando {f} (≈ {g} GB)…', { f: r.files.join(', '), g: r.approx_gb }));
+          events('/api/jobs/' + r.job_id + '/events', (ev) => {
+            if (ev.type === 'progress' && ev.total) btn.lastChild.textContent = ' ' + Math.round(ev.done / ev.total * 100) + '%';
+            else if (ev.type === 'done') { toast(t('Arquivos de apoio baixados. Execute o nó de novo.'), 'ok'); btn.remove(); }
+            else if (ev.type === 'error') { toast(ev.message, 'err'); btn.disabled = false; }
+            else if (ev.type === 'cancelled') { btn.disabled = false; }
+          });
+        } catch (e) { btn.disabled = false; toast(e.status === 409 ? t('Já há um download de arquivos de apoio em andamento.') : e.message, 'err'); }
+      };
+      box.append(btn);
+    }
     if (/ainda não foi baixado|not been downloaded/i.test(error)) box.append(h('button', { class: 'btn sm primary nodrag', type: 'button', style: { marginTop: '6px' }, onclick: () => window.dispatchEvent(new CustomEvent('asta:go', { detail: { route: 'config', ctx: { tab: 'media' } } })) }, icon('download', 13), t('Baixar o modelo agora')));   // abre Configuração → Mídia na escolha da precisão
   }
   if (st.state === 'running' || st.state === 'queued') return box;

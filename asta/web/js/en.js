@@ -2305,4 +2305,8 @@ export default {
   "Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem, vídeo ou som do canvas.": "Describe the image (or connect a text node). Type @ to mention an image, video or sound from the canvas.",
   "Sem modelo da nuvem": "No cloud model",
   "Configurar provedores e chaves…": "Set up providers and keys…",
+  "Baixar os arquivos de apoio": "Download the support files",
+  "Baixando {f} (≈ {g} GB)…": "Downloading {f} (≈ {g} GB)…",
+  "Arquivos de apoio baixados. Execute o nó de novo.": "Support files downloaded. Run the node again.",
+  "Já há um download de arquivos de apoio em andamento.": "A support-file download is already running.",
 };
