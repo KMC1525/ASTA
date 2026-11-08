@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.14.2] — 2026-11-08
+
+### Melhorado — links: imagens e vídeos analisados conforme o pedido
+- **O ASTA entende o que você pede sobre o link.** Pediu *imagens/fotos/gráficos* → o modelo (com visão) recebe até 10 imagens da página em vez de 4. Pediu *vídeo/transcrição/resumo do áudio* → o vídeo é baixado, o ASTA tira quadros e **transcreve o áudio** (serviço de voz em *Configuração → Voz*) e entrega tudo ao modelo. Link direto para um vídeo é sempre analisado.
+- Vídeos hospedados em arquivo (`.mp4`, `.webm`, `.mov`…) são baixados direto (até 60 MB, só endereços públicos); YouTube, Vimeo e similares usam o `yt-dlp` se estiver instalado; sem ele, o vídeo é descrito pelo título e o modelo avisa que dá para tentar. Quadros e transcrição precisam do `ffmpeg`.
+- Palavras dentro do próprio endereço não contam como pedido.
+
 ## [0.14.1] — 2026-11-08
 
 ### Melhorado — Chat lê links, inclusive de páginas com imagens e vídeos

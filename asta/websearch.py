@@ -19,6 +19,7 @@ import ssl
 import urllib.error
 import urllib.parse
 import urllib.request
+from pathlib import Path
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
@@ -473,7 +474,87 @@ def fetch_image(url: str) -> Optional[Dict[str, str]]:
     return {"media_type": ctype, "data": base64.b64encode(data).decode("ascii")}
 
 
-def read_link(url: str, want_images: bool = True) -> Dict[str, Any]:
+_IMG_WORDS = re.compile(r"imag|foto|figura|print|screenshot|captura|ilustra|diagrama|gr[áa]fico|infogr|banner|thumb|capa\b|image|picture|photo|pic\b|diagram|chart|graphic|illustration", re.I)
+_VID_WORDS = re.compile(r"v[ií]deo|assist|transcri|legenda|[áa]udio|fala|filme|clipe|trailer|aula|watch|clip\b|footage|movie|subtitle|caption|speech|audio|recording|reel", re.I)
+VIDEO_BYTES = 60_000_000
+VIDEO_MAX = 2
+_VIDEO_EXT = re.compile(r"\.(mp4|webm|mov|m4v|mkv|avi)(\?|$)", re.I)
+
+
+def link_intent(prompt: str) -> Dict[str, Any]:
+    """O que o usuário pede sobre o conteúdo dos links: olhar as imagens e/ou os vídeos (muda quantas imagens são vistas e se os vídeos são baixados e analisados)."""
+    txt = _URL_RE.sub(" ", prompt or "")
+    imgs, vids = bool(_IMG_WORDS.search(txt)), bool(_VID_WORDS.search(txt))
+    return {"images": imgs, "videos": vids, "max_images": 10 if imgs else LINK_IMAGES}
+
+
+def download_media(url: str, dest_dir: Path, max_bytes: int = VIDEO_BYTES) -> Optional[Path]:
+    """Baixa um arquivo de vídeo público para `dest_dir` (recusa o que passa de `max_bytes`); None se não deu."""
+    if not safe_url(url):
+        return None
+    try:
+        with _OPENER.open(urllib.request.Request(url, headers=_UA), timeout=20) as resp:
+            ctype = (resp.headers.get("Content-Type", "") or "").lower()
+            if ctype and not re.search(r"video|audio|octet-stream", ctype):
+                return None
+            try:
+                if int(resp.headers.get("Content-Length") or 0) > max_bytes:
+                    return None
+            except ValueError:
+                pass
+            m = _VIDEO_EXT.search(urllib.parse.urlsplit(url).path + "?")
+            ext = m.group(1).lower() if m else "mp4"
+            out = dest_dir / f"video.{ext}"
+            total = 0
+            with out.open("wb") as fh:
+                while True:
+                    chunk = resp.read(1 << 20)
+                    if not chunk:
+                        break
+                    total += len(chunk)
+                    if total > max_bytes:
+                        return None
+                    fh.write(chunk)
+    except (urllib.error.URLError, OSError, ValueError):
+        return None
+    return out if total else None
+
+
+def _platform_download(url: str, dest_dir: Path) -> Optional[Path]:
+    """YouTube, Vimeo etc.: só com o `yt-dlp` instalado (formato pequeno, até VIDEO_BYTES). Sem ele, o vídeo fica só descrito."""
+    import shutil
+    import subprocess
+    exe = shutil.which("yt-dlp")
+    if not exe or not safe_url(url):
+        return None
+    try:
+        subprocess.run([exe, "-q", "--no-playlist", "--max-filesize", str(VIDEO_BYTES), "-f", "worst[ext=mp4]/worst", "--socket-timeout", "15", "-o", str(dest_dir / "video.%(ext)s"), url],
+                       capture_output=True, timeout=120, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    found = sorted(dest_dir.glob("video.*"))
+    return found[0] if found else None
+
+
+def analyze_video(url: str, transcribe: Optional[Any] = None, max_chars: int = 8000) -> Dict[str, Any]:
+    """Baixa e analisa um vídeo: {text (transcrição), frames:[{media_type,data}], notes}. Precisa do ffmpeg para quadros e transcrição."""
+    import tempfile
+    from . import attachments as att
+    res: Dict[str, Any] = {"text": "", "frames": [], "notes": []}
+    with tempfile.TemporaryDirectory() as tmp:
+        d = Path(tmp)
+        path = download_media(url, d) if _VIDEO_EXT.search(urllib.parse.urlsplit(url).path + "?") else None
+        if path is None:
+            path = _platform_download(url, d)
+        if path is None:
+            res["notes"].append("não deu para baixar o vídeo (grande demais, protegido ou plataforma sem o yt-dlp instalado)")
+            return res
+        item = att.analyze(path, path.name, "video/mp4", max_chars=max_chars, transcribe=transcribe)
+        res["text"], res["frames"], res["notes"] = item.get("text", ""), item.get("images", []), item.get("notes", [])
+    return res
+
+
+def read_link(url: str, want_images: bool = True, max_images: int = LINK_IMAGES) -> Dict[str, Any]:
     """Lê um link colado pelo usuário: {url, title, kind, text, images:[{url,alt}], videos:[{url,title}], pics:[{media_type,data}], error}.
     `kind`: page | image | video | file. Imagem direta vira imagem para o modelo; vídeo direto/plataforma vira descrição (título, capa) — o ASTA não assiste vídeos."""
     out: Dict[str, Any] = {"url": url, "title": "", "kind": "page", "text": "", "images": [], "videos": [], "pics": [], "error": ""}
@@ -518,7 +599,7 @@ def read_link(url: str, want_images: bool = True) -> Dict[str, Any]:
     out["title"] = page["title"] or meta.get("og:title", "")
     desc = meta.get("og:description") or meta.get("description") or ""
     out["text"] = (desc + "\n" + page["text"]).strip() if desc and desc not in page["text"] else page["text"]
-    out["images"], out["videos"] = media["images"][:12], media["videos"]
+    out["images"], out["videos"] = media["images"][:max(12, max_images)], media["videos"]
     host = (urllib.parse.urlsplit(final).hostname or "").lower()
     if any(host == h or host.endswith("." + h) for h in _VIDEO_HOSTS) and not out["videos"]:
         out["videos"].append({"url": final, "title": out["title"]})
@@ -526,7 +607,7 @@ def read_link(url: str, want_images: bool = True) -> Dict[str, Any]:
         out["kind"] = "video"
     if want_images:
         for im in out["images"]:
-            if len(out["pics"]) >= LINK_IMAGES:
+            if len(out["pics"]) >= max_images:
                 break
             pic = fetch_image(im["url"])
             if pic:
@@ -534,17 +615,31 @@ def read_link(url: str, want_images: bool = True) -> Dict[str, Any]:
     return out
 
 
-def links_context(urls: List[str], want_images: bool = True, budget: int = 30000) -> Dict[str, Any]:
-    """Lê vários links: {text (bloco para o contexto), items (para a interface), images (para o modelo com visão)}."""
+def links_context(urls: List[str], want_images: bool = True, budget: int = 30000, prompt: str = "", transcribe: Optional[Any] = None) -> Dict[str, Any]:
+    """Lê vários links conforme o pedido do usuário (`prompt`): {text (bloco para o contexto), items (para a interface), images (para o modelo com visão)}.
+    Pediu imagens → mais imagens da página; pediu vídeo (ou o link é um vídeo) → baixa, tira quadros e transcreve o áudio."""
+    want = link_intent(prompt)
     parts: List[str] = []
     items: List[Dict[str, Any]] = []
     images: List[Dict[str, str]] = []
     per = max(3000, budget // max(1, len(urls)))
     for i, u in enumerate(urls[:LINK_MAX], 1):
-        r = read_link(u, want_images)
+        r = read_link(u, want_images, want["max_images"])
         host = (urllib.parse.urlsplit(u).hostname or "").removeprefix("www.")
+        analyzed = 0
+        vid_blocks: List[str] = []
+        if r["videos"] and (want["videos"] or r["kind"] == "video"):
+            for v in r["videos"][:VIDEO_MAX]:
+                a = analyze_video(v["url"], transcribe)
+                if a["text"] or a["frames"]:
+                    analyzed += 1
+                    r["pics"] += a["frames"]
+                    vid_blocks.append(f"Vídeo {v['url']}" + (f" — {v['title']}" if v["title"] else "") + (f" ({'; '.join(a['notes'])})" if a["notes"] else "")
+                                      + (f"\n{a['text']}" if a["text"] else "") + (f"\n({len(a['frames'])} quadros do vídeo seguem junto desta mensagem)" if a["frames"] else ""))
+                else:
+                    vid_blocks.append(f"Vídeo {v['url']}" + (f" — {v['title']}" if v["title"] else "") + f" (não analisado: {'; '.join(a['notes']) or 'sem quadros nem áudio'})")
         items.append({"n": i, "url": u[:500], "host": host[:80], "title": (r["title"] or host)[:140], "kind": r["kind"], "read": bool(r["text"] or r["pics"] or r["videos"]),
-                      "images": len(r["images"]), "videos": len(r["videos"]), "error": r["error"]})
+                      "images": len(r["images"]), "videos": len(r["videos"]), "analyzed_videos": analyzed, "error": r["error"]})
         lines = [f"[Link {i}] {r['title'] or host}", u]
         if r["error"]:
             lines.append(f"(não consegui abrir: {r['error']})")
@@ -553,11 +648,13 @@ def links_context(urls: List[str], want_images: bool = True, budget: int = 30000
         if r["text"]:
             lines.append(r["text"][:per])
         if r["images"] and r["kind"] != "image":
-            lines.append("Imagens da página:" + "".join(f"\n  - {im['url']}" + (f" — {im['alt']}" if im["alt"] else "") for im in r["images"][:8]))
+            lines.append("Imagens da página:" + "".join(f"\n  - {im['url']}" + (f" — {im['alt']}" if im["alt"] else "") for im in r["images"][:12]))
             if r["pics"]:
-                lines.append(f"({len(r['pics'])} delas seguem junto desta mensagem para você ver)")
-        if r["videos"]:
-            lines.append("Vídeos da página (você não assiste vídeos: use o título e o texto ao redor):" + "".join(f"\n  - {v['url']}" + (f" — {v['title']}" if v["title"] else "") for v in r["videos"][:6]))
+                lines.append(f"({len(r['pics'])} imagens/quadros seguem junto desta mensagem para você ver)")
+        if vid_blocks:
+            lines.append("Vídeos da página:\n" + "\n".join(vid_blocks))
+        elif r["videos"]:
+            lines.append("Vídeos da página (não analisados — o usuário não pediu; se precisar, diga que dá para analisar se ele pedir):" + "".join(f"\n  - {v['url']}" + (f" — {v['title']}" if v["title"] else "") for v in r["videos"][:6]))
         parts.append("\n".join(lines))
         images += r["pics"]
-    return {"text": "\n\n".join(parts)[:budget], "items": items, "images": images[:8]}
+    return {"text": "\n\n".join(parts)[:budget], "items": items, "images": images[:12]}

@@ -61,3 +61,26 @@ class Links(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class Intent(unittest.TestCase):
+    def test_intent(self):
+        self.assertTrue(ws.link_intent("descreva as imagens de https://a.com")["images"])
+        self.assertEqual(ws.link_intent("descreva as imagens de https://a.com")["max_images"], 10)
+        self.assertTrue(ws.link_intent("resuma e transcreva o vídeo https://a.com")["videos"])
+        i = ws.link_intent("o que diz https://a.com/foto-video.html ?")   # palavras dentro da URL não contam
+        self.assertFalse(i["images"] or i["videos"])
+
+    def test_video_analyzed_on_request(self):
+        page = {"url": "u", "title": "T", "kind": "page", "text": "texto", "images": [], "videos": [{"url": "https://s.com/v.mp4", "title": ""}], "pics": [], "error": ""}
+        an = {"text": "[Transcrição do áudio]\nolá mundo", "frames": [{"media_type": "image/jpeg", "data": "QQ=="}], "notes": ["duração 5s"]}
+        with mock.patch.object(ws, "read_link", return_value=dict(page, pics=[])), mock.patch.object(ws, "analyze_video", return_value=an) as av:
+            got = ws.links_context(["https://s.com/p"], prompt="transcreva o vídeo")
+            self.assertTrue(av.called)
+            self.assertIn("olá mundo", got["text"])
+            self.assertEqual(len(got["images"]), 1)
+            self.assertEqual(got["items"][0]["analyzed_videos"], 1)
+        with mock.patch.object(ws, "read_link", return_value=dict(page, pics=[])), mock.patch.object(ws, "analyze_video", return_value=an) as av:
+            got = ws.links_context(["https://s.com/p"], prompt="resuma a página")
+            self.assertFalse(av.called)
+            self.assertIn("não analisados", got["text"])
