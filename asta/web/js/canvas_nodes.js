@@ -1,5 +1,6 @@
 // Canvas: tipos de nó na interface (paleta, controles de cada nó e área de resultado) e regras de compatibilidade das portas.
 import { t } from './i18n.js';
+import { api } from './api.js';
 import { withMentions } from './canvas_mention.js';
 import { checkbox, h, icon, seg, select } from './ui.js';
 
@@ -73,6 +74,56 @@ const lab = (text, ctl) => h('div', null, h('label', { class: 'f' }, text), ctl)
 // o que já estava salvo nos canvases continua valendo no motor.
 const ratio = (w, h) => { const g = (a, b) => (b ? g(b, a % b) : a), d = g(w, h); return (w / d) + ':' + (h / d); };
 export const sizeLabel = (s) => { const [w, h] = s.split('x').map(Number); return `${w}×${h} (${ratio(w, h)})`; };
+// Seletor de modelo (v0.17.3): o que está instalado neste computador (GGUF e Hugging Face local), os sugeridos do provedor e os modelos que a nuvem oferece
+// (OpenAI, OpenRouter, xAI…). Escolher um modelo instalado também troca o provedor do nó para o que o executa.
+const LISTS = new Map();   // «instalados:tipo» e «provedor:tipo» → { t, items }
+const LOCAL_ONLY = ['demo', 'gguf_local', 'local_hf', 'voice_settings'];
+async function cachedList(key, loader, force) {
+  const hit = LISTS.get(key);
+  if (hit && !force && Date.now() - hit.t < 60000) return hit.items;
+  let items = []; try { items = await loader(); } catch (e) { items = hit ? hit.items : []; }
+  LISTS.set(key, { t: Date.now(), items }); return items;
+}
+const sizeTxt = (n) => (n >= 1 << 30 ? (n / (1 << 30)).toFixed(1) + ' GB' : n >= 1 << 20 ? Math.round(n / (1 << 20)) + ' MB' : '');
+function modelPicker(c, n, cap, eff, def) {
+  const effId = (eff && eff.id) || '';
+  const defModel = (eff && eff.models && eff.models[cap]) || '';
+  const sel = h('select', { class: 'nodrag', id: 'mp_' + n.id + cap, title: t('Modelo') });
+  const custom = h('input', { class: 'nodrag hidden', placeholder: t('nome do modelo'), value: n.params.model || '' });
+  custom.addEventListener('input', () => c.change(n, 'model', custom.value.trim()));
+  custom.addEventListener('keydown', cut);
+  const reload = h('button', { class: 'btn icon sm nodrag', type: 'button', title: t('Atualizar a lista de modelos'), onclick: () => build(true) }, icon('refresh', 13));
+  const canCloud = eff && !LOCAL_ONLY.includes(effId) && (eff.has_key || !eff.needs_key);
+  const group = (label, opts) => (opts.length ? h('optgroup', { label }, opts) : null);
+  const opt = (value, label) => h('option', { value }, label);
+  async function build(force) {
+    const [inst, cloud] = await Promise.all([cachedList('inst:' + cap, () => api('/api/media/installed?cap=' + cap).then((r) => r.items), force),
+      canCloud ? cachedList(effId + ':' + cap, () => api(`/api/media/models?provider=${encodeURIComponent(effId)}&cap=${cap}`).then((r) => r.models), force) : []]);
+    const cur = n.params.model || '', seen = new Set();
+    const mk = (list) => list.filter((m) => m && !seen.has(m) && seen.add(m));
+    const suggest = mk((eff && eff.suggest && eff.suggest[cap]) || []).map((m) => opt('M|' + m, m));
+    const cloudOpts = mk(cloud).map((m) => opt('M|' + m, m));
+    const instOpts = inst.map((m) => opt(`L|${m.provider}|${m.model}`, m.label + (m.detail ? ' · ' + m.detail : '') + (m.size ? ' · ' + sizeTxt(m.size) : '')));
+    const instKey = inst.find((m) => m.model === cur && (m.provider === (n.params.provider || '') || (!n.params.provider && m.provider === effId)));
+    const known = seen.has(cur) || !!instKey;
+    sel.replaceChildren(opt('', t('Padrão') + (defModel ? ' · ' + defModel : '')), ...(!cur || known ? [] : [opt('M|' + cur, cur + ' (' + t('atual') + ')')]),
+      group(t('Instalados neste computador'), instOpts), group(t('Sugeridos'), suggest), group(t('Disponíveis na nuvem') + (eff ? ' · ' + t(eff.label) : ''), cloudOpts.filter((o) => !suggest.some((x) => x.value === o.value))), opt('__custom', t('Outro modelo…')));
+    for (const g of [...sel.children]) if (g === null) g.remove();
+    sel.value = !cur ? '' : instKey ? `L|${instKey.provider}|${instKey.model}` : 'M|' + cur;
+    if (sel.value !== (!cur ? '' : instKey ? `L|${instKey.provider}|${instKey.model}` : 'M|' + cur)) sel.value = '';
+  }
+  sel.addEventListener('change', () => {
+    const v = sel.value;
+    if (v === '__custom') { custom.classList.remove('hidden'); custom.focus(); return; }
+    custom.classList.add('hidden');
+    if (v.startsWith('L|')) { const [, prov, model] = v.split('|'); c.change(n, 'provider', prov); c.change(n, 'model', model, true); }   // modelo instalado: troca também o provedor que o executa
+    else c.change(n, 'model', v.startsWith('M|') ? v.slice(2) : '', true);
+  });
+  build(false);
+  return h('div', { class: 'mpick' }, h('div', { class: 'row nw', style: { gap: '6px' } }, sel, reload), custom);
+}
+
+// Provedor + Modelo (+ Resolução, quando o tipo tem). v0.17.1: o antigo bloco «Avançado» saiu da tela; o que já estava salvo nos canvases continua valendo no motor.
 function providerBlock(c, n, cap, resolutionField) {
   const provs = c.prov.providers.filter((p) => p.caps.includes(cap));
   const defId = c.prov.active[cap] || 'demo';
@@ -80,14 +131,10 @@ function providerBlock(c, n, cap, resolutionField) {
   const eff = c.prov.providers.find((p) => p.id === (n.params.provider || defId)) || def;
   const sel = select([['', t('Padrão') + (def ? ' · ' + t(def.label) : '')], ...provs.map((p) => [p.id, t(p.label)])], n.params.provider || '', (v) => c.change(n, 'provider', v, true));
   sel.classList.add('nodrag');
-  const listId = 'dl_' + n.id + cap;
-  const model = txt(c, n, 'model', (eff && eff.models && eff.models[cap]) || t('modelo padrão'));
-  model.setAttribute('list', listId);
-  const dl = h('datalist', { id: listId }, ((eff && eff.suggest && eff.suggest[cap]) || []).map((m) => h('option', { value: m })));
   const warn = eff && eff.needs_key && !eff.has_key
     ? h('div', { class: 'warnk' }, icon('warn', 13), t('Sem chave de API:'), h('a', { href: '#/config', onclick: () => c.openConfig() }, t('configurar')))
     : (eff && eff.id === 'demo' ? h('div', { class: 'dim small' }, t('Demo: resultado simples, sem IA real.')) : null);
-  return [lab(t('Provedor'), sel), warn, lab(t('Modelo'), model), dl, resolutionField || null];
+  return [lab(t('Provedor'), sel), warn, lab(t('Modelo'), modelPicker(c, n, cap, eff, def)), resolutionField || null];
 }
 
 function fileThumbs(c, n) {

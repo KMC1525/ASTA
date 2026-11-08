@@ -47,6 +47,7 @@ class CanvasRoutes:
         a("GET", r"/api/media/providers", self.r_media_providers)
         a("POST", r"/api/media/test", self.r_media_test)
         a("GET", r"/api/media/models", self.r_media_models)
+        a("GET", r"/api/media/installed", self.r_media_installed)
         a("GET", r"/api/media/hub/search", self.r_hub_search)
         a("POST", r"/api/media/hub/use", self.r_hub_use)
         a("GET", r"/api/media/local/state", self.r_local_state)
@@ -272,6 +273,15 @@ class CanvasRoutes:
             req.json({"models": build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
+
+    def r_media_installed(self, req) -> None:
+        """Modelos instalados neste computador para um tipo (image, video, sound, voice, stt): GGUF baixados e modelos do Hugging Face local."""
+        from .canvas import installed
+
+        cap = text(req.query.get("cap", ["image"])[0], "image", 12)
+        if cap not in CAPS:
+            raise HttpError(400, "Tipo de modelo inválido.")
+        req.json({"cap": cap, "items": installed.installed(self.store.get_settings(), self.store.models_dir, cap)})
 
     def r_mentions(self, req, cid: str) -> None:
         """As imagens que podem ser citadas com «@» nos prompts deste canvas (apelido, nome, miniatura), da mais nova para a mais antiga; `q` filtra pelo apelido."""
