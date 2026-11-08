@@ -1,0 +1,2 @@
+### C · C++
+Follow the project's build system (`CMakeLists.txt`, `Makefile`, `meson.build`) and standard (C11/C17, C++17/20). Check every allocation and return code, free what you allocate (C) / use RAII and smart pointers (C++), never use unbounded `strcpy`/`sprintf`/`gets`, watch integer overflow and signedness, keep headers self-contained with include guards. Compile with warnings on and fix them; run the project's tests (`ctest`, `make test`) and sanitizers if the project has them.

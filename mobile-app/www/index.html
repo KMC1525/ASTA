@@ -62,7 +62,7 @@
 <script>
 // Casca nativa do ASTA mobile (v0.14): abre o ASTA que roda DENTRO do aparelho (motor Python embutido, sem computador) ou, se você preferir, guarda o endereço de um servidor ASTA
 // (no seu computador, num servidor da sua casa ou numa VPN como o Tailscale), lê o QR code de pareamento e abre o ASTA nesse endereço. Também avisa de versão nova do APP (GitHub Releases) e pergunta se quer baixar agora.
-var APP_VERSION = '0.15.12';
+var APP_VERSION = '0.16.0';
 var REPO = 'KMC1525/ASTA';
 var pt = /^pt/i.test(navigator.language || '');
 var T = pt ? {
@@ -97,7 +97,7 @@ function set(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeIt
 function origin(u) { try { var x = new URL(/^https?:\/\//i.test(u) ? u : 'http://' + u); return x.origin; } catch (e) { return ''; } }
 // ASTA neste aparelho: o app Android liga o motor (Python) e expõe AstaEngine; ?choose=1 ou o modo «computador» deixam as duas opções na tela
 var MODE = 'asta.mode', engine = window.AstaEngine, choose = /[?&]choose=1/.test(location.search);
-var gotoPc = /[?&]goto=computer/.test(location.search), backLocal = /[?&]local=1/.test(location.search);
+var gotoPc = /[?&]goto=(computer|code)/.test(location.search), gotoSection = /[?&]goto=code/.test(location.search) ? 'code' : 'computer', backLocal = /[?&]local=1/.test(location.search);
 if (backLocal) { try { localStorage.setItem(MODE, 'local'); } catch (e) { /* ok */ } }
 if (gotoPc) { if (get()) { try { localStorage.setItem(MODE, 'remote'); } catch (e) { /* ok */ } } else { choose = true; } }  // sem computador conectado: mostra a conexão em vez de abrir o ASTA do aparelho
 function mode() { try { return localStorage.getItem(MODE) || ''; } catch (e) { return ''; } }
@@ -121,7 +121,7 @@ if (engine) {
   $('local-d').title = T.localUse;
 }
 // «Executar no meu computador» (Computer Use): abre direto o ASTA do computador já conectado, na seção Computer Use
-if (gotoPc && get()) { location.href = get() + '/#/computer'; }
+if (gotoPc && get()) { location.href = get() + '/#/' + gotoSection; }   // Computer Use ou Code
 else if (gotoPc) { $('lead').textContent = T.needPc; }
 function connect(url) {
   var o = origin(url);

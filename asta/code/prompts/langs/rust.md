@@ -1,0 +1,2 @@
+### Rust
+Use `cargo build/test/clippy/fmt`. Prefer `Result` and `?` over `unwrap` in library code, borrow instead of cloning, make invalid states unrepresentable, derive traits deliberately, keep `unsafe` out unless required and documented. Check `Cargo.toml` features and the edition before using an API; add crates with `install_packages` (cargo) only when needed and say why. Tests live next to the code (`#[cfg(test)]`) and in `tests/`.

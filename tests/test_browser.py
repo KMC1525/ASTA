@@ -340,6 +340,29 @@ class BrowserTests(unittest.TestCase):
         finally:
             shutil.rmtree(home, ignore_errors=True)
 
+    def test_33_code_section_folders_colors_states_ask_mode_settings_and_phone(self):
+        from asta.providers import build_provider
+
+        mgr = self.httpd.RequestHandlerClass.app.code
+        mgr._resolve = lambda settings: (build_provider(settings, "demo", self.store_dir / "models"), {"id": "demo", "label": "Demo", "model": "demo", "demo": True})   # sem IA: as regras entendem «rode os testes»
+        try:
+            self.run_script("code_ui.js")
+        finally:
+            mgr._resolve = None
+
+    def test_34_code_team_shows_agents_plan_actions_diff_files_and_undo(self):
+        from tests.test_code_team import Scripted, act, fin, per_step, plan, step
+
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Criar a.py", files=["a.py"]), step("s2", "Criar b.py", files=["b.py"]), step("s3", "Ajustar keep.txt", "docs", files=["keep.txt"])),
+                       worker=per_step(s1=[act("write_file", path="a.py", content="A = 1\n"), fin("a.py criado")], s2=[act("write_file", path="b.py", content="B = 2\n"), fin("b.py criado")],
+                                       s3=[act("edit_file", path="keep.txt", old="antes", new="depois"), fin("keep.txt ajustado")]))
+        mgr = self.httpd.RequestHandlerClass.app.code
+        mgr._resolve = lambda settings: (llm, {"id": "fake", "label": "Fake", "model": "fake-model", "demo": False})
+        try:
+            self.run_script("code_team_ui.js")
+        finally:
+            mgr._resolve = None
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -25,6 +25,7 @@ from .jobs import HttpError, Job, JobManager  # noqa: F401  (reexportados)
 from .providers import ProviderError, build_provider, describe_presets, provider_config, resolve_provider
 from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
+from .routes_code import CodeRoutes
 from .routes_computer import ComputerRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
@@ -219,6 +220,8 @@ class App:
         self.preinstalled_routes.register()
         self.computer_routes = ComputerRoutes(self)   # cria `self.computer` (o gerenciador de tarefas)
         self.computer_routes.register()
+        self.code_routes = CodeRoutes(self)   # cria `self.code` (pastas, sessões e execuções do Code)
+        self.code_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:
@@ -270,7 +273,10 @@ class App:
             raise HttpError(400, "Seção inválida. Opções: " + ", ".join(uiprefs.RESETTABLE))
         with self.store._lock:
             current = self.store.get_settings()
+            keep = (current.get("code") or {}).get("github", {}).get("token", "") if section == "code" else ""
             current[section] = copy.deepcopy(DEFAULT_SETTINGS[section])
+            if keep:   # «restaurar padrões» nunca apaga chaves/tokens
+                current["code"]["github"]["token"] = keep
             if section == "ui":
                 current["ui"]["welcome_done"] = True  # restaurar a aparência não reabre as boas-vindas
             write_json(self.store.settings_path, current, private=True)

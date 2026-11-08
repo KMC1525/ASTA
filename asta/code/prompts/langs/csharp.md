@@ -1,0 +1,2 @@
+### C# / .NET
+Use `dotnet build/test/format`. Follow the project's nullable-reference setting, use `async/await` end to end (no `.Result`/`.Wait()`), `using` for disposables, dependency injection as in the existing code, LINQ with care for performance, records for immutable data. Tests: xUnit/NUnit/MSTest as already used. For Unity/MonoGame follow their lifecycle (`Update`, `Start`) and never block the main thread.
