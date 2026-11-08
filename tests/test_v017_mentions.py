@@ -27,8 +27,9 @@ class SlugTests(unittest.TestCase):
     def test_repeated_names_get_numbers_and_the_oldest_keeps_the_simple_slug(self):
         cv = {"assets": [asset("b", "gato.png", "2026-02"), asset("a", "Gato.jpg", "2026-01"), asset("c", "gato.png", "2026-03"), asset("v", "clip.mp4", "2026-01", "video")]}
         t = M.table(cv)
-        self.assertEqual([(m["id"], m["slug"]) for m in t], [("c", "gato-3"), ("b", "gato-2"), ("a", "gato")])      # só imagens, da mais nova para a mais antiga
-        self.assertEqual(len({m["slug"] for m in t}), 3)
+        self.assertEqual([(m["id"], m["slug"], m["kind"]) for m in t], [("c", "gato-3", "image"), ("b", "gato-2", "image"), ("v", "clip", "video"), ("a", "gato", "image")])   # imagens, vídeos e sons, do mais novo para o mais antigo
+        self.assertEqual(len({m["slug"] for m in t}), 4)
+        self.assertEqual([m["slug"] for m in M.table({"assets": [asset("x", "chuva.mp3", "1", "audio"), asset("y", "notas.txt", "2", "text")]})], ["chuva"])   # som entra; outros tipos não
 
     def test_resolve_rewrites_orders_and_reports_unknowns(self):
         cv = {"assets": [asset("a", "fnaf-1-office.png", "1"), asset("b", "foto-perfil.png", "2")]}
@@ -43,6 +44,17 @@ class SlugTests(unittest.TestCase):
         self.assertEqual(M.resolve(cv, "pelo id @b")[1], ["b"])
         many = {"assets": [asset(f"i{k}", f"img{k}.png", str(k)) for k in range(9)]}
         self.assertEqual(len(M.resolve(many, " ".join(f"@img{k}" for k in range(9)))[1]), M.MAX_REFS)
+
+
+class MediaMentionTests(unittest.TestCase):
+    def test_videos_and_sounds_are_rewritten_and_only_pictures_get_a_number(self):
+        cv = {"assets": [asset("a", "foto.png", "1"), asset("v", "Cena Praia.mp4", "2", "video"), asset("s", "chuva.mp3", "3", "audio"), asset("b", "rosto.png", "4")]}
+        out, ids, missing = M.resolve(cv, "@chuva ao fundo, @foto e depois @cena-praia, por fim @rosto")
+        self.assertEqual((ids, missing), (["s", "a", "v", "b"], []))
+        self.assertIn("chuva (audio reference)", out)
+        self.assertIn("foto (reference image 1)", out)
+        self.assertIn("cena-praia (reference image 2, a frame of the video)", out)
+        self.assertIn("rosto (reference image 3)", out)
 
 
 class EngineMentionTests(Base):
@@ -123,6 +135,63 @@ class EngineMentionTests(Base):
         self.assertTrue(any("uma só imagem inicial" in w for e in ev if e.get("type") == "node" for w in e.get("warnings", [])))
 
 
+@unittest.skipUnless(tools.have_ffmpeg(), "ffmpeg não instalado")
+class EngineMediaMentionTests(Base):
+    def setUp(self):
+        super().setUp()
+        import subprocess
+        import tempfile
+
+        self.c = self.cs.create("mm")
+        self.img = self.cs.add_asset(self.c["id"], proc.image("praia", "64x64", 1), "png", "image", name="praia.png", mime="image/png", w=64, h=64)
+        d = Path(tempfile.mkdtemp())
+        subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "testsrc=d=2:s=96x96:r=10", "-pix_fmt", "yuv420p", str(d / "v.mp4")], check=True)
+        self.vid = self.cs.add_asset(self.c["id"], (d / "v.mp4").read_bytes(), "mp4", "video", name="Cena Teste.mp4", mime="video/mp4", duration=2.0)
+        self.snd = self.cs.add_asset(self.c["id"], proc.sound_fx("chuva", 1.0, 1), "wav", "audio", name="chuva.wav", mime="audio/wav", duration=1.0)
+
+    def run_with_spy(self, nodes, edges, cls, meth):
+        self.cs.save_layout(self.c["id"], {"nodes": nodes, "edges": edges})
+        seen = {}
+        orig = getattr(cls, meth)
+
+        def spy(self_, prompt, **kw):
+            seen.update(prompt=prompt, kw=kw)
+            return orig(self_, prompt, **kw)
+
+        with mock.patch.object(cls, meth, spy):
+            _, ev = self.run_engine(self.c["id"])
+        warns = [w for e in ev if e.get("type") == "node" for w in e.get("warnings", [])]
+        return seen, warns
+
+    def test_a_mentioned_video_becomes_its_middle_frame_as_a_reference_and_a_sound_only_warns(self):
+        seen, warns = self.run_with_spy([node("image", nid="img", prompt="a @cena-teste com @chuva e @praia")], [], DemoMedia, "image")
+        self.assertEqual(len(seen["kw"]["refs"]), 2)                                    # o quadro do vídeo e a imagem
+        self.assertEqual(seen["kw"]["refs"][0][1], "image/png")
+        self.assertIn("cena-teste (reference image 1, a frame of the video)", seen["prompt"])
+        self.assertIn("chuva (audio reference)", seen["prompt"])
+        self.assertIn("praia (reference image 2)", seen["prompt"])
+        self.assertTrue(any("chuva" in w and "som" in w for w in warns), warns)
+
+    def test_mentions_in_a_connected_text_node_reach_the_image_and_change_the_hash(self):
+        nodes = [node("text", nid="t", text="o fundo é @praia"), node("image", nid="img", prompt="uma cena")]
+        seen, _ = self.run_with_spy(nodes, [edge("t", "img", "prompt")], DemoMedia, "image")
+        self.assertEqual(len(seen["kw"]["refs"]), 1)
+        self.assertIn("praia (reference image 1)", seen["prompt"])
+        eng = lambda: CanvasEngine(self.store, self.c["id"])  # noqa: E731
+        self.assertEqual(eng().stale_ids(self.cs.get(self.c["id"])), [])
+        self.cs.patch_node_params(self.c["id"], "t", {"text": "o fundo é @cena-teste"})
+        self.assertIn("img", eng().stale_ids(self.cs.get(self.c["id"])))             # citar outra mídia no Texto ligado deixa o nó desatualizado
+
+    def test_video_node_uses_a_mentioned_video_frame_as_the_start_image(self):
+        seen, warns = self.run_with_spy([node("video", nid="vid", prompt="continua @cena-teste", duration=1)], [], DemoMedia, "video")
+        self.assertIsNotNone(seen["kw"]["image"])
+        self.assertEqual(seen["kw"]["image"][1], "image/png")
+        self.assertFalse(any("uma só imagem" in w for w in warns))
+        seen, warns = self.run_with_spy([node("video", nid="vid", prompt="som de @chuva", duration=1)], [], DemoMedia, "video")
+        self.assertIsNone(seen["kw"]["image"])
+        self.assertTrue(any("chuva" in w for w in warns))
+
+
 class MentionApi(ServerCase):
     def test_route_lists_images_with_filter_and_404(self):
         cv = self.store.canvases.create("M")
@@ -130,7 +199,9 @@ class MentionApi(ServerCase):
         self.store.canvases.add_asset(cv["id"], proc.image("b", "32x32", 2), "png", "image", name="fnaf-office.png", mime="image/png")
         s, r = self.c.json("GET", f"/api/canvases/{cv['id']}/mentions")
         self.assertEqual((s, sorted(i["slug"] for i in r["items"])), (200, ["fnaf-office", "foto-perfil"]))
-        self.assertTrue(all(i["url"].startswith(f"/api/canvases/{cv['id']}/assets/") for i in r["items"]))
+        self.assertTrue(all(i["url"].startswith(f"/api/canvases/{cv['id']}/assets/") and i["kind"] == "image" for i in r["items"]))
+        self.store.canvases.add_asset(cv["id"], proc.sound_fx("chuva", 1.0, 1), "wav", "audio", name="Chuva Forte.wav", mime="audio/wav")
+        self.assertIn(("chuva-forte", "audio"), [(i["slug"], i["kind"]) for i in self.c.json("GET", f"/api/canvases/{cv['id']}/mentions")[1]["items"]])
         self.assertEqual([i["slug"] for i in self.c.json("GET", f"/api/canvases/{cv['id']}/mentions?q=fnaf")[1]["items"]], ["fnaf-office"])
         self.assertEqual(self.c.json("GET", "/api/canvases/nao_existe/mentions")[0], 404)
 

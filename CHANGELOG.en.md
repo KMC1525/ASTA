@@ -7,6 +7,27 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.4] — 2026-11-08
+
+### Added — «@» mentions also in Text nodes and for videos and sounds
+- **`@` works in the Text and AI text nodes** (`canvas_nodes.js`): typing `@` opens the same list and chips as the Image and Video prompts. Since the text of a **Text node connected** to an Image or Video node goes into its prompt, a mention written there **counts as if typed in the node itself**; changing the mention makes the Image/Video node outdated (the hash now looks at the connected text, not only the node's prompt). The **AI text** node is told to keep the `@names` exactly as they are in its output.
+- **Videos and sounds can be mentioned** (`asta/canvas/mentions.py`): the list and chips show the video thumbnail (first frame) and a sound icon; the nickname follows the same rule (`Cena Praia.mp4` → `@cena-praia`, `chuva.mp3` → `@chuva`, repeated names with `-2`…, one nickname space for the three kinds). When generating:
+  - **image** → numbered reference (as before);
+  - **video** → goes in as a reference through its **middle frame** and the prompt becomes `cena-praia (reference image N, a frame of the video)`; in a **Video** node, the first mentioned image or frame becomes the **start image**;
+  - **sound** → not an image: stays in the prompt as `chuva (audio reference)` and the node **warns** that image/video models do not use audio as a reference.
+  Only images and frames get a reference number. The route `GET /api/canvases/{id}/mentions` now also returns each item's `kind`.
+- Tests: `MediaMentionTests` and `EngineMediaMentionTests` in `tests/test_v017_mentions.py` and new checks in `tests/browser/canvas_mention_ui.js`.
+
+### Changed
+- Android app and screens version bumped to 0.17.4 (the Rust core did not change).
+
+### Notes (honest limits)
+- No provider/model in ASTA today uses **audio as a reference** for image or video, nor a **whole video** as a reference: sound only appears in the text (with a warning) and the video goes in through **one frame** (the middle one).
+- `@` is not in the **Sound** and **Voice** nodes, in the Chat box or in the Studio; in a Text node connected to them the mention stays as text.
+- A Video node uses only **one** start image.
+- How much a reference guides the result **depends on the model** (Demo accepts references but only varies the result).
+- `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, the i18n JS check and the Canvas browser tests ran; the full suite was **not run again**.
+
 ## [0.17.3] — 2026-11-08
 
 ### Added — model picker on the Canvas nodes

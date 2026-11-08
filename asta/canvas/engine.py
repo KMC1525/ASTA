@@ -282,7 +282,8 @@ class CanvasEngine:
                 ports[pid_] = items
             data["in"] = ports
         if t in ("image", "video"):   # as imagens citadas com @ no prompt entram no hash: citar outra (ou trocar o arquivo) deixa o nó desatualizado
-            data["mentions"] = mentions_mod.ids_in(canvas, node["params"].get("prompt", ""))
+            txt = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], node["params"].get("prompt", "").strip()) if x)   # o @ vale também no texto de um nó Texto ligado
+            data["mentions"] = mentions_mod.ids_in(canvas, txt)
         if t in ("image", "video", "sound", "voice", "llm", "text_refine"):
             data["style"] = self.styles_for(canvas, node, need_digest=False).signature()
             data["style_ids"] = self.style_ids(canvas, node)
@@ -456,9 +457,11 @@ class CanvasEngine:
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
             if not base:
                 raise ValueError("O nó Imagem precisa de um prompt: escreva nele ou ligue um nó de texto.")
-            base, ment_ids, missing = mentions_mod.resolve(canvas, base)   # «@imagem» no prompt: essas imagens viram as primeiras referências
-            warnings += [f"@{m}: não há imagem com esse apelido neste canvas — ficou como texto." for m in missing]
-            refs = (self._image_bytes(canvas, ment_ids) + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]
+            base, ment_ids, missing = mentions_mod.resolve(canvas, base)   # «@mídia» no prompt (ou num Texto ligado): imagens e quadros de vídeo viram as primeiras referências
+            warnings += [f"@{m}: não há mídia com esse apelido neste canvas — ficou como texto." for m in missing]
+            ment_refs, ment_warn = self._mention_media(canvas, ment_ids, "imagem")
+            warnings += ment_warn
+            refs = (ment_refs + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]
             if p["mode"] == "edit" and not refs:
                 raise ValueError("No modo Editar, ligue uma imagem na entrada \"Referências\".")
             prompt = base + (f"\n\nStyle: {style.text}" if style.text else "")
@@ -475,9 +478,11 @@ class CanvasEngine:
         if t == "video":
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
             base, ment_ids, missing = mentions_mod.resolve(canvas, base)
-            warnings += [f"@{m}: não há imagem com esse apelido neste canvas — ficou como texto." for m in missing]
-            first = next(iter(self.image_inputs(canvas, node, "image")), None) or next(iter(self._image_bytes(canvas, ment_ids)), None)   # a 1ª imagem citada vira a imagem inicial (se nenhuma está ligada)
-            if len(ment_ids) > 1:
+            warnings += [f"@{m}: não há mídia com esse apelido neste canvas — ficou como texto." for m in missing]
+            ment_refs, ment_warn = self._mention_media(canvas, ment_ids, "vídeo")
+            warnings += ment_warn
+            first = next(iter(self.image_inputs(canvas, node, "image")), None) or next(iter(ment_refs), None)   # a 1ª imagem (ou quadro de vídeo) citada vira a imagem inicial, se nenhuma está ligada
+            if len(ment_refs) > 1:
                 warnings.append("O vídeo usa uma só imagem inicial: só a primeira citada com @ virou imagem; as outras valem como texto.")
             if not base and not first:
                 raise ValueError("O nó Vídeo precisa de um prompt (ou de uma imagem inicial ligada).")
@@ -500,15 +505,33 @@ class CanvasEngine:
             return {"assets": [self._save(node, m, "audio", self._title(node, "Voz"), speech, pid, model)], "text": "", "warnings": warnings}
         raise ValueError(f"Tipo de nó sem gerador: {t}")
 
-    def _image_bytes(self, canvas: Dict[str, Any], ids: List[str]) -> List[Tuple[bytes, str]]:
+    def _video_frame(self, a: Dict[str, Any]) -> Optional[Tuple[bytes, str]]:
+        """O quadro do meio de um vídeo do canvas como (png, mime)."""
+        src = self.cs.asset_path(self.cid, a["file"])
+        ff = shutil.which("ffmpeg")
+        if not (ff and src):
+            return None
+        with tempfile.TemporaryDirectory() as td:
+            dst = Path(td) / "f.png"
+            r = subprocess.run([ff, "-y", "-loglevel", "error", "-ss", f"{(a.get('duration') or 2.0) / 2:.2f}", "-i", str(src), "-frames:v", "1", str(dst)], capture_output=True, timeout=120)
+            return (dst.read_bytes(), "image/png") if r.returncode == 0 and dst.exists() else None
+
+    def _mention_media(self, canvas: Dict[str, Any], ids: List[str], target: str) -> Tuple[List[Tuple[bytes, str]], List[str]]:
+        """As mídias citadas com @ como imagens de referência: imagem → ela mesma; vídeo → o quadro do meio; som → nada (só texto), com aviso. `target`: «imagem» ou «vídeo» (para a mensagem)."""
         assets = self._assets(canvas)
         out: List[Tuple[bytes, str]] = []
+        warn: List[str] = []
         for i in ids:
             a = assets.get(i)
-            b = self._asset_bytes(a) if a else None
-            if a and b:
-                out.append((b, a["mime"]))
-        return out
+            if not a:
+                continue
+            if a["kind"] == "audio":
+                warn.append(f"«{a.get('name') or i}» é um som: modelos de {target} não usam áudio como referência — ficou só como texto.")
+                continue
+            got = (self._asset_bytes(a), a["mime"]) if a["kind"] == "image" else self._video_frame(a)
+            if got and got[0]:
+                out.append(got)
+        return out, warn
 
     def image_inputs(self, canvas: Dict[str, Any], node: Dict[str, Any], port: str) -> List[Tuple[bytes, str]]:
         """Imagens de uma porta como (bytes, mime). Um vídeo ligado numa porta de imagem entra pelo quadro do meio."""
@@ -519,14 +542,9 @@ class CanvasEngine:
                 if b:
                     out.append((b, a["mime"]))
             elif a["kind"] == "video":
-                with tempfile.TemporaryDirectory() as td:
-                    dst = Path(td) / "f.png"
-                    src = self.cs.asset_path(self.cid, a["file"])
-                    ff = shutil.which("ffmpeg")
-                    if ff and src:
-                        r = subprocess.run([ff, "-y", "-loglevel", "error", "-ss", f"{(a.get('duration') or 2.0) / 2:.2f}", "-i", str(src), "-frames:v", "1", str(dst)], capture_output=True, timeout=120)
-                        if r.returncode == 0 and dst.exists():
-                            out.append((dst.read_bytes(), "image/png"))
+                fr = self._video_frame(a)
+                if fr:
+                    out.append(fr)
         return out
 
     def _transcribe(self, canvas: Dict[str, Any], node: Dict[str, Any]) -> Dict[str, Any]:
@@ -634,7 +652,7 @@ STYLE_SYSTEM = (
     "Descreva em 3 a 6 frases o estilo COMUM a eles: para imagem/vídeo, paleta de cores, traço/textura, iluminação, composição e clima; para áudio, timbre, ritmo e atmosfera. "
     "Seja concreto e útil como complemento de um prompt de geração. Não cite nomes de arquivos. Responda só com a descrição, no idioma predominante dos textos (padrão: português)."
 )
-LLM_SYSTEM = "Você é um assistente de escrita criativa dentro de um fluxo de produção de mídia. Cumpra a instrução usando o texto de entrada. Responda APENAS com o texto final, sem explicações nem aspas."
+LLM_SYSTEM = "Você é um assistente de escrita criativa dentro de um fluxo de produção de mídia. Cumpra a instrução usando o texto de entrada. Se houver menções como @nome (apelidos de imagens, vídeos ou sons do projeto), mantenha-as exatamente como estão no texto final. Responda APENAS com o texto final, sem explicações nem aspas."
 
 
 def _style_refs_ok(pid: str, model: str) -> bool:

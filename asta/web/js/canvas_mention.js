@@ -1,7 +1,7 @@
 import { t } from './i18n.js';
-import { h } from './ui.js';
+import { h, icon } from './ui.js';
 
-// Menções com «@» nos prompts dos nós Imagem e Vídeo: digite @ e escolha uma imagem do canvas; ela vira referência da geração (veja asta/canvas/mentions.py).
+// Menções com «@» nos prompts (nós Texto, Texto IA, Imagem e Vídeo): digite @ e escolha uma imagem, vídeo ou som do canvas; imagens e quadros de vídeo viram referência da geração (veja asta/canvas/mentions.py).
 const TOKEN = /(?:^|[^\w@.])@([A-Za-z0-9_-]*)$/;          // «@ap» logo antes do cursor
 const MENTION = /(?<![\w@.])@([A-Za-z0-9][A-Za-z0-9_-]*)/g;  // mesma regra do servidor
 
@@ -9,6 +9,9 @@ const MENTION = /(?<![\w@.])@([A-Za-z0-9][A-Za-z0-9_-]*)/g;  // mesma regra do s
 export function withMentions(ta, c) {
   let items = [], open = false, sel = 0, range = null, loaded = 0, seq = 0;   // seq: descarta respostas atrasadas (fechou ou digitou de novo enquanto a lista carregava)
   const pop = h('div', { class: 'mpop nodrag hidden', role: 'listbox' }), chips = h('div', { class: 'mchips' });
+  // miniatura por tipo: imagem → ela mesma; vídeo → o primeiro quadro; som → ícone
+  const thumb = (it) => (it.kind === 'video' ? h('video', { class: 'mth', src: it.url + '#t=0.5', preload: 'metadata', muted: true, playsinline: true })
+    : it.kind === 'audio' ? h('i', { class: 'mth aud', title: t('Som') }, icon('audio', 14)) : h('i', { class: 'mth', style: { backgroundImage: `url("${it.url}")` } }));
   const wrap = h('div', { class: 'mwrap' }, ta, pop, chips);
   const load = async (force) => {
     if (!force && Date.now() - loaded < 4000) return items;
@@ -20,14 +23,14 @@ export function withMentions(ta, c) {
     const toks = [...new Set([...ta.value.matchAll(MENTION)].map((m) => m[1]))];
     chips.replaceChildren(...toks.map((tok) => {
       const it = items.find((x) => x.slug === tok.toLowerCase() || x.id === tok);
-      return it ? h('span', { class: 'mchip', title: it.name }, h('i', { style: { backgroundImage: `url("${it.url}")` } }), '@' + it.slug)
+      return it ? h('span', { class: 'mchip ' + (it.kind || 'image'), title: it.name }, thumb(it), '@' + it.slug)
         : h('span', { class: 'mchip bad', title: t('Não há imagem com esse apelido neste canvas') }, '@' + tok);
     }));
   }
   function paintPop(list) {
     pop.replaceChildren(...(list.length ? list.map((it, i) => h('div', { class: 'mi' + (i === sel ? ' on' : ''), role: 'option', dataset: { slug: it.slug },
-      onmousedown: (e) => { e.preventDefault(); pick(it); } }, h('i', { style: { backgroundImage: `url("${it.url}")` } }), h('b', null, '@' + it.slug), h('span', { class: 'muted small' }, it.name)))
-      : [h('div', { class: 'mi none' }, t('Nenhuma imagem neste canvas. Envie ou gere uma imagem e cite com @.'))]));
+      onmousedown: (e) => { e.preventDefault(); pick(it); } }, thumb(it), h('b', null, '@' + it.slug), h('span', { class: 'muted small' }, (it.kind === 'video' ? t('vídeo') : it.kind === 'audio' ? t('som') : t('imagem')) + ' · ' + it.name)))
+      : [h('div', { class: 'mi none' }, t('Nenhuma mídia neste canvas. Envie ou gere uma imagem, vídeo ou som e cite com @.'))]));
     pop.classList.remove('hidden'); open = true;
   }
   const filtered = () => items.filter((x) => !range || x.slug.includes(range.q.toLowerCase())).slice(0, 8);
