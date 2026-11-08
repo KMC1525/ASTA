@@ -5,6 +5,23 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.3] — 2026-11-08
+
+### Adicionado — seletor de modelos nos nós do Canvas
+- **O campo «Modelo» dos nós Imagem, Vídeo, Som, Voz e Transcrever virou um seletor** (`canvas_nodes.js`, `GET /api/media/installed`, `asta/canvas/installed.py`) com grupos: **Instalados neste computador** (GGUF de imagem e vídeo baixados em `models/image` e `models/video`, com quantização e tamanho, e os modelos do **Hugging Face local** que o ASTA baixou — reconhecidos pelo marcador de precisão —, com a precisão), **Sugeridos** (as sugestões do provedor) e **Disponíveis na nuvem** (a lista que o provedor escolhido oferece, via `/api/media/models`: OpenAI/ChatGPT, OpenRouter, xAI/Grok, Google, ElevenLabs, Replicate, Hugging Face Inference…). A lista da nuvem só é pedida quando o provedor tem chave (ou é um servidor local); o botão ↻ atualiza (as listas ficam em memória por 1 minuto).
+- **Escolher um modelo instalado também troca o provedor do nó** para o que o executa (GGUF local ou Hugging Face local); escolher um modelo da nuvem ou sugerido só troca o modelo e mantém o provedor. *Padrão* limpa a escolha e *Outro modelo…* abre um campo para digitar qualquer nome (como era antes).
+- Testes: `tests/test_v017_models.py` (rota com GGUF e cache falso do Hugging Face) e o teste de navegador `canvas_model_picker_ui.js`.
+
+### Alterado
+- As imagens citadas com `@` agora têm ordem estável (mais antiga primeiro, e no mesmo segundo vale a ordem de entrada no canvas): antes o desempate usava o id sorteado, então a ordem da lista e o `-2`/`-3` de nomes repetidos podiam variar.
+- Versão do app Android e das telas atualizada para 0.17.3 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- Modelos do **Hugging Face local** só aparecem se foram baixados **pelo ASTA** (o cache de outros programas não é lido), e o ASTA não sabe para qual tipo cada um serve: os que não são os sugeridos/escolhidos para o tipo aparecem em todos os tipos compatíveis com o provedor.
+- A lista da nuvem depende da API do provedor e da chave; sem chave, ou sem rede, só aparecem os sugeridos (e o modelo atual do nó continua selecionável). Ela mostra o que o provedor oferece, não só o que serve ao tipo: provedores como OpenRouter listam muitos modelos.
+- Modelos de **texto** (a conversa e o nó «Texto IA») não ganharam o seletor: ele vale para os nós de mídia.
+- A suíte completa **não foi rodada de novo**: rodaram `test_v017_models`, `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, o JS de i18n e os testes de navegador do Canvas.
+
 ## [0.17.2] — 2026-11-08
 
 ### Adicionado — comando «@» para citar uma imagem específica nos prompts

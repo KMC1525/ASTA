@@ -2292,4 +2292,11 @@ export default {
   "O que mudar na imagem ligada em “Referências” (ou citada com @)?": "What to change in the image connected to “References” (or mentioned with @)?",
   "Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem do canvas.": "Describe the image (or connect a text node). Type @ to mention an image from the canvas.",
   "Descreva o vídeo (ou ligue um texto e/ou uma imagem inicial). Digite @ para citar a imagem inicial.": "Describe the video (or connect a text and/or a start image). Type @ to mention the start image.",
+  "nome do modelo": "model name",
+  "Atualizar a lista de modelos": "Refresh the model list",
+  "atual": "current",
+  "Instalados neste computador": "Installed on this computer",
+  "Sugeridos": "Suggested",
+  "Disponíveis na nuvem": "Available in the cloud",
+  "Outro modelo…": "Other model…",
 };

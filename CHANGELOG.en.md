@@ -7,6 +7,23 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.3] — 2026-11-08
+
+### Added — model picker on the Canvas nodes
+- **The «Model» field of the Image, Video, Sound, Voice and Transcribe nodes became a picker** (`canvas_nodes.js`, `GET /api/media/installed`, `asta/canvas/installed.py`) with groups: **Installed on this computer** (GGUF image and video files downloaded to `models/image` and `models/video`, with quantization and size, and the **local Hugging Face** models ASTA downloaded — recognised by the precision marker —, with the precision), **Suggested** (the provider's suggestions) and **Available in the cloud** (the list the chosen provider offers, through `/api/media/models`: OpenAI/ChatGPT, OpenRouter, xAI/Grok, Google, ElevenLabs, Replicate, Hugging Face Inference…). The cloud list is only requested when the provider has a key (or is a local server); the ↻ button refreshes (lists are kept in memory for 1 minute).
+- **Choosing an installed model also switches the node's provider** to the one that runs it (local GGUF or local Hugging Face); choosing a cloud or suggested model only changes the model and keeps the provider. *Default* clears the choice and *Other model…* opens a field to type any name (as before).
+- Tests: `tests/test_v017_models.py` (route with GGUF files and a fake Hugging Face cache) and the browser test `canvas_model_picker_ui.js`.
+
+### Changed
+- Images mentioned with `@` now have a stable order (oldest first, and within the same second the order they entered the canvas): before, the tie-break used the random id, so the list order and the `-2`/`-3` of repeated names could vary.
+- Android app and screens version bumped to 0.17.3 (the Rust core did not change).
+
+### Notes (honest limits)
+- **Local Hugging Face** models only show up if they were downloaded **by ASTA** (other programs' caches are not read), and ASTA does not know which type each one serves: those that are not the suggested/chosen ones for the type show under every type the provider supports.
+- The cloud list depends on the provider's API and key; without a key, or offline, only the suggestions show (and the node's current model stays selectable). It shows what the provider offers, not only what fits the type: providers like OpenRouter list many models.
+- **Text** models (the chat and the «AI text» node) did not get the picker: it applies to the media nodes.
+- The full suite was **not run again**: `test_v017_models`, `test_v017_mentions`, `test_v017_canvas`, `test_canvas`, `test_canvas_nodes`, the i18n JS check and the Canvas browser tests ran.
+
 ## [0.17.2] — 2026-11-08
 
 ### Added — the «@» command to mention a specific image in prompts

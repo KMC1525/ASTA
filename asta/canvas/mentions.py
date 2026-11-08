@@ -23,7 +23,8 @@ def slug(name: str) -> str:
 
 def table(canvas: Dict[str, Any]) -> List[Dict[str, Any]]:
     """As imagens do canvas com o apelido único de cada uma, da mais nova para a mais antiga."""
-    imgs = sorted((a for a in canvas.get("assets", []) if a.get("kind") == "image"), key=lambda a: (a.get("created", ""), a.get("id", "")))
+    # mais antiga primeiro; no mesmo segundo vale a ordem em que entraram no canvas (o id é sorteado e não serve de desempate)
+    imgs = [a for _, a in sorted(((i, a) for i, a in enumerate(canvas.get("assets", [])) if a.get("kind") == "image"), key=lambda x: (x[1].get("created", ""), x[0]))]
     seen: Dict[str, int] = {}
     out: List[Dict[str, Any]] = []
     for a in imgs:
