@@ -910,6 +910,7 @@ class EngineTests(TmpCase):
     def result(self, cid, nid):
         return next(n for n in self.cs.get(cid)["nodes"] if n["id"] == nid)["result"]
 
+    @unittest.skipUnless(HAVE_FFMPEG, "ffmpeg não instalado")  # o modelo «scene» tem nós de vídeo/editor
     def test_template_runs_end_to_end_and_uses_the_cache(self):
         c = self.cs.create("t", "scene", "Uma faroleira acende o farol")
         stats, ev = self.run_engine(c["id"])
@@ -1097,6 +1098,7 @@ class EngineTests(TmpCase):
         self.assertEqual((stats["ran"], stats["cached"]), (2, 0))
         self.assertNotEqual((self.result(c["id"], "i")["assets"], self.result(c["id"], "s")["assets"]), before)
 
+    @unittest.skipUnless(HAVE_FFMPEG, "ffmpeg não instalado")  # o modelo «scene» tem nós de vídeo/editor
     def test_cancellation_leaves_nodes_idle(self):
         c = self.cs.create("t", "scene")
         calls = {"n": 0}

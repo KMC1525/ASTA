@@ -405,9 +405,12 @@ class AutoUpdateOnLaunchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as t:
             res, inst, ex = self.go(Path(t), "99.0.0")
             self.assertTrue(inst.called)
-            args = ex.call_args[0]
-            self.assertEqual(args[1][1:], ["-m", "asta", "--no-browser"])
-            self.assertEqual(args[2]["ASTA_NO_UPDATE"], "1")  # sem laço de atualização
+            if cli._windows():  # no Windows o instalador continua numa janela nova e o ASTA encerra (sem reabrir por execve)
+                self.assertEqual((res, ex.called), (0, False))
+            else:
+                args = ex.call_args[0]
+                self.assertEqual(args[1][1:], ["-m", "asta", "--no-browser"])
+                self.assertEqual(args[2]["ASTA_NO_UPDATE"], "1")  # sem laço de atualização
             self.assertTrue((Path(t) / ".last-update").exists())
 
     def test_up_to_date_and_recently_checked_just_opens(self):
