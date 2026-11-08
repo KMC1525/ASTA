@@ -11,7 +11,7 @@ run('chat_settings', async ({ open, api, check, base }) => {
   // ---- aba Chat nas configurações
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForTimeout(600);
   const tabNames = await page.locator('.tabs button').allInnerTexts();
-  check('config:aba-Chat-existe', tabNames.includes('Chat') && tabNames.length === 18);
+  check('config:aba-Chat-existe', tabNames.includes('Chat') && tabNames.length === 19);
   await page.locator('.tabs button', { hasText: /^Chat$/ }).click(); await page.waitForSelector('#cc-max_tokens', { timeout: 8000 });
   check('config:campos-do-chat', (await page.locator('#cc-max_tokens').count()) === 1 && (await page.locator('#cc-context_tokens').count()) === 1 && (await page.locator('.seg button', { hasText: 'Ultra' }).count()) === 1 && (await page.locator('.seg button', { hasText: 'Extra high' }).count()) === 1);
   await page.locator('.card:has(#cc-max_tokens) .chip', { hasText: /^8K tokens$/ }).click();

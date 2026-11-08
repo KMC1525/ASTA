@@ -1,0 +1,2 @@
+### Java · Kotlin · Scala (JVM)
+Follow the build tool (`pom.xml` → `mvn -q test`, `build.gradle(.kts)` → `gradle test`, `build.sbt`). Use the project's Java/Kotlin version and style, immutable types where possible, try-with-resources, `Optional` instead of nulls, JUnit for tests, constructor injection in Spring. Never catch and swallow `Exception`; log with the project's logger. Android: respect lifecycle, no work on the main thread, update Gradle/manifest consistently.

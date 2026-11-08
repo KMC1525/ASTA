@@ -35,7 +35,7 @@ export function installShell(app) {
 
   const host = {
     items() {
-      const nav = NAV.map(([id, label, ic], i) => ({ group: t('Ir para'), label: t(label), icon: ic, keys: i < 10 ? 'Alt+' + ((i + 1) % 10) : '', rank: 1, run: () => { state.ctx = {}; location.hash = '#/' + id; } }));
+      const nav = NAV.map(([id, label, ic], i) => ({ group: t('Ir para'), label: t(label), icon: ic, keys: i < 9 ? 'Alt+' + (i + 1) : (i === NAV.length - 1 ? 'Alt+0' : ''), rank: 1, run: () => { state.ctx = {}; location.hash = '#/' + id; } }));
       const tabs = CONFIG_TABS.map(([id, label]) => ({ group: t('Configuração'), label: t('Configuração') + ' → ' + t(label), icon: 'config', run: () => go('config', { tab: id }) }));
       const actions = [
         { group: t('Ações'), label: t('Novo avatar'), icon: 'plus', run: () => { location.hash = '#/avatars/edit/new'; } },
@@ -69,7 +69,7 @@ export function installShell(app) {
     if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.code === 'KeyJ') { e.preventDefault(); newChatTab(); return; }   // Ctrl+J: nova aba de chat
     if (e.altKey && !e.ctrlKey && !e.metaKey) {
       const m = /^Digit([0-9])$/.exec(e.code);
-      const at = m ? (m[1] === '0' ? 9 : Number(m[1]) - 1) : -1;   // Alt+1…9 = telas 1…9; Alt+0 = a 10ª
+      const at = m ? (m[1] === '0' ? NAV.length - 1 : Number(m[1]) - 1) : -1;   // Alt+1…9 = telas 1…9; Alt+0 = a última (Configuração)
       if (m && NAV[at]) { e.preventDefault(); state.ctx = {}; location.hash = '#/' + NAV[at][0]; }
       else if (e.code === 'KeyB') { e.preventDefault(); toggleSidebar(); }
       else if (e.code === 'KeyT') { e.preventDefault(); toggleTheme(); }

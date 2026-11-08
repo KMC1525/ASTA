@@ -44,7 +44,7 @@ asta = "asta.cli:main"
 include = ["asta*"]
 
 [tool.setuptools.package-data]
-asta = ["web/**/*", "runtime/**/*", "runtime2d/**/*", "native/Cargo.toml", "native/Cargo.lock", "native/src/*.rs", "computer/prompts/*.md", "computer/prompts/*/*.md"]
+asta = ["web/**/*", "runtime/**/*", "runtime2d/**/*", "native/Cargo.toml", "native/Cargo.lock", "native/src/*.rs", "computer/prompts/*.md", "computer/prompts/*/*.md", "code/prompts/*.md", "code/prompts/*/*.md"]
 
 [tool.setuptools.dynamic]
 version = { attr = "asta.__version__" }

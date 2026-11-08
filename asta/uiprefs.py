@@ -15,8 +15,8 @@ MOTIONS = ("auto", "reduce", "full")  # auto = respeita o sistema; reduce = sem 
 FONTS = ("system", "serif", "mono")
 CHAT_SIZES = ("small", "medium", "large")
 SEND_KEYS = ("enter", "ctrl_enter")  # enter: Enter envia (Shift+Enter quebra a linha) · ctrl_enter: Ctrl/⌘+Enter envia (Enter quebra a linha)
-START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "studio", "computer", "library")
-HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "computer", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
+START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "studio", "computer", "code", "library")
+HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "computer", "code", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
 LANGS = ("auto", "pt-BR", "en")
 
 DEFAULT_UI: Dict[str, Any] = {
@@ -78,14 +78,18 @@ def normalize_ui(data: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- exportar / importar configurações (sem segredos)
 
 EXPORT_SCHEMA = "asta.settings.v1"
-EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "performance", "active")
-RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
+EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "performance", "active")
+RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
 _PROVIDER_FIELDS = ("base_url", "model", "vision", "n_ctx")  # nunca `api_key`
 
 
 def export_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
     """Configurações para levar a outro computador: as preferências e o que dá para reaproveitar. **Nunca** chaves de API nem tokens."""
     out: Dict[str, Any] = {k: settings[k] for k in EXPORT_SECTIONS if k in settings}
+    if isinstance(out.get("code"), dict):   # o token do GitHub nunca sai do computador
+        code = dict(out["code"])
+        code["github"] = {k: v for k, v in (code.get("github") or {}).items() if k != "token"} if isinstance(code.get("github"), dict) else {}
+        out["code"] = code
     out["providers"] = {pid: {k: v for k, v in (cfg or {}).items() if k in _PROVIDER_FIELDS and v not in (None, "")}
                         for pid, cfg in (settings.get("providers") or {}).items() if isinstance(cfg, dict)}
     voice = settings.get("voice") or {}
@@ -104,6 +108,11 @@ def import_patch(payload: Any) -> Dict[str, Any]:
             patch[key] = src[key]
     if isinstance(src.get("computer"), dict):   # um arquivo importado nunca liga o Computer Use, nem troca o modo, nem tira as perguntas do modo Ask: isso só quem está na frente do computador decide
         patch["computer"] = {k: v for k, v in src["computer"].items() if k in ("max_parallel", "max_steps", "team", "revisions", "app_wait")}
+    if isinstance(src.get("code"), dict):   # idem Computer Use: um arquivo importado nunca troca o modo (Full Access), as perguntas do Ask, o token do GitHub nem a publicação direta na main
+        c = {k: v for k, v in src["code"].items() if k in ("effort", "agents", "max_sessions", "run_timeout", "max_download_mb", "branch_prefix", "clone_depth", "github_mode", "editor", "provider")}
+        if isinstance(src["code"].get("finalize"), dict):
+            c["finalize"] = {"docs": src["code"]["finalize"].get("docs") is True}
+        patch["code"] = c
     if src.get("language") in LANGS:
         patch["language"] = src["language"]
     if isinstance(src.get("ui"), dict):

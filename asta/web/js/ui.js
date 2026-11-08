@@ -87,6 +87,14 @@ const ICONS = {
   eye: '<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', lock: '<rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/>',
   computer: '<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/><path d="m9.5 7.5 5 2.2-2 .7-.7 2-2.3-4.9Z"/>',
   wand: '<path d="m4 20 11-11M14 6l1-2 1 2 2 1-2 1-1 2-1-2-2-1 2-1ZM18 14l.7-1.4L20 12l-1.3-.6L18 10l-.7 1.4L16 12l1.3.6L18 14Z"/>',
+  code: '<path d="m8 8-5 4 5 4M16 8l5 4-5 4M14 5l-4 14"/>',
+  branch: '<circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="8" r="2"/><path d="M6 7v10M18 10c0 4-6 3-12 7"/>',
+  foldero: '<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v1H3Z"/><path d="M3 10h18l-1.6 8a2 2 0 0 1-2 1.6H6.6a2 2 0 0 1-2-1.6Z"/>',
+  chevd: '<path d="m6 9 6 6 6-6"/>',
+  chevr: '<path d="m9 6 6 6-6 6"/>',
+  github: '<path d="M9 19c-4 1.3-4-2-6-2.5m12 5v-3.5c0-1 .1-1.5-.5-2.2 2.800-.3 5.500-1.400 5.500-6a4.700 4.700 0 0 0-1.300-3.300 4.400 4.400 0 0 0-.1-3.300s-1.100-.3-3.500 1.300a12 12 0 0 0-6.200 0C6.500 2.800 5.400 3.100 5.400 3.100a4.400 4.400 0 0 0-.1 3.300A4.700 4.700 0 0 0 4 9.700c0 4.600 2.700 5.700 5.500 6-.6.600-.6 1.200-.5 2.200V22"/>',
+  layers: '<path d="m12 3 9 5-9 5-9-5Z"/><path d="m3 13 9 5 9-5"/>',
+  bolt: '<path d="M13 3 5 14h6l-1 7 8-11h-6Z"/>',
 };
 export function icon(name, size = 18) {
   const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');

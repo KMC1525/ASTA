@@ -109,6 +109,11 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "computer": {"enabled": False, "mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
                  "max_parallel": 8, "max_steps": 40, "team": "full",  # team: full (Planejador → Operador → Revisor → Relator) | fast (só o Operador; para modelos locais lentos)
                  "revisions": 1, "ask_for": ["write", "delete", "run", "input", "screen"], "game_dirs": [], "app_wait": 2.0},
+    # Code (vibe coding com equipes de agentes): ver code/manager.py (normalize_config). O token do GitHub é segredo (SECRET_PATHS): nunca vai ao navegador nem à exportação.
+    "code": {"mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
+             "effort": "high", "agents": 4, "max_sessions": 4, "ask_for": ["write", "delete", "run", "install", "git", "publish"], "run_timeout": 180, "max_download_mb": 200,
+             "allow_main": True, "branch_prefix": "asta/", "git_name": "", "git_email": "", "clone_depth": 20, "github_mode": "auto", "editor": "auto",
+             "github": {"api": "", "token": ""}, "finalize": {"docs": False, "publish": "none"}, "provider": {"id": "", "model": ""}},
     "canvas": {"template": "text_image"},
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},
@@ -144,6 +149,7 @@ def conform(defaults: Any, value: Any) -> Any:
 # Caminhos (dentro de settings) que contêm segredos e nunca são enviados ao navegador.
 SECRET_PATHS = [
     ("hf", "token"),
+    ("code", "github", "token"),
     ("voice", "stt", "api_key"),
     ("voice", "tts", "api_key"),
     ("chat", "web", "brave_key"),

@@ -6,6 +6,7 @@ import { CONFIG_GROUPS, CONFIG_TABS, ui } from '../prefs.js';
 import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
 import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 import { RISK } from '../computer_ui.js';
+import { EFFORT_LABEL, PUBLISH, RISK as CODE_RISK } from '../code_ui.js';
 
 export default async function render(root, ctx) {
   let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers');   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
@@ -13,7 +14,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -21,8 +22,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -493,7 +494,7 @@ async function appearance() {
 async function sections() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
   return h('div', null,
@@ -501,7 +502,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
       h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
     cfgCard(t('Tela inicial'),
-      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
     cfgCard(t('Teclado'),
       checkbox(t('Atalhos de teclado (Alt+1…9 e 0, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
       field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
@@ -512,7 +513,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
       h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('generation', 'Mundos 3D', 'perspectiva, conteúdo, realismo, NPCs'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
         jump('games', 'Jogos 2D', 'tamanho, revisão, criatividade'), jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
-        jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
+        jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('code', 'Code', 'modo, esforço, agentes, GitHub, git e editor'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
 }
 
 // ---------------------------------------------------------------------------------- canvas
@@ -623,6 +624,90 @@ async function computerTab() {
       h('p', { class: 'muted small', style: { margin: 0 } }, t('O histórico passo a passo, as capturas de tela e a lixeira ficam em arquivos comuns na pasta do ASTA (~/.asta/computer). Apague quando quiser: na seção Computer Use, em «Limpar o histórico».'))));
 }
 
+// ---------------------------------------------------------------------------------- code
+async function codeTab() {
+  const base = { mode: 'ask', effort: 'high', agents: 4, max_sessions: 4, ask_for: ['write', 'delete', 'run', 'install', 'git', 'publish'], run_timeout: 180, max_download_mb: 200, allow_main: true, branch_prefix: 'asta/', git_name: '', git_email: '',
+    clone_depth: 20, github_mode: 'auto', editor: 'auto', github: { api: '' }, finalize: { docs: false, publish: 'none' }, provider: { id: '', model: '' } };
+  const cd = Object.assign(base, JSON.parse(JSON.stringify(state.settings.code || {})));
+  cd.github = { api: (cd.github || {}).api || '' };
+  cd.finalize = Object.assign({ docs: false, publish: 'none' }, cd.finalize || {});
+  const tokenSet = !!(((state.settings.code || {}).github || {}).token_set);
+  let status = null, prompts = [], gh = null;
+  try { status = await api('/api/code/status'); } catch (e) { /* servidor antigo: segue sem o painel */ }
+  try { prompts = (await api('/api/code/prompts')).prompts; } catch (e) { /* idem */ }
+  try { gh = await api('/api/code/github?probe=1'); } catch (e) { /* idem */ }
+  const asks = ['write', 'delete', 'run', 'install', 'git', 'publish'];
+  const askSet = new Set((cd.ask_for || []).filter((x) => asks.includes(x)));
+  const stt = status || { efforts: [], languages: [], editors: {}, git: false, android: false };
+  const tokenIn = h('input', { type: 'password', id: 'cd-gh-token', autocomplete: 'off', placeholder: tokenSet ? '•••••••• (' + t('salvo') + ')' : 'ghp_… / github_pat_…' });
+  const ghMsg = h('p', { class: 'muted small', id: 'cd-gh-msg', style: { margin: '6px 0 0' } }, tokenSet ? t('Token salvo. Ele fica só neste computador e nunca é enviado a nenhuma IA.') : t('Sem token: dá para ler repositórios públicos, mas não publicar.'));
+  const check = async () => { ghMsg.textContent = t('Conferindo…'); try { const r = await api('/api/code/github?check=1'); ghMsg.textContent = r.user ? t('Conectado como {u}.', { u: r.user.login }) : (r.error || t('Sem token.')); ghMsg.className = (r.user ? 'ok' : 'err') + ' small'; } catch (e) { ghMsg.textContent = e.message; ghMsg.className = 'err small'; } };
+  const body = h('div', null, secHead('code', ['code']),
+    cfgCard(t('Code'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Vibe coding de projetos grandes: uma equipe de agentes de IA (Planejador, até 8 agentes trabalhando juntos, testes, Revisor e Relator) lê, escreve, testa, corrige e publica código — com o modelo que você escolher (nuvem ou local).')),
+      h('div', { class: 'grid2' },
+        field(t('Modo padrão'), seg([['ask', 'Ask'], ['full', 'Full Access']], cd.mode, (v) => { cd.mode = v; }), t('Ask: antes de cada ação que muda algo, aparece Sim ou Não. Full Access: executa tudo sem perguntar (os limites de segurança continuam valendo). Dá para escolher em cada sessão.')),
+        field(t('Esforço padrão'), select((stt.efforts || []).map((e) => [e.id, EFFORT_LABEL[e.id]]), cd.effort, (v) => { cd.effort = v; }), t('Os 8 níveis (Low a Omni) valem para modelos de nuvem e locais: mais passos, mais rodadas de correção, testes e revisão.'))),
+      h('div', { class: 'grid2' },
+        field(t('Agentes por sessão'), range(1, 8, 1, cd.agents, (v) => { cd.agents = v; }), t('Até 8 agentes trabalhando ao mesmo tempo numa sessão.')),
+        field(t('Sessões em segundo plano ao mesmo tempo'), range(1, 8, 1, cd.max_sessions, (v) => { cd.max_sessions = v; }), t('As que passam disso esperam na fila. Com modelos locais, o modelo atende uma geração por vez.')))),
+    cfgCard(t('Quando perguntar (modo Ask)'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Só ler, listar, buscar e pesquisar nunca pergunta. Marque o que deve pedir um Sim ou Não:')),
+      h('div', { class: 'cu-asks' }, asks.map((r) => checkbox(CODE_RISK()[r], askSet.has(r), (on) => { on ? askSet.add(r) : askSet.delete(r); cd.ask_for = asks.filter((x) => askSet.has(x)); })))),
+    cfgCard(t('Níveis de esforço'),
+      h('ul', { class: 'muted small cd-effort-list', id: 'cd-effort-list', style: { margin: 0, paddingLeft: '18px' } }, (stt.efforts || []).map((e) => h('li', { dataset: { effort: e.id } }, h('b', null, EFFORT_LABEL[e.id]), ' — ' + t(e.hint) + ' (' + t('até {n} ações por agente, {r} rodada(s) de correção', { n: e.turns, r: e.revisions }) + ')')))),
+    cfgCard(t('GitHub'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Para ler, editar e publicar em repositórios (branch, commit, pull request, issues, releases e CI). Crie um token em github.com → Settings → Developer settings → Personal access tokens com acesso ao conteúdo e aos pull requests dos repositórios que você quer usar (escopo «repo»).')),
+      field(t('Token do GitHub'), tokenIn, t('Fica só em settings.json neste computador; nunca vai ao navegador, às exportações nem a uma IA.')),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm primary', type: 'button', id: 'cd-gh-save', onclick: async () => { if (!tokenIn.value.trim()) return toast(t('Cole o token.'), 'err'); await saveSettings({ code: { github: { token: tokenIn.value.trim() } } }); await refreshState(); toast(t('Token salvo'), 'ok'); go('config', { tab: 'code' }); } }, t('Salvar o token')),
+        h('button', { class: 'btn sm', type: 'button', id: 'cd-gh-check', onclick: check }, icon('check', 13), t('Conferir a conexão')),
+        gh && gh.gh_cli ? h('button', { class: 'btn sm', type: 'button', id: 'cd-gh-import', onclick: async () => { try { await api('/api/code/github/import-gh', { method: 'POST', body: {} }); await refreshState(); toast(t('Token do gh importado'), 'ok'); go('config', { tab: 'code' }); } catch (e) { toast(e.message, 'err'); } } }, t('Usar o login do gh (GitHub CLI)')) : null,
+        tokenSet ? h('button', { class: 'btn sm danger', type: 'button', id: 'cd-gh-remove', onclick: async () => { await saveSettings({ code: { github: { token: null } } }); await refreshState(); toast(t('Token removido'), 'ok'); go('config', { tab: 'code' }); } }, t('Remover o token')) : null),
+      ghMsg,
+      h('div', { class: 'grid2', style: { marginTop: '12px' } },
+        field(t('Como trabalhar nos repositórios'), select([['auto', t('Automático (git se existir; senão nuvem)')], ['git', t('Sempre git (clone no computador)')], ['cloud', t('Sempre nuvem (ZIP + API, sem git)')]], cd.github_mode, (v) => { cd.github_mode = v; }),
+          t('O modo nuvem funciona sem o programa git — é o que o app do celular usa.')),
+        field(t('Endereço da API (GitHub Enterprise)'), h('input', { id: 'cd-gh-api', value: cd.github.api, placeholder: 'https://api.github.com', oninput: (e) => { cd.github.api = e.target.value.trim(); } }), t('Deixe em branco para o github.com.'))),
+      h('div', { class: 'grid2' },
+        field(t('Prefixo das branches do Code'), h('input', { id: 'cd-prefix', value: cd.branch_prefix, oninput: (e) => { cd.branch_prefix = e.target.value; } }), t('As mudanças vão para uma branch nova, como «asta/minha-mudanca».')),
+        field(t('Histórico do clone (commits)'), numInput(cd, 'clone_depth', 0, 2000, 5), t('0 = histórico completo. Menos é mais rápido.'))),
+      checkbox(t('Permitir publicar direto na branch principal (só quando você pedir «Direto na branch principal» na sessão)'), cd.allow_main !== false, (v) => { cd.allow_main = v; })),
+    cfgCard(t('Git, editor e comandos'),
+      h('div', { class: 'grid2' }, field(t('Nome nos commits'), h('input', { id: 'cd-git-name', value: cd.git_name, placeholder: 'ASTA Code', oninput: (e) => { cd.git_name = e.target.value; } }), t('Só quando o git não tem um nome configurado.')),
+        field(t('E-mail nos commits'), h('input', { id: 'cd-git-email', value: cd.git_email, placeholder: 'code@asta.local', oninput: (e) => { cd.git_email = e.target.value; } }))),
+      h('div', { class: 'grid2' }, field(t('Editor preferido'), select([['auto', t('Automático')], ['vscode', 'VS Code'], ['cursor', 'Cursor']], cd.editor, (v) => { cd.editor = v; })),
+        field(t('Tempo máximo de um comando (segundos)'), numInput(cd, 'run_timeout', 10, 1800, 10), t('Testes e builds que passam disso são encerrados.'))),
+      field(t('Limite de download do Hugging Face por arquivo (MB)'), numInput(cd, 'max_download_mb', 1, 2000, 10))),
+    cfgCard(t('Ao terminar um pedido (padrão)'),
+      checkbox(t('Atualizar README, changelogs e notas de versão'), cd.finalize.docs, (v) => { cd.finalize.docs = v; }),
+      field(t('Publicar'), select(Object.entries(PUBLISH()), cd.finalize.publish, (v) => { cd.finalize.publish = v; }), t('A publicação só acontece depois dos testes e da revisão sem problema.'))),
+    saveRow(async () => { await saveSettings({ code: Object.assign({}, cd, { github: { api: cd.github.api } }) }); await refreshState(); }),
+    cfgCard(t('O que o ASTA achou neste computador'),
+      h('ul', { id: 'cd-tools', style: { listStyle: 'none', margin: 0, padding: 0 } }, [[t('git'), stt.git], ['VS Code', (stt.editors || {}).vscode], ['Cursor', (stt.editors || {}).cursor], [t('Token do GitHub'), (stt.github || {}).token], [t('Token do Hugging Face'), stt.huggingface]].map(([l, ok]) =>
+        h('li', { class: ok ? 'ok' : 'no', style: { display: 'flex', gap: '8px', margin: '4px 0' } }, icon(ok ? 'check' : 'x', 14), h('span', null, l)))),
+      stt.android ? h('p', { class: 'warnbox small' }, t('Este aparelho não roda comandos: o Code edita e publica pelo GitHub (nuvem) e usa o CI do GitHub para os testes. Para rodar código, use o ASTA do computador.')) : null),
+    cfgCard(t('Linguagens e bibliotecas'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('O Code detecta as linguagens do projeto e usa os comandos de teste, build e lint de cada ecossistema, com as bibliotecas mais comuns de cada um:')),
+      h('div', { class: 'cd-langs', id: 'cd-langs' }, (stt.languages || []).filter((l) => l.libs.length).map((l) => h('details', { dataset: { lang: l.id } }, h('summary', null, h('b', null, l.id === 'cpp' ? 'C++' : l.id === 'csharp' ? 'C#' : l.id[0].toUpperCase() + l.id.slice(1)), h('span', { class: 'dim small' }, ' — ' + l.exts.slice(0, 4).join(' '))), h('div', { class: 'small muted', style: { padding: '4px 0 6px' } }, l.libs.join(' · ')))))),
+    cfgCard(t('Segurança — o que vale em qualquer modo'),
+      h('ul', { class: 'muted small', style: { margin: 0, paddingLeft: '18px' } }, [
+        t('O Code só mexe nos arquivos da pasta do projeto da sessão; nunca em segredos (chaves SSH, .env, certificados, perfis de navegador) nem na pasta de dados do ASTA (onde ficam as chaves de API).'),
+        t('Comandos são uma lista de argumentos de ferramentas de desenvolvimento (python, node, cargo, go, mvn, dotnet, gcc, make…): sem shell, sudo, curl/ssh nem apagadores de disco. O ambiente do comando não leva as suas chaves.'),
+        t('A pasta .git só muda pelo git, e o git não faz push --force, reset --hard nem clean.'),
+        t('Rodar testes e programas escritos pela IA dá a esse código as permissões do seu usuário no computador. Por isso o modo Ask mostra o comando inteiro e pergunta; o Full Access é confiança total.'),
+        t('Tudo que muda arquivos pode ser desfeito; publicar (push, pull request, release) não pode — por isso só acontece depois dos testes e da revisão.')].map((x) => h('li', null, x)))),
+    cfgCard(t('System prompts internos'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Os textos que orientam cada agente são arquivos .md abertos, no código do ASTA (asta/code/prompts). Aqui você só os lê.')),
+      h('div', { class: 'cu-cfg-prompts' }, prompts.map((name) => {
+        const pre = h('pre', null, '…');
+        let loaded = false;
+        return h('details', { ontoggle: async (e) => { if (!e.target.open || loaded) return; loaded = true; try { pre.textContent = (await api('/api/code/prompts/' + name)).text; } catch (err) { pre.textContent = err.message; } } }, h('summary', { class: 'mono small' }, name), pre);
+      }))),
+    cfgCard(t('Seus dados'),
+      h('p', { class: 'muted small', style: { margin: 0 } }, t('As sessões, o histórico passo a passo, os backups do «Desfazer» e as cópias de repositórios ficam em arquivos comuns na pasta do ASTA (~/.asta/code). Apague quando quiser: pela seção Code, em «Apagar a sessão».'))));
+  return body;
+}
+
 // ---------------------------------------------------------------------------------- rebuild
 async function rebuildTab() {
   const rb = JSON.parse(JSON.stringify(state.settings.rebuild));
@@ -719,7 +804,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 

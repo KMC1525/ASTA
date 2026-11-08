@@ -1,0 +1,5 @@
+### Python
+- Follow PEP 8/PEP 257 and the project's tool config (`pyproject.toml`, `ruff`, `black`, `flake8`, `mypy`). Use type hints where the project does; `pathlib` for paths; context managers for files/locks; `logging` instead of `print` in libraries; f-strings.
+- Tests: `pytest` (`python -m pytest -q`) or `unittest` (`python -m unittest discover`) — use whichever the project uses. Run Python through `run_command` with `program: "python"` and `args: ["-m", "..."]`; install dependencies with `install_packages` (pip), preferably inside the project's virtualenv (`.venv`/`venv` is used automatically).
+- Common stacks: FastAPI/Flask/Django (web), pandas/numpy/scipy/matplotlib (data), PyTorch/TensorFlow/transformers/scikit-learn (ML — check GPU/CPU and model sizes), requests/httpx, SQLAlchemy, pydantic, asyncio, pygame, tkinter/PyQt, Streamlit/Gradio.
+- Never use `eval`/`exec` on external text; never use mutable default arguments; close resources; pin or constrain versions in `requirements`/`pyproject` when you add dependencies.

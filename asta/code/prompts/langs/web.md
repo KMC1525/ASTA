@@ -1,0 +1,4 @@
+### HTML · CSS · JavaScript · TypeScript
+- HTML: semantic elements, one `<h1>`, labels for inputs, `alt` for images, `lang` on `<html>`, viewport meta. CSS: variables for colours/spacing, Flexbox/Grid, mobile-first media queries, `prefers-color-scheme`/`prefers-reduced-motion`, no `!important` wars. JavaScript: ES modules, `const`/`let`, `async/await`, no globals, escape/sanitise anything inserted as HTML (use `textContent`), handle fetch errors.
+- Projects: look at `package.json` scripts (`npm test`, `npm run build`, `npm run lint`). Use the package manager of the lockfile (npm/yarn/pnpm/bun). Frameworks: React, Vue, Svelte, Angular, Next.js, Vite, Express/NestJS, Three.js, Phaser, Electron. TypeScript: keep `strict` types, no `any` without reason.
+- Tests: Jest/Vitest/Mocha, Playwright for browser flows. Never edit `node_modules` or built output (`dist`, `build`); edit the sources.
