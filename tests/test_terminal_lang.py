@@ -92,7 +92,7 @@ class CliLanguageTests(unittest.TestCase):
             return mock.Mock(returncode=0)
 
         with mock.patch.object(cli, "_managed_app_dir", return_value=Path("/home/u/.asta/app")), mock.patch("urllib.request.urlopen") as uo, \
-                mock.patch.object(cli.subprocess, "run", side_effect=fake_run), mock.patch.dict(os.environ, {"ASTA_LANG": "en"}):
+                mock.patch.object(cli.subprocess, "run", side_effect=fake_run), mock.patch.object(cli.os, "name", "posix"), mock.patch.dict(os.environ, {"ASTA_LANG": "en"}):
             uo.return_value.__enter__.return_value.read.return_value = b"echo hi"
             cli._update_with_installer(__import__("argparse").Namespace(force=False, core=False, extras="", no_python=False, rust="yes"))
         self.assertEqual((seen["env"]["ASTA_LANG"], seen["env"]["ASTA_RUST"]), ("en", "yes"))

@@ -855,7 +855,7 @@ def prefetch(paths: Any, threads: int = 0) -> int:
         size, got = os.path.getsize(p), 0
         stripe = max(4 << 20, -(-size // parts))
         try:
-            fd = os.open(p, os.O_RDONLY)
+            fd = os.open(p, os.O_RDONLY | getattr(os, "O_BINARY", 0))
         except OSError:
             return 0
         try:
@@ -863,7 +863,11 @@ def prefetch(paths: Any, threads: int = 0) -> int:
                 os.posix_fadvise(fd, 0, 0, os.POSIX_FADV_WILLNEED)
             off, end = i * stripe, min((i + 1) * stripe, size)
             while off < end:
-                chunk = os.pread(fd, min(4 << 20, end - off), off) if hasattr(os, "pread") else b""
+                if hasattr(os, "pread"):
+                    chunk = os.pread(fd, min(4 << 20, end - off), off)
+                else:   # Windows: sem pread; cada thread tem o seu próprio descritor, então posicionar e ler é seguro
+                    os.lseek(fd, off, os.SEEK_SET)
+                    chunk = os.read(fd, min(4 << 20, end - off))
                 if not chunk:
                     break
                 off += len(chunk)

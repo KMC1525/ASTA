@@ -121,6 +121,7 @@ class HardwareTests(Base):
             self.assertLessEqual(i["physical"], i["logical"])
             self.assertTrue(i["ram_total"] > 0 and 0 < i["ram_avail"] <= i["ram_total"])
 
+    @unittest.skipUnless(sys.platform.startswith("linux"), "o espelho em Python lê as extensões da CPU só do /proc/cpuinfo (Linux)")
     def test_rust_and_python_agree_on_cores_and_features(self):
         self.use(True)
         r = native.sys_info()
