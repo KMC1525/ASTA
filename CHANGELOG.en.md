@@ -24,6 +24,7 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - API: `GET/POST /api/computer/tasks`, `…/tasks/<id>` (+ `cancel`, `answer`, `undo`, `retry`, `shots/<file>`), `GET /api/computer/events` (SSE), `status`, `inventory`, `prompts`, `history/clear`. The `computer` settings section (`enabled`, `mode`, `max_parallel`, `max_steps`, `team`, `revisions`, `ask_for`, `game_dirs`, `app_wait`).
 
 ### Changed
+- **Linux/X11: screen, keyboard and mouse work with nothing to install** (`computer/x11.py`: libX11 + XTEST via `ctypes`, PNG capture with `zlib`, accents and any Unicode, shortcuts, click and scroll; tested on a virtual X server with Xvfb). External tools (`xdotool`, `grim`, `ydotool`…) are only used on pure Wayland sessions. On Wayland with XWayland, X11 only reaches X windows.
 - The sidebar now has **10 screens**: `Alt+0` opens the 10th (Configuration); the command palette shows the right shortcut; *Configuration* gained the **Computer Use** tab (18 tabs) and a card in *Chat*. Start page and hide-from-sidebar accept the new section.
 - Importing settings **never turns Computer Use on, changes the mode or removes Ask questions** (numeric limits only); exporting carries the `computer` section.
 

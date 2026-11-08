@@ -533,6 +533,50 @@ class DriverTests(Env):
                 self.assertTrue(caps[k].get("hint"), k)                        # sem a ferramenta, diz o que instalar
 
 
+@unittest.skipUnless(sys.platform.startswith("linux") and shutil.which("Xvfb"), "precisa do Xvfb (Linux)")
+class X11NativeTests(unittest.TestCase):
+    """Tela, teclado e mouse nativos (libX11/XTEST por ctypes) num servidor X virtual."""
+
+    def setUp(self):
+        import subprocess
+
+        self.disp = ":%d" % (90 + os.getpid() % 100)
+        self.xvfb = subprocess.Popen(["Xvfb", self.disp, "-screen", "0", "800x600x24"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        self.addCleanup(self.xvfb.terminate)
+        p = mock.patch.dict(os.environ, {"DISPLAY": self.disp}, clear=False)
+        p.start()
+        self.addCleanup(p.stop)
+        os.environ.pop("WAYLAND_DISPLAY", None)
+        from asta.computer import x11
+
+        self.x11 = x11
+        for _ in range(50):
+            if x11.available() == "":
+                break
+            time.sleep(0.1)
+        self.tmp = Path(tempfile.mkdtemp())
+        self.addCleanup(shutil.rmtree, self.tmp, ignore_errors=True)
+
+    def test_capabilities_screenshot_and_input_need_no_external_tool(self):
+        d = osdrv.LinuxDriver()
+        caps = d.capabilities()
+        self.assertTrue(all(caps[k]["ok"] and caps[k]["how"] == "X11 nativo" for k in ("screenshot", "keyboard", "mouse")), caps)
+        self.assertEqual(d.screen_size(), (800, 600))
+        out = self.tmp / "s.png"
+        d.screenshot(out)
+        data = out.read_bytes()
+        self.assertEqual(data[:8], b"\x89PNG\r\n\x1a\n")
+        self.assertEqual(att.image_size(data), (800, 600))
+        d.click(10, 10)
+        d.click(20, 20, "right", True)
+        d.scroll(3)
+        d.press_keys("ctrl+shift+a")
+        d.press_keys("F5")
+        d.type_text("Olá ç Ü 日本\n")                      # teclas que o teclado não tem são mapeadas por um instante
+        with self.assertRaises(osdrv.DriverError):
+            d.press_keys("ctrl+bananas")
+
+
 # --------------------------------------------------------------------------- regras sem IA
 
 
