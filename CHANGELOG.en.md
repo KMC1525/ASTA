@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.15.10] — 2026-11-08
+
+### Reviewed — using the app away from home
+- **Not possible without a VPN:** the computer's home address (`192.168…`) only exists inside the home network; from outside (4G/5G, another Wi-Fi) the app cannot reach it. This applies to the computer's LM Studio and the computer's ASTA.
+- **With Tailscale (free) it works:** install it on the computer and the phone, sign in to the same account and use the Tailscale IP (`100.x.x.x`) or the `….ts.net` name instead of `192.168…`.
+
+### Added/Fixed
+- VPN addresses (`100.64.0.0/10`, Tailscale) and `.ts.net` names are treated as private network: they do not go through the system proxy.
+- The **«LM Studio on the computer»** card accepts `https://…` (tunnel/reverse proxy) without forcing `http` and port 1234, and shows the «Away from home» tip.
+- `asta mobile` / Configuration → Mobile and tablet: if Tailscale is installed, the computer's Tailscale address is listed (and used in pairing) after the home-network addresses.
+- The LM Studio network search ignores the VPN network.
+
 ## [0.15.9] — 2026-11-08
 
 ### Fixed

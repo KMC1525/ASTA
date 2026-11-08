@@ -41,15 +41,20 @@ def _read_error(exc: urllib.error.HTTPError) -> str:
         return body[:600]
 
 
+_CGNAT = ipaddress.ip_network("100.64.0.0/10")
+
+
 def is_local_host(host: str) -> bool:
     """localhost, 127.x, ::1, redes privadas (192.168.x, 10.x…) e nomes .local: servidores na própria máquina ou na rede de casa (Ollama, LM Studio…)."""
     host = (host or "").strip("[]").lower()
-    if host in ("localhost", "ip6-localhost") or host.endswith((".local", ".lan", ".home.arpa")):
+    if host in ("localhost", "ip6-localhost") or host.endswith((".local", ".lan", ".home.arpa", ".ts.net")):   # .ts.net: nomes MagicDNS do Tailscale (o PC de casa, de fora de casa)
         return True
     try:
         ip = ipaddress.ip_address(host)
     except ValueError:
         return False
+    if ip.version == 4 and ip in _CGNAT:   # 100.64.0.0/10: endereços de VPN (Tailscale e similares), que também não passam pelo proxy do sistema
+        return True
     return ip.is_loopback or ip.is_private or ip.is_link_local
 
 
