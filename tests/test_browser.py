@@ -327,7 +327,15 @@ class BrowserTests(unittest.TestCase):
         home = Path(tempfile.mkdtemp(prefix="asta-cu-home-"))
         (home / "Documents").mkdir()
         try:
-            self.run_script("computer_ui.js", {"ASTA_TEST_HOME": str(home)})   # caminhos absolutos: a pasta pessoal de verdade não é tocada
+            # sem IA de verdade: outros testes deixam provedores/modelos locais configurados e o modo automático os usaria; aqui o Demo (regras) é o que se quer exercitar
+            from asta.providers import build_provider
+
+            mgr = self.httpd.RequestHandlerClass.app.computer
+            mgr._resolve = lambda settings: (build_provider(settings, "demo", self.store_dir / "models"), {"id": "demo", "label": "Demo", "model": "demo", "demo": True})
+            try:
+                self.run_script("computer_ui.js", {"ASTA_TEST_HOME": str(home)})   # caminhos absolutos: a pasta pessoal de verdade não é tocada
+            finally:
+                mgr._resolve = None
             self.assertTrue((home / "Documents" / "UiNegada").exists() is False)
         finally:
             shutil.rmtree(home, ignore_errors=True)
