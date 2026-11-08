@@ -7,6 +7,22 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.7] — 2026-11-08
+
+### Fixed — diffusion GGUF without support files (Qwen-Image, FLUX): you can now download them from the node itself
+- The error «The model qwen-image-….gguf did not load in stable-diffusion.cpp («NULL pointer access»)» only **told the person to download by hand** the VAE and the text encoder. Now the node shows the error **without the internal marker**, says **what is missing and the approximate size** and has the **«Download the support files»** button, which downloads **only what is missing** straight into the model's folder (`models/image`), with progress on the button; when done, just run the node again (the 0.17.6 automatic loading finds the files).
+- **Qwen-Image:** VAE `qwen_image_vae.safetensors` (Comfy-Org/Qwen-Image_ComfyUI, ≈ 0.25 GB) and text encoder `Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf` (unsloth/Qwen2.5-VL-7B-Instruct-GGUF, ≈ 4.7 GB). **FLUX:** `ae.safetensors`, `clip_l.safetensors` and `t5xxl_fp8_e4m3fn.safetensors` (≈ 5.5 GB in total).
+- **Only on request:** ASTA still does not download gigabytes on its own in the middle of a generation; the download starts when the person presses the button. It uses the Hugging Face token from Configuration, resumes partial downloads and refuses a second one at the same time.
+- Families and downloads live in `asta/canvas/support.py` (`FAMILIES`, `missing`, `download_missing`); route `POST /api/media/support/download`.
+- Tests: `SupportFilesTests` in `tests/test_v017_models.py` (simulated download) and the browser test `canvas_support_ui.js`.
+- Android app and screens version bumped to 0.17.7 (the Rust core did not change).
+
+### Notes (honest limits)
+- I **did not download or run** the real files (no network to Hugging Face or the library in this environment): the download was tested with a simulated server and the loading with a fake module. File names in the repositories may change; if a download fails, the error shows on the node and the files can be put by hand in the `models/image` folder.
+- The Qwen-Image text encoder is big (≈ 4.7 GB): it needs disk space and time; the final result still depends on the installed stable-diffusion-cpp-python version.
+- Only **Qwen-Image** and **FLUX** have a support download; other diffusion models that need extra files go through `extra` in `canvas.json`.
+- `test_v017_models`, `test_canvas`, the Canvas browser tests and the i18n JS check ran; the full suite was **not run again**.
+
 ## [0.17.6] — 2026-11-08
 
 ### Fixed — «NULL pointer access» when generating an image with a diffusion-only GGUF (Qwen-Image, FLUX…)

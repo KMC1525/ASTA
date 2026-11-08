@@ -48,6 +48,7 @@ class CanvasRoutes:
         a("POST", r"/api/media/test", self.r_media_test)
         a("GET", r"/api/media/models", self.r_media_models)
         a("GET", r"/api/media/installed", self.r_media_installed)
+        a("POST", r"/api/media/support/download", self.r_support_download)
         a("GET", r"/api/media/hub/search", self.r_hub_search)
         a("POST", r"/api/media/hub/use", self.r_hub_use)
         a("GET", r"/api/media/local/state", self.r_local_state)
@@ -273,6 +274,45 @@ class CanvasRoutes:
             req.json({"models": build_media(self.store.get_settings(), pid, models_dir=self.store.models_dir).list_models(cap)})
         except ProviderError as exc:
             raise HttpError(502, str(exc))
+
+    def r_support_download(self, req) -> None:
+        """Baixa os arquivos de apoio (VAE, codificador de texto…) que faltam ao lado de um GGUF de difusão de imagem (Qwen-Image, FLUX…). Só a pedido da pessoa (botão no nó)."""
+        import re as _re
+
+        from . import hf
+        from .canvas import support
+
+        body = req.body_json()
+        model = text((body if isinstance(body, dict) else {}).get("model"), "", 200)
+        if not _re.match(r"^[\w][\w .+()=-]{0,200}\.gguf$", model):
+            raise HttpError(400, "Informe o arquivo GGUF do modelo.")
+        folder = hf.kind_dir(self.store.models_dir, "image", create=True)
+        info = support.missing(folder, model)
+        if not info["family"]:
+            raise HttpError(400, "Este modelo não é de uma família com arquivos de apoio conhecidos (Qwen-Image, FLUX).")
+        if not info["missing"]:
+            raise HttpError(400, "Os arquivos de apoio deste modelo já estão na pasta.")
+        running = self.app.jobs.running("support_files")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+        token = self._hf_token()
+
+        def work(job: Job) -> None:
+            import time
+
+            job.emit({"type": "start", "files": [m["label"] for m in info["missing"]], "approx_gb": info["approx_gb"]})
+            last = [0.0]
+
+            def progress(done: int, total: int) -> None:
+                if time.time() - last[0] > 0.4:
+                    last[0] = time.time()
+                    job.emit({"type": "progress", "done": done, "total": total})
+
+            got = support.download_missing(folder, model, token, progress, lambda: job.cancelled, lambda m: job.emit({"type": "note", "message": m}))
+            job.emit({"type": "done", "files": got})
+
+        job = self.app.jobs.start("support_files", work)
+        req.json({"job_id": job.id, "files": [m["label"] for m in info["missing"]], "approx_gb": info["approx_gb"]})
 
     def r_media_installed(self, req) -> None:
         """Modelos instalados neste computador para um tipo (image, video, sound, voice, stt): GGUF baixados e modelos do Hugging Face local."""

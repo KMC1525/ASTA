@@ -35,6 +35,7 @@ from ..util import hardware_info
 from ..providers import http
 from ..providers.base import ProviderError
 from . import procedural as proc
+from . import support
 
 CAP_LABELS = {"image": "imagens", "video": "vídeos", "sound": "sons e músicas", "voice": "vozes", "stt": "transcrição de áudio"}
 Ref = Tuple[bytes, str]  # (bytes, mime) de uma imagem de referência
@@ -1320,33 +1321,16 @@ class GGUFMedia(MediaProvider):
             kw["model_path"] = str(path)
         return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", lambda: sdc.StableDiffusion(**kw))
 
-    # Famílias de modelos que vêm só com o «transformador» (a difusão) e precisam de arquivos de apoio na mesma pasta: nome do modelo → o que carregar (parâmetro → padrão do nome do arquivo)
-    FAMILIES = [
-        {"name": r"qwen[-_ ]?image", "label": "Qwen-Image", "load": {"vae_path": r"(qwen.*image.*vae|(^|[-_.])vae([-_.]|$)|^ae\.safetensors$)", "llm_path": r"qwen2[._]?5.*vl.*\.gguf$"}, "run": {"cfg_scale": 2.5},
-         "need": "o VAE (qwen_image_vae.safetensors, em Comfy-Org/Qwen-Image_ComfyUI) e o codificador de texto Qwen2.5-VL (um .gguf, ex.: unsloth/Qwen2.5-VL-7B-Instruct-GGUF)"},
-        {"name": r"flux", "label": "FLUX", "load": {"vae_path": r"^ae\.safetensors$", "clip_l_path": r"clip[_-]?l.*\.safetensors$", "t5xxl_path": r"t5xxl.*\.(safetensors|gguf)$"}, "run": {},
-         "need": "o VAE (ae.safetensors), o clip_l.safetensors e o t5xxl (safetensors ou .gguf)"},
-    ]
-
     def _auto_load(self, path: Path) -> Dict[str, Any]:
-        """Para um GGUF de família conhecida (Qwen-Image, FLUX…), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
-        ou se falta algum apoio (carregar só o arquivo do modelo faz a biblioteca falhar com «NULL pointer access»; o erro então explica o que baixar)."""
-        for fam in self.FAMILIES:
-            if not re.search(fam["name"], path.name, re.I):
-                continue
-            files = [f for f in path.parent.iterdir() if f.is_file() and f != path]
-            load: Dict[str, Any] = {"diffusion_model_path": "@model"}
-            missing = []
-            for key, pat in fam["load"].items():
-                hit = next((f for f in sorted(files) if re.search(pat, f.name, re.I)), None)
-                if hit:
-                    load[key] = hit.name
-                else:
-                    missing.append(key)
-            if missing:   # faltou algo: segue como arquivo único (como antes) e, se a biblioteca falhar, a mensagem de erro diz o que baixar
-                return {}
-            return {"load": load, "run": dict(fam["run"])}
-        return {}
+        """Para um GGUF de família conhecida (Qwen-Image, FLUX…, ver `support.FAMILIES`), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
+        ou se falta algum apoio (carregar só o arquivo do modelo faz a biblioteca falhar com «NULL pointer access»; o erro então oferece baixar o que falta)."""
+        fam = support.family_of(path.name)
+        if not fam:
+            return {}
+        found = support.find_companions(path.parent, path, fam)
+        if any(v is None for v in found.values()):
+            return {}
+        return {"load": {"diffusion_model_path": "@model", **found}, "run": dict(fam["run"])}
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
         from .. import preinstalled
@@ -1374,10 +1358,11 @@ class GGUFMedia(MediaProvider):
                 imgs = gen(**kw)
             except (ValueError, RuntimeError, OSError) as exc:
                 if "null pointer" in str(exc).lower() or "nullptr" in str(exc).lower():   # o modelo não carregou na stable-diffusion.cpp (arquivo de apoio faltando ou formato não suportado)
-                    fam = next((f for f in self.FAMILIES if re.search(f["name"], path.name, re.I)), None)
-                    need = f" Para o {fam['label']}, baixe {fam['need']} e ponha na pasta {path.parent}." if fam else ""
+                    info = support.missing(path.parent, path.name)
+                    fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
+                           f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
                     raise ProviderError(f"O modelo {path.name} não carregou na stable-diffusion.cpp («{exc}»). Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a "
-                                        f"biblioteca precisa ser recente (asta libs).{need}") from None
+                                        f"biblioteca precisa ser recente (asta libs).{fix}") from None
                 raise
             for img in (imgs if isinstance(imgs, (list, tuple)) else [imgs])[:1]:
                 buf = io.BytesIO()

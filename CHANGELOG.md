@@ -5,6 +5,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.7] — 2026-11-08
+
+### Corrigido — GGUF de difusão sem arquivos de apoio (Qwen-Image, FLUX): agora dá para baixá-los do próprio nó
+- O erro «O modelo qwen-image-….gguf não carregou na stable-diffusion.cpp («NULL pointer access»)» só **mandava a pessoa baixar à mão** o VAE e o codificador de texto. Agora o nó mostra o erro **sem o marcador interno**, diz **o que falta e o tamanho aproximado** e traz o botão **«Baixar os arquivos de apoio»**, que baixa **só o que falta** direto para a pasta do modelo (`models/image`), com o progresso no botão; ao terminar, é só executar o nó de novo (o carregamento automático da 0.17.6 acha os arquivos).
+- **Qwen-Image:** VAE `qwen_image_vae.safetensors` (Comfy-Org/Qwen-Image_ComfyUI, ≈ 0,25 GB) e codificador de texto `Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf` (unsloth/Qwen2.5-VL-7B-Instruct-GGUF, ≈ 4,7 GB). **FLUX:** `ae.safetensors`, `clip_l.safetensors` e `t5xxl_fp8_e4m3fn.safetensors` (≈ 5,5 GB no total).
+- **Só a pedido:** o ASTA continua sem baixar gigabytes sozinho no meio de uma geração; o download começa quando a pessoa aperta o botão. Usa o token do Hugging Face de Configuração, retoma downloads parciais e recusa um segundo ao mesmo tempo.
+- Famílias e downloads vivem em `asta/canvas/support.py` (`FAMILIES`, `missing`, `download_missing`); rota `POST /api/media/support/download`.
+- Testes: `SupportFilesTests` em `tests/test_v017_models.py` (download simulado) e o teste de navegador `canvas_support_ui.js`.
+- Versão do app Android e das telas atualizada para 0.17.7 (o núcleo Rust não mudou).
+
+### Observações (limites honestos)
+- **Não baixei nem rodei** os arquivos reais (sem rede para a Hugging Face nem a biblioteca neste ambiente): o download foi testado com um servidor simulado e o carregamento com um módulo falso. Os nomes dos arquivos nos repositórios podem mudar; se um download falhar, o erro aparece no nó e dá para pôr os arquivos à mão na pasta `models/image`.
+- O codificador de texto do Qwen-Image é grande (≈ 4,7 GB): precisa de espaço em disco e de tempo; o resultado final ainda depende da versão da stable-diffusion-cpp-python instalada.
+- Só **Qwen-Image** e **FLUX** têm download de apoio; outros modelos de difusão que precisem de arquivos extras seguem pelo `extra` no `canvas.json`.
+- Rodaram `test_v017_models`, `test_canvas`, os testes de navegador do Canvas e o JS de i18n; a suíte completa **não foi rodada de novo**.
+
 ## [0.17.6] — 2026-11-08
 
 ### Corrigido — «NULL pointer access» ao gerar imagem com GGUF de difusão (Qwen-Image, FLUX…)

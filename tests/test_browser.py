@@ -384,5 +384,8 @@ class BrowserTests(unittest.TestCase):
     def test_39_canvas_model_picker_lists_installed_and_cloud_models(self):
         self.run_script("canvas_model_picker_ui.js")
 
+    def test_40_canvas_missing_gguf_support_files_offer_a_download_button(self):
+        self.run_script("canvas_support_ui.js")
+
 if __name__ == "__main__":
     unittest.main()
