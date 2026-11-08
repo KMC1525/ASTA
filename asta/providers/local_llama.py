@@ -96,6 +96,8 @@ def _plan(path: str, hw: Dict[str, Any], prof: Dict[str, Any], want_ctx: int, ex
     try:
         info = native.model_info(path) or {}
         mem = perf.memory_state()
+        if mem["ram_avail"] <= 0:   # memória desconhecida (sem o núcleo Rust fora do Linux): sem plano, vale o comportamento antigo — nunca encolher a janela por falta de dado
+            return {}
         gpu_known = bool(hw.get("gpu")) or mem["unified"]
         plan = native.plan_llm(int(info.get("bytes") or 0), int(info.get("layers") or 0), int(info.get("kv_bytes_per_token") or 0), int(info.get("ctx_train") or 0), int(want_ctx), explicit,
                                0, mem["ram_avail"], mem["vram_free"] if gpu_known else 0, mem["unified"], mem["phys"], mem["logical"], perf.MODE_NUM[prof["mode"]])

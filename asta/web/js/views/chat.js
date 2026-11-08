@@ -316,7 +316,7 @@ export default async function render(root, ctx) {
   const engineNote = (compact) => {
     const demo = st.current && st.current.demo;
     return demo ? h('div', { class: 'notice' }, t('Modo Demo (sem IA): o Chat não consegue responder perguntas de verdade. '), h('a', { href: '#/config', onclick: (e) => { e.preventDefault(); go('config', { tab: 'providers' }); } }, t('Configure um provedor')), t(' ou escolha um modelo no botão ao lado do Run.'))
-      : (compact ? null : h('div', { class: 'notice' }, st.current ? t(st.current.label || '') : presetOf(state.settings.active.generation).label));
+      : (compact ? null : h('div', { class: 'notice' }, st.current ? t(st.current.label || '') : (state.settings && state.settings.active ? presetOf(state.settings.active.generation).label : '')));
   };
 
   // a última pergunta ficou sem resposta (Parar, falha do modelo, página recarregada): oferece responder

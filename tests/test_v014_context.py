@@ -261,7 +261,7 @@ class LocalLoadTests(TmpCase):
         loads = []
         fake, p = self.provider(ll, loads)
         hw = {"tier": "low", "ram_gb": 4, "cpus": 2, "gpu": "", "os": "Linux", "arch": "x86_64"}
-        with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(ll, "hardware_info", return_value=hw):
+        with mock.patch.dict(sys.modules, {"llama_cpp": fake}), mock.patch.object(ll, "hardware_info", return_value=hw), mock.patch.object(ll.perf, "memory_state", return_value={"ram_total": 64 << 30, "ram_avail": 48 << 30, "vram_total": 0, "vram_free": 0, "unified": False, "phys": 4, "logical": 8, "features": []}):
             p.chat([{"role": "user", "content": "oi"}], max_tokens=300)
             small = loads[-1]["n_ctx"]
             p.chat([{"role": "user", "content": "oi"}], max_tokens=6000)   # resposta de 6K: a janela automática (2048 no PC fraco) não cabe

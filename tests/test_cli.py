@@ -175,7 +175,7 @@ class UpdateTests(unittest.TestCase):
         self.assertEqual(seen["cmd"][0], "sh")
         self.assertEqual(seen["script"], script)
         self.assertTrue(urlopen.call_args[0][0].endswith("/main/install.sh"))
-        self.assertEqual((seen["env"]["ASTA_APP_DIR"], seen["env"]["ASTA_EXTRAS"]), ("/home/u/.asta/app", "docs,media"))
+        self.assertEqual((seen["env"]["ASTA_APP_DIR"].replace("\\", "/"), seen["env"]["ASTA_EXTRAS"]), ("/home/u/.asta/app", "docs,media"))
         self.assertFalse(os.path.exists(seen["cmd"][1]))  # arquivo temporário apagado
         self.assertIn("Atualizando o Python", out.getvalue())
 
