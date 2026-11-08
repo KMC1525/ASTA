@@ -64,5 +64,65 @@ class InstalledTests(ServerCase):
         self.assertEqual(INST.downloaded_hf_models.__name__, "downloaded_hf_models")
 
 
+class GGUFApiCompatTests(unittest.TestCase):
+    """v0.17.5 — a stable-diffusion-cpp-python nova gera com `generate_image`; a antiga, com `txt2img` (erro «object has no attribute 'txt2img'»)."""
+
+    def run_with(self, sd_cls):
+        import tempfile
+
+        from asta.canvas import media as M
+        from tests.test_canvas import PNG
+
+        tmp = Path(tempfile.mkdtemp())
+        (tmp / "image").mkdir()
+        (tmp / "image" / "z-image-Q4_K_M.gguf").write_bytes(b"g")
+        M._LOCAL_CACHE.clear()
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        runs = []
+        sd = sd_cls(Img, runs)
+        mod = mock.MagicMock(StableDiffusion=lambda **kw: sd)
+        prov = M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(tmp), "models": {"image": "z-image-Q4_K_M.gguf"}, "needs_key": False})
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
+            return prov.image("um gato", size="1280x720", seed=3), runs
+
+    def test_new_api_generate_image(self):
+        class New:
+            def __init__(self, img, runs):
+                self.img, self.runs = img, runs
+
+            def generate_image(self, **kw):
+                self.runs.append(kw)
+                return [self.img()]
+
+        out, runs = self.run_with(New)
+        self.assertEqual((out[0].mime, runs[0]["width"], runs[0]["height"], runs[0]["seed"]), ("image/png", 1024, 576, 3))
+
+    def test_old_api_txt2img_and_a_clear_error_when_neither_exists(self):
+        class Old:
+            def __init__(self, img, runs):
+                self.img, self.runs = img, runs
+
+            def txt2img(self, **kw):
+                self.runs.append(kw)
+                return self.img()   # uma imagem só, sem lista, também é aceita
+
+        out, runs = self.run_with(Old)
+        self.assertEqual(out[0].mime, "image/png")
+
+        class Neither:
+            def __init__(self, img, runs):
+                pass
+
+        from asta.providers.base import ProviderError
+
+        with self.assertRaises(ProviderError) as cm:
+            self.run_with(Neither)
+        self.assertIn("generate_image", str(cm.exception))
+
+
 if __name__ == "__main__":
     unittest.main()

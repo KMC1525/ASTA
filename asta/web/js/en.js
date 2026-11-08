@@ -2303,4 +2303,6 @@ export default {
   "Nenhuma mídia neste canvas. Envie ou gere uma imagem, vídeo ou som e cite com @.": "No media in this canvas. Upload or generate an image, video or sound and mention it with @.",
   "Escreva o texto… (digite @ para citar uma imagem, vídeo ou som do canvas)": "Write the text… (type @ to mention an image, video or sound from the canvas)",
   "Descreva a imagem (ou ligue um nó de texto). Digite @ para citar uma imagem, vídeo ou som do canvas.": "Describe the image (or connect a text node). Type @ to mention an image, video or sound from the canvas.",
+  "Sem modelo da nuvem": "No cloud model",
+  "Configurar provedores e chaves…": "Set up providers and keys…",
 };

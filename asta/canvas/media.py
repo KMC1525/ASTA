@@ -1328,7 +1328,8 @@ class GGUFMedia(MediaProvider):
         extra = {**base.get("run", {}), **(extra or {})}
         sd = self._engine("image", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
         w, h = parse_wh(size)
-        w, h = max(256, min(w, 1024) // 8 * 8), max(256, min(h, 1024) // 8 * 8)
+        k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
+        w, h = max(256, int(w * k) // 8 * 8), max(256, int(h * k) // 8 * 8)
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
@@ -1336,7 +1337,11 @@ class GGUFMedia(MediaProvider):
             kw = {"prompt": prompt, "width": w, "height": h, "seed": int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i, **extra}
             if negative:
                 kw.setdefault("negative_prompt", negative)
-            for img in sd.txt2img(**kw)[:1]:
+            gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)   # a stable-diffusion-cpp-python nova chama `generate_image`; a antiga, `txt2img`
+            if gen is None:
+                raise ProviderError("A versão instalada da stable-diffusion-cpp-python não tem um gerador de imagem conhecido (generate_image/txt2img). Atualize-a (asta libs).")
+            imgs = gen(**kw)
+            for img in (imgs if isinstance(imgs, (list, tuple)) else [imgs])[:1]:
                 buf = io.BytesIO()
                 img.save(buf, format="PNG")
                 out.append(Media(buf.getvalue(), "image/png"))
