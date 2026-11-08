@@ -196,22 +196,36 @@ def check_args(args: Iterable[str], cwd: Optional[Path] = None) -> list:
     dados do ASTA nem segredos por dentro de um argumento de `tar`, `7z`, `ffmpeg`…). `--opcao=valor` confere o valor."""
     out = []
     ws = workspace()
+    base = cwd or ws
     for a in args:
         s = str(a)
         if "\x00" in s or len(s) > 4000:
             raise Blocked("Argumento inválido.")
-        cand = s.split("=", 1)[1] if s.startswith("-") and "=" in s else s
-        if cand and not cand.startswith("-") and (re.search(r"[\\/]", cand) or cand.startswith("~") or re.match(r"^[a-zA-Z]:", cand)):
+        cands = [s.split("=", 1)[1]] if s.startswith("-") and "=" in s else [s]
+        if s.startswith("-"):   # opção com o caminho colado: «-o/etc/x», «-I~/y»
+            m = re.search(r"(?:/|\\|~|[A-Za-z]:[\\/])", s)
+            if m:
+                cands.append(s[m.start():])
+        for cand in cands:
+            if not cand or "://" in cand or (cand.startswith("-") and cand == s):
+                continue
+            looks = bool(re.search(r"[\\/]", cand) or cand.startswith("~") or re.match(r"^[a-zA-Z]:", cand) or cand in (".", ".."))
+            if not looks:
+                try:   # nome simples que existe ao lado do programa também é caminho (um arquivo ou pasta)
+                    looks = (base / cand).exists()
+                except (OSError, ValueError):
+                    looks = False
+            if not looks:
+                continue
             try:
-                p = resolve(cand.split("?")[0], cwd) if "://" not in cand else None
+                p = resolve(cand.split("?")[0], base)
             except Blocked:
-                p = None
-            if p is not None and "://" not in cand:
-                if any(_under(p, ah) for ah in _asta_homes()) and not _under(p, ws):
-                    raise Blocked("Um argumento aponta para a pasta de dados do ASTA (chaves de API e configurações): bloqueado.")
-                why = _sensitive(p)
-                if why:
-                    raise Blocked(f"Um argumento aponta para algo protegido: {why}.")
+                continue
+            if any(_under(p, ah) for ah in _asta_homes()) and not _under(p, ws):
+                raise Blocked("Um argumento aponta para a pasta de dados do ASTA (chaves de API e configurações): bloqueado.")
+            why = _sensitive(p)
+            if why:
+                raise Blocked(f"Um argumento aponta para algo protegido: {why}.")
         out.append(s)
     return out[:60]
 

@@ -5,6 +5,25 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.15.1] — 2026-11-08
+
+### Corrigido — Computer Use
+- **Segurança de `run_program`:** um argumento com o caminho **colado à opção** (`-o/caminho`, `-I~/x`) e o argumento `..` escapavam do filtro de caminhos (dava para ler a pasta de dados do ASTA, onde ficam as chaves de API, por um programa como `grep -r … ..`). Agora toda opção com caminho embutido, `.`/`..` e qualquer nome que exista ao lado do programa passam pelo mesmo crivo dos arquivos.
+- **Modelos pequenos erravam o formato:** a IA que manda os argumentos como **texto JSON**, usa nomes de ferramenta parecidos (`mkdir`, `write_file`, `open_application`, `hotkey`…; «delete» vira lixeira, sempre desfazível) ou nomes de argumento parecidos (`file_path`, `destination`, `app_name`…) agora é entendida em vez de gastar passos com erro.
+- **Jogos:** a pasta Downloads deixou de ser varrida por padrão (instaladores e páginas soltas apareciam como «jogos»); pastas de jogos próprias continuam em *Configuração → Computer Use → Pastas de jogos*.
+- **macOS:** o texto digitado e as teclas vão como argumento do AppleScript (UTF-8 correto para acentos), não por variável de ambiente.
+- Limite de tarefas ao mesmo tempo **aumentado nas configurações** passa a liberar na hora quem estava na fila.
+- Dicas de instalação que faltavam no relatório (macOS e Windows).
+
+### Adicionado
+- **Bibliotecas e ferramentas** em *Configuração → Computer Use*: o que está instalado e o que falta (com o comando para instalar), por sistema: libX11/libXtst (X11), `xdg-open`, `grim`/`ydotool` (Wayland), `cliclick` (macOS), PowerShell (Windows), Pillow, `ffmpeg` e `pypdf`. Só o Python padrão é obrigatório; Pillow ganhou o extra `pip install "asta[computer]"` (reduz a captura de telas grandes; sem ele o `ffmpeg` faz o trabalho).
+- Testes novos: argumentos de programas, nomes tolerantes, relatório de dependências e falha do provedor.
+
+### Verificado nesta versão (Linux, X virtual com o Xvfb)
+- As **27 ferramentas** rodaram com o driver real: arquivos (inclusive `.docx`/`.xlsx`/`.pdf` válidos), `zip`, organizar, lixeira, `ffmpeg`/`pandoc`/`soffice` por `run_program`, abrir programa por entrada `.desktop`, jogos de pasta, URL, captura de tela (com redução em tela 2560×1440: escala de clique correta, com Pillow e com `ffmpeg`), clique, digitação com acentos/Unicode, atalhos e rolagem.
+- **Equipe completa ponta a ponta** com um modelo «com visão» roteirizado: abrir o terminal, capturar a tela (a imagem chega ao modelo), clicar, digitar e conferir o arquivo escrito.
+- Continua sem verificação em máquinas reais: Windows, macOS e Android.
+
 ## [0.15.0] — 2026-11-08
 
 ### Adicionado — Computer Use

@@ -72,6 +72,7 @@ run('computer', async ({ api, open, check, base }) => {
   await page.locator('.cu-cfg-prompts details summary', { hasText: 'operator.md' }).click();
   await until(page, () => /Operator/.test(document.querySelector('.cu-cfg-prompts details[open] pre')?.textContent || ''));
   check('cu:le-os-prompts-internos', true);
+  check('cu:mostra-bibliotecas-e-ferramentas', (await page.locator('#cu-libs li').count()) >= 3 && (await page.locator('#cu-libs li[data-lib="python"].ok').count()) === 1);
 
   // esconder da barra lateral e celular
   await api('/api/settings', { method: 'PUT', body: { ui: { sidebar_hidden: ['computer'] } } });

@@ -24,6 +24,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from .. import attachments as att
 from . import files as F
 from . import guard, osdrv
+from .agents import ARG_ALIASES
 
 READ, WRITE, DELETE, RUN, INPUT, SCREEN = "read", "write", "delete", "run", "input", "screen"
 RISKS = (READ, WRITE, DELETE, RUN, INPUT, SCREEN)
@@ -88,6 +89,13 @@ def coerce(tool: Tool, args: Any) -> Dict[str, Any]:
     if not isinstance(args, dict):
         raise ToolError("«args» precisa ser um objeto JSON.")
     out: Dict[str, Any] = {}
+    args = dict(args)
+    for name in tool.args:   # «file_path» no lugar de «path», «destination» no lugar de «dst»…
+        if args.get(name) in (None, ""):
+            for alt in ARG_ALIASES.get(name, ()):
+                if alt not in tool.args and args.get(alt) not in (None, ""):
+                    args[name] = args[alt]
+                    break
     for name, (typ, required, _) in tool.args.items():
         if name not in args or args[name] is None or args[name] == "":
             if required:

@@ -17,7 +17,7 @@ from .. import attachments as att
 from ..providers import resolve_provider
 from ..util import new_id, now_iso, num, read_json, text
 from . import files as F
-from . import guard, osdrv, tools as T
+from . import deps, guard, osdrv, tools as T
 from .engine import FINAL, GuiLease, TaskRunner
 
 SCHEMA = "asta.computer.task.v1"
@@ -186,12 +186,13 @@ class ComputerManager:
     def status(self) -> Dict[str, Any]:
         cfg = self.config()
         drv = self.driver
+        self._pump()   # o limite pode ter sido aumentado nas configurações: libera quem estava na fila
         with self.lock:
             running = sum(1 for tid in self.active if (self.get(tid) or {}).get("status") == "running")
             waiting = sum(1 for tid in self.active if (self.get(tid) or {}).get("status") == "waiting")
             queued = len(self.queue)
         return {"enabled": cfg["enabled"], "mode": cfg["mode"], "max_parallel": cfg["max_parallel"], "running": running, "waiting": waiting, "queued": queued,
-                "platform": drv.name, "platform_label": drv.label, "capabilities": drv.capabilities(), "gui_owner": self.gui.owner, "limit": MAX_PARALLEL}
+                "platform": drv.name, "platform_label": drv.label, "capabilities": drv.capabilities(), "libs": deps.report(drv.name), "gui_owner": self.gui.owner, "limit": MAX_PARALLEL}
 
     # ----------------------------------------------------------------- criar
     def submit(self, goal: str, *, mode: str = "", attachment_ids: Optional[List[str]] = None, chat_id: str = "", origin: str = "section",
