@@ -427,6 +427,18 @@ def strip_reasoning(raw: str) -> str:
     return s
 
 
+def trim_to_sentence(text: str, keep_at_least: float = 0.25) -> str:
+    """Resposta cortada pelo limite de tokens: corta no fim da última frase completa (ponto, !, ?, … ou aspas/parêntese logo depois), para não terminar no meio de uma palavra.
+    Se a última frase completa deixaria menos de `keep_at_least` do texto, mantém tudo (melhor um texto cortado do que quase nada)."""
+    body = (text or "").rstrip()
+    if not body or body[-1] in ".!?…\"'”»)*_~`":
+        return body
+    best = max((body.rfind(m) + len(m) for m in (". ", "! ", "? ", "… ", ".\n", "!\n", "?\n", "…\n", ".\"", "!\"", "?\"", ".*", "!*", "?*")), default=-1)
+    if best > 0 and best >= len(body) * keep_at_least:
+        return body[:best].rstrip()
+    return body
+
+
 def parse_reply(raw: str, name: str = "", others: Optional[List[str]] = None) -> Dict[str, Any]:
     """Separa o texto visível das tags [[remember:…]] / [[mood:…]] / [[silence]]."""
     remembers: List[str] = []

@@ -47,6 +47,7 @@ Python 3.9 is the minimum: do not use `match`, runtime `X | Y`, etc. (use `from 
 ## Tests and PRs
 
 - Every fix/feature needs a test in `tests/` whenever possible.
+- Read [docs/asta-principles.md](docs/asta-principles.md) and [docs/asta-dev-guide.md](docs/asta-dev-guide.md) first: they define the principles (open source, local-first, data control, interoperability, AI everywhere, multi-agent systems, federation) and the rules every change follows (update both READMEs and both changelogs, keep every installer current, give every tool a multi-agent flow, allow SFW and NSFW freely).
 - Describe **what** changed and **why**; record it in `CHANGELOG.md` under *Unreleased* (and in `CHANGELOG.en.md`). `README.md` is in English and `README.pt-BR.md` in Portuguese; `CONTRIBUTING.pt-BR.md` is the Portuguese twin of `CONTRIBUTING.md`: keep each pair in sync.
 - Third-party API adapters: follow the service's public documentation and test against a simulated server — paid services cannot be tested in CI; say in the PR what you actually verified.
 - 3D engine changes: attach a screenshot (before/after) — headless Chromium works (`--use-angle=swiftshader`).

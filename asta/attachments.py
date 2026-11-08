@@ -20,6 +20,8 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 from xml.etree import ElementTree as ET
 
+from . import archives
+
 TEXT_EXT = {
     "txt", "md", "markdown", "csv", "tsv", "json", "jsonl", "yaml", "yml", "xml", "html", "htm", "css", "js", "mjs",
     "ts", "tsx", "jsx", "py", "rb", "go", "rs", "java", "c", "h", "cpp", "hpp", "cs", "php", "sh", "bat", "ps1", "sql",
@@ -39,7 +41,9 @@ def _ext(name: str) -> str:
 
 def _run(cmd: List[str], timeout: int = 120) -> Optional[subprocess.CompletedProcess]:
     try:
-        return subprocess.run(cmd, capture_output=True, timeout=timeout)
+        from . import perf
+
+        return perf.run(cmd, capture_output=True, timeout=timeout)   # ffmpeg com menos threads e prioridade baixa conforme o modo de desempenho
     except (OSError, subprocess.SubprocessError):
         return None
 
@@ -304,8 +308,9 @@ def analyze(
     *,
     max_chars: int = 20000,
     transcribe: Optional[Callable[[Path], str]] = None,
+    _depth: int = 0,
 ) -> Dict[str, Any]:
-    """Lê um anexo e devolve {name, kind, size, text, images, notes}."""
+    """Lê um anexo e devolve {name, kind, size, text, images, notes}. Um pacote (ZIP, RAR, 7z, TAR…) é aberto e o conteúdo dele entra no texto (kind «archive»)."""
     path = Path(path)
     ext = _ext(name)
     size = path.stat().st_size
@@ -320,6 +325,12 @@ def analyze(
         return item
 
     try:
+        if archives.archive_kind(name, path):
+            item["kind"] = "archive"
+            if _depth >= 1:
+                item["notes"].append("pacote dentro de pacote: não aberto")
+                return item
+            return _archive(path, name, item, max_chars, transcribe, finish)
         if ext in IMAGE_EXT or mime.startswith("image/"):
             item["kind"] = "image"
             data = path.read_bytes()
@@ -407,6 +418,64 @@ def analyze(
     except (zipfile.BadZipFile, KeyError, ET.ParseError, OSError) as exc:
         item["notes"].append(f"não foi possível ler o arquivo: {exc}")
         return item
+
+
+def _priority(f: Dict[str, Any]) -> tuple:
+    """Dentro de um pacote, o que ajuda mais a entender o conteúdo vem primeiro: README/documentação, depois textos pequenos, imagens e o resto."""
+    base = f["name"].rsplit("/", 1)[-1].lower()
+    ext = _ext(base)
+    if base.startswith(("readme", "leia", "leeme", "sobre", "about", "license")):
+        rank = 0
+    elif ext in ("md", "txt", "rst", "pdf", "docx", "odt"):
+        rank = 1
+    elif ext in TEXT_EXT or ext in ("xlsx", "pptx", "ods", "odp", "rtf"):
+        rank = 2
+    elif ext in IMAGE_EXT:
+        rank = 3
+    elif ext in AUDIO_EXT or ext in VIDEO_EXT:
+        rank = 4
+    else:
+        rank = 5
+    return (rank, f["size"])
+
+
+def _archive(path: Path, name: str, item: Dict[str, Any], max_chars: int, transcribe: Optional[Callable[[Path], str]], finish: Callable[[str], Dict[str, Any]]) -> Dict[str, Any]:
+    """Abre o pacote numa pasta temporária, lista o conteúdo e lê os arquivos de dentro (os mais úteis primeiro) até esgotar o limite de texto."""
+    with tempfile.TemporaryDirectory(prefix="asta-pack-") as tmp:
+        try:
+            res = archives.expand(path, Path(tmp) / "x", name)
+        except archives.ArchiveError as exc:
+            item["notes"].append(str(exc))
+            return item
+        files = res["files"]
+        total = sum(f["size"] for f in files)
+        item["notes"].append(f"{len(files)} arquivo(s) dentro, {_human(total)}")
+        item["notes"].extend(res["skipped"][:4])
+        lines = [f"[Pacote {name}: {len(files)} arquivo(s), {_human(total)}]"] + [f"- {f['name']} ({_human(f['size'])})" for f in files[:150]]
+        if len(files) > 150:
+            lines.append(f"… e mais {len(files) - 150} arquivo(s)")
+        header = "\n".join(lines)
+        budget = max_chars - len(header) - 8
+        sections: List[str] = []
+        media_left = 3   # áudio/vídeo é caro de analisar (ffmpeg, transcrição): só os primeiros
+        for f in sorted(files, key=_priority):
+            if budget < 400:
+                break
+            ext = _ext(f["name"])
+            if ext in AUDIO_EXT or ext in VIDEO_EXT:
+                if media_left <= 0:
+                    continue
+                media_left -= 1
+            inner = analyze(f["path"], f["name"], "", max_chars=max(400, min(budget, max_chars // 2)), transcribe=transcribe, _depth=1)
+            for img in inner.get("images", []):
+                if len(item["images"]) < 8:
+                    item["images"].append(img)
+            body = inner.get("text", "")
+            if body:
+                section = f"--- {f['name']} ---\n{body}"
+                sections.append(section)
+                budget -= len(section) + 2
+        return finish(header + ("\n\n" + "\n\n".join(sections) if sections else ""))
 
 
 def build_digest(items: List[Dict[str, Any]], max_total: int = 60000) -> str:

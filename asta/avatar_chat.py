@@ -350,6 +350,8 @@ class ChatEngine:
             emit({"type": "silence", "avatar_id": speaker["id"]})
             return None
         parsed = av.parse_reply(raw, speaker["name"], other_names)
+        if parsed["say"] and getattr(provider, "last_stop", "") == "length":   # cortada pelo limite de tokens: não termina no meio de uma frase
+            parsed["say"] = av.trim_to_sentence(parsed["say"])
         if parsed["silence"] and not parsed["say"]:
             emit({"type": "silence", "avatar_id": speaker["id"]})
             return None

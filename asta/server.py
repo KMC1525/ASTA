@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import __version__, builder, hf, voice
+from . import __version__, builder, hf, native, voice
 from .agents.llm import call_json
 from .agents.pipeline import Cancelled, Pipeline, create_edit_version  # noqa: F401
 from .cards import character_from_png, import_character, normalize_character
@@ -71,7 +71,8 @@ def _native_status() -> dict:
 
         st = native.status()
         si = native.sys_info()
-        return {"active": st["active"], "cargo": st["cargo"], "models": st.get("models", False), "last": st.get("last", {}), "cores": [si.get("physical"), si.get("logical")], "features": si.get("features", [])}
+        return {"active": st["active"], "cargo": st["cargo"], "models": st.get("models", False), "ops": st.get("ops", False), "abi": st.get("abi", 0), "last": st.get("last", {}),
+                "cores": [si.get("physical"), si.get("logical")], "features": si.get("features", [])}
     except Exception:  # noqa: BLE001
         return {"active": False, "cargo": False}
 
@@ -174,6 +175,8 @@ class App:
         a("GET", r"/api/hf/search", self.r_hf_search)
         a("GET", r"/api/hf/files", self.r_hf_files)
         a("GET", r"/api/hf/local", self.r_hf_local)
+        a("GET", r"/api/storage", self.r_storage)
+        a("POST", r"/api/storage/optimize", self.r_storage_optimize)
         a("POST", r"/api/hf/download", self.r_hf_download)
         a("DELETE", r"/api/hf/local/(?P<name>[^/]+)", self.r_hf_delete)
 
@@ -562,9 +565,30 @@ class App:
     def r_hf_local(self, req: "Request") -> None:
         kind = req.query.get("kind", ["text"])[0] or "text"  # sem `kind`: só os de texto (o que o provedor de IA lista)
         try:
-            req.json({"models": hf.local_models(self.store.models_dir, kind if kind == "all" else hf.check_kind(kind)), "kinds": {k: v["label"] for k, v in hf.GGUF_KINDS.items()}})
+            models = hf.local_models(self.store.models_dir, kind if kind == "all" else hf.check_kind(kind))
+            for m in models:
+                if m.get("kind") == "text":   # contexto em que o modelo foi treinado e custo do cache de atenção (lidos do cabeçalho, sem carregar os pesos): a tela mostra até onde dá para ir
+                    info = native.model_info(hf.kind_dir(self.store.models_dir, "text") / m["name"]) or {}
+                    m["ctx_train"], m["kv_bytes_per_token"] = int(info.get("ctx_train") or 0), int(info.get("kv_bytes_per_token") or 0)
+            req.json({"models": models, "kinds": {k: v["label"] for k, v in hf.GGUF_KINDS.items()}})
         except ProviderError as exc:
             raise HttpError(400, str(exc))
+
+    def r_storage(self, req: "Request") -> None:
+        """Uso do disco por área, sobras e arquivos duplicados (só leitura)."""
+        from . import storage_opt
+
+        req.json(storage_opt.report(self.store.home))
+
+    def r_storage_optimize(self, req: "Request") -> None:
+        """Libera espaço: remove sobras e troca duplicados por links físicos. `apply: false` (padrão) só mostra a prévia."""
+        from . import storage_opt
+
+        b = req.body_json()
+        b = b if isinstance(b, dict) else {}
+        if self.jobs.running("generate"):
+            raise HttpError(409, "Há uma geração em andamento. Espere terminar para otimizar o armazenamento.")
+        req.json(storage_opt.optimize(self.store.home, dedupe=b.get("dedupe") is not False, clean=b.get("clean") is not False, apply=b.get("apply") is True))
 
     def r_hf_delete(self, req: "Request", name: str) -> None:
         name = urllib.parse.unquote(name)

@@ -290,7 +290,7 @@ export default async function render(root, ctx, cid) {
     for (const f of files) {
       try {
         const a = await api(`/api/canvases/${cid}/assets`, { method: 'POST', body: f, raw: true, headers: { 'X-Filename': encodeURIComponent(f.name), 'Content-Type': f.type || 'application/octet-stream' } });
-        S.cv.assets.push(a); added.push(a.id);
+        for (const x of [a, ...(a.also || [])]) { S.cv.assets.push(x); added.push(x.id); }
       } catch (e) { toast(`${f.name}: ${e.message}`, 'err'); }
     }
     if (!added.length) return;
@@ -315,7 +315,7 @@ export default async function render(root, ctx, cid) {
     assetsPanel.classList.toggle('hidden', !S.assetsOpen);
     assetsBtn.querySelector('span').textContent = t('Arquivos') + ' (' + S.cv.assets.length + ')';
     if (!S.assetsOpen) return;
-    const input = h('input', { type: 'file', multiple: true, accept: 'image/*,video/*,audio/*', class: 'hidden', onchange: (e) => { const r = surface.getBoundingClientRect(); const p = toWorld(r.left + 120, r.top + 80); uploadFiles([...e.target.files], p); e.target.value = ''; } });
+    const input = h('input', { type: 'file', multiple: true, accept: 'image/*,video/*,audio/*,.zip,.rar,.7z,.tar,.tgz,.cbz,.cbr', class: 'hidden', onchange: (e) => { const r = surface.getBoundingClientRect(); const p = toWorld(r.left + 120, r.top + 80); uploadFiles([...e.target.files], p); e.target.value = ''; } });
     const items = [...S.cv.assets].reverse().map((a) => h('div', { class: 'cv-asset', draggable: 'true', title: a.prompt || a.name, ondragstart: (e) => { e.dataTransfer.setData('text/asta-asset', a.id); e.dataTransfer.effectAllowed = 'copy'; } },
       h('div', { class: 'pv', onclick: () => preview(a) }, a.kind === 'image' ? h('img', { src: c.url(a), loading: 'lazy', draggable: 'false' }) : a.kind === 'video' ? h('video', { src: c.url(a) + '#t=0.1', preload: 'metadata', muted: true }) : icon('audio', 28)),
       h('span', { class: 'kd' }, a.kind === 'image' ? t('imagem') : a.kind === 'video' ? t('vídeo') : t('áudio')),

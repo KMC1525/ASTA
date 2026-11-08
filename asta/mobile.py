@@ -9,6 +9,7 @@ from __future__ import annotations
 import hmac
 import ipaddress
 import json
+import os
 import secrets
 import socket
 from pathlib import Path
@@ -84,9 +85,17 @@ class Mobile:
     def exposed(self) -> bool:
         return self.bind_host not in ("127.0.0.1", "localhost", "::1")
 
+    @property
+    def strict(self) -> bool:
+        """Modo do app Android (ASTA_STRICT_LOOPBACK=1): o ASTA roda DENTRO do celular, e no Android qualquer outro app (ou página) do aparelho alcança 127.0.0.1. Por isso até o endereço local
+        exige o cookie de pareamento, que só o app conhece (o código fica na pasta privada dele)."""
+        return os.environ.get("ASTA_STRICT_LOOPBACK", "") not in ("", "0")
+
     # ----- controle de acesso
     def is_remote(self, client_ip: str, headers) -> bool:
-        """Remoto = veio de outro endereço OU passou por um proxy/túnel (que faz tudo parecer localhost)."""
+        """Remoto = veio de outro endereço OU passou por um proxy/túnel (que faz tudo parecer localhost). No modo estrito, tudo é remoto."""
+        if self.strict:
+            return True
         if not is_loopback(client_ip):
             return True
         present = {k.lower() for k, v in headers.items() if v}

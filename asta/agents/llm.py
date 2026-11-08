@@ -148,7 +148,7 @@ def call_json(
         except (ValueError, json.JSONDecodeError) as exc:
             last_err = str(exc)
             if "incompleto" in last_err or "cortada" in last_err:
-                max_tokens = min(max_tokens * 2, 8192)  # resposta cortada: da próxima vez cabe mais
+                max_tokens = min(max_tokens * 2, 16384)  # resposta cortada: da próxima vez cabe mais
                 if salvage and attempt == attempts - 1:
                     try:
                         return salvage_json(str(raw)), str(raw)

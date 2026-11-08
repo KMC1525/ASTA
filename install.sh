@@ -18,8 +18,9 @@
 #                                       pelo gerenciador de pacotes do sistema (apt, dnf, yum, pacman, zypper, apk, Homebrew).
 #                                       keep: nunca mexe no Python do sistema.
 #   ASTA_FORCE=1                        reinstala o ASTA mesmo que a versão instalada já seja a mais recente.
-#   ASTA_RUST=yes|ask|no                Rust (deixa o ASTA mais rápido e leve): yes (padrão) instala o Rust se faltar, atualiza e recompila o núcleo do ASTA, sozinho (na pasta do
-#                                       usuário, sem sudo); ask pergunta no terminal; no pula.
+#   ASTA_RUST=yes|ask|no                Núcleo Rust (mais rápido e leve; parte do ASTA): yes (padrão) baixa a biblioteca pronta da Release e, só se isso falhar, instala o Rust e compila
+#                                       na máquina (pasta do usuário, sem sudo); ask pergunta no terminal; no pula.
+#   ASTA_NATIVE_FILE=<arquivo>          núcleo Rust já compilado (os instaladores usam isto); é copiado em vez de baixado.
 # O que já está instalado NÃO é instalado de novo: o Python só é atualizado se o gerenciador de pacotes tiver versão nova, o ambiente
 # (venv) é reaproveitado, o ASTA só é baixado se houver versão mais nova, e as bibliotecas/modelos já presentes só são atualizados se precisar.
 # Argumentos: sh -s -- --run            inicia o ASTA ao terminar.
@@ -54,11 +55,28 @@ die()  { printf '\033[31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 
 say "$(L "ASTA — instalação/atualização" "ASTA — install/update")"
 
+# macOS: o Terminal nem sempre tem o Homebrew no PATH (Apple Silicon fica em /opt/homebrew; Intel em /usr/local). Sem isto «brew» e os Pythons dele "não existem" para o instalador.
+if [ "$(uname -s)" = "Darwin" ]; then
+  for brewbin in /opt/homebrew/bin/brew /usr/local/bin/brew; do
+    if [ -x "$brewbin" ] && ! command -v brew >/dev/null 2>&1; then eval "$("$brewbin" shellenv)"; fi
+  done
+  PATH="$PATH:/opt/homebrew/bin:/usr/local/bin:/Library/Frameworks/Python.framework/Versions/Current/bin"; export PATH
+fi
+
 # 1) Python 3.9+ — instala se faltar e atualiza (com o pip, o venv e as ferramentas de empacotamento) usando o gerenciador
 #    de pacotes do sistema. Pode pedir a sua senha (sudo). ASTA_PYTHON=keep: nunca mexe no Python do sistema.
+# macOS sem as «Command Line Tools»: /usr/bin/python3 é só um atalho que ABRE uma janela de instalação em vez de rodar o Python. Não o executamos.
+mac_stub() {
+  [ "$(uname -s)" = "Darwin" ] || return 1
+  case "$(command -v "$1" 2>/dev/null)" in
+    /usr/bin/python3|/usr/bin/python) ! xcode-select -p >/dev/null 2>&1 ;;
+    *) return 1 ;;
+  esac
+}
 find_python() {
   PY=""
-  for cand in python3.13 python3.12 python3.11 python3.10 python3.9 python3 python; do
+  for cand in python3.14 python3.13 python3.12 python3.11 python3.10 python3.9 python3 python; do
+    mac_stub "$cand" && continue
     if command -v "$cand" >/dev/null 2>&1 && "$cand" -c 'import sys; sys.exit(0 if sys.version_info >= (3, 9) else 1)' >/dev/null 2>&1; then
       PY="$cand"; return 0
     fi
@@ -77,7 +95,7 @@ pkg_python() {
     Darwin)
       command -v brew >/dev/null 2>&1 || return 1
       if [ "$mode" = "install" ]; then brew install python
-      elif brew list --formula python >/dev/null 2>&1; then brew upgrade python || true; fi ;;
+      elif brew list --formula 2>/dev/null | grep -Eq '^python(@3\.[0-9]+)?$'; then brew upgrade python || true; fi ;;
     *)
       if command -v apt-get >/dev/null 2>&1; then
         as_root apt-get update -qq && as_root env DEBIAN_FRONTEND=noninteractive apt-get install -y python3 python3-venv python3-pip
@@ -205,7 +223,15 @@ case "${ASTA_MODELS:-ask}" in
      "$APP_DIR/venv/bin/asta" models install || MODELS_FAILED=1 ;;
 esac
 
-# 7) Rust (opcional, deixa o ASTA mais rápido e leve): instala o Rust se faltar, atualiza se já existir e recompila o núcleo do ASTA.
+# 7) núcleo Rust — parte obrigatória do ASTA. Os instaladores (macOS .pkg etc.) já trazem a biblioteca pronta (ASTA_NATIVE_FILE): ela é copiada para cá antes de tudo.
+if [ -n "${ASTA_NATIVE_FILE:-}" ] && [ -f "$ASTA_NATIVE_FILE" ]; then
+  NDIR="${ASTA_HOME:-$HOME/.asta}/native"
+  mkdir -p "$NDIR"
+  case "$(uname -s)" in Darwin) NLIB="libasta_core.dylib" ;; *) NLIB="libasta_core.so" ;; esac
+  if cp "$ASTA_NATIVE_FILE" "$NDIR/$NLIB"; then printf '%s' "$NEW" > "$NDIR/VERSION"; note "$(L "Núcleo Rust copiado do instalador." "Rust core copied from the installer.")"; fi
+fi
+#    Sem ela, `asta native setup` baixa a biblioteca PRÉ-COMPILADA da Release (conferida por SHA-256, sem compilador) e só compila na máquina se isso falhar:
+#    Rust instalado se faltar, atualizado se já existir.
 #    ASTA_RUST=yes (padrão: automático, como as bibliotecas e os modelos) | ask (pergunta no terminal) | no (pula).
 ASTA_RUST="${ASTA_RUST:-yes}" "$APP_DIR/venv/bin/asta" native setup || note "$(L "Rust: não foi possível concluir agora (opcional; o ASTA usa Python). Tente depois:  asta native setup" "Rust: could not finish right now (optional; ASTA uses Python). Try later:  asta native setup")"
 
@@ -217,8 +243,15 @@ if [ "$LIBS_FAILED" = "1" ]; then
 fi
 case ":$PATH:" in
   *":$BIN_DIR:"*) ;;
-  *) note "$(L "Adicione ao seu PATH para usar o comando 'asta':" "Add this to your PATH to use the 'asta' command:")"
-     note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> ~/.profile   $(L "(e abra um novo terminal)" "(and open a new terminal)")"
+  *) case "${SHELL:-}" in
+       */zsh)  RCFILE="~/.zshrc" ;;
+       */bash) if [ "$(uname -s)" = "Darwin" ]; then RCFILE="~/.bash_profile"; else RCFILE="~/.bashrc"; fi ;;
+       */fish) RCFILE="" ;;
+       *)      RCFILE="~/.profile" ;;
+     esac
+     note "$(L "Adicione ao seu PATH para usar o comando 'asta':" "Add this to your PATH to use the 'asta' command:")"
+     if [ -z "$RCFILE" ]; then note "$(L "  fish_add_path $BIN_DIR   (e abra um novo terminal)" "  fish_add_path $BIN_DIR   (and open a new terminal)")"
+     else note "  echo 'export PATH=\"$BIN_DIR:\$PATH\"' >> $RCFILE   $(L "(e abra um novo terminal)" "(and open a new terminal)")"; fi
      note "$(L "Até lá, abra a WebUI com o caminho completo:  $BIN_DIR/asta" "Until then, open the WebUI with the full path:  $BIN_DIR/asta")" ;;
 esac
 echo

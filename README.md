@@ -6,9 +6,9 @@
 
 A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a playable 3D world, a companion to chat with, a complete 2D game, or a node flow that produces images, videos, sounds and voices.
 
-[Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
+[Download](#download-the-installers) · [Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
 
-`MIT` · `Windows` · `macOS` · `Linux` · `Python 3.9+` · `no required dependencies`
+`MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `Rust core` · `no required dependencies`
 
 </div>
 
@@ -34,6 +34,19 @@ Everything you create lands in one **Library** of updatable projects.
 - 🧠 **Multi-agent, multi-step generation** (Analyst → Planner → Designer → Reviewer → Packager) with deterministic validation and a rule-based fallback, so something playable is always delivered.
 - 🪶 **Light by design**: the core uses only the Python standard library; there is no build step; worlds and games adapt to your hardware.
 - 🔒 **Local and private**: the server listens on `127.0.0.1`, keys never reach the browser, and AI writes **data (JSON)**, never code that gets executed.
+
+## Download the installers
+
+Pick the file for your system on the [**latest Release**](https://github.com/KMC1525/ASTA/releases/latest) — no terminal, no Python needed:
+
+| System | File | How |
+|---|---|---|
+| **Windows 10/11** (64-bit) | `ASTA-0-14-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
+| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-14-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
+| **Linux** (x86_64; `-arm64` too) | `ASTA-0-14-Linux.appimage` | `chmod +x ASTA-0-14-Linux.appimage && ./ASTA-0-14-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-14-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
+
+Every release also carries the **pre-built Rust core** of each platform (`asta-core-*`) and `SHA256SUMS.txt` (verify with `sha256sum -c`). The installers are not code-signed (that needs a paid certificate): Windows may show SmartScreen ("More info → Run anyway"). They are built by [GitHub Actions](.github/workflows/release.yml) and were **not run on real Windows/macOS/Android devices by the author of this change** (what could be checked is listed in the [changelog](CHANGELOG.en.md)). The terminal installers below remain available.
 
 ## Install
 
@@ -83,7 +96,8 @@ The WebUI opens at `http://localhost:8787`. To update, run the install command a
 | `ASTA_PYTHON=auto` (default) | installs Python if missing and upgrades it (with `pip`, `setuptools`, `wheel`, `venv`) via the system package manager |
 | `ASTA_PYTHON=keep` | never installs or upgrades the system Python (ASTA's own `pip`/`setuptools`/`wheel` are still kept current) |
 | `ASTA_FORCE=1` | reinstall ASTA even if the installed version is already the latest published one |
-| `ASTA_RUST=yes` (default) | **installs Rust for you** (rustup, in your user folder, no sudo) if missing, updates it and compiles ASTA's fast core; `no` skips it, `ask` asks first |
+| `ASTA_RUST=yes` (default) | the **Rust core** (a mandatory part of ASTA): downloads the ready-made library from the Release and, only if that fails, installs Rust (rustup, your user folder, no sudo) and compiles it; `no` skips it, `ask` asks first |
+| `ASTA_NATIVE_FILE=<file>` | an already compiled core to copy instead of downloading (the installers use this) |
 | `ASTA_LANG=pt\|en` | language of the terminal texts (default: your computer's language) |
 | `ASTA_SOURCE=<url\|folder>` | install from another source (fork, branch, local folder) |
 | `ASTA_APP_DIR`, `ASTA_BIN_DIR` | where the program and the `asta` command live |
@@ -106,7 +120,7 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 | **`asta mobile`** | **opens ASTA to your phone/tablet** and shows the pairing QR code (only paired devices get in) |
 | `asta libs` | installs/updates the optional libraries (`docs`, `media`, `local`) |
 | `asta models list\|install` | the pre-installed local models |
-| `asta native setup` | installs/updates Rust and recompiles the fast core (also `install`, `update`, `build`, `status`) |
+| `asta native setup` | makes sure the **Rust core** is active: downloads the pre-built library from the Release (SHA-256 verified, no compiler) and only compiles locally if that fails (also `install`, `update`, `build`, `status`) |
 | `asta doctor` | environment diagnostics (hardware, Python, Rust, ffmpeg, providers, terminal language) |
 | `asta version` · `asta --help` | version · all options |
 
@@ -125,11 +139,11 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
-**Without a computer at hand (Android app):** scan this QR code (or open [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest)) to download the **ASTA app** (APK, built by GitHub Actions on every release; allow "install unknown apps" once). Open it, scan your ASTA's pairing QR code or type its address, and you are in. The app **checks the repository for new versions and asks "Download now / Later"**.
+**The Android app needs no computer.** Download `ASTA-0-14-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
 
 <img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
 
-> The app is a native shell (the window); **ASTA itself must still run somewhere** — your computer, a home server or a VPN such as Tailscale. iPhone/iPad can't receive an app outside the App Store, so there it stays *Add to Home Screen* from your ASTA's address. The APK is built by CI and was not run on a device by the author of this change.
+> **Honest limits of the on-device ASTA:** heavy local models (GGUF/PyTorch) do not run inside a phone — point the providers at an Ollama/LM Studio server on your network, or connect the app to the ASTA on a computer. Features that need `ffmpeg` (video analysis, Canvas/Studio export) work only if the APK bundles it (`libffmpeg.so`/`libffprobe.so`). The app's server listens on the phone's loopback in **strict mode** — even the local address needs the app's pairing cookie, so other apps on the phone can't use it. The APK is built by CI and **was not run on a real device by the author of this change** (the engine itself is tested on the CI machine). iPhone/iPad can't receive an app outside the App Store, so there it stays *Add to Home Screen* from your ASTA's address.
 
 **Safety:** `asta mobile` opens ASTA to your network, but **only paired devices get in** (the computer itself never needs to pair). *Generate new code* in *Configuration → Mobile and tablet* unpairs every device. Behind a proxy or tunnel, pairing is required too.
 
@@ -154,7 +168,10 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 - **Split view (Firefox style).** Right-click a tab → *Split the view with…* to show two conversations side by side in the same screen, each pane with its own scroll and live streaming; the text box goes to the focused pane. The tab strip also slides sideways (mouse wheel, drag or touchpad) when you have many tabs.
 - **Sources panel (right side of the conversation).** Every searched source is listed there **in the order the search returned them**, grouped by search (Search 1, 2… with the query used), each with its number, title (opens in a new tab), site, snippet and a *read* badge when the page was read in full. It opens by itself when a search arrives (a drawer on narrow screens), fills in live, and has a **Sources (n)** button in the top bar. The `[1]`, `[2]` marks in the answer are buttons that jump to and highlight the source.
 - **Thinking time** (next to the model name, only when the chosen model supports it): **Off · Slow · Medium · High · Extra high · Ultra**. Claude gets extended-thinking budgets (1K → 32K tokens, on top of the answer size); OpenAI reasoning models (o-series, GPT-5), Gemini 2.5+, gpt-oss (LM Studio/Ollama) and reasoning models on OpenRouter get `reasoning_effort` (Extra high and Ultra use the provider's highest effort with more token headroom). Models without the feature show no selector and nothing is sent; if a model refuses the mode, ASTA retries without it and says so.
-- **Chat settings** (*Configuration → Chat*): **answer size** (tokens), **context window** (what ASTA sends — oldest messages leave first), remembered turns, creativity, **custom instructions**, default thinking level and the web-search options.
+- **Long, high-quality answers.** *Configuration → Chat*: **answer size** up to 128,000 tokens; **answer style** — *Balanced*, *Detailed* (default: complete answers with reasoning, examples and steps) or *Long and deep*; **automatic continuation** — when an answer hits the token limit ASTA asks the model to carry on where it stopped instead of handing you cut-off text; and the **output ceiling of each model is learned** from the provider's own error (so a too-large size is adjusted, not a failure). An optional **agent team** (*Plan and write* / *Plan, write and review*) adds a Planner and a Reviewer around the Writer.
+- **Long contexts: 256K, 512K and 1M tokens** (models that support them). Set the **context window** in *Configuration → Chat* (what ASTA sends — oldest messages leave first) and, for embedded GGUF models, in *Providers → Hugging Face GGUF* (the screen shows the model's trained context and the estimated attention-cache memory; the Rust core compresses the cache to 8 or 4 bits to fit and warns, but never overrides your value). Claude gets the 1M beta header automatically above 200K.
+- **Attach ZIP, RAR, 7z and TAR files — in every section.** The package is opened safely (no path escapes, no zip bombs, links ignored) and its files are used as attachments (images, documents, audio, video, text…). RAR/7z use a system tool (`unrar`, `unar`, `7z` or `bsdtar`); ZIP/TAR need nothing.
+- **Chat settings** (*Configuration → Chat*): remembered turns (up to 1,000), creativity, **custom instructions**, default thinking level and the web-search options.
 - Without a provider the Demo engine is used and Chat says so honestly — it cannot really answer questions. Pick a model to fix it.
 
 ## The creation tools
@@ -263,11 +280,11 @@ A node flow to generate and edit **images, videos, sounds and voices**, kept del
 - **Styles:** Realistic, Cartoon, Anime or **Custom** (you describe the look). **Projects:** **Single** (one video) or **Series** (episodes that share a "bible" — characters, world, tone — and recaps of earlier episodes).
 - **Generation, one scene at a time:** a Showrunner writes the script (in acts for long videos) and **each scene** goes through *receive → analyze → generate → review → deliver* before the next one starts. Delivered scenes are saved: cancel and **continue**, or **redo a single scene**. The live scene board shows the five steps of each scene.
 - **Automatic editing:** attach several videos/images/audio files + a prompt and pick an **editing style** — **Gameplay**, **Documentary**, **Phonk edit**, **Trailer**, **Vlog**, **Tutorial**, **Music video**, **Photo slideshow**. An Analyst, a Director and a Reviewer build the cuts (volume peaks, scene changes, silences, beat grid) and you refine them on the timeline.
-- **Kdenlive-style timeline:** media bin, preview monitor, inspector and tracks with **cut** (`S` / razor `C`), **join** (`J`), **mute** (`M`), delete / ripple delete, duplicate, trim, **magnet**, ripple mode, text, markers, speed, volume, fades, color filters, lock/hide/mute tracks, **undo/redo**, zoom and autosave.
+- **Kdenlive-style timeline:** media bin (double-click, drag or right-click → *Insert*/*Place*/*Remove*), project monitor, inspector, audio mixer and tracks with **cut** (`S` / razor `C`), **join** (`J`), **mute** (`M`), delete / ripple delete, duplicate, trim, **magnet**, ripple mode, text, markers, speed, volume, fades, color filters, lock/hide/mute tracks, **undo/redo**, zoom and autosave.
 - **Export:** **Full** (MP4), **Video only** or **Audio only** (M4A/MP3/WAV) at 480p/720p/1080p.
 - Honest limits: quality depends on your media providers (Demo is synthetic); a 90-minute feature means hundreds of shots (hours of work, and cost with paid providers); the browser preview approximates filters with CSS — the ffmpeg export is the reference.
 
-- **Timeline like Kdenlive**: media bin, **clip monitor** (in/out marks, *Insert*/*Overwrite*) beside the project monitor, properties panel, tracks with razor/ripple/snap, collapsible tracks, a bottom **zoom slider**, and an **audio mixer** (dB faders per track, live meters, master volume — applied to the preview and the export).
+- **Timeline like Kdenlive**: media bin, project monitor, properties panel, tracks with razor/ripple/snap, collapsible tracks, a bottom **zoom slider**, and an **audio mixer** (dB faders per track, live meters, master volume — applied to the preview and the export). *(v0.14 removed the separate clip monitor; V2 now stacks above V1 in the exported video exactly as in the preview, speed changes the clip's length, and the last edit is never lost when you leave the tab.)*
 
 ## Rebuild — rebuild an existing game in plain HTML/CSS/JS
 
@@ -287,12 +304,15 @@ The rebuilt game keeps the **same structure as the original** (same maps/labels,
 
 ## Performance — Rust core and Light mode
 
-ASTA's backend is still Python, now with an optional **Rust core** and a **performance mode** for modest PCs.
+ASTA's orchestration stays in Python (as much as possible), on top of a **mandatory Rust core** and a **performance mode** for modest PCs.
 
-- **Rust core (`asta_core`).** A small, dependency-free Rust library (std only, no crates, loaded through `ctypes`) that does the heavy number crunching — currently the **audio synthesis** of the Canvas (music, effects, voice → PCM). It works on shared buffers instead of one Python object per sample: on our benchmark a 20-second music track went from ~15 s to ~0.05 s. **It is optional:** every function has a pure-Python twin, so without Rust nothing breaks. Enable it with **`asta native setup`** — it **installs Rust for you** (rustup, minimal profile, in your user folder, no sudo) if it is missing, **updates** it if it is already there and **recompiles** the core. The installers (`install.sh`, `install.ps1`) and `asta update` offer the same step: by default they do it **automatically**, like the other code and libraries (no question; `ASTA_RUST=ask` asks first, `ASTA_RUST=no` skips it). Also: `asta native install | update | build | status`, `asta update --rust yes|no`. The C toolchain is needed to compile (Linux: `build-essential`; macOS: `xcode-select --install`; Windows: Visual Studio Build Tools) — ASTA tells you when it is missing. `asta native` / `asta doctor` show whether it is active; `ASTA_NO_NATIVE=1` turns it off.
-- **Rust core v2 — faster loading and smarter inference for any local model.** On every load the core reads the model's **header** (GGUF and safetensors: architecture, layers, training context, quantization, attention-cache cost per token) and the **free RAM/VRAM and physical cores right now**, then plans: **GPU layers** that fit, the **context window** that fits (or an 8-bit attention cache to fit more), **threads = physical cores**, batch sizes, `mlock` when there is plenty of memory, and a **prompt cache** so a repeated conversation prefix is not recomputed. Image/video/audio models get a plan from the **real weight size** (all on GPU, model offload, sequential offload for tiny VRAM, or CPU, plus attention/VAE slicing). Weights are **pre-read in parallel** into the system cache before loading (much faster on a cold disk). A context you set by hand is never overridden. *Configuration → Performance* shows the last plan. Without Rust everything has a Python twin with the same math.
-- **Performance mode** (*Configuration → Performance*): **Auto** (by hardware tier), **Light**, **Balanced** or **Maximum**. Light mode caps the local model's context window (a value you set by hand always wins), loads weights with `mmap` and a smaller batch, uses **flash attention and an 8-bit KV cache** (about half the attention-cache memory) when the llama-cpp build supports it, **unloads idle models** (configurable) and, for local image/video models, enables attention/VAE slicing and CPU offload — which lowers **VRAM** peaks. Options an older llama-cpp-python does not know are skipped automatically.
-- Honest limits: the Rust speed-up is measured on audio synthesis only; the RAM/VRAM savings of Light mode come from documented llama.cpp/diffusers features and were not benchmarked on real GPUs or models here.
+- **Rust core (`asta_core`) — a mandatory part of ASTA.** A small, dependency-free Rust library (std only, loaded through `ctypes`) that does the heavy lifting: audio synthesis of the Canvas, **local-model planning**, **multi-agent scheduling**, **storage scanning** and **memory release**. The installers (`.exe`, `.pkg`, AppImage, APK) **ship it ready-made**; from the terminal, `asta native setup` (run by the installer and `asta update`) downloads the **pre-built library from the Release** — verified by SHA-256, **no compiler needed** — and only compiles on your machine if that fails (installing Rust for you in your user folder). On start ASTA also fetches it by itself in the background if it is missing (at most once a day). **Python mirrors every function**: if the library can't load, nothing breaks, it is just slower (`ASTA_NO_NATIVE=1` turns it off; `asta native` / `asta doctor` / *Configuration → Performance* show its state). CI builds and tests it on Linux, macOS and Windows, and a test suite compares Rust and Python on hundreds of cases.
+- **Loading and running any local model.** On every load the core reads the model's **header** (GGUF, safetensors) and the **free RAM/VRAM and physical cores right now**, then plans: GPU layers, the **context window that fits** (up to **1M tokens**, with an 8-bit or **4-bit attention cache** when needed), threads, batch sizes, `mlock`, a **prompt cache**; media models get a plan from the real weight size. Weights are **pre-read in parallel**. When a model is unloaded its weights leave the page cache and the memory the allocator held **goes back to the system**. A context you set by hand is never overridden.
+- **Several local AI agents.** The embedded model serves agents through a **priority queue** (the chat you are waiting on goes ahead of a long background generation), and a **pool of resident models** sized by free memory keeps more than one loaded only when it fits.
+- **Storage (HDD/SSD).** *Configuration → Performance → Storage* shows what takes space, finds leftovers (stalled downloads, forgotten attachments) and **identical files** (checked byte by byte by the Rust core), which become a single file on disk through hard links — always with a preview and a confirmation, and only for files ASTA never rewrites in place.
+- **Less compute.** In Light and Balanced modes ffmpeg uses fewer threads and runs at low priority, so the interface stays smooth while exporting; the result is the same.
+- **Performance mode** (*Configuration → Performance*): **Auto**, **Light**, **Balanced** or **Maximum** — Light caps the automatic context window, uses flash attention and an 8-bit KV cache, unloads idle models and slices attention/VAE for image/video models.
+- Honest limits: the Rust speed-up is measured on audio synthesis only; the RAM/VRAM savings come from documented llama.cpp/diffusers/OS features and were not benchmarked on real GPUs or models here; the 1M-token cache of an 8B model still needs tens of GB.
 - **Terminal language.** Everything the terminal prints — `asta`, `asta update`, `asta doctor` and the installers — is shown in **your computer's language** (Portuguese or English; any other language falls back to English). `ASTA_LANG=pt|en` forces one.
 
 ## The interface
@@ -416,10 +436,16 @@ asta/
   canvas/        node schema, store, engine, media providers, timeline renderer, procedural Demo
   studio/        video projects: schema, scene-by-scene pipeline, automatic editing, export, ffmpeg tools
   rebuild/       Ren'Py / RPG Maker readers and converters (+ the optional AI text review)
-  native/        optional Rust core (std only) with a Python twin for every function
-  perf.py  termi18n.py  term_en.py   performance modes · terminal language (pt/en)
+  attachments.py  archives.py    attachments of any type; safe ZIP/RAR/7z/TAR extraction
+  native/        mandatory Rust core (std only) with a Python twin for every function
+  perf.py  scheduler.py  storage_opt.py  performance modes · priority queue for local agents · storage optimizer
+  termi18n.py  term_en.py   terminal language (pt/en)
   web/           the WebUI (plain HTML/CSS/JS, no build)
 tests/           unittest suite (API, pipelines, engines, providers, Canvas) + optional browser tests
+installers/      Windows (Inno Setup), macOS (.pkg), Linux (AppImage) and release notes
+mobile-app/      Android app: Capacitor shell + the embedded ASTA engine (Chaquopy)
+docs/            asta-principles.md · asta-dev-guide.md · README images
+.github/workflows/  ci.yml (tests) · release.yml (installers + Release)
 install.sh  install.ps1
 ```
 
@@ -431,9 +457,10 @@ python -m venv .venv && . .venv/bin/activate     # Windows: .venv\Scripts\activa
 pip install -e .
 asta --home ./asta-data                            # isolated development data
 python -m unittest discover -s tests -t .          # offline test suite
+cargo test --release --manifest-path asta/native/Cargo.toml   # the Rust core
 ```
 
-Browser tests (Chromium via Playwright) and the JavaScript engine tests run automatically when Node.js (and Playwright) are available, and are skipped otherwise. See [CONTRIBUTING.md](CONTRIBUTING.md) (Portuguese: [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md)). The change history is in [CHANGELOG.md](CHANGELOG.md).
+Browser tests (Chromium via Playwright) and the JavaScript engine tests run automatically when Node.js (and Playwright) are available, and are skipped otherwise. See [CONTRIBUTING.md](CONTRIBUTING.md) (Portuguese: [CONTRIBUTING.pt-BR.md](CONTRIBUTING.pt-BR.md)). **The project's principles are in [docs/asta-principles.md](docs/asta-principles.md) and the rules every developer (human or AI) follows are in [docs/asta-dev-guide.md](docs/asta-dev-guide.md).** The change history is in [CHANGELOG.en.md](CHANGELOG.en.md) ([pt-BR](CHANGELOG.md)).
 
 ## Roadmap
 
@@ -442,6 +469,9 @@ Browser tests (Chromium via Playwright) and the JavaScript engine tests run auto
 - Local multiplayer (several players in the same world).
 - AI-generated behavior scripts in a sandbox.
 - Export a world as a desktop/mobile app.
+- **Federation** (see [asta-principles](docs/asta-principles.md)): independent ASTAs exchanging signed, versioned packages, opt-in — a direction, not yet implemented.
+- Optional, encrypted sync/backup to a destination of your choice.
+- Signed Windows/macOS installers (needs certificates).
 - Ideas on the table (not scheduled): moving more hot paths to the Rust core; shared (multi-user) Studio projects.
 
 ## License and credits

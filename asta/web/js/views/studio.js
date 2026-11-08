@@ -313,7 +313,7 @@ async function renderProject(root, ctx, meta, sub) {
       return;
     }
     const host = h('div', { class: 'st-tlhost' }); fill(body, host);
-    tl = mountTimeline(host, { pid: p.id, eid: ep.id, timeline: ep.timeline, assets: p.assets, aspect: p.aspect, onSaved: (x) => { ep.timeline = x; }, onAsset: (a) => { if (!p.assets.some((y) => y.id === a.id)) p.assets.push(a); } });
+    tl = mountTimeline(host, { pid: p.id, eid: ep.id, timeline: ep.timeline, assets: p.assets, aspect: p.aspect, onSaved: (x) => { ep.timeline = x; }, onAsset: (a) => { if (!p.assets.some((y) => y.id === a.id)) p.assets.push(a); }, onAssetRemoved: (a) => { p.assets = p.assets.filter((y) => y.id !== a.id); } });
   }
   let tlToken = 0;
 

@@ -57,6 +57,8 @@ class Provider:
     def __init__(self, cfg: Dict[str, Any]):
         self.cfg = cfg
         self.notes: List[str] = []  # avisos para a interface (ex.: o modelo recusou o modo de pensamento e a resposta veio sem ele)
+        #: por que a última resposta parou: "length" (bateu no limite de tokens — o texto foi cortado), "stop" (terminou) ou "" (não sei). O Chat usa isto para continuar sozinho.
+        self.last_stop = ""
         self.model = cfg.get("model", "")
         self.vision = bool(cfg.get("vision", self.vision))
 
@@ -70,6 +72,7 @@ class Provider:
         json_mode: bool = False,
         stream: bool = False,
     ) -> Union[str, Iterator[str]]:
+        self.last_stop = ""
         if stream:
             return self._stream(messages, system, temperature, max_tokens)
         return self._chat(messages, system, temperature, max_tokens, json_mode)

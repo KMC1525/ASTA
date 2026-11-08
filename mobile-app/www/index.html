@@ -23,6 +23,13 @@
 <h1>ASTA</h1>
 <p class="muted" id="lead"></p>
 
+<div class="card" id="local" hidden>
+  <b id="local-t"></b>
+  <p class="muted" id="local-d"></p>
+  <p class="err" id="local-e"></p>
+  <button id="local-go"></button>
+</div>
+
 <div class="card" id="upd" hidden>
   <b id="upd-t"></b>
   <div><button id="upd-go"></button><button class="ghost" id="upd-later"></button></div>
@@ -50,20 +57,24 @@
 <p class="muted" id="ver"></p>
 </main>
 <script>
-// Casca nativa do ASTA mobile: guarda o endereço do servidor ASTA (no seu computador, num servidor da sua casa ou numa VPN como o Tailscale), lê o QR code de pareamento
-// e abre o ASTA nesse endereço. Também avisa de versão nova do APP (GitHub Releases) e pergunta se quer baixar agora.
-var APP_VERSION = '0.10.0';
+// Casca nativa do ASTA mobile (v0.14): abre o ASTA que roda DENTRO do aparelho (motor Python embutido, sem computador) ou, se você preferir, guarda o endereço de um servidor ASTA
+// (no seu computador, num servidor da sua casa ou numa VPN como o Tailscale), lê o QR code de pareamento e abre o ASTA nesse endereço. Também avisa de versão nova do APP (GitHub Releases) e pergunta se quer baixar agora.
+var APP_VERSION = '0.14.0';
 var REPO = 'KMC1525/ASTA';
 var pt = /^pt/i.test(navigator.language || '');
 var T = pt ? {
-  lead: 'Conecte este app a um ASTA: o ASTA do seu computador (ou de um servidor seu). O ASTA em si continua rodando lá; este app é a janela.',
+  lead: 'O ASTA roda neste aparelho, sem precisar de computador. Se preferir, conecte este app ao ASTA do seu computador (ou de um servidor seu): lá ele continua rodando e este app é só a janela.',
+  localT: 'ASTA neste aparelho', localD: 'Iniciando o ASTA neste aparelho… (na primeira vez pode levar alguns segundos)', localGo: 'Abrir o ASTA deste aparelho', localErr: 'Não consegui iniciar o ASTA neste aparelho: ',
+  localUse: 'Dados, conversas e projetos ficam só neste aparelho. Provedores de IA na nuvem funcionam com a sua chave; modelos locais pesados precisam de um servidor (Ollama, LM Studio) na rede ou do ASTA de um computador.',
   scanT: 'Escanear o QR code', scanD: 'No computador: rode «asta mobile» (ou Configuração → Celular e tablet) e aponte a câmera para o QR code.', scan: 'Abrir a câmera',
   addrT: 'Ou digite o endereço', addrD: 'Ex.: http://192.168.0.10:8787 (use o endereço mostrado no computador).', go: 'Conectar',
   saved: 'Último ASTA usado', open: 'Abrir', forget: 'Esquecer',
   updT: function (v) { return 'Há uma versão nova do app ASTA (' + v + '). Quer baixar agora?'; }, updGo: 'Baixar agora', updLater: 'Depois',
   noCam: 'Não consegui usar a câmera. Digite o endereço abaixo.', noScan: 'Este aparelho não lê QR code pelo app; digite o endereço abaixo.', bad: 'Endereço inválido.', ver: 'App ASTA v'
 } : {
-  lead: "Connect this app to an ASTA: the one on your computer (or on your own server). ASTA itself keeps running there; this app is the window.",
+  lead: "ASTA runs on this device, no computer needed. If you prefer, connect this app to the ASTA on your computer (or on your own server): it keeps running there and this app is just the window.",
+  localT: 'ASTA on this device', localD: 'Starting ASTA on this device… (it can take a few seconds the first time)', localGo: "Open this device's ASTA", localErr: 'I could not start ASTA on this device: ',
+  localUse: 'Data, chats and projects stay on this device only. Cloud AI providers work with your key; heavy local models need a server (Ollama, LM Studio) on the network or the ASTA on a computer.',
   scanT: 'Scan the QR code', scanD: 'On the computer: run “asta mobile” (or Configuration → Mobile and tablet) and point the camera at the QR code.', scan: 'Open the camera',
   addrT: 'Or type the address', addrD: 'E.g. http://192.168.0.10:8787 (use the address shown on the computer).', go: 'Connect',
   saved: 'Last ASTA used', open: 'Open', forget: 'Forget',
@@ -71,17 +82,33 @@ var T = pt ? {
   noCam: 'I could not use the camera. Type the address below.', noScan: "This device can't read QR codes in the app; type the address below.", bad: 'Invalid address.', ver: 'ASTA app v'
 };
 var $ = function (id) { return document.getElementById(id); };
-$('lead').textContent = T.lead; $('scan-t').textContent = T.scanT; $('scan-d').textContent = T.scanD; $('scan').textContent = T.scan;
+$('lead').textContent = T.lead; $('local-t').textContent = T.localT; $('local-go').textContent = T.localGo; $('scan-t').textContent = T.scanT; $('scan-d').textContent = T.scanD; $('scan').textContent = T.scan;
 $('addr-t').textContent = T.addrT; $('addr-d').textContent = T.addrD; $('addr-go').textContent = T.go;
 $('saved-l').textContent = T.saved; $('saved-go').textContent = T.open; $('saved-forget').textContent = T.forget; $('ver').textContent = T.ver + APP_VERSION;
 var KEY = 'asta.server';
 function get() { try { return localStorage.getItem(KEY) || ''; } catch (e) { return ''; } }
 function set(v) { try { v ? localStorage.setItem(KEY, v) : localStorage.removeItem(KEY); } catch (e) { /* ok */ } }
 function origin(u) { try { var x = new URL(/^https?:\/\//i.test(u) ? u : 'http://' + u); return x.origin; } catch (e) { return ''; } }
+// ASTA neste aparelho: o app Android liga o motor (Python) e expõe AstaEngine; ?choose=1 ou o modo «computador» deixam as duas opções na tela
+var MODE = 'asta.mode', engine = window.AstaEngine, choose = /[?&]choose=1/.test(location.search);
+function mode() { try { return localStorage.getItem(MODE) || ''; } catch (e) { return ''; } }
+function setMode(v) { try { localStorage.setItem(MODE, v); } catch (e) { /* ok */ } }
+if (engine) {
+  $('local').hidden = false; $('local-d').textContent = T.localD;
+  var openLocal = function () {
+    var u = engine.getLocalUrl();
+    if (u) { setMode('local'); location.href = u; return true; }
+    var er = engine.getError(); if (er) { $('local-e').textContent = T.localErr + er; $('local-d').textContent = ''; return true; }
+    return false;
+  };
+  $('local-go').onclick = function () { $('local-e').textContent = ''; $('local-d').textContent = T.localD; var t0 = setInterval(function () { if (openLocal()) clearInterval(t0); }, 250); };
+  if (!choose && mode() !== 'remote') { var t1 = setInterval(function () { if (openLocal()) clearInterval(t1); }, 250); }
+  $('local-d').title = T.localUse;
+}
 function connect(url) {
   var o = origin(url);
   if (!o) { $('scan-e').textContent = T.bad; return; }
-  set(o);
+  set(o); setMode('remote');
   // o QR traz /api/mobile/pair?code=… (pareia e redireciona para o ASTA); um endereço simples abre direto
   location.href = /\/api\/mobile\/pair/.test(url) ? url : o + '/';
 }

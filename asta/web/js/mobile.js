@@ -4,6 +4,8 @@ import { t } from './i18n.js';
 import { h, modal, toast } from './ui.js';
 
 const dev = () => window.ASTA_DEVICE || { device: 'desktop' };
+export const inApp = () => /ASTA-Android/.test(navigator.userAgent || '');   // o app Android (APK): o ASTA roda dentro do aparelho ou numa conexão com um computador
+const REPO = 'KMC1525/ASTA';
 export const isMobile = () => dev().device !== 'desktop';
 let reg = null, asking = false;
 const declined = new Set();
@@ -29,6 +31,24 @@ export async function offerUpdate(version) {
       [{ label: t('Depois'), value: false }, { label: t('Atualizar agora'), value: true, cls: 'primary' }]);
     if (yes === true) await applyUpdate(); else declined.add(version || '?');
   } finally { asking = false; }
+}
+
+// App Android: o ASTA do aparelho é o do próprio APK, então a atualização é um APK novo nas Releases do repositório (pergunta «Baixar agora» ou «Depois»)
+async function checkApk() {
+  try {
+    const mine = (await (await fetch('/api/version', { cache: 'no-store' })).json()).version;
+    const r = await fetch('https://api.github.com/repos/' + REPO + '/releases/latest', { headers: { Accept: 'application/vnd.github+json' } });
+    if (!r.ok) return;
+    const rel = await r.json(), v = String(rel.tag_name || '').replace(/^v/, ''), n = (s) => String(s).split('.').map((x) => parseInt(x, 10) || 0);
+    const a = n(v), b = n(mine);
+    let newer = false;
+    for (let i = 0; i < 3; i++) if ((a[i] || 0) !== (b[i] || 0)) { newer = (a[i] || 0) > (b[i] || 0); break; }
+    if (!newer || declined.has('apk-' + v)) return;
+    const apk = (rel.assets || []).find((x) => /\.apk$/i.test(x.name));
+    const yes = await modal(t('Atualização do app ASTA'), h('p', { class: 'muted', style: { margin: 0 } }, t('Há uma versão nova do app ASTA ({v}). Quer baixar agora?', { v })),
+      [{ label: t('Depois'), value: false }, { label: t('Baixar agora'), value: true, cls: 'primary' }]);
+    if (yes === true) location.href = apk ? apk.browser_download_url : rel.html_url; else declined.add('apk-' + v);
+  } catch (e) { /* sem internet: tudo bem */ }
 }
 
 async function checkVersion(loaded) {
@@ -75,7 +95,8 @@ export function initMobile(loadedVersion) {
     }).catch(() => { /* sem service worker: tudo bem */ });
   }
   if (!isMobile()) return;
-  installBar();
+  if (inApp()) { setTimeout(checkApk, 6000); document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') setTimeout(checkApk, 1500); }); }
+  else installBar();   // dentro do APK não faz sentido «instalar o app»
   const tick = () => checkVersion(loadedVersion);
   setInterval(tick, 5 * 60 * 1000);
   document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') tick(); });

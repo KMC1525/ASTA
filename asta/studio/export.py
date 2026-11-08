@@ -44,7 +44,7 @@ def export_episode(store: Any, pid: str, eid: str, mode: str = "full", quality: 
     fname = f"{slugify(p['name'], 'video', 40)}-ep{ep['n']}-{mode}-{stamp}.{ext}"
     out = ss.export_dir(pid) / fname
     try:
-        warnings = render_timeline(tl, w, h, fps, "#000000", resolve, out, ctl, mode=mode)
+        warnings = render_timeline(tl, w, h, fps, "#000000", resolve, out, ctl, mode=mode, top_first=True)   # na timeline do Studio a primeira trilha da lista é a de cima (V2 sobre V1), como na prévia
     except ProviderError as exc:
         out.unlink(missing_ok=True)
         raise ProviderError(str(exc).replace("do Editor", "da timeline").replace("O Editor", "A exportação")) from None

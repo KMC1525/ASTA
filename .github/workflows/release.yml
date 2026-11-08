@@ -1,0 +1,235 @@
+# Instaladores e Release do ASTA: a cada push na main que muda a versão, o núcleo em Rust ou os instaladores, este workflow gera
+#   ASTA-<versão>-Win.exe · ASTA-<versão>-macOS.pkg · ASTA-<versão>-Linux.appimage (+ arm64) · ASTA-<versão>-Android.apk
+# (ex.: ASTA-0-14-Win.exe) e o núcleo pré-compilado de cada plataforma (asta-core-*.so/.dylib/.dll + SHA256SUMS.txt), e publica tudo na Release vX.Y.Z.
+# Também roda à mão (Actions → release → Run workflow).
+name: release
+on:
+  push:
+    branches: [main]
+    paths: ["asta/__init__.py", "asta/native/**", "installers/**", "mobile-app/**", "install.sh", "install.ps1", ".github/workflows/release.yml"]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+env:
+  CHAQUOPY: "16.1.0"          # plugin que embute o Python no APK (Maven Central)
+  WIN_PYTHON: "3.12.10"       # Python embutido do instalador do Windows
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      label: ${{ steps.v.outputs.label }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        run: |
+          V=$(python3 -c "import re;print(re.search(r'__version__ = \"([^\"]+)\"',open('asta/__init__.py').read()).group(1))")
+          # rótulo dos arquivos: 0.14.0 → 0-14 · 0.14.1 → 0-14-1
+          L=$(python3 -c "import sys;p=sys.argv[1].split('.');p=p[:-1] if p[-1]=='0' and len(p)>2 else p;print('-'.join(p))" "$V")
+          echo "version=$V" >> "$GITHUB_OUTPUT"; echo "tag=v$V" >> "$GITHUB_OUTPUT"; echo "label=$L" >> "$GITHUB_OUTPUT"
+
+  # ------------------------------------------------------------------ núcleo em Rust, por plataforma
+  core:
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, tag: linux-x86_64, lib: libasta_core.so, ext: so }
+          - { os: ubuntu-22.04-arm, tag: linux-aarch64, lib: libasta_core.so, ext: so, optional: true }
+          - { os: macos-14, tag: macos-aarch64, lib: libasta_core.dylib, ext: dylib }
+          - { os: macos-14, tag: macos-x86_64, lib: libasta_core.dylib, ext: dylib, target: x86_64-apple-darwin }
+          - { os: windows-latest, tag: windows-x86_64, lib: asta_core.dll, ext: dll }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Testes do núcleo
+        if: ${{ !matrix.target }}
+        run: cargo test --release --manifest-path asta/native/Cargo.toml
+      - name: Compilar
+        shell: bash
+        run: |
+          if [ -n "${{ matrix.target }}" ]; then
+            cargo build --release --manifest-path asta/native/Cargo.toml --target "${{ matrix.target }}"
+            OUT="asta/native/target/${{ matrix.target }}/release/${{ matrix.lib }}"
+          else
+            cargo build --release --manifest-path asta/native/Cargo.toml
+            OUT="asta/native/target/release/${{ matrix.lib }}"
+          fi
+          mkdir -p core && cp "$OUT" "core/asta-core-${{ matrix.tag }}.${{ matrix.ext }}"
+          ls -la core
+      - uses: actions/upload-artifact@v4
+        with: { name: "core-${{ matrix.tag }}", path: core/*, if-no-files-found: error }
+
+  # ------------------------------------------------------------------ Linux: AppImage (x86_64 e arm64)
+  appimage:
+    needs: [meta, core]
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.optional || false }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, arch: x86_64, tag: linux-x86_64, pbs: x86_64-unknown-linux-gnu, name: "" }
+          - { os: ubuntu-22.04-arm, arch: aarch64, tag: linux-aarch64, pbs: aarch64-unknown-linux-gnu, name: "-arm64", optional: true }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: "core-${{ matrix.tag }}", path: core }
+      - name: Python portátil (python-build-standalone)
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          URL=$(gh api repos/astral-sh/python-build-standalone/releases/latest --jq '.assets[].browser_download_url' | grep -E "cpython-3\.12\.[0-9]+\+[0-9]+-${{ matrix.pbs }}-install_only\.tar\.gz$" | head -1)
+          echo "Python: $URL"
+          curl -fsSL "$URL" -o py.tar.gz && mkdir pyportable && tar -xzf py.tar.gz -C pyportable --strip-components=1
+      - name: Montar o AppImage
+        run: |
+          mkdir -p dist-installers
+          sh installers/linux/build-appimage.sh "${{ needs.meta.outputs.version }}" "dist-installers/ASTA-${{ needs.meta.outputs.label }}-Linux${{ matrix.name }}.appimage" pyportable "core/asta-core-${{ matrix.tag }}.so" "${{ matrix.arch }}"
+      - name: Teste do AppImage (versão, núcleo Rust e servidor)
+        run: |
+          F="dist-installers/ASTA-${{ needs.meta.outputs.label }}-Linux${{ matrix.name }}.appimage"
+          export ASTA_HOME="$(mktemp -d)" APPIMAGE_EXTRACT_AND_RUN=1 ASTA_NO_UPDATE=1
+          test "$("$F" version)" = "${{ needs.meta.outputs.version }}"
+          "$F" native status | grep -q "active\|ativo"
+          ("$F" --port 8799 --no-browser >/dev/null 2>&1 &) ; sleep 8
+          curl -fsS http://127.0.0.1:8799/api/version | grep -q "${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with: { name: "appimage-${{ matrix.tag }}", path: "dist-installers/*", if-no-files-found: error }
+
+  # ------------------------------------------------------------------ Windows: instalador (Inno Setup)
+  windows:
+    needs: [meta, core]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: actions/download-artifact@v4
+        with: { name: core-windows-x86_64, path: core }
+      - name: Inno Setup
+        run: choco install innosetup -y --no-progress
+      - name: Montar o instalador
+        shell: pwsh
+        run: ./installers/windows/build-windows.ps1 -Version "${{ needs.meta.outputs.version }}" -Label "${{ needs.meta.outputs.label }}" -CoreDll "core/asta-core-windows-x86_64.dll" -PythonVersion "$env:WIN_PYTHON"
+      - name: Teste do instalador (instala em silêncio e roda o ASTA instalado)
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP "ASTA-instalado"
+          Start-Process "dist-installers/ASTA-${{ needs.meta.outputs.label }}-Win.exe" -ArgumentList "/VERYSILENT","/SUPPRESSMSGBOXES","/NORESTART","/DIR=$dir" -Wait
+          $env:ASTA_HOME = Join-Path $env:RUNNER_TEMP "asta-home"
+          $env:ASTA_NATIVE_LIB = Join-Path $dir "native\asta_core.dll"
+          $v = & (Join-Path $dir "python\python.exe") -m asta version
+          if ($v.Trim() -ne "${{ needs.meta.outputs.version }}") { throw "versão instalada inesperada: $v" }
+          & (Join-Path $dir "python\python.exe") -m asta native status
+      - uses: actions/upload-artifact@v4
+        with: { name: windows, path: "dist-installers/*", if-no-files-found: error }
+
+  # ------------------------------------------------------------------ macOS: pacote .pkg
+  macos:
+    needs: [meta, core]
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { name: core-macos-aarch64, path: core }
+      - uses: actions/download-artifact@v4
+        with: { name: core-macos-x86_64, path: core }
+      - name: Montar o .pkg
+        run: |
+          mkdir -p dist-installers
+          bash installers/macos/build-pkg.sh "${{ needs.meta.outputs.version }}" "dist-installers/ASTA-${{ needs.meta.outputs.label }}-macOS.pkg" core/asta-core-macos-aarch64.dylib core/asta-core-macos-x86_64.dylib
+      - name: Conferir o conteúdo do pacote
+        run: |
+          pkgutil --payload-files "dist-installers/ASTA-${{ needs.meta.outputs.label }}-macOS.pkg" | tee payload.txt || true
+          pkgutil --expand "dist-installers/ASTA-${{ needs.meta.outputs.label }}-macOS.pkg" expanded
+          cd expanded/*.pkg 2>/dev/null || cd expanded
+          FOUND=$(gunzip -c Payload | cpio -it 2>/dev/null | grep -E "ASTA.app/Contents/(MacOS/ASTA|Resources/(install.sh|native/asta-core-macos-aarch64.dylib|native/asta-core-macos-x86_64.dylib|asta-src/pyproject.toml))$" | sort -u)
+          echo "$FOUND"
+          test "$(echo "$FOUND" | wc -l)" -ge 5 || { echo "faltam arquivos no pacote"; exit 1; }
+      - uses: actions/upload-artifact@v4
+        with: { name: macos, path: "dist-installers/*", if-no-files-found: error }
+
+  # ------------------------------------------------------------------ Android: APK com o ASTA dentro (sem computador)
+  android:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20 }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - uses: actions/setup-python@v5
+        with: { python-version: "3.12" }
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
+      - name: Núcleo Rust para o Android (arm64, armeabi-v7a, x86_64)
+        run: |
+          cargo install cargo-ndk --locked
+          export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
+          cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o "$PWD/mobile-app/jniLibs" build --release --manifest-path asta/native/Cargo.toml
+          find mobile-app/jniLibs -name "libasta_core.so"
+      - name: Versão do app = versão do ASTA
+        run: |
+          V="${{ needs.meta.outputs.version }}"
+          sed -i "s/\"version\": \".*\"/\"version\": \"$V\"/" mobile-app/package.json
+          sed -i "s/var APP_VERSION = '.*';/var APP_VERSION = '$V';/" mobile-app/www/index.html
+      - name: Projeto Android (Capacitor) + ASTA dentro (Chaquopy)
+        working-directory: mobile-app
+        run: |
+          npm install
+          npx cap add android
+          python3 android-overlay/patch_android.py . .. "$CHAQUOPY"
+          mkdir -p android/app/src/main/jniLibs && cp -r jniLibs/* android/app/src/main/jniLibs/
+          npx cap sync android
+      - name: Compilar o APK
+        working-directory: mobile-app/android
+        run: ./gradlew assembleDebug --no-daemon
+      - name: Conferir o APK
+        run: |
+          mkdir -p dist-installers
+          cp mobile-app/android/app/build/outputs/apk/debug/app-debug.apk "dist-installers/ASTA-${{ needs.meta.outputs.label }}-Android.apk"
+          LIST=$(unzip -l "dist-installers/ASTA-${{ needs.meta.outputs.label }}-Android.apk")
+          echo "$LIST" | grep -E "lib/arm64-v8a/libasta_core.so" || { echo "o núcleo Rust não entrou no APK"; exit 1; }
+          echo "$LIST" | grep -E "lib/arm64-v8a/lib(chaquopy|python)" || echo "aviso: não achei as bibliotecas do Python (Chaquopy) no APK — confira o build"
+      - name: Motor do app (mesmo código, no computador do CI)
+        run: python3 -m unittest tests.test_android_engine -v
+      - uses: actions/upload-artifact@v4
+        with: { name: android, path: "dist-installers/*", if-no-files-found: error }
+
+  # ------------------------------------------------------------------ publicar na Release vX.Y.Z
+  publish:
+    needs: [meta, core, appimage, windows, macos, android]
+    if: ${{ always() && needs.core.result == 'success' && needs.windows.result == 'success' && needs.macos.result == 'success' && needs.android.result == 'success' && needs.appimage.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts, merge-multiple: true }
+      - name: Juntar os arquivos e calcular o SHA-256
+        run: |
+          mkdir release && cp artifacts/* release/
+          (cd release && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt)
+      - name: Publicar
+        env: { GH_TOKEN: "${{ github.token }}" }
+        run: |
+          TAG="${{ needs.meta.outputs.tag }}"
+          python3 installers/release_notes.py "${{ needs.meta.outputs.version }}" "${{ needs.meta.outputs.label }}" > notes.md
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release edit "$TAG" --title "ASTA $TAG" --notes-file notes.md --latest
+            gh release upload "$TAG" release/* --clobber
+          else
+            gh release create "$TAG" release/* --target "$GITHUB_SHA" --title "ASTA $TAG" --latest --notes-file notes.md
+          fi

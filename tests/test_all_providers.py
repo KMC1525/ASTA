@@ -311,7 +311,7 @@ class AllProvidersTests(ServerCase):
             ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
             self.finished(pid, ev)
             self.reached_the_provider(pid)
-        self.run_each("studio", go, ids=["anthropic", "openai", "ollama", "local_hf"])
+        self.run_each("studio", go)   # os 11 provedores de texto (nuvem e locais)
 
     # ------------------------------------------------------------------ transporte: imagens, JSON e cabeçalhos por tipo de provedor
     def test_every_provider_receives_images_json_and_system_in_its_own_format(self):

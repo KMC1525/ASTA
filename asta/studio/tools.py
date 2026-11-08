@@ -17,7 +17,9 @@ def have_ffmpeg() -> bool:
 
 
 def _run(cmd: List[str], timeout: int = 600) -> subprocess.CompletedProcess:
-    return subprocess.run(cmd, capture_output=True, timeout=timeout)
+    from .. import perf
+
+    return perf.run(cmd, capture_output=True, timeout=timeout)   # ffmpeg com menos threads e prioridade baixa conforme o modo de desempenho
 
 
 def probe(path: Path) -> Dict[str, Any]:

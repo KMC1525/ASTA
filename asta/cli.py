@@ -33,7 +33,13 @@ def _auto_update(args: argparse.Namespace, argv) -> object:
     import time
     from pathlib import Path
 
-    if getattr(args, "no_update", False) or os.environ.get("ASTA_NO_UPDATE", "") not in ("", "0") or _managed_app_dir() is None:
+    if getattr(args, "no_update", False) or os.environ.get("ASTA_NO_UPDATE", "") not in ("", "0"):
+        return None
+    if _managed_app_dir() is None:
+        if os.environ.get("ASTA_INSTALLER"):   # instalador do Windows / AppImage: não se atualizam sozinhos, mas avisam (uma linha) quando há versão nova
+            remote = _remote_version(timeout=4.0)
+            if remote and _version_tuple(remote) > _version_tuple(__version__):
+                print(_("Há uma versão nova do ASTA ({v}). Para atualizar: asta update  (ou baixe o instalador novo em https://github.com/KMC1525/ASTA/releases/latest)", v=remote) + "\n")
         return None
     home = Path(args.home or os.environ.get("ASTA_HOME") or Path.home() / ".asta").expanduser()
     stamp = home / ".last-update"
@@ -84,9 +90,12 @@ def _print_mobile_qr(app, port: int) -> None:
 def _run(args: argparse.Namespace) -> int:
     if args.home:
         os.environ["ASTA_HOME"] = args.home
+    from . import native
     from .server import make_server
     from .storage import Store
 
+    if not getattr(args, "no_update", False):
+        native.ensure()   # núcleo Rust obrigatório: sem ele, baixa a biblioteca pré-compilada em segundo plano (sem compilador, no máximo 1 vez por dia)
     store = Store()
     httpd = None
     port = args.port
@@ -175,6 +184,40 @@ def _installed_version(req: str):
         return None
 
 
+def _ensure_pip() -> bool:
+    """O Python embutido do instalador do Windows não traz o pip: instala (ensurepip ou, se faltar, o get-pip.py oficial). True se o pip está disponível."""
+    import importlib.util
+
+    if importlib.util.find_spec("pip") is not None:
+        return True
+    print(_("Instalando o pip neste Python (uma vez) …"))
+    try:
+        import ensurepip  # noqa: F401
+
+        if subprocess.run([sys.executable, "-m", "ensurepip", "--upgrade"], capture_output=True).returncode == 0:
+            return True
+    except ImportError:
+        pass
+    import tempfile
+    import urllib.request
+
+    from .util import ssl_context
+
+    try:
+        with urllib.request.urlopen("https://bootstrap.pypa.io/get-pip.py", timeout=60, context=ssl_context()) as resp:
+            data = resp.read()
+        with tempfile.NamedTemporaryFile("wb", suffix=".py", delete=False) as fh:
+            fh.write(data)
+            path = fh.name
+        try:
+            return subprocess.run([sys.executable, path, "--no-warn-script-location", "--disable-pip-version-check"]).returncode == 0
+        finally:
+            os.unlink(path)
+    except Exception as exc:  # noqa: BLE001  (sem internet…)
+        print(_("Não consegui instalar o pip ({e}). Sem ele não dá para instalar bibliotecas opcionais nem atualizar por aqui; baixe o instalador novo em https://github.com/KMC1525/ASTA/releases/latest", e=str(exc)[:120]))
+        return False
+
+
 def _libs(args: argparse.Namespace) -> int:
     """Instala o que falta e atualiza (só se houver versão mais nova) as bibliotecas opcionais do ASTA. Uma que falhe não impede as outras.
     O que já está instalado não é instalado de novo: o pip só mexe nele se existir uma versão mais nova."""
@@ -185,6 +228,8 @@ def _libs(args: argparse.Namespace) -> int:
     if not chosen:
         print(_("Bibliotecas opcionais: nada a instalar (ASTA_EXTRAS=none)."))
         return 0
+    if not _ensure_pip():
+        return 1
     failed, present = [], []
     for extra in chosen:
         reqs = _lib_requirements(extra)
@@ -263,7 +308,8 @@ def _update_with_installer(args: argparse.Namespace) -> int:
 
     app = _managed_app_dir()
     if app is None:
-        print(_("Este ASTA não foi instalado pelo instalador oficial: o Python do sistema não é gerenciado por ele (atualize-o pelo gerenciador de pacotes do seu sistema)."))
+        if not os.environ.get("ASTA_INSTALLER"):   # Windows (.exe) e AppImage têm o próprio Python: atualizam o ASTA com o pip, sem esta mensagem
+            print(_("Este ASTA não foi instalado pelo instalador oficial: o Python do sistema não é gerenciado por ele (atualize-o pelo gerenciador de pacotes do seu sistema)."))
         return -1
     windows = os.name == "nt"
     name = "install.ps1" if windows else "install.sh"
@@ -364,6 +410,8 @@ def _update(args: argparse.Namespace) -> int:
                 print("\n" + _("Pronto! Reinicie o ASTA para usar a nova versão."))
             return code
     print(_("Verificando as ferramentas do Python e o ASTA…"))
+    if not _ensure_pip():
+        return 1
     subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--quiet", "--disable-pip-version-check", "pip", "setuptools", "wheel"])  # já atualizadas = nada a fazer; falha = aviso
     if _asta_is_current(getattr(args, "force", False)):
         print(_("ASTA {v} já é a versão mais recente — nada a baixar. (Para reinstalar mesmo assim: asta update --force)", v=__version__))
@@ -396,8 +444,9 @@ def _native(args: argparse.Namespace) -> int:
     if args.action == "setup":
         return native.setup(getattr(args, "rust", "") or os.environ.get("ASTA_RUST") or "yes", ask=_ask_terminal)
     st = native.status()
-    print(_("Núcleo Rust: ") + (_("ativo") if st["active"] else _("inativo (usando Python puro)")) + (f" — {_(st['reason'])}" if st["reason"] else ""))
-    print("cargo: " + (native.rust_version() if st["cargo"] else _("não encontrado (opcional: asta native install)")) + ("" if not st["cargo"] else " · rustup: " + (_("sim") if st["rustup"] else _("não"))))
+    print(_("Núcleo Rust: ") + (_("ativo") if st["active"] else _("inativo — usando Python puro, mais lento (rode: asta native setup)")) + (f" — {_(st['reason'])}" if st["reason"] else ""))
+    print("cargo: " + (native.rust_version() if st["cargo"] else _("não encontrado (opcional: o ASTA baixa a biblioteca pronta)")) + ("" if not st["cargo"] else " · rustup: " + (_("sim") if st["rustup"] else _("não"))))
+    print(_("Interface: {a} · plataforma: {p} · biblioteca pronta da Release: {n}", a=st["abi"], p=native.platform_tag(), n=native.prebuilt_name()))
     return 0
 
 
@@ -454,8 +503,8 @@ def _doctor(_args: argparse.Namespace) -> int:
         from . import native, perf
 
         nst = native.status()
-        print(_("Núcleo Rust: ") + (_("ativo") if nst["active"] else _("inativo — usando Python puro (opcional: asta native setup)")))
-        print("Rust: " + (native.rust_version() if nst["cargo"] else _("não instalado (opcional: asta native install)")))
+        print(_("Núcleo Rust: ") + (_("ativo") if nst["active"] else _("inativo — usando Python puro, mais lento (rode: asta native setup)")))
+        print("Rust: " + (native.rust_version() if nst["cargo"] else _("não instalado (não precisa: o ASTA baixa o núcleo pronto)")))
         print(_("Modo de desempenho: ") + _(perf.describe(perf.profile({}, hw))))
     except Exception:  # noqa: BLE001
         pass
@@ -491,6 +540,9 @@ def _doctor(_args: argparse.Namespace) -> int:
 
 
 def main(argv=None) -> int:
+    from .util import fix_default_certs
+
+    fix_default_certs()   # macOS + Python do python.org: sem isto toda chamada HTTPS (atualização, modelos, Rust) falhava por falta de certificados
     parser = argparse.ArgumentParser(prog="asta", description=_("ASTA — o primeiro super app open source: chat com IA, busca na web, mundos 3D, avatars, jogos 2D, Canvas de mídia e Studio de vídeo"))
     sub = parser.add_subparsers(dest="cmd")
     run = sub.add_parser("run", help=_("inicia a WebUI (padrão)"))

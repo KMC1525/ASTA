@@ -55,11 +55,7 @@ class Pipeline(Runner):
 
         # ---------- anexos
         self._step("attachments", "running")
-        uploads = []
-        for uid in req.get("attachment_ids") or []:
-            meta = st.get_upload(uid)
-            if meta:
-                uploads.append(meta)
+        uploads = st.get_uploads(req.get("attachment_ids") or [])   # pacotes (ZIP, RAR…) já vêm abertos: cada arquivo de dentro é um anexo
         analyzed = []
         transcribe = voice.transcriber(settings)
         for meta in uploads:

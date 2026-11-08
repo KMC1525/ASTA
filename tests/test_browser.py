@@ -315,8 +315,12 @@ class BrowserTests(unittest.TestCase):
     def test_29_studio_manual_timeline_without_generating(self):
         self.run_script("studio_manual_ui.js")
 
-    def test_30_studio_timeline_mixer_clip_monitor_zoom_bar_and_collapsible_tracks(self):
+    def test_30_studio_timeline_mixer_zoom_bar_bin_menu_and_collapsible_tracks(self):
         self.run_script("studio_mixer_ui.js")
+
+    @unittest.skipUnless(shutil.which("ffmpeg"), "ffmpeg não instalado")
+    def test_31_studio_manual_edit_track_choice_speed_and_saving(self):
+        self.run_script("studio_edit_ui.js")
 
 
 if __name__ == "__main__":

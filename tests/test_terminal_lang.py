@@ -111,7 +111,9 @@ class RustTests(unittest.TestCase):
             calls.append("install")
             return install_code
 
-        with mock.patch.object(native, "find_tool", side_effect=lambda n: "/x/cargo" if (have or "install" in calls) else None), mock.patch.object(native, "install_rust", side_effect=installed), \
+        # o caminho do Rust na máquina (v0.14: a biblioteca pronta da Release vem primeiro): aqui ela está indisponível e o compilador existe, para exercitar a instalação/compilação
+        with mock.patch.object(native, "available", return_value=False), mock.patch.object(native, "fetch_prebuilt", return_value=1), mock.patch.object(native, "_toolchain_ok", return_value=True), \
+                mock.patch.object(native, "find_tool", side_effect=lambda n: "/x/cargo" if (have or "install" in calls) else None), mock.patch.object(native, "install_rust", side_effect=installed), \
                 mock.patch.object(native, "update_rust", side_effect=lambda: calls.append("update")), mock.patch.object(native, "build", side_effect=lambda *a, **k: (calls.append("build"), build_code)[1]):
             import contextlib
             import io

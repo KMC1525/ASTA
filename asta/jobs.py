@@ -69,6 +69,9 @@ class JobManager:
             self.jobs[job.id] = job
 
         def run() -> None:
+            from . import scheduler
+
+            scheduler.set_priority(scheduler.BACKGROUND)   # a conversa que o usuário espera passa na frente de uma geração longa no modelo local embutido
             try:
                 res = fn(job)
                 job.finish("done", res)
