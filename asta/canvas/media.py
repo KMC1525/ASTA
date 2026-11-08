@@ -1321,6 +1321,8 @@ def _size_like(ref: Any, w: int, h: int, mult: int) -> Tuple[int, int]:
 
 _SD_LOG: "collections.deque[Tuple[int, str]]" = collections.deque(maxlen=120)   # (nível, texto) das mensagens da stable-diffusion.cpp; níveis: 0 debug, 1 info, 2 aviso, 3 erro
 _SD_CB: Any = None
+_SD_LITE: set = set()   # modelos que só funcionaram sem as opções abaixo
+_SD_LITE_KEYS = ("diffusion_flash_attn", "flash_attn", "offload_params_to_cpu")
 
 
 def _install_sd_log(sdc: Any) -> None:
@@ -1342,6 +1344,22 @@ def _install_sd_log(sdc: Any) -> None:
         sdc.sd_set_log_callback(_SD_CB, ctypes.c_void_p(0))
     except Exception:  # noqa: BLE001 — versões sem esse recurso: segue sem capturar
         _SD_CB = None
+
+
+def _sd_env(sdc: Any) -> str:
+    """Versão da stable-diffusion-cpp-python e backend (CPU/CUDA/Vulkan…) para a mensagem de erro; vazio se a biblioteca não informa."""
+    bits = []
+    try:
+        ver = getattr(sdc, "__version__", "")
+        if ver:
+            bits.append(f"stable-diffusion-cpp-python {ver}")
+        info = sdc.sd_get_system_info()
+        info = info.decode("utf-8", "replace") if isinstance(info, bytes) else str(info)
+        if info.strip():
+            bits.append(info.strip().replace("\n", " ")[:160])
+    except Exception:  # noqa: BLE001 — informação opcional
+        pass
+    return f" [{' · '.join(bits)}]" if bits else ""
 
 
 def _sd_reason() -> str:
@@ -1407,7 +1425,10 @@ class GGUFMedia(MediaProvider):
             base = self._auto_load(path)   # famílias conhecidas (Qwen-Image, FLUX): acha o VAE e o codificador de texto ao lado do modelo
         extra = {**base.get("run", {}), **(extra or {})}
         load = {**base.get("load", {}), **(extra.pop("load", None) or {})}
+        if path.name in _SD_LITE:   # este modelo já falhou com flash attention/offload nesta máquina: começa sem eles (não recarrega duas vezes a cada imagem)
+            load = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
         sd = self._engine("image", path, load)
+        sdc_mod = sys.modules.get("stable_diffusion_cpp")
         used = ", ".join(Path(v).name for k, v in load.items() if k.endswith("_path") and isinstance(v, str) and v != "@model")   # os arquivos de apoio de fato carregados (para o erro)
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
@@ -1455,10 +1476,19 @@ class GGUFMedia(MediaProvider):
                         scale = 0.5625
                         self.ctl.note("Sem memória para este tamanho: tentando de novo com resolução menor…")
                         continue
+                    lite = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
+                    if len(lite) < len(load):
+                        _SD_LITE.add(path.name)   # última tentativa: sem as opções de atenção/memória (alguns backends — CPU, Vulkan, placas antigas — não as suportam e a geração volta nula)
+                        load = lite
+                        self.ctl.note("Tentando de novo sem flash attention e sem descarregar pesos para a RAM…")
+                        sd = self._engine("image", path, load)
+                        gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)
+                        scale = 1.0
+                        continue
                     info = support.missing(path.parent, path.name)
                     fix = (f" Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
                            f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]") if info["missing"] else ""
-                    why = _sd_reason() or ("a biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda" + (f"; arquivos de apoio carregados: {used}" if used else "; nenhum arquivo de apoio foi carregado"))
+                    why = _sd_reason() or ("a biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda" + (f"; arquivos de apoio carregados: {used}" if used else "; nenhum arquivo de apoio foi carregado") + _sd_env(sdc_mod))
                     mem = (" Parece falta de memória: feche outros programas, use uma quantização menor (Q3/Q2) ou uma resolução menor." if re.search(r"alloc|out of memory|oom", why, re.I) else "")
                     raise ProviderError(f"A geração com {path.name} falhou na stable-diffusion.cpp («{exc}»)." + (f" Motivo informado pela biblioteca: {why}." if why else "")
                                         + mem + " Modelos GGUF só de difusão (Qwen-Image, FLUX, Z-Image…) precisam do VAE e do codificador de texto na mesma pasta, e a biblioteca precisa ser recente (asta libs)." + fix) from None
