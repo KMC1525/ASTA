@@ -3,7 +3,7 @@
 
 Uso (feito pelo workflow `release`, job `android`):  python3 patch_android.py <pasta mobile-app> <pasta do repositório> [versão do Chaquopy]
 
-  1. Gradle: aplica o plugin Chaquopy (Python no app), sem pacotes pip (o ASTA só usa a biblioteca padrão), ABIs arm64/armeabi/x86_64;
+  1. Gradle: aplica o plugin Chaquopy (Python no app), sem pacotes pip (o ASTA só usa a biblioteca padrão), ABIs arm64/x86_64;
   2. copia o pacote `asta` (sem testes nem artefatos do Rust) e o `asta_android.py` para src/main/python;
   3. troca a MainActivity pela que liga o ASTA; 4. AndroidManifest: tráfego local em HTTP, memória grande.
 É idempotente (rodar duas vezes não duplica nada) e falha alto se algo esperado não existe (melhor o CI quebrar do que gerar um APK sem o ASTA).
@@ -15,7 +15,7 @@ import shutil
 import sys
 from pathlib import Path
 
-ABIS = '"arm64-v8a", "armeabi-v7a", "x86_64"'
+ABIS = '"arm64-v8a", "x86_64"'   # o Chaquopy com Python 3.12 não tem armeabi-v7a
 PY_VERSION = "3.12"
 
 

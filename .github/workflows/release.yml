@@ -175,12 +175,12 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android
-      - name: Núcleo Rust para o Android (arm64, armeabi-v7a, x86_64)
+      - name: Núcleo Rust para o Android (arm64, x86_64)
         run: |
           cargo install cargo-ndk --locked
           export ANDROID_NDK_HOME="${ANDROID_NDK_HOME:-$ANDROID_NDK_LATEST_HOME}"
           OUT="$PWD/mobile-app/jniLibs"
-          (cd asta/native && cargo ndk -t arm64-v8a -t armeabi-v7a -t x86_64 -o "$OUT" build --release)
+          (cd asta/native && cargo ndk -t arm64-v8a -t x86_64 -o "$OUT" build --release)
           find mobile-app/jniLibs -name "libasta_core.so"
       - name: Versão do app = versão do ASTA
         run: |
