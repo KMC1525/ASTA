@@ -22,7 +22,7 @@ export function withMentions(ta, c) {
   function paintChips() {
     const toks = [...new Set([...ta.value.matchAll(MENTION)].map((m) => m[1]))];
     chips.replaceChildren(...toks.map((tok) => {
-      const it = items.find((x) => x.slug === tok.toLowerCase() || x.id === tok);
+      const it = items.find((x) => x.slug === tok.toLowerCase() || x.slug === tok.toLowerCase().replace(/_/g, '-') || x.id === tok);   // mesma regra do servidor (@foto_perfil vale para foto-perfil)
       return it ? h('span', { class: 'mchip ' + (it.kind || 'image'), title: it.name }, thumb(it), '@' + it.slug)
         : h('span', { class: 'mchip bad', title: t('Não há imagem com esse apelido neste canvas') }, '@' + tok);
     }));
@@ -45,7 +45,7 @@ export function withMentions(ta, c) {
   }
   function pick(it) {
     if (!range) return;
-    const v = ta.value, ins = '@' + it.slug + ' ';
+    const v = ta.value, ins = '@' + it.slug + (/^[\s,.;:!?)]/.test(v.slice(range.end)) ? '' : ' ');   // sem espaço a mais quando já há um espaço ou pontuação depois
     ta.value = v.slice(0, range.start) + ins + v.slice(range.end);
     const caret = range.start + ins.length; ta.setSelectionRange(caret, caret);
     close(); ta.dispatchEvent(new Event('input', { bubbles: true })); ta.focus();

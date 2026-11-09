@@ -462,7 +462,7 @@ class CanvasEngine:
             warnings += [f"@{m}: não há mídia com esse apelido neste canvas — ficou como texto." for m in missing]
             ment_refs, ment_warn = self._mention_media(canvas, ment_ids, "imagem")
             warnings += ment_warn
-            refs = (ment_refs + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]
+            refs = _unique_refs(ment_refs + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]   # a mesma imagem citada com @ e ligada em «Referências» vale uma vez só
             if p["mode"] == "edit" and not refs:
                 raise ValueError("No modo Editar, ligue uma imagem na entrada \"Referências\".")
             prompt = base + (f"\n\nStyle: {style.text}" if style.text else "")
@@ -544,6 +544,8 @@ class CanvasEngine:
             got = (self._asset_bytes(a), a["mime"]) if a["kind"] == "image" else self._video_frame(a)
             if got and got[0]:
                 out.append(got)
+            else:
+                warn.append(f"«{a.get('name') or i}» não pôde ser lida (arquivo ausente ou vídeo sem quadro): a imagem citada não foi enviada como referência.")
         return out, warn
 
     def image_inputs(self, canvas: Dict[str, Any], node: Dict[str, Any], port: str) -> List[Tuple[bytes, str]]:
@@ -666,6 +668,19 @@ STYLE_SYSTEM = (
     "Seja concreto e útil como complemento de um prompt de geração. Não cite nomes de arquivos. Responda só com a descrição, no idioma predominante dos textos (padrão: português)."
 )
 LLM_SYSTEM = "Você é um assistente de escrita criativa dentro de um fluxo de produção de mídia. Cumpra a instrução usando o texto de entrada. Se houver menções como @nome (apelidos de imagens, vídeos ou sons do projeto), mantenha-as exatamente como estão no texto final. Responda APENAS com o texto final, sem explicações nem aspas."
+
+
+def _unique_refs(refs: List[Tuple[bytes, str]]) -> List[Tuple[bytes, str]]:
+    """Tira as imagens repetidas (mesmo conteúdo), mantendo a ordem da primeira vez: as citadas com @ vêm antes, na ordem em que aparecem no texto, e a numeração «reference image N» do prompt continua apontando para a imagem certa."""
+    import hashlib
+
+    seen, out = set(), []
+    for data, mime in refs:
+        key = hashlib.sha1(data).digest()
+        if key not in seen:
+            seen.add(key)
+            out.append((data, mime))
+    return out
 
 
 def _style_refs_ok(pid: str, model: str) -> bool:

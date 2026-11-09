@@ -35,6 +35,10 @@ run('canvas_mention', async ({ api, open, check }) => {
   await page.waitForTimeout(1500);
   const saved = (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im');
   check('prompt-salvo-com-as-menções', saved.params.prompt === 'fundo @fnaf-1-office e @fnaf-1-office @foto-perfil @fantasma');
+  const h0 = await ta.evaluate((e) => e.clientHeight);
+  await ta.fill(Array.from({ length: 14 }, (_, i) => 'linha ' + i + ' @foto-perfil').join('\n')); await page.waitForTimeout(250);
+  const h1 = await ta.evaluate((e) => e.clientHeight);
+  check('campo-cresce-com-o-texto-em-vez-de-esconde-lo', h1 > h0 + 60 && h1 <= 330);
 
   // ---- v0.17.4: nó Texto e vídeos/sons
   const cv2 = await api('/api/canvases', { method: 'POST', body: { name: 'Menções 2', template: 'blank' } });

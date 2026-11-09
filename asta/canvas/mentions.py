@@ -49,7 +49,7 @@ def resolve(canvas: Dict[str, Any], prompt: str) -> Tuple[str, List[str], List[s
 
     def sub(m: "re.Match[str]") -> str:
         tok = m.group(1)
-        it = by.get(tok.lower()) or by_id.get(tok)
+        it = by.get(tok.lower()) or by.get(tok.lower().replace("_", "-")) or by_id.get(tok)   # «@foto_perfil» também vale para «foto-perfil»
         if not it:
             if tok not in missing:
                 missing.append(tok)

@@ -1088,6 +1088,31 @@ class EngineTests(TmpCase):
         self.assertEqual(prompts, ["foto-perfil no centro, com @ninguem ao lado"])   # sem «(reference image 1)»; o que não casa com mídia fica como estava
         del a
 
+    def test_the_same_image_cited_with_at_and_connected_to_references_is_sent_once(self):
+        from asta.canvas import engine as E
+
+        c = self.cs.create("t")
+        names = ["foto-perfil.png", "fnaf-1-office.png", "fnaf-1-bonnie.png"]
+        ids = [self.cs.add_asset(c["id"], proc.image(n, "64x64", i + 1), "png", "image", name=n, mime="image/png")["id"] for i, n in enumerate(names)]
+        self.cs.save_layout(c["id"], {"nodes": [node("text", nid="t", text="@foto_perfil no centro, fundo @fnaf-1-office e o @fnaf-1-bonnie"), node("upload", nid="u", files=ids), node("image", nid="i", mode="edit")],
+                                      "edges": [edge("t", "i", "prompt"), edge("u", "i", "refs")]})
+        seen = {}
+
+        class Cloud:
+            supports_refs = True
+            label = "Nuvem"
+
+            def image(self, prompt, *, refs=(), **k):
+                seen["prompt"], seen["n"] = prompt, len(refs)
+                return [M.Media(PNG, "image/png")]
+
+        with mock.patch.object(E, "build_media", lambda *a, **k: Cloud()):
+            _, ev = self.run_engine(c["id"])
+        self.assertEqual(seen["n"], 3)                        # 3 imagens, não 6: as citadas e as ligadas são as mesmas
+        self.assertIn("(reference image 1)", seen["prompt"])  # «@foto_perfil» (com sublinhado) também casa com «foto-perfil»
+        self.assertIn("(reference image 3)", seen["prompt"])
+        self.assertEqual([e.get("warnings") for e in ev if e.get("id") == "i" and e["state"] == "done"], [[]])
+
     def test_validation_messages(self):
         c = self.make([node("image", nid="i"), node("video", nid="v"), node("voice", nid="vo"), node("sound", nid="so"), node("llm", nid="l"), node("transcribe", nid="tr"), node("image", nid="ed", mode="edit", prompt="x")], [])
         _, ev = self.run_engine(c["id"])
