@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.15] — 2026-11-09
+
+### Fixed — ASTA closed («Segmentation fault») when generating with a GGUF that stable-diffusion.cpp does not recognize
+- stable-diffusion.cpp only recognizes Qwen-Image if the file has the tensor `transformer_blocks.0.img_mod.1.weight` (and FLUX, `double_blocks.`). Without it, it rejects the model and, when giving up, **takes the whole program down** — a C error Python cannot intercept.
+- ASTA now reads the GGUF header (tensor names only, no weights loaded) before handing it to the library. If the expected tensor is missing, the load is tested in a **separate process**: if it crashes or rejects, the node shows the error (with the expected tensor, some names the file has and the exit code) and ASTA stays up. Files that pass the check load as before, at no extra cost.
+- The error also leaves the flag for `asta update`/`asta libs` to try the newest library.
+- Version 0.17.15 (the Rust core did not change).
+
 ## [0.17.14] — 2026-11-09
 
 ### Added/Fixed — the newest image library is part of install and update

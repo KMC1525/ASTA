@@ -18,6 +18,7 @@ import base64
 import collections
 import gc
 import io
+import os
 import json
 import re
 import shutil
@@ -37,7 +38,7 @@ from ..util import hardware_info
 from ..providers import http
 from ..providers.base import ProviderError
 from . import procedural as proc
-from . import support
+from . import gguf_info, support
 
 CAP_LABELS = {"image": "imagens", "video": "vídeos", "sound": "sons e músicas", "voice": "vozes", "stt": "transcrição de áudio"}
 Ref = Tuple[bytes, str]  # (bytes, mime) de uma imagem de referência
@@ -1413,6 +1414,7 @@ class GGUFMedia(MediaProvider):
             kw["model_path"] = str(path)
 
         def build() -> Any:
+            self._preflight(path, kw)
             _SD_LOG.clear()   # o motivo de uma falha de carga é registrado AQUI, durante a criação do modelo (antes, era apagado antes de gerar)
             sd = sdc.StableDiffusion(**kw)
             ctx = getattr(getattr(sd, "_model", None), "model", 1)   # a biblioteca confere `is None`, mas a carga que falha devolve um ponteiro NULO (que não é None): ela segue com um contexto vazio
@@ -1435,6 +1437,41 @@ class GGUFMedia(MediaProvider):
             return sd
 
         return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", build)   # um modelo que não carregou nunca fica em cache
+
+    def _preflight(self, path: Path, kw: Dict[str, Any]) -> None:
+        """Antes de entregar o modelo à stable-diffusion.cpp: se o arquivo não tem o tensor pelo qual ela reconhece a família (Qwen-Image, FLUX), ela recusa o modelo e ainda derruba o
+        programa inteiro (falha de segmentação). Nesse caso a carga é testada num processo à parte; se ele cai ou recusa, o erro aparece no nó e o ASTA continua de pé."""
+        fam = support.family_of(path.name)
+        if not fam or not fam.get("marker") or str(path) not in (kw.get("diffusion_model_path"), kw.get("model_path")):
+            return
+        names = gguf_info.tensor_names(path)
+        if names is None or any(fam["marker"] in n for n in names):
+            return   # não é um GGUF legível (nada a conferir) ou tem o tensor esperado
+        import json
+        import subprocess
+
+        root = str(Path(__file__).resolve().parents[2])
+        env = {**os.environ, "PYTHONPATH": root + os.pathsep + os.environ.get("PYTHONPATH", "")}
+        self.ctl.note("Conferindo se a stable-diffusion.cpp reconhece este modelo…")
+        try:
+            r = subprocess.run([sys.executable, "-m", "asta.canvas.sd_probe", json.dumps(kw)], capture_output=True, timeout=1800, env=env)
+            code, err = r.returncode, (r.stderr or b"").decode("utf-8", "replace")
+        except (OSError, subprocess.SubprocessError) as exc:
+            code, err = -1, str(exc)
+        if code == 0:
+            return   # carregou no teste: a biblioteca reconhece o modelo mesmo sem o tensor esperado
+        try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
+            from ..util import asta_home
+
+            (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
+        except OSError:
+            pass
+        lines = [ln.strip() for ln in err.splitlines() if re.search(r"error|failed|version", ln, re.I)][-3:]
+        how = ("a biblioteca recusou o modelo" if code == 3 else f"o programa de teste fechou de repente (código {code}) — era a falha de segmentação que derrubaria o ASTA")
+        raise _SDUnsupportedModel(
+            f"O arquivo {path.name} não tem o tensor que a stable-diffusion.cpp usa para reconhecer o {fam['label']} («{fam['marker']}»), e no teste de carga {how}"
+            + (f" ({' | '.join(lines)[:300]})" if lines else "") + f". O arquivo tem {len(names)} tensores, por exemplo: {', '.join(names[:4])}. "
+            "Ele provavelmente não é um GGUF do " + fam["label"] + " no formato que a biblioteca entende, ou é mais novo que ela: baixe outro arquivo/quantização desse modelo, ou rode «asta update» (ou «asta libs --sd-latest») para tentar a biblioteca mais nova." + _sd_env(_local_import("stable_diffusion_cpp", extra="local")[0]))
 
     def _auto_load(self, path: Path) -> Dict[str, Any]:
         """Para um GGUF de família conhecida (Qwen-Image, FLUX…, ver `support.FAMILIES`), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
