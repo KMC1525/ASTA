@@ -346,7 +346,7 @@ class Runner:
     def _compact_project(self) -> Dict[str, Any]:
         p = self.project or {}
         cmds = {k: [f"{c['label']}: {' '.join(c['argv'])}" for c in v[:2]] for k, v in (p.get("commands") or {}).items() if v}
-        return {"name": self.env.get("root"), "languages": [f"{x['label']} ({x['files']})" for x in p.get("languages", [])[:6]], "manifests": p.get("manifests", [])[:10], "commands": cmds, "git": p.get("git"),
+        return {"name": self.env.get("root"), "empty": bool(p.get("empty")), "languages": [f"{x['label']} ({x['files']})" for x in p.get("languages", [])[:6]], "manifests": p.get("manifests", [])[:10], "commands": cmds, "git": p.get("git"),
                 "repo": p.get("repo"), "tree": self.ws.list_dir(".", 2, 60) if self.ws else ""}
 
     def _inputs_list(self) -> List[str]:

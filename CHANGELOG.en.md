@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.29] — 2026-11-09
+
+### Added — Code: empty (or not-yet-existing) folders to write the code later
+- A session can point at an **empty folder** (it already worked on paper, but the Planner did not know it was a new project) or at a **folder that does not exist yet**: in the new-session dialog, **"Create the folder if it does not exist"** (on by default) creates it — **after the same safety checks** (no whole disk, whole home folder, system folders, ASTA data or secret folders; a path through a file is refused) — and the session starts empty. Through the API: `workspace: {type: "local", path, create: true}`; without `create`, the error message explains the option.
+- **A real new project:** the project summary carries `empty` (no files besides `.git`); the Planner and the workers are told to pick the stack from the request, create the structure (manifest, code, tests, README) and run it, instead of looking for code that is not there or giving up.
+- **"file:///…" address:** you can paste the address copied from your file manager (with `%20`, `file:///C:/…`) into the folder field.
+- Honest limit: the quality of a project written from scratch depends on the model; the suite uses a scripted provider. The Rust core did not change.
+- Version 0.17.29.
+
 ## [0.17.28] — 2026-11-09
 
 ### Changed — Chat: no Computer Use button; toolbar on a single line

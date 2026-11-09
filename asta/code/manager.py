@@ -401,7 +401,7 @@ class CodeManager:
         repo_spec = ""
         if wtype == "local":
             try:
-                root = guard.check_root(str(ws_spec.get("path") or ""))
+                root = guard.check_root(str(ws_spec.get("path") or ""), create=ws_spec.get("create") is True)
             except guard.Blocked as exc:
                 raise CodeError(400, str(exc)) from None
             wsd.update(kind="local", path=str(root), label=root.name)
