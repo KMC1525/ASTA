@@ -98,6 +98,7 @@ function modelPicker(c, n, cap) {
   const custom = h('input', { class: 'nodrag hidden', placeholder: t('nome do modelo'), value: n.params.model || '' });
   custom.addEventListener('input', () => c.change(n, 'model', custom.value.trim()));
   custom.addEventListener('keydown', cut);
+  custom.addEventListener('blur', () => { if (!custom.value.trim() || custom.value.trim() === (n.params.model || '')) { custom.classList.add('hidden'); build(false, false); } });   // saiu do campo sem mudar nada (ou digitado, já salvo): some e a lista mostra o modelo salvo
   const reload = h('button', { class: 'btn icon sm nodrag', type: 'button', title: t('Atualizar a lista de modelos'), onclick: () => build(true, true) }, icon('refresh', 13));
   const opt = (value, text) => h('option', { value }, text);
   const group = (text, opts) => (opts.length ? h('optgroup', { label: text }, opts) : null);
@@ -126,6 +127,7 @@ function modelPicker(c, n, cap) {
       opt('__config', t('Configurar provedores e chaves…')), opt('__custom', t('Outro modelo…')));
     sel.value = curKey;
     if (sel.value !== curKey) sel.value = '';
+    custom.classList.add('hidden');   // a lista foi refeita (↻) e voltou ao modelo salvo: o campo «nome do modelo» só vale enquanto «Outro modelo…» está escolhido
   }
   sel.addEventListener('change', () => {
     const v = sel.value;

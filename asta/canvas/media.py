@@ -19,6 +19,7 @@ import atexit
 import collections
 import gc
 import io
+import math
 import os
 import json
 import re
@@ -643,8 +644,9 @@ class OpenRouterMedia(MediaProvider):
     e **transcrição** (modelos de chat que ouvem áudio). Serve ao Studio e ao Canvas. Os modelos mudam sempre: «Carregar modelos» lista os atuais de cada tipo, pelas modalidades que o OpenRouter
     declara (`architecture.input_modalities`/`output_modalities`).
 
-    Imagens: tenta a rota própria `/images`; se o servidor não a tem (404/405), usa o chat com `modalities` (`image_config`: proporção e 1K/2K/4K), e lembra disso. Com referências, vai direto pelo chat
-    (as imagens seguem como partes `image_url` da mensagem)."""
+    Imagens: a rota própria `POST /images` (geração e edição: `input_references`) para os modelos do catálogo `GET /images/models` — o que o modelo aceita (proporção, resolução, seed) vem desse catálogo e uma opção
+    recusada (400) é tirada numa nova tentativa. Modelos só de chat multimodal (ou servidor sem a rota) vão pelo chat com `modalities`; se o chat responde «é um modelo só de imagem, use /images», o ASTA muda de rota.
+    Vídeos: `POST /videos` assíncrono, com duração/proporção/resolução escolhidas dentre as do `GET /videos/models` e o download pela URL do próprio job."""
 
     id, label = "openrouter", "OpenRouter"
     caps = ("image", "video", "voice", "stt")
@@ -670,7 +672,7 @@ class OpenRouterMedia(MediaProvider):
             raise ProviderError(f"{self.label}: {res['error'].get('message') or res['error']}")
         return res if isinstance(res, dict) else {}
 
-    def _image_via_chat(self, prompt: str, size: str, count: int, negative: str, refs: Sequence[Ref], model: str, extra: Optional[Dict[str, Any]]) -> List[Media]:
+    def _image_via_chat(self, prompt: str, size: str, count: int, negative: str, refs: Sequence[Ref], model: str, extra: Optional[Dict[str, Any]], via_images: bool = False) -> List[Media]:
         """Geração/edição pelo chat: `modalities` + `image_config`; as referências vão como `image_url` (data URI) antes do texto."""
         text_part = prompt + (f"\n\nEvite: {negative}" if negative else "")
         content: Any = text_part
@@ -685,6 +687,9 @@ class OpenRouterMedia(MediaProvider):
                 res = self._chat(body)
             except ProviderError as exc:
                 msg = str(exc).lower()
+                if not via_images and ("/images" in msg or "images endpoint" in msg or "cannot be used with the chat" in msg):   # «é um modelo só de imagem: use /api/v1/images» (ex.: openai/gpt-image-2.6-flare)
+                    self.ctl.note("Este modelo só gera imagem: usando a rota de imagens do OpenRouter…")
+                    return self._image_via_images(prompt, size, count, 0, negative, refs, model, extra)
                 if exc.status in (400, 404, 422) and ("modalit" in msg or "image_config" in msg or "image_size" in msg):   # o modelo só gera imagem (ou não conhece a configuração): tenta de novo mais simples
                     self.ctl.note("O modelo não aceitou estas opções de imagem: tentando de novo só com a proporção…")
                     body["modalities"] = ["image"]
@@ -709,22 +714,89 @@ class OpenRouterMedia(MediaProvider):
                 break
         return out[:max(1, count)]
 
-    def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
-        h = self._h()
-        model = self.model_for("image", model) or "google/gemini-2.5-flash-image"
-        if refs or self.base in self._no_images:
-            return self._image_via_chat(prompt, size, count, negative, refs, model, extra)
-        body: Dict[str, Any] = {"model": model, "prompt": prompt + (f"\n\nEvite: {negative}" if negative else ""), "aspect_ratio": aspect_of(size)}
-        body.update(extra or {})
-        out: List[Media] = []
-        for _ in range(max(1, count)):
+    # ---- catálogo: o que cada modelo aceita (GET /images/models e /videos/models, sem chave), guardado por 10 minutos
+    _catalog_cache: Dict[Tuple[str, str], Tuple[float, Dict[str, Dict[str, Any]]]] = {}
+
+    def _catalog(self, kind: str) -> Dict[str, Dict[str, Any]]:
+        """{id do modelo: registro} de «images» ou «videos»; {} se o servidor não responde (aí as chamadas seguem sem validação prévia)."""
+        key = (self.base, kind)
+        hit = OpenRouterMedia._catalog_cache.get(key)
+        if hit and time.time() - hit[0] < 600:
+            return hit[1]
+        out: Dict[str, Dict[str, Any]] = {}
+        try:
+            res = http.get_json(f"{self.base}/{kind}/models", {"X-Title": "ASTA"}, timeout=20)
+            out = {m["id"]: m for m in ((res.get("data") if isinstance(res, dict) else None) or []) if isinstance(m, dict) and m.get("id")}
+        except Exception:  # noqa: BLE001 — catálogo é opcional
+            out = {}
+        OpenRouterMedia._catalog_cache[key] = (time.time(), out)
+        return out
+
+    @staticmethod
+    def _nearest_ratio(w: int, h: int, values: Sequence[str]) -> str:
+        """A proporção da lista mais próxima de w:h («auto» não conta)."""
+        best, dist = "", 1e9
+        for v in values:
             try:
-                res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=300))
+                a, b = [float(x) for x in str(v).split(":")]
+            except ValueError:
+                continue
+            d = abs(math.log((a / b) / (w / max(1, h))))
+            if d < dist:
+                best, dist = str(v), d
+        return best
+
+    def _image_body(self, model: str, prompt: str, size: str, seed: int, refs: Sequence[Ref], extra: Optional[Dict[str, Any]], entry: Optional[Dict[str, Any]]) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        """(corpo completo, corpo mínimo) da rota `/images`. O completo leva só o que o catálogo diz que o modelo aceita (proporção, resolução, seed); `size` em pixels não é enviado (a xAI e outros o recusam).
+        As referências vão em `input_references` (URL ou data URL). Sem catálogo, só a proporção."""
+        sp = (entry or {}).get("supported_parameters") or {}
+        w, h = parse_wh(size)
+        minimal: Dict[str, Any] = {"model": model, "prompt": prompt}
+        if refs:
+            minimal["input_references"] = [{"type": "image_url", "image_url": {"url": _data_uri(d, m)}} for d, m in list(refs)[:self.max_refs(model)]]
+        full = dict(minimal)
+        if not sp or "aspect_ratio" in sp:
+            vals = [v for v in ((sp.get("aspect_ratio") or {}).get("values") or []) if v != "auto"]
+            full["aspect_ratio"] = (self._nearest_ratio(w, h, vals) if vals else aspect_of(size)) or aspect_of(size)
+        if "resolution" in sp:
+            vals = (sp.get("resolution") or {}).get("values") or []
+            tier = _image_size_tier(size)
+            if not vals or tier in vals:
+                full["resolution"] = tier
+            elif vals:   # o modelo não tem esse degrau: o mais próximo do pedido
+                order = {"512": 0, "768": 1, "1K": 2, "1.5K": 3, "2K": 4, "4K": 5}
+                full["resolution"] = min(vals, key=lambda v: abs(order.get(str(v), 2) - order.get(tier, 2)))
+        if seed and "seed" in sp:
+            full["seed"] = int(seed)
+        full.update({k: v for k, v in (extra or {}).items() if k not in ("load",)})
+        return full, minimal
+
+    def _image_via_images(self, prompt: str, size: str, count: int, seed: int, negative: str, refs: Sequence[Ref], model: str, extra: Optional[Dict[str, Any]]) -> List[Media]:
+        """A rota dedicada `POST /images` (geração e edição: `input_references`), a certa para os modelos que só geram imagem (OpenAI gpt-image, xAI, FLUX, Seedream…)."""
+        h = self._h()
+        entry = self._catalog("images").get(model)
+        text_part = prompt + (f"\n\nEvite: {negative}" if negative else "")
+        full, minimal = self._image_body(model, text_part, size, seed, refs, extra, entry)
+        out: List[Media] = []
+        for i in range(max(1, count)):
+            body = dict(full)
+            if "seed" in body and i:
+                body["seed"] = int(body["seed"]) + i   # cada imagem do lote com a sua semente
+            try:
+                res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=600))
             except ProviderError as exc:
-                if exc.status in (404, 405, 501) and not out:   # sem a rota própria de imagens: o chat com `modalities` é o caminho
+                if exc.status == 402:
+                    raise ProviderError("OpenRouter: sem créditos para esta chamada. Adicione créditos em openrouter.ai/credits ou escolha um modelo mais barato.", status=402) from None
+                if exc.status in (404, 405, 501) and not out and not entry:   # sem a rota própria (servidor compatível mais simples): o chat com `modalities` é o caminho
                     OpenRouterMedia._no_images.add(self.base)
-                    return self._image_via_chat(prompt, size, count, negative, refs, model, extra)
-                raise
+                    return self._image_via_chat(prompt, size, count, negative, refs, model, extra, via_images=True)
+                if exc.status in (400, 422) and body != minimal:   # alguma opção (proporção, resolução, seed…) não vale para este modelo: tenta de novo só com o essencial
+                    self.ctl.note("O modelo não aceitou algumas opções de imagem: tentando de novo só com o texto e as referências…")
+                    body = dict(minimal)
+                    full = dict(minimal)
+                    res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=600))
+                else:
+                    raise
             items = (res.get("data") if isinstance(res, dict) else None) or []
             got = 0
             for it in items:
@@ -743,20 +815,58 @@ class OpenRouterMedia(MediaProvider):
                 break
         return out[:max(1, count)]
 
+    def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
+        self._h()
+        model = self.model_for("image", model) or "google/gemini-2.5-flash-image"
+        cat = self._catalog("images")
+        # modelos do catálogo de imagens (inclui edição por referências) vão pela rota `/images`; os que só existem como chat multimodal (ou servidor sem a rota) vão pelo chat
+        if self.base in self._no_images or (cat and model not in cat):
+            return self._image_via_chat(prompt, size, count, negative, refs, model, extra)
+        return self._image_via_images(prompt, size, count, seed, negative, refs, model, extra)
+
+    def _video_entry(self, model: str) -> Dict[str, Any]:
+        return self._catalog("videos").get(model) or {}
+
     def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
         h = self._h()
         model = self.model_for("video", model) or "google/veo-3.1"
-        body: Dict[str, Any] = {"model": model, "prompt": prompt, "duration": int(duration), "aspect_ratio": aspect}
-        body.update(extra or {})
+        ent = self._video_entry(model)
+        body: Dict[str, Any] = {"model": model, "prompt": prompt}
+        # o que o catálogo diz que o modelo aceita (duração, proporção, resolução); valores fora da lista dão 400
+        durs = [int(x) for x in (ent.get("supported_durations") or []) if isinstance(x, (int, float))]
+        body["duration"] = min(durs, key=lambda d: abs(d - int(duration))) if durs else int(duration)
+        ratios = [str(x) for x in (ent.get("supported_aspect_ratios") or [])]
+        body["aspect_ratio"] = aspect if (not ratios or aspect in ratios) else (self._nearest_ratio(*size_of_aspect(aspect, 1000), ratios) or aspect)
+        ress = [str(x) for x in (ent.get("supported_resolutions") or [])]
+        if ress:   # o degrau mais perto do pedido (sem pedido, ~720p: barato e suficiente)
+            short = {"480p": 480, "720p": 720, "768p": 768, "1080p": 1080, "1K": 1024, "2K": 2048, "4K": 2160}
+            target = int(long_side * 9 / 16) if long_side else 720
+            body["resolution"] = min(ress, key=lambda r: abs(short.get(r, 720) - target))
+        if seed:
+            body["seed"] = int(seed)
+        body.update({k: v for k, v in (extra or {}).items() if k != "load"})
         if image:
             body["frame_images"] = [{"type": "image_url", "image_url": {"url": f"data:{image[1]};base64,{base64.b64encode(image[0]).decode('ascii')}"}, "frame_type": "first_frame"}]
         try:
             job = _retry(self.ctl, lambda: http.post_json(f"{self.base}/videos", body, h, timeout=120))
         except ProviderError as exc:
-            if image and exc.status in (400, 422):  # o modelo não aceita imagem inicial: segue só com o texto
-                body.pop("frame_images", None)
-                self.ctl.note("Este modelo de vídeo não aceitou a imagem inicial: gerando só pelo texto.")
-                job = _retry(self.ctl, lambda: http.post_json(f"{self.base}/videos", body, h, timeout=120))
+            if exc.status == 402:
+                raise ProviderError("OpenRouter: sem créditos para esta chamada. Adicione créditos em openrouter.ai/credits ou escolha um modelo mais barato.", status=402) from None
+            if exc.status in (400, 422):   # alguma opção não vale para este modelo: tira a imagem inicial e as opções de qualidade, na ordem, e tenta de novo
+                for drop, why in (("frame_images", "a imagem inicial"), ("resolution", "a resolução"), ("seed", "a semente"), ("aspect_ratio", "a proporção")):
+                    if drop not in body:
+                        continue
+                    body.pop(drop)
+                    self.ctl.note(f"Este modelo de vídeo não aceitou {why}: tentando de novo sem isso.")
+                    try:
+                        job = _retry(self.ctl, lambda: http.post_json(f"{self.base}/videos", body, h, timeout=120))
+                        break
+                    except ProviderError as exc2:
+                        if exc2.status not in (400, 422):
+                            raise
+                        exc = exc2
+                else:
+                    raise exc
             else:
                 raise
         vid, poll = (job.get("id") if isinstance(job, dict) else None), (job.get("polling_url") if isinstance(job, dict) else None)
@@ -777,7 +887,8 @@ class OpenRouterMedia(MediaProvider):
             self.ctl.note("Gerando vídeo…")
             self.ctl.sleep(self.poll(10))
         vid = vid or st.get("id")
-        data, mime = http.get_bytes(f"{self.base}/videos/{vid}/content?index=0", {**h, "Accept": "video/*"}, timeout=900)
+        urls = [u for u in (st.get("unsigned_urls") or []) if isinstance(u, str) and u.startswith("http")]
+        data, mime = http.get_bytes(urls[0] if urls else f"{self.base}/videos/{vid}/content?index=0", {**h, "Accept": "video/*"}, timeout=900)   # a URL não é assinada: leva a chave
         return expect_media(data, mime, "video", self.label)
 
     def voice(self, text, *, voice="", speed=1.0, model="", extra=None, instructions=""):
@@ -826,6 +937,9 @@ class OpenRouterMedia(MediaProvider):
             return sorted({m.get("id") for m in (res.get("data") or []) if isinstance(m, dict) and m.get("id")})
         if cap not in ("image", "voice", "stt"):
             return []   # o OpenRouter não tem som/música: nada a listar
+        extra_ids: set = set()
+        if cap == "image":   # o catálogo próprio de imagens (os modelos da rota `/images`: OpenAI gpt-image, xAI, FLUX, Seedream…) soma-se aos de chat com saída de imagem
+            extra_ids = set(self._catalog("images"))
         res = http.get_json(f"{self.base}/models" + ("?output_modalities=image" if cap == "image" else ""), self._h(), timeout=30)
         want_in, want_out = {"image": (None, "image"), "voice": (None, "audio"), "stt": ("audio", "text")}[cap]
         ids = set()
@@ -838,7 +952,7 @@ class OpenRouterMedia(MediaProvider):
                 ids.add(m["id"])   # a resposta já veio filtrada pelo servidor (sem detalhes de arquitetura)
             elif (want_in is None or want_in in ins) and (want_out is None or want_out in outs):
                 ids.add(m["id"])
-        return sorted(ids | (set(MEDIA_PRESETS["openrouter"]["suggest"].get(cap, [])) if cap in ("voice",) else set()))
+        return sorted(ids | extra_ids | (set(MEDIA_PRESETS["openrouter"]["suggest"].get(cap, [])) if cap in ("voice",) else set()))
 
     def test(self) -> str:
         res = http.get_json(f"{self.base}/auth/key", self._h(), timeout=30)
@@ -2292,9 +2406,9 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
     "openrouter": {
         "label": "OpenRouter", "kind": "openrouter", "caps": ["image", "video", "voice", "stt"], "base_url": "https://openrouter.ai/api/v1", "needs_key": True,
         "docs": "https://openrouter.ai/keys", "models": {"image": "google/gemini-2.5-flash-image", "video": "google/veo-3.1", "voice": "openai/gpt-4o-mini-tts", "stt": "google/gemini-2.5-flash"},
-        "suggest": {"image": ["google/gemini-2.5-flash-image", "openai/gpt-image-1"], "video": ["google/veo-3.1"], "voice": ["openai/gpt-4o-mini-tts", "openai/tts-1"],
+        "suggest": {"image": ["google/gemini-2.5-flash-image", "openai/gpt-image-1", "openai/gpt-image-2", "black-forest-labs/flux.2-pro", "bytedance-seed/seedream-4.5"], "video": ["google/veo-3.1", "alibaba/wan-2.7", "bytedance/seedance-2.0", "minimax/hailuo-3"], "voice": ["openai/gpt-4o-mini-tts", "openai/tts-1"],
                     "stt": ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-4o-audio-preview"]},
-        "hint": "Imagens (geração e edição com até 4 referências), vídeos, vozes e transcrição com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo (as modalidades vêm do próprio OpenRouter).",
+        "hint": "Imagens (geração e edição com até 4 referências, pela rota própria de imagens — OpenAI gpt-image, xAI, FLUX, Seedream…), vídeos (assíncronos; duração, proporção e resolução seguem o catálogo de cada modelo), vozes e transcrição com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo (as modalidades vêm do próprio OpenRouter).",
     },
     "google": {
         "label": "Google (Gemini / Veo)", "kind": "google", "caps": ["image", "video"], "base_url": "https://generativelanguage.googleapis.com/v1beta", "needs_key": True,

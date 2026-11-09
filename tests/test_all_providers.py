@@ -73,6 +73,8 @@ class Fake:
                     return self._out({"id": "job1", "status": "completed" if outer.polls >= 2 else "in_progress"})
                 if self.path.endswith("/videos/models"):
                     return self._out({"data": [{"id": "google/veo-3.1"}]})
+                if self.path.endswith("/images/models"):   # o catálogo próprio de imagens do OpenRouter (modelos da rota /images)
+                    return self._out({"data": [{"id": "google/gemini-2.5-flash-image", "supported_parameters": {}}]})
                 if "output_modalities=image" in self.path:
                     return self._out({"data": [{"id": "google/gemini-2.5-flash-image"}]})
                 if self.path.endswith("/auth/key"):
