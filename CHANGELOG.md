@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.33] — 2026-11-09
+
+### Corrigido — Canvas: referências descartadas no modo Gerar e tamanho trocado pela 1ª foto
+Numa thumb feita com um Texto com `@foto-perfil`, `@fnaf-…`, uma Mídia ligada em «Referências» e um Style Folder (modelo FLUX.2 klein GGUF, modo «Gerar»), **as referências nunca chegavam ao modelo**.
+- **Referências no modo Gerar:** o provedor GGUF (e o Hugging Face local) tinha `refs_edit_only` fixo: no modo Gerar, a engine descartava todas as referências com o aviso «só usa imagens de referência no modo Editar». Isso vale para os modelos de «imagem → imagem», mas **não** para os que juntam várias referências na mesma geração. Agora é **por modelo** (`refs_need_edit`): FLUX.2 klein/dev, FLUX.3 Klein, Qwen-Image 2.1, Kontext e Qwen-Image-Edit usam as referências também em Gerar; os demais seguem pedindo Editar.
+- **Tamanho:** com referências, o tamanho de saída virava o da **primeira** imagem (um retrato como `foto-perfil` fazia a thumb 16:9 sair em pé). Agora só a edição de **uma** imagem mantém a proporção dela; com várias, vale o tamanho pedido.
+- **FLUX.3 GGUF:** lia no máximo 4 referências; agora lê até o limite do modelo (10).
+- Não corrigido (ambiente): «a stable-diffusion.cpp instalada não reconhece o modelo» — a biblioteca do PyPI (0.4.7) é antiga demais para alguns GGUF; o botão «Atualizar a biblioteca» compila a mais nova (precisa de git, cmake e compilador C++). Testes novos em `tests/test_canvas_refs.py`; **não rodei com a stable-diffusion.cpp de verdade**.
+- Versão 0.17.33.
+
 ## [0.17.32] — 2026-11-09
 
 ### Melhorado — OpenRouter no Canvas: edição de imagens, transcrição e modelos pelas modalidades

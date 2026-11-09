@@ -197,6 +197,10 @@ def _auth(key: str, header: str = "Authorization", scheme: str = "Bearer ") -> D
 # --------------------------------------------------------------------------- base
 
 
+#: GGUF que juntam várias imagens de referência na mesma geração (edição, Kontext, FLUX.2 klein/dev, Qwen-Image 2.1): as referências valem também no modo Gerar
+_GGUF_MULTI_REF = re.compile(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", re.I)
+
+
 class MediaProvider:
     id = "media"
     label = "Provedor"
@@ -207,6 +211,10 @@ class MediaProvider:
     def max_refs(self, model: str = "") -> int:
         """Quantas imagens de referência o modelo realmente usa (as demais seriam ignoradas em silêncio)."""
         return 8
+
+    def refs_need_edit(self, model: str = "") -> bool:
+        """As referências só valem no modo Editar? Modelos que juntam várias referências na mesma imagem (FLUX.2 klein, Qwen-Image 2.1, Kontext…) as usam também no modo Gerar; os de «imagem → imagem» não."""
+        return bool(self.refs_edit_only)
 
     def __init__(self, cfg: Dict[str, Any], ctl: Optional[Ctl] = None):
         self.cfg = cfg
@@ -1325,6 +1333,9 @@ class LocalHFMedia(MediaProvider):
             return 10   # FLUX.3 Image Klein: até 10 imagens de referência no mesmo pedido
         return 4 if "klein" in name else 1   # FLUX.2 klein edita com várias imagens de uma vez; os demais fazem imagem → imagem com uma
 
+    def refs_need_edit(self, model: str = "") -> bool:
+        return self.max_refs(model) <= 1   # klein e FLUX.3 juntam várias referências também no modo Gerar
+
     @staticmethod
     def _defaults(model: str) -> Tuple[int, float]:
         """Passos e guidance do modelo (o padrão de cada família): FLUX.2 klein destilado 4 passos sem CFG; klein «base» 50 passos e guidance 4; FLUX.1 schnell 4 passos; FLUX.1 dev 28 passos e guidance 3,5;
@@ -1443,7 +1454,8 @@ class LocalHFMedia(MediaProvider):
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
         i2i = None
         if pil:
-            w, h = _size_like(pil[0], w, h, 16 if (klein or flux3) else 8)
+            if len(pil) == 1:   # só uma imagem (edição): mantém a proporção dela; com várias referências vale o tamanho pedido
+                w, h = _size_like(pil[0], w, h, 16 if (klein or flux3) else 8)
             if not klein and not flux3:   # imagem → imagem: reaproveita os pesos já carregados (o FLUX.2 klein edita pelo próprio pipeline, com várias imagens)
                 i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
         out = []
@@ -1878,7 +1890,11 @@ class GGUFMedia(MediaProvider):
         name = Path(self.model_for("image", model) or model or "").name
         if re.search(r"flux[-_. ]?3", name, re.I):
             return 10
-        return 4 if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        return 4 if _GGUF_MULTI_REF.search(name) else 1   # os demais modelos usam só uma imagem de partida
+
+    def refs_need_edit(self, model: str = "") -> bool:
+        name = Path(self.model_for("image", model) or model or "").name
+        return not (_GGUF_MULTI_REF.search(name) or re.search(r"flux[-_. ]?3", name, re.I))
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1982,7 +1998,7 @@ class GGUFMedia(MediaProvider):
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
         w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)   # múltiplos de 16: Qwen-Image/FLUX/Z-Image falham com tamanhos que não são
-        pil = _pil_refs(refs) if refs else []
+        pil = _pil_refs(refs, self.max_refs(model)) if refs else []
         if refs and not pil:
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
         ref_kw: Dict[str, Any] = {}
@@ -1994,8 +2010,9 @@ class GGUFMedia(MediaProvider):
                 params = set(getattr(sd, "_params", None) or (inspect.signature(gen_fn).parameters if gen_fn else ()))   # no processo à parte, os parâmetros vêm da carga
             except (TypeError, ValueError):
                 params = set()
-            w, h = _size_like(pil[0], w, h, 16)
-            if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", path.name, re.I) and "ref_images" in params:
+            if len(pil) == 1:   # uma só imagem (edição): mantém a proporção dela; com várias referências vale o tamanho pedido (uma thumb não pode herdar a forma da 1ª foto)
+                w, h = _size_like(pil[0], w, h, 16)
+            if _GGUF_MULTI_REF.search(path.name) and "ref_images" in params:
                 ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
             elif "init_image" in params:
                 ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem

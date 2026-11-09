@@ -488,7 +488,8 @@ class CanvasEngine:
             use_refs = list(refs)
             if not use_refs and style.images and getattr(prov, "supports_refs", False) and _style_refs_ok(pid, model):
                 use_refs = list(style.images)  # modelos que aceitam várias imagens usam o Style Folder como referência
-            if use_refs and prov.supports_refs and getattr(prov, "refs_edit_only", False) and p["mode"] != "edit":
+            needs_edit = getattr(prov, "refs_need_edit", lambda m="": getattr(prov, "refs_edit_only", False))(p["model"] or model)   # por modelo: o klein junta referências também no modo Gerar
+            if use_refs and prov.supports_refs and needs_edit and p["mode"] != "edit":
                 warnings.append(f"{prov.label} só usa imagens de referência no modo Editar (imagem → imagem). No modo Gerar elas viram só texto — para editar uma imagem, escolha «Editar».")
                 use_refs = []
             elif use_refs and prov.supports_refs:
