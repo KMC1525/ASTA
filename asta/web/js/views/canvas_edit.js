@@ -210,12 +210,14 @@ export default async function render(root, ctx, cid) {
     }));
     return e;
   }
-  function addToDom(n) { const e = nodeEl(n); el[n.id] = e; nodesLayer.appendChild(e); }
+  let roFrame = 0;
+  const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { cancelAnimationFrame(roFrame); roFrame = requestAnimationFrame(drawEdges); }) : null;   // a altura do nó mudou (texto que cresce, campo redimensionado à mão, resultado novo): as portas se mexem e as conexões acompanham
+  function addToDom(n) { const e = nodeEl(n); el[n.id] = e; nodesLayer.appendChild(e); if (ro) ro.observe(e); }
   function refreshNode(id) {
     const n = nodeById(id); if (!n) return;
     const old = el[id], e = nodeEl(n);
-    if (old) old.replaceWith(e); else nodesLayer.appendChild(e);
-    el[id] = e; drawEdges(); paintHint();
+    if (old) { if (ro) ro.unobserve(old); old.replaceWith(e); } else nodesLayer.appendChild(e);
+    el[id] = e; if (ro) ro.observe(e); drawEdges(); paintHint();
   }
   const paintHint = () => hint.classList.toggle('hidden', S.cv.nodes.length > 0);
 

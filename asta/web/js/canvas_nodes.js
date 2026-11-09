@@ -57,8 +57,10 @@ const cut = (e) => e.stopPropagation();
 function ta(c, n, key, ph, rows, mention) {
   const el = h('textarea', { placeholder: ph, rows: rows || 3, class: 'nodrag' });
   el.value = n.params[key] || '';
-  el.addEventListener('input', () => c.change(n, key, el.value));
+  const grow = () => { if (el.scrollHeight > el.clientHeight + 2) el.style.height = Math.min(el.scrollHeight + 2, 320) + 'px'; };   // o texto cresce o campo (até um limite) em vez de ficar escondido; o que a pessoa puxou à mão não é encolhido
+  el.addEventListener('input', () => { c.change(n, key, el.value); grow(); });
   el.addEventListener('keydown', cut);
+  requestAnimationFrame(grow);
   return mention && c.mentions ? withMentions(el, c) : el;   // @ cita uma imagem do canvas (Imagem e Vídeo)
 }
 function txt(c, n, key, ph, type) {

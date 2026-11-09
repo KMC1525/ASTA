@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.20] — 2026-11-09
+
+### Fixed — Text node with several references (`@`) when generating/editing images
+- **Images sent twice.** An `@foto-perfil` in the Text node plus a Media node holding the same photo connected to «References» sent the image twice to the model (4 cited + 4 connected = 6 images, only 4 different): copies took slots of the limit and the prompt's «(reference image N)» numbering also pointed at copies. Repeated references (same content) now count once, in order of first appearance: those cited in the text, then the connected ones.
+- `@foto_perfil` (with an underscore) now also matches `foto-perfil`, on the server and in the node chips.
+- If a cited image cannot be read (missing file, video without a frame), the node warns instead of continuing with shifted reference numbering.
+- **Cut-off text.** Text fields (Text, AI Text, Image, Video…) now grow with their content, up to a limit, instead of hiding the end of a long prompt; what you dragged by hand is not shrunk.
+- **Connections left in the wrong place** when a field was resized or grew: lines between nodes are now redrawn whenever a node's height changes.
+- Picking a mention from the list no longer adds an extra space when a space or punctuation already follows.
+- Version 0.17.20 (the Rust core did not change).
+
 ## [0.17.19] — 2026-11-09
 
 ### Fixed — image references on nodes with a local model
