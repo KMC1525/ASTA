@@ -92,6 +92,18 @@ class SessionTests(TeamCase):
         self.assertNotEqual(d["run"]["status"], "done")
         self.assertIn(str(dest.resolve()), json.dumps(d["run"], ensure_ascii=False))
 
+    def test_a_reading_role_may_finish_with_code_in_its_summary_and_a_writer_that_only_explains_is_not_failed(self):
+        dest = self.home / "site3"
+        dest.mkdir()
+        (dest / "a.py").write_text("x = 1\n")
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Explicar o código", files=["a.py"], role="architect")),
+                       worker=per_step(s1=[fin("O arquivo faz:\n```python\nx = 1\n```", files=["a.py"])]))
+        m = self.manager(llm, mode="full", agents=1)
+        s = m.create_session({"workspace": {"type": "local", "path": str(dest)}})
+        m.send(s["id"], "explique o código")
+        d = self.wait(m, s["id"])
+        self.assertIn(d["run"]["status"], ("done", "partial"))   # papel só de leitura: a resposta não precisa virar arquivo
+
     def test_without_create_a_missing_folder_is_an_error_that_explains_the_option(self):
         m = self.manager(Scripted())
         with self.assertRaises(CodeError) as cm:

@@ -36,7 +36,7 @@ from .remote import Remote
 from .routes_games import GameRoutes
 from .routes_preinstalled import PreinstalledRoutes
 from .storage import Store
-from .util import hardware_info, new_id, safe_filename, slugify, text, write_json
+from .util import clean_json as _clean_json, hardware_info, new_id, safe_filename, slugify, text, write_json
 
 WEB_DIR = Path(__file__).parent / "web"
 PLAY_ALLOWED = ("Game.html", "code/", "chars/", "sound/", "ui/", "data/", "assets/", "README.md", "CHANGELOG.md")
@@ -383,7 +383,7 @@ class App:
     def r_char_import(self, req: "Request") -> None:
         raw = req.body_bytes(10 * 1024 * 1024)
         try:
-            card = character_from_png(raw) if raw[:4] == b"\x89PNG" else import_character(json.loads(raw.decode("utf-8")))
+            card = character_from_png(raw) if raw[:4] == b"\x89PNG" else import_character(_clean_json(json.loads(raw.decode("utf-8"))))
         except (ValueError, UnicodeDecodeError) as exc:
             raise HttpError(400, f"Não foi possível importar: {exc}")
         req.json(self.store.characters.save(card))
@@ -800,8 +800,10 @@ class App:
             if req.method != "HEAD":
                 req.h.wfile.write(data)
             return
+        if "\x00" in rel:   # byte nulo no endereço: o sistema de arquivos levantaria ValueError (erro 500)
+            raise HttpError(404, "Não encontrado")
         target = (WEB_DIR / rel).resolve()
-        if not str(target).startswith(str(WEB_DIR.resolve())) or not target.is_file():
+        if not _under(target, WEB_DIR) or not target.is_file():
             if "." in rel.rsplit("/", 1)[-1]:
                 raise HttpError(404, "Não encontrado")
             target = WEB_DIR / "index.html"
@@ -809,6 +811,12 @@ class App:
 
 
 # --------------------------------------------------------------------------- requisição
+
+
+def _under(target: Path, root: Path) -> bool:
+    """`target` está dentro de `root`? (comparação por pastas, não por prefixo de texto: «/x/web2» não está dentro de «/x/web».)"""
+    root = Path(root).resolve()
+    return target == root or root in target.parents
 
 
 def _as_list(v):
@@ -851,7 +859,7 @@ class Request:
             raise HttpError(400, "JSON inválido")
         if not isinstance(data, dict):  # todas as rotas esperam um objeto: lista/texto/número virariam um erro 500 lá dentro
             raise HttpError(400, "JSON inválido: esperava um objeto {…}")
-        return data
+        return _clean_json(data)
 
     # saída
     def _head(self, status: int, mime: str, length: Optional[int], extra: Optional[Dict[str, str]] = None) -> None:
@@ -913,8 +921,10 @@ class Request:
                 left -= len(chunk)
 
     def static(self, root: Path, rel: str) -> None:
+        if "\x00" in rel:
+            raise HttpError(404, "Arquivo não encontrado")
         target = (root / rel).resolve()
-        if not str(target).startswith(str(root.resolve())) or not target.is_file():
+        if not _under(target, root) or not target.is_file():
             raise HttpError(404, "Arquivo não encontrado")
         self.file(target, guess_mime(rel))
 

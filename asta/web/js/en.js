@@ -75,7 +75,7 @@ export default {
   'Buscar por nome, descrição ou tag…': 'Search by name, description or tag…', 'nenhuma': 'none', 'Tags automáticas (geradas pela IA)': 'Automatic tags (AI-generated)', 'Tags personalizadas': 'Custom tags',
   'Tags de “{n}”': 'Tags of “{n}”', 'Editar tags': 'Edit tags', 'Renomear': 'Rename', 'Reconstruir com o motor mais recente': 'Rebuild with the latest engine', 'Nova versão criada com o motor atual': 'New version created with the current engine',
   'Apagar “{n}” e todas as suas versões? Isso não pode ser desfeito.': 'Delete “{n}” and all its versions? This cannot be undone.', 'Mais': 'More', '{n} versões': '{n} versions',
-  'Atualizar com IA — o mesmo jogo, várias vezes': 'Update with AI — the same game, many times', 'Atualizar': 'Update', 'Configurar mundo': 'Configure world', 'Nada encontrado': 'Nothing found',
+  'Atualizar com IA — o mesmo jogo, várias vezes': 'Update with AI — the same game, many times', 'Configurar mundo': 'Configure world', 'Nada encontrado': 'Nothing found',
   'Tente outra busca ou remova filtros de tags.': 'Try another search or remove tag filters.', 'Sua biblioteca está vazia': 'Your library is empty',
   'Cada mundo gerado é salvo aqui como um projeto — dá para atualizar o mesmo jogo várias vezes.': 'Every generated world is saved here as a project — you can update the same game many times.',
   'Criar o primeiro mundo': 'Create the first world', 'Biblioteca': 'Library', 'Todos os mundos gerados, salvos como projetos atualizáveis.': 'All generated worlds, saved as updatable projects.', '{n} projeto(s)': '{n} project(s)',

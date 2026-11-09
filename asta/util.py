@@ -326,3 +326,19 @@ def fix_default_certs() -> bool:
         return False
     ssl._create_default_https_context = lambda *a, **k: ssl_context()   # type: ignore[assignment,misc]
     return True
+
+
+_NUL, _LONE_SURROGATE = re.compile("\x00"), re.compile("[\ud800-\udfff]")
+
+
+def clean_json(v: Any, depth: int = 0) -> Any:
+    """Texto vindo do JSON sem bytes nulos e sem «surrogates» soltos (o JSON permite «\\ud800», mas nem o sistema de arquivos nem o UTF-8 aceitam: davam erro 500 ao salvar)."""
+    if isinstance(v, str):
+        return _LONE_SURROGATE.sub("\ufffd", _NUL.sub("", v)) if ("\x00" in v or _LONE_SURROGATE.search(v)) else v
+    if depth > 64:
+        return v
+    if isinstance(v, dict):
+        return {(clean_json(k, depth + 1) if isinstance(k, str) else k): clean_json(x, depth + 1) for k, x in v.items()}
+    if isinstance(v, list):
+        return [clean_json(x, depth + 1) for x in v]
+    return v

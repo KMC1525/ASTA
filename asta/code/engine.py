@@ -488,15 +488,17 @@ class Runner:
                                     ". Escolha a interpretação mais razoável do pedido (o que o projeto já faz é a melhor pista: leia os arquivos relacionados), anote a suposição em «memo» e FAÇA o trabalho. "
                                     "Só termine com success=false se uma ferramenta, uma permissão ou um arquivo realmente impedir."})
                     continue
-                if t["success"] and not acted and self._phantom_files(t):   # disse que criou arquivos (ou colou o código no texto), mas nada foi escrito na pasta do projeto: o código só existiria na conversa
+                why_phantom = self._phantom_files(t, role) if (t["success"] and not acted) else ""   # «missing»: cita arquivos que não existem; «fence»: colou código no texto sem escrever nada
+                if why_phantom:
                     phantom += 1
                     if phantom < 3 and turn < max_turns:
                         history.append({"action": "finish (recusado)", "ok": False, "output": "Nada foi escrito na pasta do projeto: os arquivos que você cita não existem no disco, e código escrito no texto da resposta não vira arquivo. "
-                                        "Crie cada arquivo AGORA com a ferramenta write_file (caminho relativo à pasta do projeto) e só então finalize."})
+                                        "Crie cada arquivo AGORA com a ferramenta write_file (caminho relativo à pasta do projeto) e só então finalize. Se a tarefa não pede arquivos (só análise), finalize de novo sem citar arquivos nem colar código."})
                         continue
-                    outcome = {"success": False, "summary": ("Disse ter criado os arquivos, mas nenhum foi escrito na pasta do projeto (" + str(self.ws.root) + "). Peça de novo ou escolha um modelo mais capaz."
-                                                             if self.lang == "pt" else "Claimed to have created the files, but none was written to the project folder (" + str(self.ws.root) + "). Ask again or pick a more capable model."), "files": []}
-                    break
+                    if why_phantom == "missing":   # insistiu em dizer que criou arquivos inexistentes: falha honesta, com a pasta
+                        outcome = {"success": False, "summary": ("Disse ter criado os arquivos, mas nenhum foi escrito na pasta do projeto (" + str(self.ws.root) + "). Peça de novo ou escolha um modelo mais capaz."
+                                                                 if self.lang == "pt" else "Claimed to have created the files, but none was written to the project folder (" + str(self.ws.root) + "). Ask again or pick a more capable model."), "files": []}
+                        break
                 if self.prof["self_check"] and not selfchecked and t["success"] and turn < max_turns:
                     selfchecked = True
                     history.append({"action": "finish (pedido)", "ok": True, "output": "Antes de encerrar: confira com uma ação (ler o resultado, rodar o teste) que «done_when» foi atendido. Se estiver tudo certo, finalize de novo."})
@@ -564,15 +566,17 @@ class Runner:
         except OSError:
             return None
 
-    def _phantom_files(self, t: Dict[str, Any]) -> bool:
-        """O «finish» cita arquivos que não existem na pasta do projeto, ou traz código em bloco (```) no resumo sem ter escrito nada."""
+    def _phantom_files(self, t: Dict[str, Any], role: str = "coder") -> str:
+        """Só para papéis que escrevem. «missing»: o «finish» cita arquivos que não existem na pasta do projeto; «fence»: traz código em bloco (```) no resumo sem ter escrito nada; «» se está tudo certo."""
+        if T.WRITE not in T.ROLE_RISKS.get(role, T.ROLE_RISKS["coder"]):
+            return ""   # arquiteto, pesquisador e revisor só leem: o que respondem não precisa virar arquivo
         for f in t.get("files") or []:
             try:
                 if not self.ws.check(str(f), "read").exists():
-                    return True
+                    return "missing"
             except Exception:  # noqa: BLE001 — caminho fora do projeto/bloqueado: também não é um arquivo do projeto
-                return True
-        return "```" in str(t.get("summary") or "")
+                return "missing"
+        return "fence" if "```" in str(t.get("summary") or "") else ""
 
     def _worker_payload(self, st: Dict[str, Any], history: List[Dict[str, Any]], memo: List[str], turn: int, max_turns: int, last_chance: bool) -> Dict[str, Any]:
         hist = []
