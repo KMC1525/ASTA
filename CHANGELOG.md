@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.27] — 2026-11-09
+
+### Adicionado — Canvas: caixa de prompt embaixo do canvas para gerar fluxos com a equipe de agentes
+- Uma **caixa de prompt pequena embaixo do Canvas** («Gerar fluxo com IA») recebe o pedido («thumb de YouTube com uma foto minha…», «cena de farol com narração») e a equipe de agentes **monta os nós e as ligações**: Planejador → Revisor (com rodadas de correção pelo esforço), com a mesma configuração de **esforço (Low → Omni) e 1/4/8/12/16 agentes** que antes ficava na barra de cima (agora mora na caixa e vale também para «Executar tudo»). O fluxo entra à direita do que já existe, o canvas se ajusta à tela e fica salvo; nada é executado sozinho: você revisa e aperta «Executar tudo». `Ctrl+Enter` gera.
+- **Botão de minimizar/maximizar** (a setinha do canto): minimizada vira uma barra fina que não atrapalha a montagem do fluxo; o estado é lembrado. Rolar ou arrastar dentro da caixa não mexe na vista do canvas.
+- **Validação e método automático:** a IA só devolve dados (tipo, parâmetros e ligações por chave); `canvas/schema.py` valida tipos, parâmetros, portas, compatibilidade e ciclos, e as posições são calculadas em colunas. Sem IA (Demo) ou com resposta inválida, um modelo de partida é escolhido pelas palavras do pedido — sempre sai um fluxo. Rota nova: `POST /api/canvases/<id>/flow` (job com eventos; não grava nada: o navegador insere o resultado).
+- Limite honesto: a qualidade do fluxo gerado com IA depende do modelo e não foi medida com modelos reais; a suíte usa provedores simulados. O núcleo Rust não mudou.
+- Versão 0.17.27.
+
 ## [0.17.26] — 2026-11-09
 
 ### Adicionado — equipe de agentes em TODAS as seções: 1 · 4 · 8 · 12 · 16 agentes e os oito níveis de esforço do Code

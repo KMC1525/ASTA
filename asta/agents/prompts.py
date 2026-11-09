@@ -21,6 +21,7 @@ DOMAINS = {
     "world": "a playable, persistent 3D virtual world (rendered with three.js in a web browser) inhabited by NPCs that are AI agents",
     "avatar": "one or more complete AI companion avatars (friends, partners, companions) that the user will chat with by text and voice",
     "studio": "a complete audiovisual video (a short, a short film or a feature) built scene by scene from images, motion, voice-over, music and captions, then edited on a timeline",
+    "canvas": "a node flow for ASTA's Canvas (typed nodes joined by edges) that produces images, videos, sounds, voices and text from a prompt",
     "game2d": "a complete, playable 2D game: you write the game as JSON data and a deterministic HTML5-canvas engine plays it "
               "(you never write code)",
 }

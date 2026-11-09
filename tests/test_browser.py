@@ -389,6 +389,9 @@ class BrowserTests(unittest.TestCase):
     def test_41_team_of_agents_in_every_section_effort_levels_and_1_4_8_12_16_agents(self):
         self.run_script("team_ui.js")
 
+    def test_42_canvas_prompt_box_generates_a_flow_and_minimizes(self):
+        self.run_script("canvas_flow_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

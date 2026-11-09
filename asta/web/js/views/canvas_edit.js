@@ -98,7 +98,7 @@ export default async function render(root, ctx, cid) {
     h('button', { class: 'btn ghost', title: t('Provedores de mídia'), onclick: () => c.openConfig() }, icon('config', 14), t('Provedores')),
     assetsBtn,
     h('a', { class: 'btn', href: `/api/canvases/${cid}/download`, title: t('Baixa o canvas e todos os arquivos (.zip)') }, icon('download', 14), t('Baixar')), studioBtn,
-    team.el, runBtn, cancelBtn);
+    runBtn, cancelBtn);
 
   const world = h('div', { class: 'cv-world' });
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -113,6 +113,53 @@ export default async function render(root, ctx, cid) {
       h('button', { class: 'btn icon sm', title: t('Ajustar à tela'), onclick: () => fit() }, icon('fit', 15))));
   const assetsPanel = h('div', { class: 'cv-assets hidden' });
 
+  // ---------------------------------------------------------------------------------------------- caixa de prompt (gerar fluxo com IA)
+  // fica embaixo do canvas, pequena; o botão ▾/▴ recolhe e abre para não atrapalhar a montagem do fluxo. A equipe (esforço e agentes) é a mesma da execução.
+  const DOCK_KEY = 'asta.cv.dock';
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); localStorage.setItem(k, v); } catch (e) { /* sem armazenamento */ } return null; };
+  const dockText = h('textarea', { rows: 2, id: 'cv-dock-text', placeholder: t('Descreva o fluxo que você quer: ex. «thumb de YouTube com uma foto minha e 3 personagens» ou «cena de farol com narração»…'), 'aria-label': t('Prompt do fluxo') });
+  const dockMsg = h('div', { class: 'cv-dock-msg muted small hidden', id: 'cv-dock-msg' });
+  const dockGo = h('button', { class: 'btn primary sm', id: 'cv-dock-go', type: 'button', title: t('A equipe de agentes monta os nós e as ligações; você revisa e executa'), onclick: () => genFlow() }, icon('wand', 14), t('Gerar fluxo'));
+  const dockBody = h('div', { class: 'cv-dock-body' }, dockText, dockMsg, h('div', { class: 'cv-dock-row' }, team.el, h('span', { class: 'grow' }), dockGo));
+  const dockToggle = h('button', { class: 'btn icon sm cv-dock-toggle', id: 'cv-dock-toggle', type: 'button', onclick: () => setDock(dock.classList.contains('min')) });
+  const dock = h('div', { class: 'cv-dock', id: 'cv-dock' }, h('div', { class: 'cv-dock-head' }, icon('wand', 14), h('span', { class: 'cv-dock-title' }, t('Gerar fluxo com IA')), h('span', { class: 'grow' }), dockToggle), dockBody);
+  function setDock(open) {
+    dock.classList.toggle('min', !open); ls(DOCK_KEY, open ? '1' : '0');
+    dockToggle.replaceChildren(icon('chevd', 14));
+    dockToggle.title = dockToggle.ariaLabel = open ? t('Minimizar a caixa de prompt') : t('Maximizar a caixa de prompt');
+    dockToggle.classList.toggle('flip', !open);
+    if (open) setTimeout(() => dockText.focus(), 0);
+  }
+  dock.addEventListener('keydown', (e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); genFlow(); } });
+  let flowJob = '';
+  async function genFlow() {
+    const prompt = dockText.value.trim();
+    if (!prompt) { dockText.focus(); return toast(t('Descreva o fluxo que você quer criar.'), 'err'); }
+    if (flowJob) return;
+    const xs = S.cv.nodes.map((n) => n.x + (n.w || 280)), ys = S.cv.nodes.map((n) => n.y);
+    const origin = S.cv.nodes.length ? { x: Math.max(...xs) + 120, y: Math.min(...ys) } : toWorld(surface.getBoundingClientRect().left + 120, surface.getBoundingClientRect().top + 90);
+    await save();
+    dockGo.disabled = true; dockMsg.classList.remove('hidden'); dockMsg.textContent = t('Equipe de agentes montando o fluxo…');
+    let r;
+    try { r = await api(`/api/canvases/${cid}/flow`, { method: 'POST', body: { prompt, team: team.get(), x: Math.round(origin.x), y: Math.round(origin.y) } }); }
+    catch (e) { if (e.status === 409) { try { r = JSON.parse(e.message); } catch (er) { /* ignore */ } } if (!r) { dockGo.disabled = false; dockMsg.classList.add('hidden'); return toast(e.message, 'err'); } }
+    flowJob = r.job_id;
+    const STEP = { planner: t('Planejador'), reviewer: t('Revisor'), build: t('Montagem') };
+    const stop = events('/api/jobs/' + flowJob + '/events', (ev) => {
+      if (ev.type === 'step' && ev.status === 'running') dockMsg.textContent = t('Equipe de agentes: {s}…', { s: STEP[ev.id] || ev.id });
+      else if (ev.type === 'note') dockMsg.textContent = ev.message;
+      else if (ev.type === 'done') applyFlow(ev);
+      else if (ev.type === 'error') { dockMsg.textContent = ''; toast(ev.message || t('Não consegui gerar o fluxo.'), 'err'); }
+    }, () => { flowJob = ''; dockGo.disabled = false; setTimeout(() => dockMsg.classList.add('hidden'), 4000); if (stop) stop(); });
+  }
+  function applyFlow(ev) {
+    for (const n of ev.nodes || []) { n.w = n.w || (['editor', 'image', 'video'].includes(n.type) ? 300 : 280); S.cv.nodes.push(n); addToDom(n); }
+    for (const e of ev.edges || []) S.cv.edges.push(e);
+    paintHint(); drawEdges(); fit(); dirty();
+    dockMsg.textContent = t('{n} nós e {e} ligações adicionados. Revise e aperte «Executar tudo».', { n: (ev.nodes || []).length, e: (ev.edges || []).length }) + ((ev.warnings || []).length ? ' ⚠ ' + ev.warnings.join(' · ') : '');
+    dockText.value = '';
+  }
+
   const palette = h('div', { class: 'cv-pal' }, GROUPS.map(([g, list]) => h('div', null, h('h4', null, t(g)),
     list.map((type) => h('button', { class: 'it', draggable: 'true', title: t(TYPE_HELP[type]), style: { '--c': OUT_COLOR[types[type].out] },
       ondragstart: (e) => { e.dataTransfer.setData('text/asta-node', type); e.dataTransfer.effectAllowed = 'copy'; },
@@ -120,6 +167,7 @@ export default async function render(root, ctx, cid) {
       icon(types[type].icon, 17), h('span', null, t(LABEL[type])))))));
 
   root.replaceChildren(h('div', { class: 'cv-root cv-pg' }, top, h('div', { class: 'cv-main' }, palette, surface, assetsPanel)));
+  surface.appendChild(dock); setDock(ls(DOCK_KEY) !== '0');
   const rootEl = root.firstChild;
 
   // ---------------------------------------------------------------------------------------------- vista (pan/zoom)
@@ -143,7 +191,7 @@ export default async function render(root, ctx, cid) {
     view = { zoom: z, x: (r.width - (x2 - x1) * z) / 2 - x1 * z, y: (r.height - (y2 - y1) * z) / 2 - y1 * z }; applyView(); drawEdges(); dirty(1500);
   }
   surface.addEventListener('wheel', (e) => {
-    if (e.target.closest('textarea,select,input,.rtxt,.digest')) return;
+    if (e.target.closest('textarea,select,input,.rtxt,.digest,.cv-dock')) return;
     e.preventDefault();
     const r = surface.getBoundingClientRect();
     zoomAt(e.deltaY < 0 ? 1.1 : 1 / 1.1, e.clientX - r.left, e.clientY - r.top);
@@ -154,7 +202,7 @@ export default async function render(root, ctx, cid) {
     window.addEventListener('pointermove', mv); window.addEventListener('pointerup', up);
   }
   surface.addEventListener('pointerdown', (e) => {
-    const bg = !e.target.closest('.cv-node,.cv-zoom,.hit,.del');
+    const bg = !e.target.closest('.cv-node,.cv-zoom,.cv-dock,.hit,.del');
     if (!(bg && e.button === 0) && e.button !== 1) return;
     e.preventDefault();
     if (bg) select('', '');
