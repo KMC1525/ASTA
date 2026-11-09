@@ -880,6 +880,58 @@ class LocalHFTests(unittest.TestCase):
                 p.image("x")
         self.assertIn("pip install -U diffusers", str(cm.exception))
 
+    def test_flux3_klein_loads_the_modular_pipeline_without_the_prompt_upsampler_and_offline(self):
+        import types
+
+        from asta.canvas import localmodels as lm
+
+        mods, calls = self.fake_modules()
+        consts = types.SimpleNamespace(HF_HUB_OFFLINE=False)
+        mods["huggingface_hub"] = types.SimpleNamespace(constants=consts)
+        seen = {}
+
+        class Out:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class Blocks:
+            sub_blocks = {"prompt_upsampler": object(), "denoise": object()}
+
+            def init_pipeline(self, model):
+                seen["init_with"] = (model, sorted(self.sub_blocks))
+                return Mod()
+
+        class Mod:
+            blocks = Blocks()
+
+            def load_components(self, dtype=None):
+                seen["dtype"], seen["offline"] = dtype, consts.HF_HUB_OFFLINE
+
+            def to(self, dev):
+                return self
+
+            def __call__(self, **kw):
+                seen["kw"] = kw
+                return [Out()]
+
+        mods["diffusers"].ModularPipeline.from_pretrained.side_effect = lambda model, **k: Mod()
+        refs = [(proc.image(f"r{i}", "64x64", i + 1), "image/png") for i in range(3)]
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value="bf16"), mock.patch.object(lm, "has_fp16_variant", return_value=False), \
+                mock.patch.object(M.LocalHFMedia, "_is_modular", staticmethod(lambda model: True)):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "black-forest-labs/flux-3-image-klein"}, key="", needs_key=False)
+            out = p.image("uma capa de revista", size="512x512", refs=refs, negative="feio")
+        self.assertEqual(out[0].mime, "image/png")
+        self.assertEqual(seen["init_with"], ("black-forest-labs/flux-3-image-klein", ["denoise"]))   # sem o expansor de 9B (18,8 GB de outro repositório)
+        self.assertTrue(seen["offline"])                                                              # nada é baixado em silêncio
+        self.assertFalse(consts.HF_HUB_OFFLINE)                                                       # e o modo offline não vaza para o resto do ASTA
+        kw = seen["kw"]
+        self.assertEqual((kw["prompt"], kw["output"], len(kw["image"])), ("uma capa de revista", "images", 3))
+        self.assertNotIn("negative_prompt", kw)
+        self.assertEqual(p.max_refs("black-forest-labs/flux-3-image-klein"), 10)
+        self.assertEqual(M.LocalHFMedia._defaults("black-forest-labs/flux-3-image-klein"), (16, 0.0))
+        self.assertEqual(M.LocalHFMedia._defaults("black-forest-labs/flux-3-image-klein-base"), (50, 3.5))
+
     def test_image_pipeline_uses_the_downloaded_precision_and_only_local_files(self):
         from asta.canvas import localmodels as lm
 
@@ -1164,6 +1216,44 @@ class EngineTests(TmpCase):
         self.assertIn("(reference image 1)", seen["prompt"])  # «@foto_perfil» (com sublinhado) também casa com «foto-perfil»
         self.assertIn("(reference image 3)", seen["prompt"])
         self.assertEqual([e.get("warnings") for e in ev if e.get("id") == "i" and e["state"] == "done"], [[]])
+
+    def test_flux3_prompts_are_expanded_by_the_configured_text_model_unless_they_are_already_captions(self):
+        from asta.canvas import engine as E
+
+        c = self.cs.create("t")
+        self.cs.save_layout(c["id"], {"nodes": [node("image", nid="short", prompt="um gato na janela", model="black-forest-labs/flux-3-image-klein"),
+                                                node("image", nid="long", prompt=" ".join(["palavra"] * 70), model="black-forest-labs/flux-3-image-klein"),
+                                                node("image", nid="off", prompt="um cão", model="black-forest-labs/flux-3-image-klein", extra={"upsample": False}),
+                                                node("image", nid="other", prompt="um pato", model="gpt-image-1")], "edges": []})
+        sent, chats = {}, []
+
+        class LLM:
+            def chat(self, messages, system="", **k):
+                chats.append((messages[0]["content"], system))
+                return '"A macro photograph of a tabby cat on a sunlit window sill, soft morning light."'
+
+        class Prov:
+            supports_refs = False
+            label = "P"
+
+            def image(self, prompt, *, extra=None, **k):
+                sent[prompt[:12]] = (prompt, dict(extra or {}))
+                return [M.Media(PNG, "image/png")]
+
+        settings = self.store.get_settings()
+        settings["active"]["generation"] = "fake-llm"
+        with mock.patch.object(E, "build_media", lambda *a, **k: Prov()), mock.patch.object(E, "build_provider", lambda *a, **k: LLM()), \
+                mock.patch.object(self.store, "get_settings", return_value=settings):
+            _, ev = self.run_engine(c["id"])
+        self.assertEqual(len(chats), 1)                                                   # só o prompt curto do FLUX.3 foi expandido
+        self.assertIn("scene caption", chats[0][1])
+        self.assertTrue(sent["A macro phot"][0].startswith("A macro photograph"))  # as aspas do modelo de texto saem
+        self.assertIn("palavra palavra", sent["palavra pala"][0])                 # legenda longa: segue como está
+        self.assertEqual(sent["um cão"][0], "um cão")                                      # {"upsample": false}
+        self.assertEqual(sent["um cão"][1], {})                                            # e a chave não chega ao provedor
+        self.assertEqual(sent["um pato"][0], "um pato")                                    # outros modelos não são expandidos
+        warns = {e["id"]: e.get("warnings") for e in ev if e.get("state") == "done"}
+        self.assertTrue(any(w.startswith("Prompt expandido") for w in warns["short"]))
 
     def test_validation_messages(self):
         c = self.make([node("image", nid="i"), node("video", nid="v"), node("voice", nid="vo"), node("sound", nid="so"), node("llm", nid="l"), node("transcribe", nid="tr"), node("image", nid="ed", mode="edit", prompt="x")], [])

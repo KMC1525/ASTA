@@ -31,7 +31,14 @@ FAMILIES: List[Dict[str, Any]] = [
      "need": "o VAE do FLUX.2 (flux2-vae.safetensors, em Comfy-Org/flux2-dev) e o codificador de texto Qwen3-4B (um .gguf, ex.: unsloth/Qwen3-4B-GGUF)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors", "label": "VAE do FLUX.2", "approx": 0.34},
                    "llm_path": {"repo": "unsloth/Qwen3-4B-GGUF", "file": "Qwen3-4B-Q4_K_M.gguf", "label": "Codificador de texto Qwen3-4B (Q4_K_M)", "approx": 2.5}}},
-    {"id": "flux", "name": r"flux(?![-_. ]?2)", "label": "FLUX",
+    {"id": "flux3-klein", "name": r"flux[-_. ]?3(?!.*pup)", "label": "FLUX.3 Image Klein",   # «pup» = o expansor de prompt (um modelo de texto), não é de imagem
+     "load": {"vae_path": r"flux2[-_]?(ae|vae)", "llm_path": r"^qwen[-_]?3[-_]?vl[-_]?4b[-_]?instruct(?!.*mmproj)[^/]*\.gguf$"},
+     "run": {"cfg_scale": 1.0, "sample_steps": 16}, "run_base": {"cfg_scale": 3.5, "sample_steps": 50},   # destilado: 16 passos, sem guidance; «base»: 50 passos, guidance 3,5 (cartão do modelo)
+     "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
+     "need": "o VAE do FLUX.2/3 (flux2-vae.safetensors, em Comfy-Org/flux2-dev) e o codificador de texto Qwen3-VL-4B-Instruct (um .gguf, ex.: unsloth/Qwen3-VL-4B-Instruct-GGUF)",
+     "downloads": {"vae_path": {"repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors", "label": "VAE do FLUX.2/3", "approx": 0.34},
+                   "llm_path": {"repo": "unsloth/Qwen3-VL-4B-Instruct-GGUF", "file": "Qwen3-VL-4B-Instruct-Q4_K_M.gguf", "label": "Codificador de texto Qwen3-VL-4B-Instruct (Q4_K_M)", "approx": 2.5}}},
+    {"id": "flux", "name": r"flux(?![-_. ]?[23])", "label": "FLUX",
      "load": {"vae_path": r"^ae\.safetensors$", "clip_l_path": r"clip[_-]?l.*\.safetensors$", "t5xxl_path": r"t5xxl.*\.(safetensors|gguf)$"}, "marker": "double_blocks.", "run": {}, "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
      "need": "o VAE (ae.safetensors), o clip_l.safetensors e o t5xxl (safetensors ou .gguf)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/z_image_turbo", "file": "split_files/vae/ae.safetensors", "label": "VAE (ae.safetensors)", "approx": 0.33},

@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.22] — 2026-11-09
+
+### Added — FLUX.3 Image Klein support (`black-forest-labs/flux-3-image-klein`)
+FLUX.3 Image Klein (5.6B, editing, text → image and up to **10 reference images**) is gated (FLUX Kommunity License: accept it on the model page and set your Hugging Face token) and **does not use the regular diffusers pipeline**: it is a *modular* pipeline, with Qwen3-VL-4B as the text encoder and a 9B prompt upsampler.
+- **Hugging Face local:** loads through `ModularPipeline`, local files only (offline mode applies only during loading) and **without the 9B upsampler** (18.8 GB, from another repository: nothing is downloaded silently). Default steps/guidance: distilled 16 steps with no guidance; «base» 50 steps and guidance 3.5. If this diffusers version has no modular pipeline, the error says to run `pip install -U diffusers transformers`.
+- **Right download:** the repository holds the same transformer in three places (root, `transformer/` and the fp8/nvfp4 `variants/` folders — about 42 GB). ASTA now downloads one copy (`transformer/`, `text_encoder/`, `vae/`) — about 20 GB — and skips the variants.
+- **Gated model:** if the download is refused for lack of license/token, the error says to accept the license at `huggingface.co/<model>` and set the token in Configuration, instead of showing the raw Hub error.
+- **Prompt expansion:** the model only does well with full scene captions (a short request «as typed» comes out generic). ASTA expands the prompt with the **already configured text model**, using its own instructions (medium and style, scene, lighting and camera, each subject with colors, materials and position; for editing, the caption of the result), keeping the `@` markers. Prompts of 60 words or more stay as they are; `{"upsample": false}` in the node's «extra» turns it off; with no text model configured, the node warns. The expanded prompt shows in the node's warnings.
+- **GGUF (stable-diffusion.cpp):** FLUX.3 Image Klein (`leejet/flux-3-image-klein-GGUF`, `unsloth/flux-3-image-klein-GGUF`…) is its own family: VAE `flux2-vae.safetensors` and the **Qwen3-VL-4B-Instruct** `.gguf` encoder in the same folder (the «Download the support files» button fetches what is missing: ≈ 0.3 GB + 2.5 GB), 16 steps with no guidance (base: 50 steps, 3.5). The prompt upsampler (`…-pup-….gguf`) is a text model and is not treated as an image model. PyPI's stable-diffusion-cpp-python 0.4.7 only knows up to FLUX.2: ASTA offers the «Update the library» button (and `asta update` builds the GitHub version when a diffusion GGUF is downloaded).
+- FLUX.1 is no longer confused with FLUX.2/3 (`flux1-dev` still asks for `clip_l` and `t5xxl`).
+- Version 0.17.22 (the Rust core did not change).
+
 ## [0.17.21] — 2026-11-09
 
 ### Added — FLUX.2 klein support (`black-forest-labs/FLUX.2-klein-4B` and 9B)

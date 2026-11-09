@@ -1144,13 +1144,18 @@ class LocalHFMedia(MediaProvider):
     refs_edit_only = True
 
     def max_refs(self, model: str = "") -> int:
-        return 4 if "klein" in (model or self.model_for("image", model) or "").lower() else 1   # FLUX.2 klein edita com várias imagens de uma vez; os demais fazem imagem → imagem com uma
+        name = (model or self.model_for("image", model) or "").lower()
+        if re.search(r"flux[-_. ]?3", name):
+            return 10   # FLUX.3 Image Klein: até 10 imagens de referência no mesmo pedido
+        return 4 if "klein" in name else 1   # FLUX.2 klein edita com várias imagens de uma vez; os demais fazem imagem → imagem com uma
 
     @staticmethod
     def _defaults(model: str) -> Tuple[int, float]:
         """Passos e guidance do modelo (o padrão de cada família): FLUX.2 klein destilado 4 passos sem CFG; klein «base» 50 passos e guidance 4; FLUX.1 schnell 4 passos; FLUX.1 dev 28 passos e guidance 3,5;
         modelos «turbo»/«lightning»/«lcm» 2 passos sem CFG; os demais 25 passos e guidance 7."""
         name = model.lower()
+        if re.search(r"flux[-_. ]?3", name):
+            return (50, 3.5) if "base" in name else (16, 0.0)   # FLUX.3 Image Klein: destilado 16 passos sem guidance; «base» 50 passos e guidance 3,5
         if "klein" in name:
             return (50, 4.0) if "base" in name else (4, 1.0)
         if "schnell" in name:
@@ -1160,6 +1165,42 @@ class LocalHFMedia(MediaProvider):
         if "flux" in name:
             return 28, 3.5
         return 25, 7.0
+
+    @staticmethod
+    def _is_modular(model: str) -> bool:
+        """O repositório baixado usa o pipeline modular do diffusers (FLUX.3 Image Klein: `modular_model_index.json`, sem `model_index.json`)?"""
+        from . import localmodels as lm
+
+        snap = lm._snapshot(model)
+        return bool(snap and (snap / "modular_model_index.json").is_file() and not (snap / "model_index.json").is_file())
+
+    @staticmethod
+    def _load_modular(diffusers: Any, model: str, ready: Dict[str, Any]) -> Any:
+        """Carrega um pipeline modular só com arquivos locais e SEM o expansor de prompt do modelo (um modelo de 9B, 18,8 GB, de outro repositório: nada é baixado em silêncio) —
+        o ASTA expande o prompt pelo modelo de texto configurado (`canvas/upsample.py`)."""
+        import huggingface_hub as hub  # type: ignore
+
+        (torch,) = _local_import("torch")
+        mp = getattr(diffusers, "ModularPipeline", None)
+        if mp is None:
+            raise ProviderError(f"O modelo {model} usa o pipeline modular do diffusers, que esta versão não tem. Atualize:  pip install -U diffusers transformers  (ou: asta libs).")
+        consts = hub.constants
+        old = consts.HF_HUB_OFFLINE
+        consts.HF_HUB_OFFLINE = True   # nunca baixa: só o que o ASTA baixou com a precisão escolhida
+        try:
+            pipe = mp.from_pretrained(model)
+            sub = getattr(getattr(pipe, "blocks", None), "sub_blocks", None)
+            if sub is not None and "prompt_upsampler" in sub:
+                sub.pop("prompt_upsampler")
+                pipe = pipe.blocks.init_pipeline(model)
+            pipe.load_components(dtype={"vae": torch.float32, "default": ready["dtype"]})
+        except ProviderError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise ProviderError(f"Não foi possível carregar {model}: {exc}. Confira se os arquivos foram baixados (Configuração → Mídia) e se o diffusers/transformers estão atualizados:  pip install -U diffusers transformers.") from None
+        finally:
+            consts.HF_HUB_OFFLINE = old
+        return pipe
 
     def _pick(self, cap: str, model: str, default: str) -> str:
         """O modelo pedido; se ele ainda não foi baixado, usa outro já baixado da mesma função (o padrão ou uma sugestão) em vez de falhar. Se nenhum foi baixado, devolve o pedido
@@ -1196,6 +1237,8 @@ class LocalHFMedia(MediaProvider):
         ready = self._ready(model)
 
         def load() -> Any:
+            if self._is_modular(model):
+                return _slim(self._load_modular(diffusers, model, ready), dev)
             kw: Dict[str, Any] = {"torch_dtype": ready["dtype"], "local_files_only": True}
             if ready["variant"]:
                 kw["variant"] = ready["variant"]
@@ -1211,24 +1254,48 @@ class LocalHFMedia(MediaProvider):
         pipe = _local_load("image", model, load)
         (torch,) = _local_import("torch")
         steps, guidance = self._defaults(model)
+        modular = hasattr(pipe, "load_components")   # pipeline modular (FLUX.3 Image Klein)
+        flux3 = bool(re.search(r"flux[-_. ]?3", model.lower()))
         fast = guidance == 0.0 or "klein" in model.lower()   # modelos destilados: sem prompt negativo (e, no FLUX, o pipeline nem o aceita)
         no_negative = fast or "flux" in model.lower()
-        klein = "klein" in model.lower()
+        klein = "klein" in model.lower() and not flux3
         w, h = parse_wh(size)
         w, h = (min(w, 768), min(h, 768)) if dev == "cpu" else (w, h)
         w, h = max(256, w // 8 * 8), max(256, h // 8 * 8)
-        pil = _pil_refs(refs, 4 if klein else 1) if refs else []
+        pil = _pil_refs(refs, 10 if flux3 else 4 if klein else 1) if refs else []
         if refs and not pil:
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
         i2i = None
         if pil:
-            w, h = _size_like(pil[0], w, h, 16 if klein else 8)
-            if not klein:   # imagem → imagem: reaproveita os pesos já carregados (o FLUX.2 klein edita pelo próprio pipeline, com várias imagens)
+            w, h = _size_like(pil[0], w, h, 16 if (klein or flux3) else 8)
+            if not klein and not flux3:   # imagem → imagem: reaproveita os pesos já carregados (o FLUX.2 klein edita pelo próprio pipeline, com várias imagens)
                 i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
             self.ctl.note("Gerando imagem localmente…")
+            if modular:   # FLUX.3: o pipeline modular recebe prompt, imagens e semente; tamanho/passos são pedidos e, se esta versão não os aceita, o pedido repete sem eles
+                gen = torch.Generator("cpu").manual_seed(int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i)
+                mkw: Dict[str, Any] = {"prompt": prompt, "generator": gen, "output": "images"}
+                if pil:
+                    mkw["image"] = pil if len(pil) > 1 else pil[0]
+                mkw.update(extra or {})
+                opt = {"width": w, "height": h}
+                if "base" in model.lower():
+                    opt.update(num_inference_steps=steps, guidance_scale=guidance)
+                imgs = None
+                for drop in range(3):
+                    try:
+                        imgs = pipe(**{**mkw, **(opt if drop == 0 else {k: v for k, v in opt.items() if drop == 1 and k not in ("width", "height")})})
+                        break
+                    except (TypeError, ValueError, KeyError):
+                        if drop == 2:
+                            raise
+                img = (imgs[0] if isinstance(imgs, (list, tuple)) else getattr(imgs, "images", [imgs])[0])
+                buf = io.BytesIO()
+                img.save(buf, format="PNG")
+                out.append(Media(buf.getvalue(), "image/png"))
+                continue
             kw = {"prompt": prompt, "width": w, "height": h, "num_inference_steps": steps, "guidance_scale": guidance,
                   "generator": torch.Generator("cpu").manual_seed(int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i)}
             if negative and not no_negative:
@@ -1552,7 +1619,10 @@ class GGUFMedia(MediaProvider):
     refs_edit_only = True
 
     def max_refs(self, model: str = "") -> int:
-        return 4 if re.search(r"edit|kontext|klein", Path(self.model_for("image", model) or model or "").name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        name = Path(self.model_for("image", model) or model or "").name
+        if re.search(r"flux[-_. ]?3", name, re.I):
+            return 10
+        return 4 if re.search(r"edit|kontext|klein", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1820,7 +1890,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "label": "Hugging Face (Inference)", "kind": "huggingface", "caps": ["image", "sound", "voice", "stt"], "base_url": "https://router.huggingface.co/hf-inference/models", "needs_key": True,
         "docs": "https://huggingface.co/settings/tokens",
         "models": {"image": "black-forest-labs/FLUX.1-schnell", "sound": "facebook/musicgen-small", "voice": "facebook/mms-tts-eng", "stt": "openai/whisper-large-v3"},
-        "suggest": {"image": ["black-forest-labs/FLUX.2-klein-4B", "black-forest-labs/FLUX.1-schnell", "stabilityai/stable-diffusion-xl-base-1.0"], "voice": ["facebook/mms-tts-eng", "facebook/mms-tts-por", "suno/bark-small"],
+        "suggest": {"image": ["black-forest-labs/flux-3-image-klein", "black-forest-labs/FLUX.2-klein-4B", "black-forest-labs/FLUX.1-schnell", "stabilityai/stable-diffusion-xl-base-1.0"], "voice": ["facebook/mms-tts-eng", "facebook/mms-tts-por", "suno/bark-small"],
                     "sound": ["facebook/musicgen-small"], "stt": ["openai/whisper-large-v3", "openai/whisper-small"]},
         "hint": "Usa a mesma chave do Hugging Face (Configuração → Provedores). A disponibilidade de cada modelo depende do serviço.",
     },

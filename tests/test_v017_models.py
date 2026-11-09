@@ -728,6 +728,48 @@ class SupportFilesTests(ServerCase):
         self.assertIsNone(seen[0]["init"])
         M._LOCAL_CACHE.clear()
 
+    def test_flux3_image_klein_is_its_own_gguf_family_with_a_qwen3_vl_text_encoder(self):
+        from asta.canvas import support
+
+        f = support.family_of("flux-3-image-klein-UD-Q4_K_XL.gguf")
+        self.assertEqual(f["id"], "flux3-klein")
+        self.assertEqual(support.family_of("flux3-image-klein-Q4_K.gguf")["id"], "flux3-klein")
+        self.assertIsNone(support.family_of("flux-3-image-klein-pup-Q4_K_M.gguf"))          # o expansor de prompt é um modelo de texto, não de imagem
+        self.assertEqual(support.family_of("flux1-dev-Q4_0.gguf")["id"], "flux")             # FLUX.1 não é confundido com o 2 nem com o 3
+        self.assertEqual(support.run_for(f, "flux-3-image-klein-Q4_K_M.gguf"), {"cfg_scale": 1.0, "sample_steps": 16})   # destilado: 16 passos, sem guidance
+        self.assertEqual(support.run_for(f, "flux-3-image-klein-base-Q8_0.gguf"), {"cfg_scale": 3.5, "sample_steps": 50})
+        d = Path(tempfile.mkdtemp())
+        for n in ("flux2-vae.safetensors", "Qwen3-VL-4B-Instruct-Q4_K_M.gguf", "mmproj-F16.gguf", "Qwen3-4B-Q4_K_M.gguf", "ae.safetensors"):
+            (d / n).write_bytes(b"x")
+        self.assertEqual(support.find_companions(d, d / "m.gguf", f), {"vae_path": "flux2-vae.safetensors", "llm_path": "Qwen3-VL-4B-Instruct-Q4_K_M.gguf"})   # o mmproj, o Qwen3 de texto e o VAE do FLUX.1 não servem
+        info = support.missing(self.img, "flux-3-image-klein-Q4_K_M.gguf")
+        self.assertEqual({m["repo"] for m in info["missing"]}, {"Comfy-Org/flux2-dev", "unsloth/Qwen3-VL-4B-Instruct-GGUF"})
+
+    def test_flux3_modular_repo_downloads_one_copy_of_the_weights_and_gated_errors_are_explained(self):
+        from asta.canvas import localmodels as lm
+
+        names = ["modular_model_index.json", "config.json", "model.safetensors", "ae.safetensors", "README.md", "text_encoder/model-00001-of-00002.safetensors", "text_encoder/config.json",
+                 "transformer/diffusion_pytorch_model-00001-of-00002.safetensors", "vae/diffusion_pytorch_model.safetensors", "variants/fp8r/model.safetensors", "variants/nvfp4/config.json"]
+        got = [f["name"] for f in lm.select_files([{"name": n, "size": 1} for n in names], "bf16")]
+        self.assertNotIn("model.safetensors", got)             # o arquivo da raiz repete transformer/
+        self.assertNotIn("ae.safetensors", got)                # e este repete vae/
+        self.assertFalse([n for n in got if n.startswith("variants/")])   # fp8/nvfp4 são cópias alternativas: baixar dobraria o download
+        self.assertIn("transformer/diffusion_pytorch_model-00001-of-00002.safetensors", got)
+        self.assertIn("text_encoder/model-00001-of-00002.safetensors", got)
+
+        class GatedRepoError(Exception):
+            pass
+
+        hub = mock.Mock()
+        hub.HfApi.return_value.model_info.side_effect = GatedRepoError("401 Client Error: Cannot access gated repo")
+        with mock.patch.object(lm, "_hub", return_value=hub), self.assertRaises(lm.ProviderError) as cm:
+            lm.download("black-forest-labs/flux-3-image-klein", "bf16", token="")
+        msg = str(cm.exception)
+        self.assertIn("restrito", msg)
+        self.assertIn("aceite a licença", msg)
+        self.assertIn("https://huggingface.co/black-forest-labs/flux-3-image-klein", msg)
+        self.assertIn("nenhum token", msg)
+
     def test_route_validation(self):
         self.assertEqual(self.c.json("POST", "/api/media/support/download", {"model": "../x.gguf"})[0], 400)
         self.assertEqual(self.c.json("POST", "/api/media/support/download", {"model": "meu-modelo.gguf"})[0], 400)
