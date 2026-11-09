@@ -1757,7 +1757,9 @@ def _tensor_hint(path: Path) -> str:
 
 
 class _SDCrashed(ProviderError):
-    """O processo da stable-diffusion.cpp fechou de repente (falha de segmentação, falta de memória…) enquanto gerava."""
+    """O processo da stable-diffusion.cpp fechou de repente (falha de segmentação, falta de memória…) enquanto gerava. `oom`: foi morto pelo sistema (SIGKILL, código -9/137), quase sempre falta de memória."""
+
+    oom = False
 
 
 class _SDProxy:
@@ -1851,8 +1853,11 @@ class _SDProxy:
                 with _LOCAL_LOCK:
                     for k in [k for k, v in _LOCAL_CACHE.items() if v is self]:
                         del _LOCAL_CACHE[k]
-                raise _SDCrashed(f"O processo da stable-diffusion.cpp fechou de repente durante a geração (código {code}"
-                                 + (", falha de segmentação" if code in (-11, 139) else ", provavelmente falta de memória" if code in (-9, 137) else "") + "). O ASTA continua aberto; tente uma resolução ou uma quantização menores.")
+                crash = _SDCrashed(f"O processo da stable-diffusion.cpp fechou de repente durante a geração (código {code}"
+                                   + (", falha de segmentação" if code in (-11, 139) else ", o sistema o encerrou por falta de memória (RAM)" if code in (-9, 137) else "") + "). O ASTA continua aberto; "
+                                   "tente uma resolução menor, uma quantização menor (Q3/Q2) ou feche outros programas.")
+                crash.oom = code in (-9, 137)
+                raise crash
             if not reply.get("ok"):
                 raise ValueError(reply.get("error") or "falha na geração")
             out = []
@@ -2100,6 +2105,14 @@ class GGUFMedia(MediaProvider):
                 _SD_LOG.clear()
                 try:
                     imgs = gen(**{**kw, "width": max(256, int(w * scale) // 16 * 16), "height": max(256, int(h * scale) // 16 * 16)})
+                except _SDCrashed as exc:   # o sistema matou o processo por falta de memória: o modelo é recarregado e a imagem sai de novo em resolução menor (a memória das ativações cai com a área)
+                    if not exc.oom or scale <= 0.4 or max(w, h) * scale <= 384:
+                        raise
+                    scale = 0.5625 if scale > 0.6 else 0.375
+                    self.ctl.note(f"Faltou memória (o sistema encerrou a stable-diffusion.cpp): tentando de novo em {int(w * scale) // 16 * 16}×{int(h * scale) // 16 * 16}…")
+                    sd = self._engine("image", path, load)
+                    gen = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)
+                    continue
                 except (ValueError, RuntimeError, OSError) as exc:
                     if not ("null pointer" in str(exc).lower() or "nullptr" in str(exc).lower()):
                         raise

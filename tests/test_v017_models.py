@@ -462,6 +462,35 @@ class StableDiffusion:
         self.assertIn("VAE do Qwen-Image", msg)
         self.assertIn("[[asta-support:qwen-image-2512-Q4_K_M.gguf]]", msg)                  # a tela troca isto pelo botão «Baixar os arquivos de apoio»
 
+    def test_a_process_killed_for_lack_of_memory_is_retried_at_a_smaller_size(self):
+        from asta.canvas import media as M
+        from tests.test_canvas import PNG
+
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        sizes, loads = [], []
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class SD:
+            def __init__(self, **kw):
+                loads.append(kw)
+
+            def generate_image(self, **kw):
+                sizes.append((kw["width"], kw["height"]))
+                if kw["width"] > 600:
+                    e = M._SDCrashed("morto (código -9)")
+                    e.oom = True
+                    raise e
+                return [Img()]
+
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mock.MagicMock(StableDiffusion=SD)}):
+            out = self.prov().image("x", size="1024x1024")
+        self.assertEqual(out[0].mime, "image/png")
+        self.assertEqual(sizes, [(1024, 1024), (576, 576)])
+
     def test_a_null_pointer_from_the_library_becomes_a_clear_message(self):
         from asta.providers.base import ProviderError
 
