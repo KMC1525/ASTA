@@ -32,9 +32,12 @@ export function teamPicker(cfg, onChange, o = {}) {
     EFFORTS.map((id) => h('option', { value: id, selected: id === v.effort }, EFFORT_NAME[id])));
   const agents = h('select', { class: 'team-sel', id: (o.id || 'team') + '-agents', title: t('Agentes em paralelo'), 'aria-label': t('Agentes em paralelo') },
     AGENT_COUNTS.map((n) => h('option', { value: n, selected: n === v.agents }, agentsLabel(n))));
+  // cada seletor tem a largura do texto escolhido (senão ficam com o espaço do item mais comprido e o pílula parece vazia)
+  const fit = (sel) => { sel.style.width = (sel.selectedOptions[0].textContent.length * 0.8 + 1.2) + 'ch'; };
   const paintTitles = (opts) => { effort.title = t('Nível de esforço') + ' — ' + t(hintOf(opts, v.effort) || ''); agents.title = agentsHint(v.agents); };
-  effort.addEventListener('change', () => { v.effort = effort.value; paintTitles(cache || {}); if (onChange) onChange({ ...v }); });
-  agents.addEventListener('change', () => { v.agents = parseInt(agents.value, 10); paintTitles(cache || {}); if (onChange) onChange({ ...v }); });
+  effort.addEventListener('change', () => { v.effort = effort.value; fit(effort); paintTitles(cache || {}); if (onChange) onChange({ ...v }); });
+  agents.addEventListener('change', () => { v.agents = parseInt(agents.value, 10); fit(agents); paintTitles(cache || {}); if (onChange) onChange({ ...v }); });
+  fit(effort); fit(agents);
   paintTitles({});
   teamOptions().then(paintTitles);
   const el = h('span', { class: 'tool team-pick' }, icon('layers', 15), effort, agents);
