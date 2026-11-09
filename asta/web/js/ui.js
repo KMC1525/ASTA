@@ -24,6 +24,14 @@ export function h(tag, attrs, ...kids) {
 }
 
 // replaceChildren que ignora null/false (o DOM transformaria `null` no texto "null").
+// `replaceChildren(a, null)` / `append(null)` do DOM nativo escrevem o texto «null» na tela (aparecia nas telas de criação e nos botões de Fontes). Como o `h()`, ignora null/undefined/false.
+if (typeof Element !== 'undefined') ['replaceChildren', 'append', 'prepend', 'before', 'after'].forEach((name) => {
+  const orig = Element.prototype[name];
+  if (typeof orig !== 'function' || orig.__asta) return;
+  const safe = function (...args) { return orig.apply(this, args.filter((x) => x != null && x !== false)); };
+  safe.__asta = true;
+  Element.prototype[name] = safe;
+});
 export function fill(el, ...kids) { el.replaceChildren(...kids.flat(Infinity).filter((k) => k != null && k !== false)); return el; }
 
 const ICONS = {

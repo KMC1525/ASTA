@@ -335,8 +335,8 @@ def clean_json(v: Any, depth: int = 0) -> Any:
     """Texto vindo do JSON sem bytes nulos e sem «surrogates» soltos (o JSON permite «\\ud800», mas nem o sistema de arquivos nem o UTF-8 aceitam: davam erro 500 ao salvar)."""
     if isinstance(v, str):
         return _LONE_SURROGATE.sub("\ufffd", _NUL.sub("", v)) if ("\x00" in v or _LONE_SURROGATE.search(v)) else v
-    if depth > 64:
-        return v
+    if depth > 100:
+        raise ValueError("JSON aninhado fundo demais")   # nenhuma tela manda isso; copiar/salvar uma estrutura dessas estouraria a pilha (erro 500)
     if isinstance(v, dict):
         return {(clean_json(k, depth + 1) if isinstance(k, str) else k): clean_json(x, depth + 1) for k, x in v.items()}
     if isinstance(v, list):

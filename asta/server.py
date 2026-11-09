@@ -384,7 +384,7 @@ class App:
         raw = req.body_bytes(10 * 1024 * 1024)
         try:
             card = character_from_png(raw) if raw[:4] == b"\x89PNG" else import_character(_clean_json(json.loads(raw.decode("utf-8"))))
-        except (ValueError, UnicodeDecodeError) as exc:
+        except (ValueError, UnicodeDecodeError, RecursionError) as exc:
             raise HttpError(400, f"Não foi possível importar: {exc}")
         req.json(self.store.characters.save(card))
 
@@ -855,11 +855,14 @@ class Request:
             return {}
         try:
             data = json.loads(raw.decode("utf-8"))
-        except (ValueError, UnicodeDecodeError):
+        except (ValueError, UnicodeDecodeError, RecursionError):   # RecursionError: «[[[[…» com milhares de níveis
             raise HttpError(400, "JSON inválido")
         if not isinstance(data, dict):  # todas as rotas esperam um objeto: lista/texto/número virariam um erro 500 lá dentro
             raise HttpError(400, "JSON inválido: esperava um objeto {…}")
-        return _clean_json(data)
+        try:
+            return _clean_json(data)
+        except ValueError:
+            raise HttpError(400, "JSON inválido: aninhado fundo demais")
 
     # saída
     def _head(self, status: int, mime: str, length: Optional[int], extra: Optional[Dict[str, str]] = None) -> None:

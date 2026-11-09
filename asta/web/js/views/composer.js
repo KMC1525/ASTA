@@ -28,7 +28,7 @@ export function createComposer(opts) {
   const ready = () => !!(ta.value.trim() || m.files.length || (o.extraReady && o.extraReady()) || o.allowEmpty);
   const paintSend = () => {
     sendBtn.classList.toggle('pill', !!o.sendLabel); sendBtn.classList.toggle('stop', !!busy);
-    sendBtn.replaceChildren(icon(busy ? 'stop' : (o.sendLabel ? 'play' : 'send'), o.sendLabel ? 15 : 18), o.sendLabel ? h('span', null, busy ? t('Parar') : o.sendLabel) : null);
+    sendBtn.replaceChildren(...[icon(busy ? 'stop' : (o.sendLabel ? 'play' : 'send'), o.sendLabel ? 15 : 18), o.sendLabel ? h('span', null, busy ? t('Parar') : o.sendLabel) : null].filter(Boolean));   // replaceChildren(null) escreveria o texto «null» no botão
     sendBtn.title = busy ? t('Parar') : (o.sendTitle || o.sendLabel || t('Gerar')); sendBtn.setAttribute('aria-label', sendBtn.title);
   };
   const refresh = () => { sendBtn.disabled = busy ? false : (uploading() || !ready()); };
