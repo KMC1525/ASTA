@@ -414,8 +414,8 @@ class CanvasEngine:
         return stats
 
     def _fail(self, node: Dict[str, Any], msg: str, stats: Dict[str, int], failed: set) -> None:
-        self._set_result(node["id"], {**node["result"], "state": "error", "error": msg[:800]})
-        self.emit({"type": "node", "id": node["id"], "state": "error", "message": msg[:800]})
+        self._set_result(node["id"], {**node["result"], "state": "error", "error": msg[:1600]})
+        self.emit({"type": "node", "id": node["id"], "state": "error", "message": msg[:1600]})
         stats["errors"] += 1
         failed.add(node["id"])
 

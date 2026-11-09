@@ -1348,13 +1348,15 @@ def _install_sd_log(sdc: Any) -> None:
         _SD_CB = None
 
 
-def _sd_env(sdc: Any) -> str:
+def _sd_env(sdc: Any, short: bool = False) -> str:
     """Versão da stable-diffusion-cpp-python e backend (CPU/CUDA/Vulkan…) para a mensagem de erro; vazio se a biblioteca não informa."""
     bits = []
     try:
         ver = getattr(sdc, "__version__", "")
         if ver:
             bits.append(f"stable-diffusion-cpp-python {ver}")
+        if short:
+            return f" [{bits[0]}]" if bits else ""
         info = sdc.sd_get_system_info()
         info = info.decode("utf-8", "replace") if isinstance(info, bytes) else str(info)
         if info.strip():
@@ -1371,15 +1373,15 @@ def _sd_reason() -> str:
 
 
 def _tensor_hint(path: Path) -> str:
-    """Para o erro: o tensor pelo qual a stable-diffusion.cpp reconhece a família do modelo e alguns nomes de tensores do arquivo (vazio se não há o que dizer)."""
+    """Para o erro: o tensor pelo qual a stable-diffusion.cpp reconhece a família do modelo e nomes de tensores do arquivo (os de fora dos blocos e os do primeiro bloco: mostram a arquitetura). Vazio se não há o que dizer."""
     fam = support.family_of(path.name)
     names = gguf_info.tensor_names(path) if path.suffix.lower() == ".gguf" else None
-    if not fam or not fam.get("marker") or not names:
+    if not fam or not fam.get("marker") or not names or any(fam["marker"] in n for n in names):
         return ""
-    if any(fam["marker"] in n for n in names):
-        return ""
-    return (f"O arquivo não tem o tensor «{fam['marker']}», pelo qual ela reconhece o {fam['label']}; ele tem {len(names)} tensores, por exemplo: {', '.join(names[:4])}. "
-            f"Provavelmente não é um GGUF do {fam['label']} no formato que a biblioteca entende, ou é mais novo que ela. ")
+    short = [n.replace("model.diffusion_model.", "") for n in names]
+    top = [n for n in short if not re.search(r"\.\d+\.", n)][:4]
+    block = [n for n in short if re.search(r"(^|\.)0\.", n)][:4]
+    return f"O arquivo não tem o tensor «{fam['marker']}» do {fam['label']}; tem {len(names)} tensores (ex.: {', '.join(top + block)}). "
 
 
 class _SDCrashed(ProviderError):
@@ -1561,10 +1563,10 @@ class GGUFMedia(MediaProvider):
             except OSError:
                 pass
             return _SDUnsupportedModel(
-                f"A stable-diffusion.cpp que vem na biblioteca instalada não reconhece o formato do modelo {path.name} («get sd version from file failed»)"
-                + (f" e fechou de repente (código {crashed}, falha de segmentação) — por isso o ASTA a roda em outro processo e continua aberto" if crashed else "") + ". " + hint
-                + "Rode «asta update» (ou «asta libs --sd-latest»): o ASTA compila a versão mais nova da biblioteca a partir do GitHub (precisa de git, cmake e um compilador C++; a do PyPI já é a 0.4.7). "
-                "Abra o ASTA de novo depois; se continuar, o modelo é mais novo que qualquer versão publicada — use outro modelo ou outra quantização." + _sd_env(sdc))
+                f"A stable-diffusion.cpp instalada não reconhece o modelo {path.name} («get sd version from file failed»)"
+                + (f" e fechou (código {crashed}) — o ASTA a roda em outro processo e continua aberto" if crashed else "") + ". " + hint
+                + "Provavelmente é de outra arquitetura ou mais novo que a biblioteca (a do PyPI é a 0.4.7, a mais nova publicada). "
+                "Atualize-a pelo botão abaixo (compila a versão do GitHub: precisa de git, cmake e compilador C++) ou use outro arquivo/quantização. [[asta-sd-update]]" + _sd_env(sdc, short=True))
         why = _sd_reason()
         files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
         return _SDLoadError(
