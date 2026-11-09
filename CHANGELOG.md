@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.19] — 2026-11-09
+
+### Corrigido — referências de imagem nos nós com modelo local
+- **Modo Gerar não vira imagem → imagem.** Desde a 0.17.10, qualquer imagem ligada em «Referências» (ou citada com `@`) num nó com modelo local virava a imagem de partida: numa thumb com `@foto-perfil`, `@fnaf-1-office`… a primeira imagem virava a base e as outras eram ignoradas sem aviso. Agora os modelos locais só usam as referências no modo **Editar**; no modo Gerar elas viram só texto, com aviso no nó.
+- No modo Editar, o nó diz quantas imagens o modelo realmente usa (1 nos modelos comuns; até 4 nos de edição, como Qwen-Image-Edit e FLUX Kontext) e avisa quantas ignorou.
+- Quando as imagens citadas com `@` não chegam ao modelo, o prompt perde a marcação «(reference image N)», que não apontaria para nada.
+- Verificado sem achar problema: encadeamento Imagem → Imagem → Imagem (incluindo `count` 2 e modo Editar), execução só do nó final refazendo o que mudou, cache, e nós pulados após falha.
+- **O erro do `qwen-image-2.1`** continua sendo a arquitetura do arquivo (265 tensores; módulos compartilhados em vez de `img_mod.1.weight` por bloco), que a stable-diffusion.cpp 0.4.7 não reconhece. Atualize o ASTA (0.17.18+) para o botão «Atualizar a biblioteca agora» funcionar sem o `cmake`.
+- Versão 0.17.19 (o núcleo Rust não mudou).
+
 ## [0.17.18] — 2026-11-09
 
 ### Corrigido — a stable-diffusion.cpp mais nova agora se instala e se atualiza sozinha

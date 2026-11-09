@@ -67,5 +67,11 @@ def resolve(canvas: Dict[str, Any], prompt: str) -> Tuple[str, List[str], List[s
     return MENTION_RE.sub(sub, prompt or ""), order[:MAX_REFS], missing
 
 
+def plain(canvas: Dict[str, Any], prompt: str) -> str:
+    """O prompt sem a marcação de referência: `@apelido` vira só `apelido`. Para modelos que não recebem as imagens (a marcação «reference image N» não aponta para nada)."""
+    by = {m["slug"] for m in table(canvas)}
+    return MENTION_RE.sub(lambda m: m.group(1) if m.group(1).lower() in by else m.group(0), prompt or "")
+
+
 def ids_in(canvas: Dict[str, Any], prompt: str) -> List[str]:
     return resolve(canvas, prompt)[1]

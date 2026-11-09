@@ -457,6 +457,7 @@ class CanvasEngine:
             base = "\n\n".join(x for x in (self.inputs(canvas, node, "prompt")["text"], p["prompt"].strip()) if x)
             if not base:
                 raise ValueError("O nó Imagem precisa de um prompt: escreva nele ou ligue um nó de texto.")
+            raw_base = base
             base, ment_ids, missing = mentions_mod.resolve(canvas, base)   # «@mídia» no prompt (ou num Texto ligado): imagens e quadros de vídeo viram as primeiras referências
             warnings += [f"@{m}: não há mídia com esse apelido neste canvas — ficou como texto." for m in missing]
             ment_refs, ment_warn = self._mention_media(canvas, ment_ids, "imagem")
@@ -468,11 +469,21 @@ class CanvasEngine:
             use_refs = list(refs)
             if not use_refs and style.images and getattr(prov, "supports_refs", False) and _style_refs_ok(pid, model):
                 use_refs = list(style.images)  # modelos que aceitam várias imagens usam o Style Folder como referência
+            if use_refs and prov.supports_refs and getattr(prov, "refs_edit_only", False) and p["mode"] != "edit":
+                warnings.append(f"{prov.label} só usa imagens de referência no modo Editar (imagem → imagem). No modo Gerar elas viram só texto — para editar uma imagem, escolha «Editar».")
+                use_refs = []
+            elif use_refs and prov.supports_refs:
+                cap = getattr(prov, "max_refs", lambda m="": 99)(p["model"] or model)
+                if len(use_refs) > cap:
+                    warnings.append(f"Este modelo usa só {cap} imagem(ns) de referência: usei {'a primeira' if cap == 1 else 'as ' + str(cap) + ' primeiras'} e ignorei as outras {len(use_refs) - cap}.")
+                    use_refs = use_refs[:cap]
             if use_refs and not prov.supports_refs and p["mode"] == "edit":
                 raise ValueError(f"{prov.label} não consegue editar imagens (não aceita imagem de entrada). Escolha outro modelo no nó, ou volte o modo para Gerar.")
             if use_refs and not prov.supports_refs:
                 warnings.append(f"{prov.label} não aceita imagens de referência — usei só o texto.")
                 use_refs = []
+            if ment_ids and not use_refs:   # as imagens citadas não chegam ao modelo: sem a marcação «reference image N», que não apontaria para nada
+                prompt = mentions_mod.plain(canvas, raw_base) + (f"\n\nStyle: {style.text}" if style.text else "")
             medias = prov.image(prompt, size=p["size"], count=p["count"], seed=seed, negative=p["negative"], refs=use_refs, model=p["model"], extra=p["extra"])
             for i, m in enumerate(medias):
                 ids.append(self._save(node, m, "image", f"{self._title(node, 'Imagem')} {i + 1}", prompt, pid, model))

@@ -1034,6 +1034,60 @@ class EngineTests(TmpCase):
         self.assertEqual(states["g"]["state"], "done")   # no modo Gerar a referência só vira aviso
         self.assertTrue(states["g"]["warnings"])
 
+    def test_local_models_use_references_only_in_edit_mode_and_only_as_many_as_they_take(self):
+        from asta.canvas import engine as E
+
+        c = self.cs.create("t")
+        ids = [self.cs.add_asset(c["id"], PNG, "png", "image", name=f"f{i}.png", mime="image/png")["id"] for i in range(3)]
+        self.cs.save_layout(c["id"], {"nodes": [node("upload", nid="u", files=ids), node("image", nid="g", prompt="um gato"), node("image", nid="e", mode="edit", prompt="deixe azul")],
+                                      "edges": [edge("u", "g", "refs"), edge("u", "e", "refs")]})
+        seen = {}
+
+        class Local:
+            supports_refs = True
+            refs_edit_only = True
+            label = "Local"
+
+            def max_refs(self, model=""):
+                return 1
+
+            def image(self, prompt, *, refs=(), **k):
+                seen[prompt] = len(refs)
+                return [M.Media(PNG, "image/png")]
+
+        with mock.patch.object(E, "build_media", lambda *a, **k: Local()):
+            _, ev = self.run_engine(c["id"])
+        warns = {e["id"]: e.get("warnings") for e in ev if e.get("state") == "done"}
+        self.assertEqual(seen.get("um gato"), 0)             # modo Gerar: as referências não viram a imagem de partida
+        self.assertTrue(any("Editar" in w for w in warns["g"]))
+        self.assertEqual(seen["deixe azul"], 1)           # modo Editar: este modelo usa uma só
+        self.assertTrue(any("ignorei as outras 2" in w for w in warns["e"]))
+
+    def test_mentions_lose_their_reference_marks_when_the_model_does_not_get_the_images(self):
+        from asta.canvas import engine as E
+
+        c = self.cs.create("t")
+        a = self.cs.add_asset(c["id"], PNG, "png", "image", name="Foto Perfil.png", mime="image/png")
+        self.cs.save_layout(c["id"], {"nodes": [node("image", nid="g", prompt="@foto-perfil no centro, com @ninguem ao lado")], "edges": []})
+        prompts = []
+
+        class Local:
+            supports_refs = True
+            refs_edit_only = True
+            label = "Local"
+
+            def max_refs(self, model=""):
+                return 1
+
+            def image(self, prompt, **k):
+                prompts.append(prompt)
+                return [M.Media(PNG, "image/png")]
+
+        with mock.patch.object(E, "build_media", lambda *a, **k: Local()):
+            self.run_engine(c["id"])
+        self.assertEqual(prompts, ["foto-perfil no centro, com @ninguem ao lado"])   # sem «(reference image 1)»; o que não casa com mídia fica como estava
+        del a
+
     def test_validation_messages(self):
         c = self.make([node("image", nid="i"), node("video", nid="v"), node("voice", nid="vo"), node("sound", nid="so"), node("llm", nid="l"), node("transcribe", nid="tr"), node("image", nid="ed", mode="edit", prompt="x")], [])
         _, ev = self.run_engine(c["id"])
