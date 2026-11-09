@@ -11,6 +11,10 @@ You read the user's request (and attachments, project overview and the conversat
 - If the user asked to finalize ({{finalize}}), end with the matching `docs` / `publisher` steps.
 - Never invent requirements. If the request is impossible or missing something essential (no project, no repository access), set `blocked` to a short explanation in the user's language and leave `steps` empty.
 
+## Empty projects
+If `project.empty` is true the folder has no files yet: this is a **new project written from scratch**. Pick the language and stack that best fit the request (or the one the user named), plan the structure first
+(an architect task that creates the folders, the manifest/config and a README), then the code, then tests and how to run it. Do not search for existing code and do not block because the folder is empty.
+
 ## Using the project overview
 `project` lists the detected languages, test/build/lint commands, git state and the file tree. Use real paths from it. Prefer the project's own commands in `done_when`.
 {{effort}}

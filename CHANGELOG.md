@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.29] — 2026-11-09
+
+### Adicionado — Code: pastas vazias (ou que ainda não existem) para escrever o código depois
+- Uma sessão pode apontar para uma **pasta vazia** (já funcionava no papel, mas o Planejador não sabia que era um projeto novo) ou para uma **pasta que ainda não existe**: na tela de nova sessão, **«Criar a pasta se ela não existir»** (marcado por padrão) cria a pasta — **depois das mesmas conferências de segurança** (nada de disco inteiro, pasta pessoal inteira, sistema, dados do ASTA, pastas de segredos; caminho que passa por um arquivo é recusado) — e a sessão começa vazia. Pela API: `workspace: {type: "local", path, create: true}`; sem `create`, a mensagem de erro explica a opção.
+- **Projeto novo de verdade:** o resumo do projeto traz `empty` (nenhum arquivo além do `.git`); o Planejador e os trabalhadores recebem a instrução de escolher a stack pelo pedido, criar a estrutura (manifesto, código, testes, README) e rodar, em vez de procurar código que não existe ou desistir.
+- **Endereço «file:///…»:** dá para colar o endereço copiado do gerenciador de arquivos (com `%20`, `file:///C:/…`) no campo da pasta.
+- Limite honesto: a qualidade do projeto escrito do zero depende do modelo; a suíte usa um provedor roteirizado. O núcleo Rust não mudou.
+- Versão 0.17.29.
+
 ## [0.17.28] — 2026-11-09
 
 ### Alterado — Chat: sem o botão Computer Use; barra de ferramentas numa linha só

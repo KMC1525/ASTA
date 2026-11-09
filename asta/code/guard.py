@@ -18,6 +18,7 @@ from __future__ import annotations
 import os
 import re
 import shutil
+import urllib.parse
 import sys
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
@@ -81,11 +82,28 @@ def _inside(p: Path, root: Path) -> bool:
     return cg._under(p, root)
 
 
-def check_root(path: str) -> Path:
-    """Confere a pasta escolhida como projeto. Devolve o caminho real ou levanta `Blocked` (disco inteiro, pasta pessoal inteira, sistema, dados do ASTA)."""
-    p = cg.resolve(path)
-    if not p.is_dir():
-        raise Blocked("A pasta do projeto não existe.")
+def from_uri(path: str) -> str:
+    """Aceita o endereço copiado do gerenciador de arquivos («file:///home/voce/projeto», com %20 etc.) além do caminho comum."""
+    raw = str(path or "").strip().strip('"').strip("'")
+    if raw.lower().startswith("file:"):
+        u = urllib.parse.urlparse(raw)
+        p = urllib.parse.unquote(u.path or "")
+        if u.netloc and u.netloc.lower() != "localhost":   # file://servidor/pasta (rede do Windows)
+            p = "//" + u.netloc + p
+        if re.match(r"^/[a-zA-Z]:/", p):   # file:///C:/projetos → C:/projetos
+            p = p[1:]
+        return p
+    return raw
+
+
+def check_root(path: str, create: bool = False) -> Path:
+    """Confere a pasta escolhida como projeto. Devolve o caminho real ou levanta `Blocked` (disco inteiro, pasta pessoal inteira, sistema, dados do ASTA).
+    Com `create`, uma pasta que ainda não existe é criada (vazia, para o Code escrever o projeto depois) depois de passar pelas mesmas conferências; uma pasta vazia que já existe sempre vale."""
+    p = cg.resolve(from_uri(path))
+    if p.exists() and not p.is_dir():
+        raise Blocked("O caminho é um arquivo, não uma pasta.")
+    if not p.is_dir() and not create:
+        raise Blocked("A pasta do projeto não existe. Marque «Criar a pasta se ela não existir» para começar um projeto vazio nela.")
     if p.parent == p or (os.name == "nt" and re.match(r"^[a-zA-Z]:/?$", str(p).replace("\\", "/"))):
         raise Blocked("Escolha uma pasta de projeto, não um disco inteiro.")
     if cg._norm(p) == cg._norm(cg.home()):
@@ -98,6 +116,16 @@ def check_root(path: str) -> Path:
         raise Blocked("É a pasta de dados do ASTA (chaves de API e configurações): o Code não trabalha nela.")
     if cg._sensitive(p):
         raise Blocked("Esta pasta guarda segredos (senhas, chaves ou perfis de navegador).")
+    if not p.is_dir():   # create: só chega aqui depois de todas as conferências acima
+        anc = p
+        while not anc.exists() and anc.parent != anc:
+            anc = anc.parent
+        if not anc.is_dir():
+            raise Blocked("Não dá para criar a pasta: um trecho do caminho é um arquivo.")
+        try:
+            p.mkdir(parents=True, exist_ok=True)
+        except OSError as exc:
+            raise Blocked(f"Não consegui criar a pasta ({exc.strerror or exc}).") from None
     return p
 
 

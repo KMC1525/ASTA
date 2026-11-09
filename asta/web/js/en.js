@@ -2354,4 +2354,6 @@ export default {
   "Equipe de agentes: {s}…": "Agent team: {s}…",
   "Não consegui gerar o fluxo.": "I could not generate the flow.",
   "{n} nós e {e} ligações adicionados. Revise e aperte «Executar tudo».": "{n} nodes and {e} links added. Review and press “Run all”.",
+  "Criar a pasta se ela não existir": "Create the folder if it does not exist",
+  "A pasta fica como está; o Code só mexe nos arquivos dela (e tudo pode ser desfeito). Se tiver git, ele usa o git. Pasta vazia? Sem problema: o Code começa um projeto novo nela. Dá para colar o endereço «file:///…» do gerenciador de arquivos.": "The folder stays as it is; Code only touches its files (and everything can be undone). If it has git, it uses git. Empty folder? No problem: Code starts a new project in it. You can paste the “file:///…” address from your file manager.",
 };

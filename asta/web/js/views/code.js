@@ -167,7 +167,7 @@ export default async function render(root, ctx) {
   async function newSessionDialog(folderId) {
     const stt = st.status || {}, c = cfg();
     const phone = !!stt.android;
-    const f = { source: phone ? 'github' : 'local', path: '', repo: '', name: '', title: '', folder: folderId || '', mode: c.mode || 'ask', effort: c.effort || 'high', agents: c.agents || 4, provider: '', model: '', docs: !!(c.finalize || {}).docs, publish: (c.finalize || {}).publish || 'none' };
+    const f = { source: phone ? 'github' : 'local', path: '', create: true, repo: '', name: '', title: '', folder: folderId || '', mode: c.mode || 'ask', effort: c.effort || 'high', agents: c.agents || 4, provider: '', model: '', docs: !!(c.finalize || {}).docs, publish: (c.finalize || {}).publish || 'none' };
     const body = h('div', { class: 'cd-new-form' });
     let repos = null;
     const srcSeg = seg([...(phone ? [] : [['local', t('Pasta do computador')]]), ['github', t('Repositório do GitHub')], ['new', t('Projeto novo')]], f.source, (v) => { f.source = v; paintSource(); });
@@ -175,7 +175,8 @@ export default async function render(root, ctx) {
     const inp = (key, ph, id) => { const i = h('input', { id, value: f[key], placeholder: ph, oninput: (e) => { f[key] = e.target.value; } }); return i; };
     async function paintSource() {
       if (f.source === 'local') srcBox.replaceChildren(h('label', { class: 'f' }, t('Pasta do projeto')), inp('path', t('Ex.: /home/voce/meu-projeto ou C:/projetos/meu-app'), 'cd-path'),
-        h('div', { class: 'hint' }, t('A pasta fica como está; o Code só mexe nos arquivos dela (e tudo pode ser desfeito). Se tiver git, ele usa o git.')));
+        h('label', { class: 'check', style: { marginTop: '8px' } }, h('input', { type: 'checkbox', id: 'cd-create', checked: f.create, onchange: (e) => { f.create = e.target.checked; } }), h('span', null, t('Criar a pasta se ela não existir'))),
+        h('div', { class: 'hint' }, t('A pasta fica como está; o Code só mexe nos arquivos dela (e tudo pode ser desfeito). Se tiver git, ele usa o git. Pasta vazia? Sem problema: o Code começa um projeto novo nela. Dá para colar o endereço «file:///…» do gerenciador de arquivos.')));
       else if (f.source === 'new') srcBox.replaceChildren(h('label', { class: 'f' }, t('Nome do projeto')), inp('name', t('Ex.: loja-de-receitas'), 'cd-name'), h('div', { class: 'hint' }, t('O Code cria uma pasta nova nos dados do ASTA para o projeto.')));
       else {
         const list = h('div', { class: 'cd-repos' });
@@ -216,7 +217,7 @@ export default async function render(root, ctx) {
     const v = await modal(t('Nova sessão'), body, [{ label: t('Cancelar'), value: false }, { label: t('Criar a sessão'), value: true, cls: 'primary' }]);
     if (v !== true) return;
     const spec = { title: f.title.trim(), folder_id: f.folder || null, mode: f.mode, effort: f.effort, agents: f.agents, provider: { id: f.provider, model: f.model }, finalize: { docs: f.docs, publish: f.publish },
-      workspace: f.source === 'local' ? { type: 'local', path: f.path.trim() } : f.source === 'github' ? { type: 'github', repo: f.repo.trim() } : { type: 'new', name: f.name.trim() } };
+      workspace: f.source === 'local' ? { type: 'local', path: f.path.trim(), create: !!f.create } : f.source === 'github' ? { type: 'github', repo: f.repo.trim() } : { type: 'new', name: f.name.trim() } };
     try { const s = await api('/api/code/sessions', { method: 'POST', body: spec }); await loadList(); await select(s.id); } catch (e) { toast(e.message, 'err'); }
   }
 

@@ -217,7 +217,16 @@ def describe(root: Path) -> Dict[str, Any]:
     ids = [x["id"] for x in d["languages"]][:6]
     d["libs"] = {i: list(LANGS[i]["libs"])[:14] for i in ids if LANGS[i]["libs"]}
     d["commands"] = commands(root)
+    d["empty"] = is_empty(root)
     return d
+
+
+def is_empty(root: Path) -> bool:
+    """A pasta não tem nenhum arquivo nem subpasta (fora o `.git`): o projeto começa do zero."""
+    try:
+        return not any(e.name != ".git" for e in root.iterdir())
+    except OSError:
+        return False
 
 
 def guide_name(lang_id: Optional[str]) -> str:

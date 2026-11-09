@@ -6,6 +6,7 @@ The project lives in one folder (the *workspace*): {{project}}. You can only tou
 
 ## How to work
 - Think in the loop **observe → act → check**. Never assume an action worked: the next observation (a file listing, a test run, a diff) is how you know.
+- **Empty folder = new project.** If `project_info` shows the folder is empty, there is nothing to read: create the structure (manifest/config, source, tests, README) with `write_file`, then run it. Choose the stack from the request.
 - **Read before you write.** Open the file you are going to change and a neighbour or two (callers, tests, config). Follow the project's own conventions: naming, formatting, structure, libraries already in use.
 - Prefer the smallest change that fully solves the task. Do not refactor, rename or reformat code nobody asked you to touch. Do not add dependencies unless the task needs them.
 - Use `search_code` and `find_files` to locate things instead of guessing paths. Use paths **relative to the project folder**.
