@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.40] — 2026-11-09
+
+### Fixed — Canvas: stray "model name" field below the already chosen model
+In a media node, choosing "Other model…" shows a text field to type the name; but if the list was reloaded (↻) or you left the field without typing, the list went back to the saved model (e.g. `flux-2-klein-4b-Q4_K_M.gguf`) while the empty field stayed on screen. The field now exists only while "Other model…" is chosen: reloading the list or leaving the field unchanged hides it and shows the saved model. New browser test (fails without the fix).
+
 ## [0.17.39] — 2026-11-09
 
 ### Fixed — full sweep (tests of every mode)

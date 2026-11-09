@@ -40,6 +40,15 @@ run('canvas_model_picker', async ({ api, open, check }) => {
   const free = page.locator('.cv-node[data-id="im2"] .mpick input');
   await free.fill('meu-modelo-x'); await page.waitForTimeout(1500);
   check('outro-modelo-campo-livre', (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im2').params.model === 'meu-modelo-x');
+  // o campo «nome do modelo» só existe enquanto «Outro modelo…» está escolhido: ↻ ou sair do campo vazio o esconde (antes ficava solto abaixo do modelo já escolhido)
+  const imSel = page.locator('.cv-node[data-id="im"] .mpick select'), imFree = page.locator('.cv-node[data-id="im"] .mpick input');
+  check('campo-livre-comeca-escondido', !(await imFree.isVisible()));
+  await imSel.selectOption('__custom');
+  check('outro-modelo-mostra-o-campo', await imFree.isVisible());
+  await page.locator('.cv-node[data-id="im"] .mpick button[title]').click(); await page.waitForTimeout(800);
+  check('recarregar-a-lista-esconde-o-campo-livre', !(await imFree.isVisible()));
+  await imSel.selectOption('__custom'); await imFree.focus(); await page.locator('.cv-node[data-id="im"] .mpick select').focus(); await page.waitForTimeout(600);
+  check('sair-do-campo-vazio-esconde-e-volta-ao-modelo', !(await imFree.isVisible()) && (await imSel.inputValue()) === 'P|gguf_local|z-image-Q4_K_M.gguf');
   // padrão
   await page.locator('.cv-node[data-id="im"] .mpick select').selectOption(''); await page.waitForTimeout(1500);
   check('padrao-limpa-o-modelo', (await api(`/api/canvases/${cv.id}`)).nodes.find((n) => n.id === 'im').params.model === '');

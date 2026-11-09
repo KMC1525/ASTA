@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.40] — 2026-11-09
+
+### Corrigido — Canvas: campo «nome do modelo» solto abaixo do modelo já escolhido
+No nó de mídia, escolher «Outro modelo…» mostra um campo de texto para digitar o nome; mas se a lista era recarregada (↻) ou você saía do campo sem digitar nada, a lista voltava ao modelo salvo (ex.: `flux-2-klein-4b-Q4_K_M.gguf`) e o campo vazio continuava na tela. Agora o campo só existe enquanto «Outro modelo…» está escolhido: recarregar a lista ou sair do campo sem mudar nada o esconde e mostra o modelo salvo. Teste de navegador novo (falha sem a correção).
+
 ## [0.17.39] — 2026-11-09
 
 ### Corrigido — varredura geral (testes de todos os modos)
