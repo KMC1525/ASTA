@@ -1038,7 +1038,7 @@ class EngineTests(TmpCase):
         from asta.canvas import engine as E
 
         c = self.cs.create("t")
-        ids = [self.cs.add_asset(c["id"], PNG, "png", "image", name=f"f{i}.png", mime="image/png")["id"] for i in range(3)]
+        ids = [self.cs.add_asset(c["id"], proc.image(f"imagem {i}", "64x64", i + 1), "png", "image", name=f"f{i}.png", mime="image/png")["id"] for i in range(3)]   # três imagens diferentes (iguais valeriam uma só)
         self.cs.save_layout(c["id"], {"nodes": [node("upload", nid="u", files=ids), node("image", nid="g", prompt="um gato"), node("image", nid="e", mode="edit", prompt="deixe azul")],
                                       "edges": [edge("u", "g", "refs"), edge("u", "e", "refs")]})
         seen = {}
