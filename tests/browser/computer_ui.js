@@ -46,24 +46,9 @@ run('computer', async ({ api, open, check, base }) => {
   await page.locator('.cu-item').nth(0).click(); await page.waitForSelector('#cu-goal');
   check('cu:abre-tarefa-antiga-por-endereco', /#\/computer\/cu_/.test(page.url()));
 
-  // Chat: botão Computer Use → cartão ao vivo com a pergunta e o resumo
-  await page.goto(base + '/#/main'); await page.waitForSelector('#chat-cu');
-  await page.locator('#chat-cu').click();
-  check('cu:menu-do-chat-tem-ask-e-full', (await page.locator('.cuopt').count()) === 2);
-  await page.locator('.cuopt[data-mode="ask"]').click();
-  check('cu:botao-fica-ligado-com-o-modo', (await page.locator('#chat-cu').innerText()).includes('Ask'));
-  await page.locator('.composer textarea').fill(`crie a pasta UiChat em ${home}/Documents`);
-  await page.locator('.composer .send').click();
-  await page.waitForSelector('.cu-card .cu-ask');
-  check('cu:cartao-no-chat-pergunta-sim-nao', (await page.locator('.cu-card [data-answer="yes"]').count()) === 1);
-  await page.locator('.cu-card [data-answer="yes"]').click();
-  await until(page, () => /Done|Concluída/.test((document.querySelector('.cu-card .cu-st') || {}).textContent || ''));
-  check('cu:cartao-mostra-resumo-e-link', (await page.locator('.cu-card .md').count()) === 1 && (await page.locator('.cu-card [data-open]').count()) === 1);
-  check('cu:sem-responder-de-novo-em-tarefa', (await page.locator('.cmsg.cu .cacts button').count()) === 0);
-  await page.reload(); await page.waitForSelector('.cu-card');
-  check('cu:cartao-volta-no-historico-do-chat', (await page.locator('.cmsg.user .cu-chip-user').count()) >= 1 && (await page.locator('.cu-card').count()) >= 1);
-  await page.locator('.cu-card [data-open]').first().click(); await page.waitForSelector('#cu-goal');
-  check('cu:abrir-leva-a-secao', page.url().includes('#/computer'));
+  // Chat: o Computer Use mora só na própria seção (sem botão ao lado do Run)
+  await page.goto(base + '/#/main'); await page.waitForSelector('.composer textarea');
+  check('cu:chat-nao-tem-o-botao', (await page.locator('#chat-cu, .cubtn').count()) === 0);
 
   // Configuração
   await page.goto(base + '/#/config'); await page.waitForSelector('.cfgtabs');

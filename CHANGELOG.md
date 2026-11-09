@@ -5,6 +5,13 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.28] — 2026-11-09
+
+### Alterado — Chat: sem o botão Computer Use; barra de ferramentas numa linha só
+- **O botão «Computer Use» saiu do Chat** (o Computer Use continua na própria seção, no menu lateral; tarefas antigas iniciadas pelo Chat mantêm o cartão ao vivo nas conversas).
+- **Barra do compositor alinhada:** o seletor de equipe ficou compacto («High · 👥 1») e, em caixas estreitas, «Anexar» vira só o ícone; tudo cabe numa linha (o seletor de equipe e o botão de modelo não se sobrepõem mais).
+- Versão 0.17.28.
+
 ## [0.17.27] — 2026-11-09
 
 ### Adicionado — Canvas: caixa de prompt embaixo do canvas para gerar fluxos com a equipe de agentes
