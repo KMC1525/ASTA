@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.42] — 2026-11-09
+
+### Fixed — OpenRouter: xAI rejected "input_references: must have between 0 and 3 items"
+A thumbnail with 4 references failed on `x-ai/grok-imagine-image-2.0`: xAI accepts at most **3**. The reference limit is now per model: the catalog's (`input_references` with `max`), 3 for xAI, 4 for the rest; and if a provider refuses with "between 0 and N items", ASTA learns N, uses only the first N (the node says so) and generates the next ones with that limit. The Canvas also warns when it trims references. New tests with a simulated server; **not tested on the real xAI**.
+
 ## [0.17.41] — 2026-11-09
 
 ### Improved — OpenRouter in the Canvas: image-only models (OpenAI, xAI…) and video from the catalog
