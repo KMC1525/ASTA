@@ -70,6 +70,7 @@ export default async function render(root, ctx) {
     cuBtn.replaceChildren(icon('computer', 15), st.cu ? 'Computer Use · ' + MODE()[st.cu] : 'Computer Use',
       st.cu ? h('span', { class: 'x', title: t('Voltar a só conversar'), onclick: (e) => { e.stopPropagation(); setCu(''); } }, '×') : icon('chev', 12));
   };
+  paintCuBtn();   // sem isto o botão do Computer Use ficava como uma pílula vazia até alguém clicar
   const baseTools = () => [toolBtn, cuBtn, webBtn];
   const CU_HINTS = () => [t('Organize minha pasta Downloads por tipo'), t('Crie as pastas Trabalho, Estudos e Lazer na Área de trabalho'), t('Pesquise as melhores configurações do OBS Studio e salve um resumo em Documentos'), t('Abra o Krita e crie uma tela nova de 1920x1080')];
   async function setCu(mode) {
