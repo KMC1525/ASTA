@@ -2,6 +2,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -250,10 +251,12 @@ class QwenImageGGUFTests(unittest.TestCase):
         mod = mock.MagicMock(StableDiffusion=Old)
         mod.sd_log_callback = lambda f: f
         mod.sd_set_log_callback = lambda f, d: cbs.append(f)
-        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+        home = Path(tempfile.mkdtemp())
+        with mock.patch.dict(os.environ, {"ASTA_HOME": str(home)}), mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
             self.prov().image("x", size="512x512")
+        self.assertTrue((home / "sd_needs_newer").is_file())   # avisa o `asta libs`: na próxima instalação/atualização ele compila a biblioteca mais nova
         self.assertIn("não reconhece o formato", str(cm.exception))
-        self.assertIn("pip install -U stable-diffusion-cpp-python", str(cm.exception))
+        self.assertIn("asta libs --sd-latest", str(cm.exception))
         self.assertEqual((len(loads), gens), (1, []))   # sem nova tentativa e sem chamar a geração
         M._SD_CB = None
 

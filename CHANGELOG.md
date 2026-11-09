@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.14] — 2026-11-09
+
+### Adicionado/Corrigido — a biblioteca de imagem mais nova entra na instalação e na atualização
+- **A v0.17.13 foi mergeada sem o segundo commit**: a proteção contra a «Falha de segmentação» (nunca gerar com um modelo que não carregou) e a explicação do `get sd version from file failed` não chegaram à `main`. Estão de volta nesta versão.
+- A stable-diffusion-cpp-python do PyPI já é a mais nova publicada (0.4.7), então `pip install -U` não resolve um modelo que ela não reconhece. Agora, quando o Canvas descobre isso, ele deixa um aviso e o `asta libs` — que roda na **instalação** e na **atualização** (`asta update`) — compila a versão mais nova **do GitHub** (precisa de git, cmake e um compilador C++; leva alguns minutos; se faltar algo, o ASTA diz o quê). Depois de instalar, o aviso some e não recompila a cada atualização.
+- `asta libs --sd-latest` força isso a qualquer momento; `ASTA_SD_LATEST=never|auto|always` controla o comportamento (padrão: `auto`).
+- Versão 0.17.14 (o núcleo Rust não mudou).
+
 ## [0.17.13] — 2026-11-09
 
 ### Corrigido — «NULL pointer access»: o modelo na verdade não carregava (e o motivo era apagado)

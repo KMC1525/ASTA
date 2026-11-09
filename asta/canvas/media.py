@@ -1418,8 +1418,14 @@ class GGUFMedia(MediaProvider):
             ctx = getattr(getattr(sd, "_model", None), "model", 1)   # a biblioteca confere `is None`, mas a carga que falha devolve um ponteiro NULO (que não é None): ela segue com um contexto vazio
             if not ctx:
                 if any("get sd version" in t for _, t in list(_SD_LOG)):   # a versão do modelo não foi reconhecida: a stable-diffusion.cpp desta biblioteca é antiga demais para ele
+                    try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
+                        from ..util import asta_home
+
+                        (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
+                    except OSError:
+                        pass
                     raise _SDUnsupportedModel(f"A stable-diffusion.cpp que vem na biblioteca instalada não reconhece o formato do modelo {path.name} («get sd version from file failed»): ela é mais antiga que o modelo. "
-                                              "Atualize a biblioteca — pip install -U stable-diffusion-cpp-python (ou: asta libs) — e abra o ASTA de novo; se continuar, use outro modelo ou outra quantização." + _sd_env(sdc))
+                                              "Rode «asta update» (ou «asta libs --sd-latest»): o ASTA compila a versão mais nova da biblioteca a partir do GitHub (precisa de git, cmake e um compilador C++; a do PyPI já é a 0.4.7). Abra o ASTA de novo depois; se continuar, o modelo é mais novo que qualquer versão publicada — use outro modelo ou outra quantização." + _sd_env(sdc))
                 why = _sd_reason()
                 files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
                 raise _SDLoadError(f"O modelo {path.name} não carregou na stable-diffusion.cpp. "

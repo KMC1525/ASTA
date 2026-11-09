@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import shutil
 import subprocess
 import sys
 import threading
@@ -222,10 +223,11 @@ def _libs(args: argparse.Namespace) -> int:
     """Instala o que falta e atualiza (só se houver versão mais nova) as bibliotecas opcionais do ASTA. Uma que falhe não impede as outras.
     O que já está instalado não é instalado de novo: o pip só mexe nele se existir uma versão mais nova."""
     chosen, unknown = _wanted_libs(getattr(args, "extras", "") or "")
+    sd_force = bool(getattr(args, "sd_latest", False))
     if unknown:
         print(_("Bibliotecas desconhecidas: {u}. Opções: {o}, all, none.", u=", ".join(unknown), o=", ".join(LIBS)), file=sys.stderr)
         return 2
-    if not chosen:
+    if not chosen and not sd_force:
         print(_("Bibliotecas opcionais: nada a instalar (ASTA_EXTRAS=none)."))
         return 0
     if not _ensure_pip():
@@ -252,10 +254,47 @@ def _libs(args: argparse.Namespace) -> int:
         if res.returncode != 0:
             failed.append(extra)
             print(_("⚠  Não foi possível instalar «{x}». O ASTA funciona sem ela; tente de novo depois com:  asta libs --extras {x}", x=extra))
+    if ("local" in chosen or sd_force) and not _sd_latest(sd_force):
+        failed.append("local (stable-diffusion.cpp mais nova)")
     ok = [e for e in chosen if e not in failed]
     print("\n" + _("Bibliotecas prontas: {l}", l=", ".join(ok) or _("nenhuma")) + (_(" (já estavam instaladas: {p})", p=", ".join(present)) if present else "")
           + (_(" · com falha: {f}", f=", ".join(failed)) if failed else ""))
     return 1 if failed else 0
+
+
+SD_GIT = "stable-diffusion-cpp-python @ git+https://github.com/william-murray1204/stable-diffusion-cpp-python.git"   # a versão do PyPI (0.4.7) pode ser mais antiga que os modelos novos; a do GitHub traz a stable-diffusion.cpp mais recente
+
+
+def _sd_marker():
+    from .util import asta_home
+
+    return asta_home() / "sd_needs_newer"   # escrito pelo Canvas quando a stable-diffusion.cpp instalada não reconhece um modelo («get sd version from file failed»)
+
+
+def _sd_latest(force: bool = False) -> bool:
+    """Instala a stable-diffusion-cpp-python mais nova do GitHub (compila a stable-diffusion.cpp: precisa de git, cmake e um compilador C++, e leva alguns minutos).
+    Roda sozinho no `asta libs` (instalação e atualização) quando o Canvas avisou que um modelo não foi reconhecido (ASTA_SD_LATEST=auto, padrão), sempre (=always) ou nunca (=never).
+    True se instalou ou não era preciso; False se tentou e falhou (o ASTA continua com a versão que já tinha)."""
+    mode = (os.environ.get("ASTA_SD_LATEST") or "auto").strip().lower()
+    marker = _sd_marker()
+    if mode in ("never", "no", "0") or not (force or mode in ("always", "yes", "1") or marker.exists()):
+        return True
+    if os.name != "nt":
+        miss = [t for t in ("git", "cmake") if not shutil.which(t)] + ([] if any(shutil.which(c) for c in ("cc", "gcc", "clang")) else ["compilador C/C++"])
+        if miss:
+            print("\n" + _("⚠  Para atualizar a stable-diffusion.cpp falta instalar: {m}. Depois rode:  asta libs --sd-latest", m=", ".join(miss)))
+            return False
+    print("\n" + _("Instalando a stable-diffusion-cpp-python mais nova (do GitHub): compila código nativo e pode levar vários minutos…"))
+    res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall", "--no-deps", "--no-cache-dir", "--disable-pip-version-check", SD_GIT])
+    if res.returncode != 0:
+        print(_("⚠  Não consegui compilar a versão mais nova. O ASTA segue com a que já está instalada; tente de novo depois com:  asta libs --sd-latest"))
+        return False
+    try:
+        marker.unlink()
+    except OSError:
+        pass
+    print(_("stable-diffusion-cpp-python atualizada. Abra o ASTA de novo para usá-la."))
+    return True
 
 
 RAW = "https://raw.githubusercontent.com/KMC1525/ASTA/main/"
@@ -572,6 +611,7 @@ def main(argv=None) -> int:
     mod.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     libs = sub.add_parser("libs", help=_("instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)"))
     libs.add_argument("--extras", default="", help=_("all (padrão), none ou lista separada por vírgula (docs,media,local)"))
+    libs.add_argument("--sd-latest", action="store_true", help=_("compila a stable-diffusion-cpp-python mais nova do GitHub (para modelos de imagem novos que a do PyPI não reconhece)"))
     nat = sub.add_parser("native", help=_("Rust e núcleo rápido do ASTA: status | build | install | update | setup"))
     nat.add_argument("action", choices=("status", "build", "install", "update", "setup"), nargs="?", default="status")
     nat.add_argument("--rust", choices=("ask", "yes", "no"), default="", help=_("com setup: yes = faz sozinho (padrão), ask = pergunta, no = pula (também ASTA_RUST)"))

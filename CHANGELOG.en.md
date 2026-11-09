@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.14] — 2026-11-09
+
+### Added/Fixed — the newest image library is part of install and update
+- **v0.17.13 was merged without its second commit**: the guard against the «Segmentation fault» (never generate with a model that did not load) and the explanation of `get sd version from file failed` did not reach `main`. They are back in this version.
+- The PyPI stable-diffusion-cpp-python is already the newest published (0.4.7), so `pip install -U` does not fix a model it does not recognize. Now, when the Canvas finds that out, it leaves a flag and `asta libs` — which runs on **install** and **update** (`asta update`) — builds the newest version **from GitHub** (needs git, cmake and a C++ compiler; takes a few minutes; if something is missing, ASTA says what). After installing, the flag clears and it does not rebuild on every update.
+- `asta libs --sd-latest` forces it at any time; `ASTA_SD_LATEST=never|auto|always` controls the behavior (default: `auto`).
+- Version 0.17.14 (the Rust core did not change).
+
 ## [0.17.13] — 2026-11-09
 
 ### Fixed — «NULL pointer access»: the model actually failed to load (and the reason was being erased)
