@@ -676,7 +676,7 @@ class SupportFilesTests(ServerCase):
         k4, k9 = support.family_of("flux-2-klein-4b-Q4_K_M.gguf"), support.family_of("FLUX.2-klein-base-9B-Q8_0.gguf")
         self.assertEqual((k4["id"], k9["id"]), ("flux2-klein-4b", "flux2-klein-9b"))
         self.assertEqual(support.family_of("flux1-dev-Q4_0.gguf")["id"], "flux")             # FLUX.1 continua pedindo clip_l e t5xxl
-        self.assertIsNone(support.family_of("flux-2-dev-Q4_0.gguf"))                         # FLUX.2 dev (Mistral 24B) não é de nenhuma família: não é tratado como FLUX.1
+        self.assertEqual(support.family_of("flux-2-dev-Q4_0.gguf")["id"], "flux2-dev")        # FLUX.2 dev (Mistral 24B) tem família própria (v0.17.31): nunca é tratado como FLUX.1
         self.assertEqual(support.run_for(k4, "flux-2-klein-4b-Q4_K_M.gguf"), {"cfg_scale": 1.0, "sample_steps": 4, "sample_method": "euler"})   # destilado: 4 passos, sem CFG
         self.assertEqual(support.run_for(k9, "flux-2-klein-base-9b-Q8_0.gguf")["sample_steps"], 50)                                                # «base»: 50 passos, CFG 4
         d = Path(tempfile.mkdtemp())

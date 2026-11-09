@@ -6,6 +6,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import numpy  # noqa: F401,E402  (importado antes dos módulos falsos: o numpy não pode ser importado de novo depois que o sys.modules é restaurado)
 from asta.canvas import media as M  # noqa: E402
 from asta.canvas import support  # noqa: E402
 from asta.providers import ProviderError  # noqa: E402
@@ -28,6 +29,13 @@ class FamilyTests(unittest.TestCase):
         self.assertEqual((run("z-image-turbo-Q4_K_M.gguf")["cfg_scale"], run("z-image-turbo-Q4_K_M.gguf")["sample_steps"]), (1.0, 8))
         self.assertEqual((run("z-image-Q4_K_M.gguf")["cfg_scale"], run("z-image-Q4_K_M.gguf")["sample_steps"]), (4.0, 30))
         self.assertEqual(run("Wan2.2-TI2V-5B-Q4_K_M.gguf")["flow_shift"], 5.0)
+
+    def test_flux2_dev_has_its_own_family_with_the_mistral_encoder(self):
+        fam = support.family_of("flux2-dev-Q4_K_M.gguf")
+        self.assertEqual(fam["id"], "flux2-dev")
+        self.assertEqual(fam["downloads"]["llm_path"]["repo"], "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF")
+        self.assertEqual(support.family_of("FLUX.2-klein-9B-Q4_K_M.gguf")["id"], "flux2-klein-9b")   # as klein não mudam
+        self.assertEqual(M._KINDS["gguf_local"]({"id": "g", "label": "g", "models_dir": ".", "models": {"image": "flux2-dev-Q4_K_M.gguf"}, "needs_key": False}).max_refs(), 4)
 
     def test_every_family_download_points_to_a_repo_and_a_file_for_each_companion(self):
         for fam in support.FAMILIES:
@@ -146,6 +154,140 @@ class GGUFTests(TmpCase):
         self.assertEqual(loads[0], {"model_path": str(self.tmp / "video" / "qualquer-Q4_0.gguf")})
         self.assertEqual(mp4.call_args[0][1], 16)
         self.assertNotIn("video_frames", {k for k, v in vids[0].items() if v is None})
+
+
+class VoiceTests(TmpCase):
+    """Orpheus e CSM da Unsloth: a decodificação dos tokens (pura) e o caminho da voz com módulos simulados."""
+
+    def test_orpheus_tokens_become_snac_layers(self):
+        base = M._ORPHEUS_AUDIO_BASE
+        raw = [128259, 1, 2, 128257] + [base + 10, base + 4096 + 11, base + 8192 + 12, base + 12288 + 13, base + 16384 + 14, base + 20480 + 15, base + 24576 + 16] + [base + 99, base + 98] + [128258]
+        codes = M.orpheus_codes(raw)
+        self.assertEqual(len(codes), 7)   # só grupos completos de 7; o fim de fala sai; o texto antes do início de fala é ignorado
+        l1, l2, l3 = M.orpheus_layers(codes)
+        self.assertEqual((l1, l2, l3), ([10], [11, 14], [12, 13, 15, 16]))
+        l1, l2, l3 = M.orpheus_layers(M.orpheus_codes([128257] + [base] * 14))
+        self.assertEqual((len(l1), len(l2), len(l3)), (2, 4, 8))   # 1 : 2 : 4
+        self.assertEqual(M.orpheus_codes([1, 2, 3]), [])
+
+    def prov(self):
+        M._LOCAL_CACHE.clear()
+        return M._KINDS["local_hf"]({"id": "local_hf", "label": "l", "models_dir": str(self.tmp), "models": {}, "needs_key": False})
+
+    def fake_stack(self, tokens):
+        calls = {}
+
+        class Out:
+            def __getitem__(self, i):
+                return mock.MagicMock(tolist=lambda: tokens)
+
+        class LM:
+            def to(self, d):
+                return self
+
+            def generate(self, **kw):
+                calls["generate"] = kw
+                return Out()
+
+        class Audio:
+            def detach(self):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return [[0.1, -0.1] * 50]
+
+        class Codec:
+            def eval(self):
+                return self
+
+            def to(self, d):
+                return self
+
+            def decode(self, layers):
+                calls["layers"] = len(layers)
+                return Audio()
+
+        tf = mock.MagicMock()
+        tf.AutoTokenizer.from_pretrained.return_value = mock.MagicMock(return_value=mock.MagicMock(input_ids=mock.MagicMock()))
+        tf.AutoModelForCausalLM.from_pretrained.return_value = LM()
+        torch = mock.MagicMock()
+        torch.cuda.is_available.return_value = False
+        torch.tensor.side_effect = lambda v, **kw: mock.MagicMock(unsqueeze=lambda d: ("layer", len(v)))
+        snac = mock.MagicMock()
+        snac.SNAC.from_pretrained.return_value = Codec()
+        return tf, torch, snac, calls
+
+    def test_orpheus_voice_uses_the_named_voice_and_the_snac_codec(self):
+        base = M._ORPHEUS_AUDIO_BASE
+        tf, torch, snac, calls = self.fake_stack([128257] + [base + i for i in range(14)])
+        p = self.prov()
+        with mock.patch.dict(sys.modules, {"transformers": tf, "torch": torch, "snac": snac}), \
+                mock.patch("asta.canvas.localmodels.downloaded_precision", return_value="fp16"), mock.patch("asta.canvas.localmodels.torch_dtype", return_value="fp16"), \
+                mock.patch("asta.canvas.localmodels.has_fp16_variant", return_value=False):
+            out = p.voice("Olá, mundo", voice="leo", model="unsloth/orpheus-3b-0.1-ft")
+        self.assertEqual(out.mime, "audio/wav")
+        self.assertEqual(out.data[:4], b"RIFF")
+        self.assertEqual(calls["layers"], 3)
+        self.assertEqual(calls["generate"]["eos_token_id"], 128258)
+        self.assertEqual(tf.AutoTokenizer.from_pretrained.call_args[0][0], "unsloth/orpheus-3b-0.1-ft")
+        self.assertEqual(tf.AutoTokenizer.from_pretrained.return_value.call_args[0][0], "leo: Olá, mundo")
+        self.assertEqual(tf.AutoTokenizer.from_pretrained.call_args[1], {"local_files_only": True})   # nada é baixado em silêncio
+
+    def test_orpheus_explains_a_missing_codec_or_library(self):
+        tf, torch, snac, _ = self.fake_stack([])
+        with mock.patch.dict(sys.modules, {"transformers": tf, "torch": torch, "snac": snac}), mock.patch("asta.canvas.localmodels.downloaded_precision", side_effect=lambda m: "fp16" if "orpheus" in m else ""), \
+                mock.patch("asta.canvas.localmodels.torch_dtype", return_value="fp16"), mock.patch("asta.canvas.localmodels.has_fp16_variant", return_value=False):
+            with self.assertRaises(ProviderError) as cm:
+                self.prov().voice("x", model="unsloth/orpheus-3b-0.1-ft")
+        self.assertIn("snac_24khz", str(cm.exception))
+        with mock.patch.dict(sys.modules, {"transformers": tf, "torch": torch, "snac": None}):
+            with self.assertRaises(ProviderError) as cm:
+                self.prov().voice("x", model="unsloth/orpheus-3b-0.1-ft")
+        self.assertIn("pip install snac", str(cm.exception))
+
+    def test_csm_voice_builds_a_chat_turn_for_the_speaker(self):
+        calls = {}
+
+        class Audio:
+            def to(self, d):
+                return self
+
+            def cpu(self):
+                return self
+
+            def numpy(self):
+                return [0.2, -0.2] * 50
+
+        class LM:
+            def to(self, d):
+                return self
+
+            def generate(self, **kw):
+                calls["generate"] = kw
+                return [Audio()]
+
+        proc = mock.MagicMock()
+        proc.apply_chat_template.return_value.to.return_value = {"input_ids": 1}
+        tf = mock.MagicMock()
+        tf.AutoProcessor.from_pretrained.return_value = proc
+        tf.CsmForConditionalGeneration.from_pretrained.return_value = LM()
+        torch = mock.MagicMock()
+        torch.cuda.is_available.return_value = False
+        with mock.patch.dict(sys.modules, {"transformers": tf, "torch": torch}), mock.patch("asta.canvas.localmodels.downloaded_precision", return_value="fp16"), \
+                mock.patch("asta.canvas.localmodels.torch_dtype", return_value="fp16"), mock.patch("asta.canvas.localmodels.has_fp16_variant", return_value=False):
+            out = self.prov().voice("Hello there", voice="1", model="unsloth/csm-1b")
+        self.assertEqual(out.data[:4], b"RIFF")
+        self.assertEqual(proc.apply_chat_template.call_args[0][0], [{"role": "1", "content": [{"type": "text", "text": "Hello there"}]}])
+        self.assertTrue(calls["generate"]["output_audio"])
+
+    def test_suggestions_include_the_unsloth_voice_and_whisper_models(self):
+        sug = M.MEDIA_PRESETS["local_hf"]["suggest"]
+        self.assertIn("unsloth/orpheus-3b-0.1-ft", sug["voice"])
+        self.assertIn("unsloth/csm-1b", sug["voice"])
+        self.assertIn("unsloth/whisper-large-v3-turbo", sug["stt"])
 
 
 class ApiTests(ServerCase):
