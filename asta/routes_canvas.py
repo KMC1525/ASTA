@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any, Dict
 
 from .canvas.engine import CanvasEngine
+from .canvas.flow import FlowPipeline
 from . import archives
 from . import team as teamlib
 from .canvas.media import MIME_EXT, build_media, describe_media_presets, sniff_mime
@@ -37,6 +38,7 @@ class CanvasRoutes:
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/meta", self.r_meta)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/duplicate", self.r_duplicate)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/run", self.r_run)
+        a("POST", r"/api/canvases/(?P<cid>[\w-]+)/flow", self.r_flow)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/nodes/(?P<nid>[\w-]+)/autofill", self.r_autofill)
         a("GET", r"/api/canvases/(?P<cid>[\w-]+)/download", self.r_download)
         a("POST", r"/api/canvases/(?P<cid>[\w-]+)/to-studio", self.r_to_studio)
@@ -169,6 +171,25 @@ class CanvasRoutes:
             CanvasEngine(self.store, cid, job.emit, lambda: job.cancelled, team=team).run(nodes or None, force)
 
         job = self.app.jobs.start(f"canvas:{cid}", work)
+        req.json({"job_id": job.id})
+
+    def r_flow(self, req, cid: str) -> None:
+        """Gera um fluxo (nós e ligações) a partir de um prompt, com a equipe escolhida (Planejador → Revisor). Não grava nada: o navegador insere o resultado no canvas."""
+        c = self._canvas(cid)
+        body = req.body_json()
+        body = body if isinstance(body, dict) else {}
+        prompt = text(body.get("prompt"), "", 6000)
+        if not prompt:
+            raise HttpError(400, "Descreva o fluxo que você quer criar.")
+        running = self.app.jobs.running(f"canvasflow:{cid}")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+        flow_req = {"prompt": prompt, "team": teamlib.request_team(body), "existing": c["nodes"], "x": body.get("x"), "y": body.get("y")}
+
+        def work(job: Job) -> None:
+            FlowPipeline(self.store, job.emit, lambda: job.cancelled).run(flow_req)
+
+        job = self.app.jobs.start(f"canvasflow:{cid}", work)
         req.json({"job_id": job.id})
 
     def r_autofill(self, req, cid: str, nid: str) -> None:

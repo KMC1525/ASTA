@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.27] — 2026-11-09
+
+### Added — Canvas: a prompt box under the canvas to generate flows with the agent team
+- A **small prompt box under the Canvas** ("Generate a flow with AI") takes the request ("YouTube thumbnail with a photo of me…", "lighthouse scene with narration") and the agent team **builds the nodes and links**: Planner → Reviewer (with fix rounds set by the effort), using the same **effort (Low → Omni) and 1/4/8/12/16 agents** setting that used to sit in the top bar (it now lives in the box and also applies to "Run all"). The flow lands to the right of what is already there, the canvas fits to the screen and is saved; nothing runs by itself: you review and press "Run all". `Ctrl+Enter` generates.
+- **Minimize/maximize button** (the little arrow in the corner): minimized it becomes a thin bar that does not get in the way of building flows; the state is remembered. Scrolling or dragging inside the box does not move the canvas view.
+- **Validation and fallback:** the AI only returns data (type, parameters and links by key); `canvas/schema.py` validates types, parameters, ports, compatibility and cycles, and positions are computed in columns. Without AI (Demo) or with an invalid answer, a starter template is picked from the words of the request — a flow always comes out. New route: `POST /api/canvases/<id>/flow` (a job with events; it saves nothing: the browser inserts the result).
+- Honest limit: the quality of AI-generated flows depends on the model and was not measured with real models; the suite uses scripted providers. The Rust core did not change.
+- Version 0.17.27.
+
 ## [0.17.26] — 2026-11-09
 
 ### Added — an agent team in EVERY section: 1 · 4 · 8 · 12 · 16 agents and Code's eight effort levels
