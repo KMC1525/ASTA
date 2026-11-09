@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.39] — 2026-11-09
+
+### Corrigido — varredura geral (testes de todos os modos)
+Rodei os 52 módulos de testes, os 43 testes de navegador (todas as telas e modos), o núcleo Rust e a checagem de traduções. Três coisas falhavam, e as três foram corrigidas:
+- **Biblioteca (Jogos, Mundos, Avatares): o botão «Atualizar» aparecia como «Refresh» em inglês** (a mesma palavra tinha duas traduções e a última vencia). Agora o botão é «Atualizar com IA» («Update with AI»).
+- **Teste de auditoria travava para sempre**: a rota de eventos ao vivo do Code (`/api/code/events`, que nunca fecha) entrava na varredura de corpos inválidos. Fica fora dela; as demais rotas do Code continuam testadas e sem erro 500.
+- **Teste do botão «Baixar os arquivos de apoio»** não achava o botão porque a caixa de prompt do Canvas (v0.17.27) cobria o nó; o teste agora a minimiza.
+Não rodei com modelos reais (só os simulados dos testes).
+
 ## [0.17.38] — 2026-11-09
 
 ### Corrigido — Code: «terminei» sem ter escrito nenhum arquivo na pasta escolhida
