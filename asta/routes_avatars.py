@@ -10,6 +10,7 @@ from .avatar_chat import ChatEngine
 from .avatars import MAX_CHAT_AVATARS, avatar_from_png, export_card_v2, import_avatar
 from .jobs import HttpError, Job
 from .providers import ProviderError, resolve_provider
+from .team import request_team as _team_of
 from .util import num, text
 
 IMAGE_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
@@ -183,7 +184,7 @@ class AvatarRoutes:
             "count": int(num(body.get("count"), 0, 0, MAX_CHAT_AVATARS)), "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),
             "character_type": text(body.get("character_type"), "auto", 10), "prompt_pipeline": body.get("prompt_pipeline") is not False,
-            "detail": text(body.get("detail"), "detailed", 10),
+            "detail": text(body.get("detail"), "detailed", 10), "team": _team_of(body),
         }
 
         def work(job: Job) -> None:
@@ -213,6 +214,7 @@ class AvatarRoutes:
             "avatar_id": text(body.get("avatar_id"), "", 60), "draft": {k: v for k, v in draft.items() if isinstance(k, str)},
             "instructions": text(body.get("instructions"), "", 4000), "content": "nsfw" if body.get("content") == "nsfw" else "sfw",
             "character_type": text(body.get("character_type"), "auto", 10), "detail": text(body.get("detail"), "detailed", 10), "apply": bool(body.get("apply")),
+            "team": _team_of(body),
         }
         if pipeline_req["avatar_id"] and not self.store.avatars.get(pipeline_req["avatar_id"]):
             raise HttpError(404, "Avatar não encontrado")

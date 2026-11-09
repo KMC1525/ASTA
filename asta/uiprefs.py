@@ -107,7 +107,7 @@ def import_patch(payload: Any) -> Dict[str, Any]:
         if isinstance(src.get(key), dict):
             patch[key] = src[key]
     if isinstance(src.get("computer"), dict):   # um arquivo importado nunca liga o Computer Use, nem troca o modo, nem tira as perguntas do modo Ask: isso só quem está na frente do computador decide
-        patch["computer"] = {k: v for k, v in src["computer"].items() if k in ("max_parallel", "max_steps", "team", "revisions", "app_wait")}
+        patch["computer"] = {k: v for k, v in src["computer"].items() if k in ("max_parallel", "max_steps", "team", "revisions", "app_wait", "agents", "effort")}
     if isinstance(src.get("code"), dict):   # idem Computer Use: um arquivo importado nunca troca o modo (Full Access), as perguntas do Ask, o token do GitHub nem a publicação direta na main
         c = {k: v for k, v in src["code"].items() if k in ("effort", "agents", "max_sessions", "run_timeout", "max_download_mb", "branch_prefix", "clone_depth", "github_mode", "editor", "provider")}
         if isinstance(src["code"].get("finalize"), dict):

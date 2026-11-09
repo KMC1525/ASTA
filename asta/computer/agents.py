@@ -10,6 +10,7 @@ import re
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+from .. import team as teamlib
 from ..agents.llm import call_json
 from ..providers import ProviderError
 from . import promptlib
@@ -58,6 +59,17 @@ class Brain:
                 break
         self.warn(f"{agent}: a IA não devolveu um JSON válido ({str(last)[:120]})")
         return None
+
+    def ask_team(self, team: "teamlib.Team", agent: str, system: str, instruction: str, payload: Dict[str, Any], *, images: Optional[List[dict]] = None, max_tokens: int = 1800,
+                 critique: bool = False) -> Optional[Dict[str, Any]]:
+        """`ask` com a equipe da tarefa: com 4/8/12/16 agentes, uma mesa em paralelo + o Sintetizador (`team.ensemble_json`); `critique` (Max para cima) acrescenta uma rodada de crítica."""
+        def one(ins: str, pl: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+            return self.ask(agent, system, ins, pl, images=images, max_tokens=int(max_tokens * team.tokens_mult))
+
+        obj = teamlib.ensemble_json(one, team, instruction, payload, cancelled=self.cancelled, fatal=(Cancelled,))
+        if obj is not None and critique and team.critique:
+            obj = teamlib.critique_json(one, instruction, payload, obj)
+        return obj
 
 
 # --------------------------------------------------------------------------- normalizadores

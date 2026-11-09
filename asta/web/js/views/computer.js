@@ -6,6 +6,7 @@ import { renderMarkdown } from '../markdown.js';
 import { AGENT, MODE, MODE_HINT, RISK, STATUS, STEP_STATUS, TOOL_ICON, approvalCard, describeAction, fmtClock, fmtDur, fmtWhen, isActive, modeChip, statusChip, subscribe } from '../computer_ui.js';
 import { confirmDialog, fill, h, icon, modal, seg, toast } from '../ui.js';
 import { createComposer } from './composer.js';
+import { teamPicker } from '../team_ui.js';
 
 const FULL_OK = 'asta.cu.fullok';
 const lsGet = (k) => { try { return localStorage.getItem(k); } catch (e) { return null; } };
@@ -125,10 +126,11 @@ export default async function render(root, ctx) {
       });
       modeSeg.id = 'cu-mode';
       const hint = h('span', { class: 'dim small' }, MODE_HINT()[st.mode]);
+      const team = teamPicker(state.settings.computer, null, { id: 'cu-team' });   // esforço e agentes desta tarefa: vêm marcados como em Configuração
       const composer = createComposer({ placeholder: t('Diga o que o computador deve fazer…'), sendLabel: t('Run'), sendTitle: t('Executar'),
         onSend: async ({ text, ids }) => {
           try {
-            const r = await api('/api/computer/tasks', { method: 'POST', body: { goal: text, mode: st.mode, attachment_ids: ids } });
+            const r = await api('/api/computer/tasks', { method: 'POST', body: { goal: text, mode: st.mode, attachment_ids: ids, team: team.get() } });
             composer.setText(''); composer.clearFiles(ids);
             toast(t('Tarefa iniciada'), 'ok');
             await loadList(); await select(r.task.id);
@@ -137,7 +139,7 @@ export default async function render(root, ctx) {
       const ex = [t('Organize minha pasta Downloads por tipo'), t('Crie as pastas Trabalho, Estudos e Lazer na Área de trabalho'), t('Pesquise as melhores configurações do OBS Studio para gravar gameplay e salve um resumo em Documentos'),
         t('Abra o Krita e crie uma tela nova de 1920x1080'), ...(inv && inv.games && inv.games.length ? [t('Abra o jogo {n}', { n: inv.games[0].name })] : [t('Abra o jogo que eu mais jogo na Steam')])];
       parts.push(h('div', { class: 'cu-new-card' }, h('h2', null, t('O que o computador deve fazer?')), composer.el,
-        h('div', { class: 'row cu-modebar' }, h('span', { class: 'muted small' }, t('Modo')), modeSeg, hint),
+        h('div', { class: 'row cu-modebar' }, h('span', { class: 'muted small' }, t('Modo')), modeSeg, hint, h('span', { class: 'grow' }), team.el),
         h('div', { class: 'suggest cu-ex' }, ex.map((x) => h('button', { type: 'button', onclick: () => { composer.setText(x); composer.focus(); } }, x.length > 70 ? x.slice(0, 68) + '…' : x)))));
     }
     if (enabled || st.status) {

@@ -153,6 +153,7 @@ class StudioPipeline(Runner):
         self.provider = build_provider(self.settings, gid, self.store.models_dir)
         self.gen = {"temperature": 0.7, "max_tokens": 3500, "content": self.settings["generation"].get("content") if self.settings["generation"].get("content") == "sfw" else "free"}
         self.language = prompts.lang_name(p["language"])
+        self.configure_team(self.settings.get("studio"), req, gid)   # equipe: agentes em paralelo + esforço (settings.studio / pedido)
         tools.need_ffmpeg("O Studio")
         prompt = text(req.get("prompt"), "", 8000) or ep["prompt"] or p["premise"]
         digest = self._attachments(req)
@@ -443,7 +444,7 @@ class StudioPipeline(Runner):
     # ------------------------------------------------------------------ revisão
     def _review(self, p: Dict[str, Any], sid: str, n: int, plan: Dict[str, Any], gen: Dict[str, Any], secs: float, brief: Dict[str, Any], idx: int) -> Tuple[Optional[float], List[str], bool]:
         revised, notes, score = False, [], None
-        rounds = int(p["revisions"])
+        rounds = self.team.revisions(int(p["revisions"]), 5)
         for r in range(rounds + 1):
             fresh = self._project()
             ids = {a["id"] for a in fresh["assets"]}

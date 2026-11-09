@@ -42,6 +42,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Chat geral (a tela «Chat»): tamanho da resposta, janela de contexto, tempo de pensamento e busca na web
     "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000, "context_tokens": 16000, "thinking": "off", "instructions": "",
              "reply_style": "detailed",  # balanced | detailed (padrão: respostas completas e de qualidade) | epic (longas e profundas)
+             "effort": "low", "team_agents": 1,  # Low … Omni (os níveis do Code) e 1/4/8/12/16 agentes (notas privadas para a resposta): ver team.py
              "auto_continue": True, "continue_rounds": 3,  # resposta cortada pelo limite de tokens → continua sozinha de onde parou
              "agents": "off",  # off | plan (Planejador → Redator) | review (Planejador → Redator → Revisor → Redator): equipe de agentes para respostas mais completas
 
@@ -62,6 +63,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "day_cycle": True,
         "npc_autonomy": "off",  # off | low | high
         "include_attachments": True,
+        "agents": 1, "effort": "high",  # equipe: 1/4/8/12/16 agentes em paralelo por etapa · esforço Low … Omni (ver team.py)
     },
     "characters": {
         "detail": "detailed",  # short | detailed
@@ -87,12 +89,15 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "auto_talk_max": 10,  # máximo de falas seguidas sem uma mensagem sua
         "auto_talk_delay": 6,  # segundos entre falas autônomas
         "voice_reply": True,
+        "agents": 1, "effort": "high",  # equipe da CRIAÇÃO de avatars (ver team.py)
+        "chat_agents": 1, "chat_effort": "low",  # equipe da CONVERSA com os avatars (notas privadas + pensamento); Low = sem pensamento, para responder rápido
     },
     "games": {
         "length": "medium",  # short | medium | long (tamanho pedido aos agentes)
         "revisions": 1,
         "temperature": 0.8,
         "max_tokens": 9000,
+        "agents": 1, "effort": "high",
     },
     "media": {
         # provedor padrão de cada capacidade do Canvas (cada nó pode escolher outro)
@@ -103,18 +108,20 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Padrões por seção (Configuração → Seções): o que já vem marcado ao criar algo novo
     "studio": {"kind": "single", "duration_type": "shorts", "target_seconds": 60, "style": "realistic", "style_custom": "", "aspect": "auto",
                "language": "auto", "motion": "auto", "captions": True, "music": True, "revisions": 1, "voice": "",
-               "export_quality": "720p", "export_fps": 24, "audio_format": "m4a", "autoedit_style": "gameplay", "autoedit_target": 0},
-    "rebuild": {"refine": True, "max_calls": 40},
+               "export_quality": "720p", "export_fps": 24, "audio_format": "m4a", "autoedit_style": "gameplay", "autoedit_target": 0,
+               "agents": 1, "effort": "high"},
+    "rebuild": {"refine": True, "max_calls": 40, "agents": 1, "effort": "high"},
     # Computer Use (opcional, desligado por padrão): equipe de agentes que faz tarefas no computador. Ver computer/manager.py (normalize_config)
     "computer": {"enabled": False, "mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
                  "max_parallel": 8, "max_steps": 40, "team": "full",  # team: full (Planejador → Operador → Revisor → Relator) | fast (só o Operador; para modelos locais lentos)
-                 "revisions": 1, "ask_for": ["write", "delete", "run", "input", "screen"], "game_dirs": [], "app_wait": 2.0},
+                 "revisions": 1, "ask_for": ["write", "delete", "run", "input", "screen"], "game_dirs": [], "app_wait": 2.0,
+                 "agents": 1, "effort": "high"},  # agents: 1/4/8/12/16 (mesa de agentes no Planejador e no Verificador) · effort: Low … Omni (ver team.py)
     # Code (vibe coding com equipes de agentes): ver code/manager.py (normalize_config). O token do GitHub é segredo (SECRET_PATHS): nunca vai ao navegador nem à exportação.
     "code": {"mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
              "effort": "high", "agents": 4, "max_sessions": 4, "ask_for": ["write", "delete", "run", "install", "git", "publish"], "run_timeout": 180, "max_download_mb": 200,
              "allow_main": True, "branch_prefix": "asta/", "git_name": "", "git_email": "", "credit_asta": False, "credit_name": "", "credit_email": "", "clone_depth": 20, "github_mode": "auto", "editor": "auto",
              "github": {"api": "", "token": ""}, "finalize": {"docs": False, "publish": "none"}, "provider": {"id": "", "model": ""}},
-    "canvas": {"template": "text_image"},
+    "canvas": {"template": "text_image", "agents": 1, "effort": "high"},  # equipe dos nós de texto (IA) do Canvas
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},
     "hf": {"token": ""},
@@ -144,6 +151,25 @@ def conform(defaults: Any, value: Any) -> Any:
     if isinstance(providers, dict):
         out["providers"] = {k: v for k, v in providers.items() if isinstance(v, dict)}
     return out
+
+
+def _normalize_teams(settings: dict) -> None:
+    """Equipe de cada seção (agentes 1/4/8/12/16 e esforço Low … Omni): valor fora da lista (edição manual, API) vira o valor aceito mais próximo. O Code mantém qualquer número de 1 a 16."""
+    from . import team
+
+    for key in team.SECTIONS:
+        sec = settings.get(key)
+        if not isinstance(sec, dict):
+            continue
+        akey = "team_agents" if key == "chat" else "agents"
+        if key == "code":
+            try:
+                sec[akey] = max(1, min(int(sec.get(akey) or 4), team.MAX_AGENTS))
+            except (TypeError, ValueError):
+                sec[akey] = 4
+        else:
+            sec[akey] = team.normalize_agents(sec.get(akey))
+        sec["effort"] = team.normalize_effort(sec.get("effort"), "low" if key == "chat" else team.DEFAULT_EFFORT)
 
 
 # Caminhos (dentro de settings) que contêm segredos e nunca são enviados ao navegador.
@@ -256,6 +282,7 @@ class Store:
     def get_settings(self) -> dict:
         saved = read_json(self.settings_path, {}) or {}
         merged = conform(DEFAULT_SETTINGS, deep_merge(copy.deepcopy(DEFAULT_SETTINGS), saved if isinstance(saved, dict) else {}))
+        _normalize_teams(merged)
         merged["ui"] = normalize_ui(merged.get("ui"))  # valor inválido (API/edição manual) volta ao padrão em vez de quebrar a interface
         return merged
 

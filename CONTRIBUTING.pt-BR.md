@@ -43,6 +43,7 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 | Modelos pré-instalados (catálogo) | `asta/preinstalled.py` (`CATALOG`: repositório, arquivo, quantização, tamanho, arquivos auxiliares) + tradução do `hint` em `web/js/en.js` |
 | Canvas: novo provedor de mídia | classe em `canvas/media.py` + entrada em `MEDIA_PRESETS` + teste com servidor simulado em `tests/test_canvas.py` (veja `MediaMock`) |
 | Editor de vídeo do Canvas | `canvas/render.py` (ffmpeg) e `web/js/canvas_timeline.js` (linha do tempo e prévia) |
+| Equipe de agentes (1/4/8/12/16 agentes, esforço Low → Omni) em cada seção | `team.py` (contagens, níveis, mesa de agentes + Sintetizador, notas privadas), `efforts.py` (os 8 níveis), `agents/runner.py` (`configure_team`, `_agent`), a chamada `configure_team`/`team_chat` de cada motor, `web/js/team_ui.js` (seletores), um cartão «Equipe de agentes» em `web/js/views/config.js`; testes: `tests/test_team.py`, `tests/browser/team_ui.js` |
 
 ## Testes e PRs
 

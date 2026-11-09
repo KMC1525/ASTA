@@ -26,7 +26,7 @@ class RebuildPipeline(Runner):
     def __init__(self, store: Store, emit: Callable[[dict], None], cancelled: Callable[[], bool] = lambda: False):
         super().__init__(store, emit, cancelled)
 
-    def _refine(self, spec: Dict[str, Any], info: Dict[str, Any], want: bool) -> Dict[str, Any]:
+    def _refine(self, spec: Dict[str, Any], info: Dict[str, Any], want: bool, req: Any = None) -> Dict[str, Any]:
         """Perfilador → Polidor → Auditor (IA, só texto). Devolve o resumo do que foi feito ({} se pulou)."""
         skip = [s for s in ("profiler", "polisher", "auditor")]
         settings = self.store.get_settings()
@@ -41,7 +41,12 @@ class RebuildPipeline(Runner):
         self.provider = build_provider(settings, pid, self.store.models_dir)
         self.gen = {"temperature": 0.2, "max_tokens": 1800, "content": "free"}
         self.language = prompts.lang_name(spec.get("language") or "pt-BR")
-        ref = R.Refiner(self._agent, self._step, self._check, self.warnings.append, max_calls=max(5, min(200, int((settings.get("rebuild") or {}).get("max_calls") or R.MAX_CALLS))))
+        self.configure_team(settings.get("rebuild"), req, pid)   # equipe: mesa de agentes no Perfilador e no Auditor (o Polidor, que roda por lote de falas, fica com um só) + esforço
+
+        def agent(step, name, instruction, payload, fallback, **kw):
+            return self._agent(step, name, instruction, payload, fallback, **{**kw, "solo": name == "rebuild_polisher"})
+
+        ref = R.Refiner(agent, self._step, self._check, self.warnings.append, max_calls=max(5, min(200, int((settings.get("rebuild") or {}).get("max_calls") or R.MAX_CALLS))))
         try:
             stats = ref.run(spec, info)
         except Exception as exc:  # noqa: BLE001  (o modelo caiu/credencial: a conversão determinística já está pronta e segue)
@@ -84,7 +89,7 @@ class RebuildPipeline(Runner):
             raise ValueError("Não encontrei conteúdo jogável (mapas, eventos ou roteiro) nesse jogo.")
         spec["title"] = text(spec.get("title"), raw.get("title") or stem, 80)
         self._step("designer", "done", genre=genre)
-        refined = self._refine(spec, info, req.get("refine", True) is not False)
+        refined = self._refine(spec, info, req.get("refine", True) is not False, req)
         self._check()
 
         problems = S.game_problems(spec)

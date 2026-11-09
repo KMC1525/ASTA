@@ -386,6 +386,9 @@ class BrowserTests(unittest.TestCase):
 
     def test_40_canvas_missing_gguf_support_files_offer_a_download_button(self):
         self.run_script("canvas_support_ui.js")
+    def test_41_team_of_agents_in_every_section_effort_levels_and_1_4_8_12_16_agents(self):
+        self.run_script("team_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

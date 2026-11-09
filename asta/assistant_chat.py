@@ -17,6 +17,7 @@ from . import avatars as av
 from . import voice, websearch
 from .agents import prompts
 from .providers import resolve_provider
+from . import team as teamlib
 from .providers import thinking as think
 from .util import new_id, now_iso, num, text
 
@@ -242,6 +243,7 @@ class AssistantChat:
                 "reply_style": style if style in LENGTH_RULES else DEFAULT_REPLY_STYLE,
                 "auto_continue": c.get("auto_continue") is not False, "continue_rounds": int(num(c.get("continue_rounds"), 3, 0, 8)),
                 "agents": str(c.get("agents") or "off").lower() if str(c.get("agents") or "off").lower() in AGENT_MODES else "off",
+                "team": teamlib.from_config({"agents": c.get("team_agents"), "effort": c.get("effort")}, default_effort="low"),
                 "content": "sfw" if (s.get("generation") or {}).get("content") == "sfw" else "free", "all": s}
 
     # ----- montagem do histórico para o modelo
@@ -413,11 +415,15 @@ class AssistantChat:
     def _answer(self, chat, cfg, images, emit, cancelled, suggest_from: str, web: bool = False) -> None:
         provider, info = resolve_provider(cfg["all"], "generation", self.store.models_dir)
         sup = think.support(info.get("id", ""), info.get("model", ""))
-        level = cfg["thinking"] if sup["supported"] else "off"
+        team = cfg["team"]
+        # tempo de pensamento: o maior entre o ajuste antigo do Chat («Slow … Ultra») e o do esforço escolhido (Low … Omni)
+        level = max((cfg["thinking"], team.thinking), key=think.LEVELS.index) if sup["supported"] else "off"
         provider.thinking = level
+        cfg = dict(cfg, thinking=level, max_tokens=int(min(MAX_REPLY_TOKENS, cfg["max_tokens"] * team.tokens_mult)),
+                   agents=AGENT_MODES[max(AGENT_MODES.index(cfg["agents"]), 2 if team.critique else (1 if team.prof["self_check"] else 0))])   # Extra+ → ao menos Planejador; Max+ → Planejador e Revisor
         if cfg["context_tokens"] > 200000 and hasattr(provider, "long_context"):
             provider.long_context = True   # Claude: pede a janela de 1M tokens (o provedor volta ao normal se o modelo não aceitar)
-        emit({"type": "provider", **info, "thinking": {**sup, "level": cfg["thinking"] if sup["supported"] else "off"}})
+        emit({"type": "provider", **info, "thinking": {**sup, "level": cfg["thinking"] if sup["supported"] else "off"}, "team": team.public()})
         web_text, sources, query = "", [], ""
         if web:
             web_text, sources, query = self._web(chat, cfg, provider, info, emit)
@@ -438,6 +444,19 @@ class AssistantChat:
                 return
             if plan:
                 system += "\n[ANSWER PLAN — made by the team's Planner. Cover every item, in this order, and expand each with real substance; do not mention the plan itself.]\n" + plan + "\n[END OF PLAN]\n"
+        if team.multi and not info.get("demo"):   # equipe de 4/8/12/16 agentes: cada um escreve notas privadas (em paralelo) para o Redator
+            ask = messages[-6:]
+            while ask and ask[0]["role"] != "user":
+                ask = ask[1:]
+            kept, provider.thinking = provider.thinking, "off"   # as notas são curtas: o pensamento longo fica para a resposta final
+            try:
+                notes = teamlib.team_notes(provider, ask, team, cancelled=cancelled, note=lambda m: emit({"type": "notice", "message": m}))
+            finally:
+                provider.thinking = kept
+            if cancelled():
+                emit({"type": "end", "reason": "cancelled"})
+                return
+            system += teamlib.notes_block(notes)
         emit({"type": "typing"})
         stream = Visible()  # o raciocínio (<think>…</think>) de alguns modelos não aparece
         base_messages, sent_msgs = messages, messages

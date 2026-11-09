@@ -9,6 +9,7 @@ from .assistant_chat import MAX_USER_CHARS, AssistantChat, title_from
 from .jobs import HttpError
 from .providers import PRESETS, ProviderError, provider_config, resolve_provider
 from .providers import auto
+from . import team as teamlib
 from .providers import thinking as think
 from .util import text
 
@@ -146,4 +147,5 @@ class ChatRoutes:
         sup = think.support(current.get("id", ""), current.get("model", ""))
         chat_cfg = settings.get("chat") or {}
         current = dict(current, thinking={**sup, "level": think.normalize(chat_cfg.get("thinking")) if sup["supported"] else "off"})
-        req.json({"current": current, "providers": items, "web_default": bool((chat_cfg.get("web") or {}).get("default")), "thinking_levels": [[k, think.LABELS[k]] for k in think.LEVELS]})
+        req.json({"current": current, "providers": items, "web_default": bool((chat_cfg.get("web") or {}).get("default")), "thinking_levels": [[k, think.LABELS[k]] for k in think.LEVELS],
+                  "team": {"agents": teamlib.normalize_agents(chat_cfg.get("team_agents")), "effort": teamlib.normalize_effort(chat_cfg.get("effort"), "low"), "counts": list(teamlib.COUNTS), "efforts": teamlib.options()["efforts"]}})

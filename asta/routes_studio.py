@@ -13,6 +13,7 @@ from .studio import schema as S
 from .studio.autoedit import AutoEditPipeline, describe_styles
 from .studio.export import AUDIO_FORMATS, FPS, QUALITY, export_episode
 from .studio.pipeline import StudioPipeline
+from .team import request_team as _team_of
 from .util import safe_filename, text
 
 META_FIELDS = ("name", "kind", "duration_type", "target_seconds", "style", "style_custom", "aspect", "language", "motion", "voice", "music", "captions", "revisions", "premise")
@@ -201,7 +202,7 @@ class StudioRoutes:
         redo = [text(x, "", 24) for x in (b.get("redo") or [])][:120] if isinstance(b.get("redo"), list) else []
         if not prompt and not self._episode(p, eid)["prompt"] and not p["premise"] and not ids and not self._episode(p, eid)["scenes"]:
             raise HttpError(400, "Descreva o vídeo que você quer criar (ou anexe algo) para gerá-lo.")
-        req_body = {"project_id": pid, "episode_id": eid, "prompt": prompt, "attachment_ids": ids, "redo": redo, "replan": bool(b.get("replan"))}
+        req_body = {"project_id": pid, "episode_id": eid, "prompt": prompt, "attachment_ids": ids, "redo": redo, "replan": bool(b.get("replan")), "team": _team_of(b)}
 
         def work(job: Job) -> None:
             StudioPipeline(self.store, job.emit, lambda: job.cancelled).run(req_body)
@@ -222,7 +223,7 @@ class StudioRoutes:
         if running:
             raise HttpError(409, json.dumps({"job_id": running.id}))
         body = {"attachment_ids": ids, "prompt": text(b.get("prompt"), "", 4000), "style": b.get("style") or (self.store.get_settings().get("studio") or {}).get("autoedit_style"), "target_seconds": b.get("target_seconds") if b.get("target_seconds") is not None else (self.store.get_settings().get("studio") or {}).get("autoedit_target") or 0, "aspect": b.get("aspect"),
-                "bpm": b.get("bpm") or 0, "name": text(b.get("name"), "", 100), "project_id": pid, "language": text(b.get("language"), "pt-BR", 12)}
+                "bpm": b.get("bpm") or 0, "name": text(b.get("name"), "", 100), "project_id": pid, "language": text(b.get("language"), "pt-BR", 12), "team": _team_of(b)}
 
         def work(job: Job) -> None:
             AutoEditPipeline(self.store, job.emit, lambda: job.cancelled).run(body)

@@ -55,6 +55,7 @@ class GamePipeline(Runner):
         self.gen = {"temperature": gcfg.get("temperature", 0.8), "max_tokens": int(gcfg.get("max_tokens", 9000)), "content": content}
         pid = settings["active"].get("generation", "demo")
         self.provider = build_provider(settings, pid, st.models_dir)
+        self.configure_team(gcfg, req, pid)   # equipe: agentes em paralelo + esforço (settings.games / pedido)
         prompt = str(req.get("prompt") or "").strip()
         project = st.get_project(req["project_id"]) if req.get("project_id") else None
         if req.get("project_id") and (not project or project.get("kind") != "game2d"):
@@ -107,7 +108,7 @@ class GamePipeline(Runner):
 
         # ---------- 3. Revisor (+ rodadas de correção)
         review = self._review(spec, brief, prompt)
-        rounds = max(0, min(int(gcfg.get("revisions", 1)), 2))
+        rounds = self.team.revisions(int(gcfg.get("revisions", 1)))
         for r in range(rounds):
             issues = [i for i in (review.get("issues") or []) if isinstance(i, dict)]
             if review.get("approved", True) or not issues:

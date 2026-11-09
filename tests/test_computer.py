@@ -1089,7 +1089,7 @@ class SettingsTests(unittest.TestCase):
         c = normalize_config({})
         self.assertEqual((c["enabled"], c["mode"], c["max_parallel"], c["team"]), (False, "ask", 8, "full"))
         c = normalize_config({"enabled": "sim", "mode": "tudo", "max_parallel": 99, "max_steps": 1, "team": "x", "revisions": 9, "ask_for": ["read", "write", "bobagem"], "game_dirs": ["~/G", 3, ""]})
-        self.assertEqual((c["enabled"], c["mode"], c["max_parallel"], c["max_steps"], c["team"], c["revisions"]), (False, "ask", 8, 5, "full", 2))
+        self.assertEqual((c["enabled"], c["mode"], c["max_parallel"], c["max_steps"], c["team"], c["revisions"]), (False, "ask", 8, 5, "full", 3))
         self.assertEqual(c["ask_for"], ["write"])
         self.assertEqual(c["game_dirs"], ["~/G"])
         self.assertEqual(normalize_config({"max_parallel": 0})["max_parallel"], 1)

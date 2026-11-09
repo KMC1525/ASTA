@@ -40,6 +40,7 @@ class Pipeline(Runner):
         chars_cfg = settings["characters"]
         pid = settings["active"].get("generation", "demo")
         self.provider = build_provider(settings, pid, st.models_dir)
+        self.configure_team(self.gen, None, pid)   # equipe: agentes em paralelo + esforço (settings.generation / pedido)
         hw = hardware_info()
         tier = self.gen.get("quality") if self.gen.get("quality") in BUDGETS else hw["tier"]
         budget = budget_for(tier)
@@ -133,8 +134,8 @@ class Pipeline(Runner):
 
         # ---------- 6. Revisor (+ revisões)
         review = self._review(brief, world, world_chars, budget, prompt)
-        rounds = int(self.gen.get("revisions", 1))
-        for r in range(max(0, min(rounds, 3))):
+        rounds = self.team.revisions(int(self.gen.get("revisions", 1)))
+        for r in range(rounds):
             issues = [i for i in (review.get("issues") or []) if isinstance(i, dict)]
             if review.get("approved", True) or not issues:
                 break

@@ -49,6 +49,7 @@ class AvatarPipeline(Runner):
         pid = info["id"]
         if info["demo"]:
             self.warnings.append("modo Demo (sem IA): " + info["reason"])
+        self.configure_team(settings.get("avatars"), req, pid)   # equipe: agentes em paralelo + esforço (settings.avatars / pedido)
         self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "count": count_hint, "content": content})
 
         # ---------- anexos
@@ -115,9 +116,11 @@ class AvatarPipeline(Runner):
 
         # ---------- 3. Revisor (+ uma rodada de correção)
         review = self._review(cards, brief, prompt, content)
-        if not review.get("approved", True) and review.get("issues"):
+        for rnd in range(self.team.revisions(1, 3)):
+            if review.get("approved", True) or not review.get("issues"):
+                break
             fb_text = "\n".join(f"- [{i.get('avatar')}] {i.get('problem')} → {i.get('fix')}" for i in review["issues"] if isinstance(i, dict))[:3000]
-            self.emit({"type": "revision", "round": 1, "issues": len(review["issues"])})
+            self.emit({"type": "revision", "round": rnd + 1, "issues": len(review["issues"])})
             redo, _ = self._agent("designer", "avatar_designer", P.DESIGNER + "\n\nFEEDBACK TO FIX:\n" + fb_text, payload, rb.designer,
                                   tokens_mult=mult, feedback=True)
             fixed = self._finish_cards(redo, brief, content, relationship, from_images)
@@ -183,7 +186,7 @@ class AvatarPipeline(Runner):
         total = len(cards)
         self._step("prompts", "running", index=0, total=total)
         sub = AvatarPromptPipeline(self.store, lambda ev: None, self.cancelled)
-        sub.provider, sub.gen = self.provider, dict(self.gen)
+        sub.provider, sub.gen, sub.team = self.provider, dict(self.gen), self.team
         names = [c["name"] for c in cards]
         out: List[Dict[str, Any]] = []
         approved = revised = 0

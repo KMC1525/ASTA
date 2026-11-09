@@ -443,6 +443,7 @@ class AutoEditPipeline(Runner):
         self.demo = gid == "demo"
         self.provider = build_provider(settings, gid, self.store.models_dir)
         self.gen = {"temperature": 0.3, "max_tokens": 3000, "content": "free"}
+        self.configure_team(settings.get("studio"), req, gid)   # equipe: agentes em paralelo + esforço (settings.studio / pedido)
         prompt = text(req.get("prompt"), "", 4000)
         self.emit({"type": "start", "steps": ["attachments", "analyst", "director", "reviewer", "assemble"], "style": style_id, "demo": self.demo})
 
