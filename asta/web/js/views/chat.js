@@ -93,7 +93,7 @@ export default async function render(root, ctx) {
   // equipe do Chat: esforço (Low … Omni) e 1/4/8/12/16 agentes (notas privadas para a resposta); fica salvo em Configuração → Chat
   const chatCfg = state.settings.chat || {};
   const chatTeam = teamPicker({ agents: chatCfg.team_agents, effort: chatCfg.effort }, (v) => { saveSettings({ chat: { effort: v.effort, team_agents: v.agents } }).catch((e) => toast(e.message, 'err')); }, { id: 'chat-team', defaultEffort: 'low' });
-  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, webBtn], rightTools: [chatTeam.el, thinkBtn, modelBtn], onSend: (x) => (st.cu ? cuRun(x) : st.tool ? toolRun(x) : sendChat(x)) });
+  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, webBtn], rightTools: [chatTeam.el, thinkBtn, modelBtn], onSend: (x) => (st.tool ? toolRun(x) : sendChat(x)) });
 
   // ------------------------------------------------------------------ ferramentas de criação (ativadores)
   let toolCfg = null;

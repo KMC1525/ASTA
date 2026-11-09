@@ -391,7 +391,7 @@ class CodeManager:
     def create_session(self, spec: Dict[str, Any]) -> Dict[str, Any]:
         cfg = self.config()
         spec = spec if isinstance(spec, dict) else {}
-        folder_id = spec.get("folder_id") or None
+        folder_id = spec.get("folder_id") if isinstance(spec.get("folder_id"), str) and spec.get("folder_id") else None
         if folder_id and folder_id not in {f["id"] for f in self.folders()}:
             raise CodeError(404, "Pasta não encontrada.")
         sid = new_id("cs_")

@@ -11,7 +11,7 @@ from .avatars import MAX_CHAT_AVATARS, avatar_from_png, export_card_v2, import_a
 from .jobs import HttpError, Job
 from .providers import ProviderError, resolve_provider
 from .team import request_team as _team_of
-from .util import num, text
+from .util import clean_json as _clean_json, num, text
 
 IMAGE_MIME = {"png": "image/png", "jpg": "image/jpeg", "webp": "image/webp", "gif": "image/gif"}
 
@@ -103,7 +103,7 @@ class AvatarRoutes:
     def r_import(self, req) -> None:
         raw = req.body_bytes(12 * 1024 * 1024)
         try:
-            card = avatar_from_png(raw) if raw[:4] == b"\x89PNG" else import_avatar(json.loads(raw.decode("utf-8")))
+            card = avatar_from_png(raw) if raw[:4] == b"\x89PNG" else import_avatar(_clean_json(json.loads(raw.decode("utf-8"))))
         except (ValueError, UnicodeDecodeError) as exc:
             raise HttpError(400, f"Não foi possível importar: {exc}")
         saved = self.store.avatars.save(card)

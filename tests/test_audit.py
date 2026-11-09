@@ -145,6 +145,35 @@ class RouteFuzzTests(ServerCase):
         self.assertGreater(n, 150)
         self.assertEqual(bad, [])
 
+class OddInputTests(ServerCase):
+    """v0.17.43: entradas estranhas (byte nulo, «surrogate» solto, tipos trocados, sair da pasta por prefixo) nunca dão erro 500."""
+
+    def test_nul_and_lone_surrogates_in_json_are_cleaned_and_saved(self):
+        st, av = self.c.json("POST", "/api/avatars", {"name": "Lu\ud800na\u0000"})
+        self.assertEqual(st, 200, av)
+        self.assertEqual(av["name"], "Lu\ufffdna")
+        self.assertEqual(self.c.json("POST", "/api/chats", {"title": "\ud800"})[0], 200)
+        self.assertLess(self.c.json("POST", "/api/avatars", {"id": "\u0000"})[0], 500)
+        self.assertLess(self.c.json("POST", "/api/avatars/import", {"name": "\ud800"})[0], 500)
+
+    def test_nul_in_the_address_is_a_404_not_a_500(self):
+        for path in ("/index.html%00.png", "/js/main.js%00", "/play/x%00"):
+            self.assertEqual(self.c.json("GET", path)[0], 404, path)
+
+    def test_code_session_with_a_non_text_folder_id_is_a_normal_error_or_works(self):
+        for fid in ({"a": 1}, [1], 5):
+            self.assertLess(self.c.json("POST", "/api/code/sessions", {"folder_id": fid, "workspace": {"type": "new", "name": "x"}})[0], 500)
+
+    def test_static_files_are_matched_by_folder_not_by_text_prefix(self):
+        from asta.server import _under
+
+        root = Path(self.tmp) / "web"
+        (Path(self.tmp) / "web2").mkdir(parents=True)
+        root.mkdir()
+        self.assertTrue(_under((root / "a.js").resolve(), root))
+        self.assertFalse(_under((Path(self.tmp) / "web2" / "a.js").resolve(), root))   # «web2» começa com «web», mas não está dentro dele
+
+
 class PromptTests(unittest.TestCase):
     def test_agent_system_prompts_keep_their_markers_and_the_fixed_rules(self):
         from asta.agents import prompts

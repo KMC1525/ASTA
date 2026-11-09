@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.43] — 2026-11-09
+
+### Fixed — general bug sweep
+Static analysis (ruff, eslint), a sweep of ~61 thousand requests with odd inputs across every `/api` route, and a review of what went in over the last versions. Found and fixed:
+- **500 error with a null byte or a lone surrogate in text** (`"\u0000"`, `"\ud800"` in names, titles, ids, card imports): JSON allows them, the file system and UTF-8 do not, and saving failed. The server now cleans the text of every JSON body (null is dropped, a lone surrogate becomes "�").
+- **500 error (with a traceback) when asking for a static file with a null byte in the address** (`/index.html%00.png`): now a 404.
+- **Folder comparison by text prefix** for static files: a sibling folder sharing the start of the name (`web2` beside `web`) counted as "inside". The comparison is now by folder.
+- **Code:** creating a session with a non-text `folder_id` (object/list) gave a 500; and the refused "done" of v0.17.38 also tripped read-only roles (architect, researcher, reviewer) whose summary had a code snippet — it now applies only to writers, and a summary with only a code block (no files named) is accepted after 2 warnings instead of failing the task.
+- **Chat:** a dead reference to `cuRun` (left over from the Computer Use button removed in v0.17.28) is gone; the duplicate `film` icon and the duplicate "Atualizar" translation (Update/Refresh) were cleaned up.
+Result: 0 server errors on the same sweep of ~61 thousand requests. New tests in `test_audit` and `test_code_empty` (they fail without the fixes).
+
 ## [0.17.42] — 2026-11-09
 
 ### Fixed — OpenRouter: xAI rejected "input_references: must have between 0 and 3 items"

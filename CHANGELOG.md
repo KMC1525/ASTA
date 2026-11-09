@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.43] — 2026-11-09
+
+### Corrigido — varredura geral de bugs
+Busca por análise estática (ruff, eslint), varredura de ~61 mil requisições com entradas estranhas em todas as rotas `/api` e revisão do que entrou nas últimas versões. Achados e corrigidos:
+- **Erro 500 com byte nulo ou «surrogate» solto no texto** (`"\u0000"`, `"\ud800"` em nomes, títulos, ids, importação de cartões): o JSON permite, mas o sistema de arquivos e o UTF-8 não, e salvar falhava. O servidor agora limpa o texto de todo corpo JSON (nulo some, «surrogate» vira «�»).
+- **Erro 500 (com traceback) ao pedir um arquivo estático com byte nulo no endereço** (`/index.html%00.png`): agora 404.
+- **Comparação de pasta por prefixo de texto** nos arquivos estáticos: uma pasta irmã com o mesmo início do nome (`web2` ao lado de `web`) passava como «dentro». Agora a comparação é por pasta.
+- **Code:** criar sessão com `folder_id` que não é texto (objeto/lista) dava erro 500; e o «terminei» recusado da v0.17.38 também travava papéis só de leitura (arquiteto, pesquisador, revisor) cujo resumo trazia um trecho de código — agora só vale para quem escreve, e um resumo só com código em bloco (sem arquivos citados) é aceito depois de 2 avisos em vez de falhar a tarefa.
+- **Chat:** referência morta a `cuRun` (restou do botão Computer Use removido na v0.17.28) saiu; ícone `film` duplicado e tradução «Atualizar» duplicada (Update/Refresh) limpos.
+Resultado: 0 erros 500 na mesma varredura de ~61 mil requisições. Testes novos em `test_audit` e `test_code_empty` (falham sem as correções).
+
 ## [0.17.42] — 2026-11-09
 
 ### Corrigido — OpenRouter: xAI recusava «input_references: must have between 0 and 3 items»
