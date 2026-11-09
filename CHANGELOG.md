@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.38] — 2026-11-09
+
+### Corrigido — Code: «terminei» sem ter escrito nenhum arquivo na pasta escolhida
+Relato: o site foi «criado», mas a pasta escolhida (um pendrive, `…/VSCODE/Darkus`) continuava com 0 itens. O motor aceitava o «finish» de um trabalhador que citava arquivos (ou colava o código no texto da resposta) **sem ter escrito nada** no disco — o código ficava só na conversa. Agora esse «terminei» é **recusado** com a instrução de criar os arquivos com `write_file`; se o modelo insistir 3 vezes, a tarefa termina como **falhou**, dizendo a pasta do projeto, em vez de parecer pronta. Quando escreve de verdade, os arquivos vão para a pasta escolhida (testado com pasta vazia). Limite honesto: não reproduzi o seu caso com o seu modelo; se ainda não aparecer nada, a mensagem de falha agora mostra o caminho exato onde o ASTA tentou escrever.
+
 ## [0.17.37] — 2026-11-09
 
 ### Corrigido — Avatares: a barra de opções vazava da caixa

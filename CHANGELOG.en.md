@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.38] — 2026-11-09
+
+### Fixed — Code: "done" without having written any file to the chosen folder
+Report: the site was "created" but the chosen folder (a USB drive, `…/VSCODE/Darkus`) still had 0 items. The engine accepted a worker's "finish" that named files (or pasted the code into the answer text) **without having written anything** to disk — the code stayed in the conversation only. That "finish" is now **refused**, with the instruction to create the files with `write_file`; if the model insists 3 times, the task ends as **failed**, naming the project folder, instead of looking done. When it does write, files land in the chosen folder (tested with an empty folder). Honest limit: I could not reproduce your case with your model; if nothing shows up still, the failure message now shows the exact path ASTA tried to write to.
+
 ## [0.17.37] — 2026-11-09
 
 ### Fixed — Avatars: the options bar spilled out of the box

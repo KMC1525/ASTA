@@ -1,4 +1,5 @@
 """Code: pastas vazias (ou que ainda não existem) viram um projeto novo para escrever código depois; o endereço «file:///…» do gerenciador de arquivos vale."""
+import json
 import shutil
 import sys
 import unittest
@@ -66,6 +67,30 @@ class SessionTests(TeamCase):
         self.assertTrue(seen["project"]["empty"])
         self.assertEqual((dest / "main.py").read_text(), "print('oi')\n")
         self.assertIn(d["run"]["status"], ("done", "partial"))
+
+    def test_finishing_with_files_that_were_never_written_is_refused_and_the_files_get_written(self):
+        dest = self.home / "site"
+        dest.mkdir()
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Criar o site", files=["index.html"])),
+                       worker=per_step(s1=[fin("criei o index.html", files=["index.html"]),     # diz que criou, mas não escreveu nada
+                                           act("write_file", path="index.html", content="<h1>oi</h1>\n"), fin("index.html criado", files=["index.html"])]))
+        m = self.manager(llm, mode="full", agents=1)
+        s = m.create_session({"workspace": {"type": "local", "path": str(dest)}})
+        m.send(s["id"], "crie o código do meu site")
+        self.wait(m, s["id"])
+        self.assertEqual((dest / "index.html").read_text(), "<h1>oi</h1>\n")   # o arquivo foi parar na pasta escolhida
+
+    def test_a_worker_that_never_writes_ends_as_failed_with_the_folder_in_the_message(self):
+        dest = self.home / "site2"
+        dest.mkdir()
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Criar o site", files=["index.html"])), worker=per_step(s1=[fin("criei o index.html", files=["index.html"])] * 4))
+        m = self.manager(llm, mode="full", agents=1)
+        s = m.create_session({"workspace": {"type": "local", "path": str(dest)}})
+        m.send(s["id"], "crie o código do meu site")
+        d = self.wait(m, s["id"])
+        self.assertFalse((dest / "index.html").exists())
+        self.assertNotEqual(d["run"]["status"], "done")
+        self.assertIn(str(dest.resolve()), json.dumps(d["run"], ensure_ascii=False))
 
     def test_without_create_a_missing_folder_is_an_error_that_explains_the_option(self):
         m = self.manager(Scripted())
