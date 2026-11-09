@@ -15,6 +15,7 @@ o campo "extra" (JSON) de cada nó permite ajustar qualquer parâmetro específi
 from __future__ import annotations
 
 import base64
+import atexit
 import collections
 import gc
 import io
@@ -1369,6 +1370,126 @@ def _sd_reason() -> str:
     return " | ".join(l[:220] for l in lines)
 
 
+def _tensor_hint(path: Path) -> str:
+    """Para o erro: o tensor pelo qual a stable-diffusion.cpp reconhece a família do modelo e alguns nomes de tensores do arquivo (vazio se não há o que dizer)."""
+    fam = support.family_of(path.name)
+    names = gguf_info.tensor_names(path) if path.suffix.lower() == ".gguf" else None
+    if not fam or not fam.get("marker") or not names:
+        return ""
+    if any(fam["marker"] in n for n in names):
+        return ""
+    return (f"O arquivo não tem o tensor «{fam['marker']}», pelo qual ela reconhece o {fam['label']}; ele tem {len(names)} tensores, por exemplo: {', '.join(names[:4])}. "
+            f"Provavelmente não é um GGUF do {fam['label']} no formato que a biblioteca entende, ou é mais novo que ela. ")
+
+
+class _SDCrashed(ProviderError):
+    """O processo da stable-diffusion.cpp fechou de repente (falha de segmentação, falta de memória…) enquanto gerava."""
+
+
+class _SDProxy:
+    """O modelo da stable-diffusion.cpp rodando em um processo À PARTE (`sd_worker`), com a mesma interface do objeto da biblioteca (`generate_image`).
+    A biblioteca é C++ e pode derrubar o processo (falha de segmentação) ao recusar um modelo ou sem memória: assim cai só o processo dela, e o ASTA mostra o erro."""
+
+    def __init__(self, proc: Any, params: List[str]):
+        self.proc, self._params = proc, set(params)
+        self._model = type("M", (), {"model": 1})()
+        atexit.register(self.close)
+
+    @staticmethod
+    def _spawn() -> Any:
+        import subprocess
+
+        root = str(Path(__file__).resolve().parents[2])
+        env = {**os.environ, "PYTHONPATH": root + os.pathsep + os.environ.get("PYTHONPATH", "")}
+        return subprocess.Popen([sys.executable, "-m", "asta.canvas.sd_worker"], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env)   # stderr herdado: o log da biblioteca aparece no terminal
+
+    @staticmethod
+    def _call(proc: Any, msg: Dict[str, Any]) -> Tuple[Optional[Dict[str, Any]], Optional[int]]:
+        """Envia uma mensagem e lê até a resposta final, guardando as linhas de log no caminho. (resposta, None) ou (None, código de saída) se o processo caiu."""
+        import json
+
+        try:
+            proc.stdin.write((json.dumps(msg) + "\n").encode("utf-8"))
+            proc.stdin.flush()
+        except (OSError, ValueError):
+            return None, proc.wait()
+        while True:
+            line = proc.stdout.readline()
+            if not line:
+                return None, proc.wait()
+            try:
+                data = json.loads(line)
+            except ValueError:
+                continue
+            if "log" in data:
+                _SD_LOG.append((int(data["log"][0]), str(data["log"][1])))
+                continue
+            return data, None
+
+    @classmethod
+    def start(cls, kw: Dict[str, Any]) -> Tuple[Optional["_SDProxy"], Optional[int]]:
+        """Sobe o processo e carrega o modelo. (proxy, None) se carregou; (None, None) se a biblioteca recusou o modelo; (None, código) se o processo caiu."""
+        proc = cls._spawn()
+        reply, code = cls._call(proc, {"op": "load", "kw": kw})
+        if reply is not None and reply.get("ok"):
+            return cls(proc, reply.get("params") or []), None
+        try:
+            proc.kill()
+            for pipe in (proc.stdin, proc.stdout):
+                pipe.close()
+        except OSError:
+            pass
+        return None, code
+
+    def close(self) -> None:
+        try:
+            if self.proc.poll() is None:
+                self.proc.kill()
+            self.proc.wait(timeout=5)
+            for pipe in (self.proc.stdin, self.proc.stdout):
+                pipe.close()
+        except Exception:  # noqa: BLE001 — encerrar nunca pode dar erro (também roda no atexit e no __del__)
+            pass
+
+    __del__ = close
+
+    def generate_image(self, **kw: Any) -> List[Any]:
+        import json
+        import shutil
+        import tempfile
+
+        from PIL import Image  # type: ignore
+
+        tmp = tempfile.mkdtemp(prefix="asta-sd-")
+        try:
+            def as_path(img: Any, name: str) -> str:
+                f = os.path.join(tmp, name)
+                img.save(f, format="PNG")
+                return f
+
+            for key in ("init_image", "mask_image", "control_image"):
+                if kw.get(key) is not None and not isinstance(kw[key], str):
+                    kw[key] = as_path(kw[key], key + ".png")
+            if kw.get("ref_images"):
+                kw["ref_images"] = [r if isinstance(r, str) else as_path(r, f"ref{i}.png") for i, r in enumerate(kw["ref_images"])]
+            reply, code = self._call(self.proc, {"op": "gen", "kw": kw, "out": tmp})
+            if reply is None:   # o processo caiu: esquece este modelo (a próxima geração sobe outro)
+                with _LOCAL_LOCK:
+                    for k in [k for k, v in _LOCAL_CACHE.items() if v is self]:
+                        del _LOCAL_CACHE[k]
+                raise _SDCrashed(f"O processo da stable-diffusion.cpp fechou de repente durante a geração (código {code}"
+                                 + (", falha de segmentação" if code in (-11, 139) else ", provavelmente falta de memória" if code in (-9, 137) else "") + "). O ASTA continua aberto; tente uma resolução ou uma quantização menores.")
+            if not reply.get("ok"):
+                raise ValueError(reply.get("error") or "falha na geração")
+            out = []
+            for f in reply.get("files", []):
+                with open(f, "rb") as fh:
+                    out.append(Image.open(io.BytesIO(fh.read())).convert("RGB"))
+            return out
+        finally:
+            shutil.rmtree(tmp, ignore_errors=True)
+
+
 class _SDLoadError(ProviderError):
     """O modelo não carregou na stable-diffusion.cpp (a biblioteca não avisa: devolve um contexto nulo e o erro só aparece depois como «NULL pointer access»)."""
 
@@ -1412,66 +1533,46 @@ class GGUFMedia(MediaProvider):
                 kw[k] = v
         if not kw:
             kw["model_path"] = str(path)
+        isolated = isinstance(getattr(sdc, "__file__", None), str) and os.environ.get("ASTA_SD_INPROC", "") in ("", "0")   # biblioteca de verdade: roda em processo à parte (ver `_SDProxy`)
 
         def build() -> Any:
-            self._preflight(path, kw)
             _SD_LOG.clear()   # o motivo de uma falha de carga é registrado AQUI, durante a criação do modelo (antes, era apagado antes de gerar)
-            sd = sdc.StableDiffusion(**kw)
-            ctx = getattr(getattr(sd, "_model", None), "model", 1)   # a biblioteca confere `is None`, mas a carga que falha devolve um ponteiro NULO (que não é None): ela segue com um contexto vazio
-            if not ctx:
-                if any("get sd version" in t for _, t in list(_SD_LOG)):   # a versão do modelo não foi reconhecida: a stable-diffusion.cpp desta biblioteca é antiga demais para ele
-                    try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
-                        from ..util import asta_home
-
-                        (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
-                    except OSError:
-                        pass
-                    raise _SDUnsupportedModel(f"A stable-diffusion.cpp que vem na biblioteca instalada não reconhece o formato do modelo {path.name} («get sd version from file failed»): ela é mais antiga que o modelo. "
-                                              "Rode «asta update» (ou «asta libs --sd-latest»): o ASTA compila a versão mais nova da biblioteca a partir do GitHub (precisa de git, cmake e um compilador C++; a do PyPI já é a 0.4.7). Abra o ASTA de novo depois; se continuar, o modelo é mais novo que qualquer versão publicada — use outro modelo ou outra quantização." + _sd_env(sdc))
-                why = _sd_reason()
-                files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
-                raise _SDLoadError(f"O modelo {path.name} não carregou na stable-diffusion.cpp. "
-                                   + (f"Motivo informado pela biblioteca: {why}. " if why else "A biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda. ")
-                                   + (" Parece falta de memória: o modelo e o codificador de texto juntos não cabem na RAM livre; feche outros programas ou use uma quantização menor (Q3/Q2)." if re.search(r"alloc|out of memory|oom|memory", why, re.I) else "")
-                                   + f" Arquivos carregados: {files}." + _sd_env(sdc))
+            crashed: Optional[int] = None
+            if isolated:
+                sd, crashed = _SDProxy.start(kw)
+                ok = crashed is None and sd is not None
+            else:
+                sd = sdc.StableDiffusion(**kw)
+                ok = bool(getattr(getattr(sd, "_model", None), "model", 1))   # a carga que falha devolve um ponteiro NULO (não None): a biblioteca segue com um contexto vazio
+            if not ok:
+                raise self._load_error(path, kw, sdc, crashed)
             return sd
 
         return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", build)   # um modelo que não carregou nunca fica em cache
 
-    def _preflight(self, path: Path, kw: Dict[str, Any]) -> None:
-        """Antes de entregar o modelo à stable-diffusion.cpp: se o arquivo não tem o tensor pelo qual ela reconhece a família (Qwen-Image, FLUX), ela recusa o modelo e ainda derruba o
-        programa inteiro (falha de segmentação). Nesse caso a carga é testada num processo à parte; se ele cai ou recusa, o erro aparece no nó e o ASTA continua de pé."""
-        fam = support.family_of(path.name)
-        if not fam or not fam.get("marker") or str(path) not in (kw.get("diffusion_model_path"), kw.get("model_path")):
-            return
-        names = gguf_info.tensor_names(path)
-        if names is None or any(fam["marker"] in n for n in names):
-            return   # não é um GGUF legível (nada a conferir) ou tem o tensor esperado
-        import json
-        import subprocess
+    def _load_error(self, path: Path, kw: Dict[str, Any], sdc: Any, crashed: Optional[int]) -> ProviderError:
+        """O erro de um modelo que não carregou: não reconhecido (biblioteca antiga), processo que caiu (falha de segmentação) ou outro motivo do log."""
+        hint = _tensor_hint(path)
+        if any("get sd version" in t for _, t in list(_SD_LOG)):   # a versão do modelo não foi reconhecida: a stable-diffusion.cpp desta biblioteca é antiga demais para ele
+            try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
+                from ..util import asta_home
 
-        root = str(Path(__file__).resolve().parents[2])
-        env = {**os.environ, "PYTHONPATH": root + os.pathsep + os.environ.get("PYTHONPATH", "")}
-        self.ctl.note("Conferindo se a stable-diffusion.cpp reconhece este modelo…")
-        try:
-            r = subprocess.run([sys.executable, "-m", "asta.canvas.sd_probe", json.dumps(kw)], capture_output=True, timeout=1800, env=env)
-            code, err = r.returncode, (r.stderr or b"").decode("utf-8", "replace")
-        except (OSError, subprocess.SubprocessError) as exc:
-            code, err = -1, str(exc)
-        if code == 0:
-            return   # carregou no teste: a biblioteca reconhece o modelo mesmo sem o tensor esperado
-        try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
-            from ..util import asta_home
-
-            (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
-        except OSError:
-            pass
-        lines = [ln.strip() for ln in err.splitlines() if re.search(r"error|failed|version", ln, re.I)][-3:]
-        how = ("a biblioteca recusou o modelo" if code == 3 else f"o programa de teste fechou de repente (código {code}) — era a falha de segmentação que derrubaria o ASTA")
-        raise _SDUnsupportedModel(
-            f"O arquivo {path.name} não tem o tensor que a stable-diffusion.cpp usa para reconhecer o {fam['label']} («{fam['marker']}»), e no teste de carga {how}"
-            + (f" ({' | '.join(lines)[:300]})" if lines else "") + f". O arquivo tem {len(names)} tensores, por exemplo: {', '.join(names[:4])}. "
-            "Ele provavelmente não é um GGUF do " + fam["label"] + " no formato que a biblioteca entende, ou é mais novo que ela: baixe outro arquivo/quantização desse modelo, ou rode «asta update» (ou «asta libs --sd-latest») para tentar a biblioteca mais nova." + _sd_env(_local_import("stable_diffusion_cpp", extra="local")[0]))
+                (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
+            except OSError:
+                pass
+            return _SDUnsupportedModel(
+                f"A stable-diffusion.cpp que vem na biblioteca instalada não reconhece o formato do modelo {path.name} («get sd version from file failed»)"
+                + (f" e fechou de repente (código {crashed}, falha de segmentação) — por isso o ASTA a roda em outro processo e continua aberto" if crashed else "") + ". " + hint
+                + "Rode «asta update» (ou «asta libs --sd-latest»): o ASTA compila a versão mais nova da biblioteca a partir do GitHub (precisa de git, cmake e um compilador C++; a do PyPI já é a 0.4.7). "
+                "Abra o ASTA de novo depois; se continuar, o modelo é mais novo que qualquer versão publicada — use outro modelo ou outra quantização." + _sd_env(sdc))
+        why = _sd_reason()
+        files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
+        return _SDLoadError(
+            f"O modelo {path.name} não carregou na stable-diffusion.cpp"
+            + (f" (o processo dela fechou de repente: código {crashed})" if crashed else "") + ". "
+            + (f"Motivo informado pela biblioteca: {why}. " if why else "A biblioteca não registrou nenhum motivo. ")
+            + ("Parece falta de memória: o modelo e o codificador de texto juntos não cabem na RAM livre; feche outros programas ou use uma quantização menor (Q3/Q2). " if re.search(r"alloc|out of memory|oom|memory", why, re.I) or crashed in (-9, 137) else "")
+            + f"Arquivos carregados: {files}. " + hint + _sd_env(sdc))
 
     def _auto_load(self, path: Path) -> Dict[str, Any]:
         """Para um GGUF de família conhecida (Qwen-Image, FLUX…, ver `support.FAMILIES`), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
@@ -1521,7 +1622,7 @@ class GGUFMedia(MediaProvider):
 
             gen_fn = getattr(sd, "generate_image", None) or getattr(sd, "txt2img", None)
             try:
-                params = set(inspect.signature(gen_fn).parameters) if gen_fn else set()
+                params = set(getattr(sd, "_params", None) or (inspect.signature(gen_fn).parameters if gen_fn else ()))   # no processo à parte, os parâmetros vêm da carga
             except (TypeError, ValueError):
                 params = set()
             w, h = _size_like(pil[0], w, h, 16)

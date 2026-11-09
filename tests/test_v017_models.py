@@ -204,39 +204,119 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertIsNone(gguf_info.tensor_names(self.img / "nao.gguf"))
         self.assertIsNone(gguf_info.tensor_names(self.img / "nao-existe.gguf"))
 
-    def test_a_qwen_file_without_the_expected_tensor_is_tested_in_a_separate_process(self):
+    FAKE_LIB = '''
+import ctypes, os
+from types import SimpleNamespace
+sd_log_callback = ctypes.CFUNCTYPE(None, ctypes.c_int, ctypes.c_char_p, ctypes.c_void_p)
+_cb = None
+def sd_set_log_callback(f, d):
+    global _cb
+    _cb = f
+def _log(level, text):
+    if _cb:
+        _cb(level, text.encode(), None)
+def sd_get_system_info():
+    return b"SSE3 = 1"
+class StableDiffusion:
+    def __init__(self, **kw):
+        mode = os.environ.get("FAKE_SD_MODE", "ok")
+        _log(1, "loading diffusion model")
+        if mode == "crash":
+            _log(3, "get sd version from file failed: ''")
+            ctypes.string_at(0)   # falha de segmentação de verdade
+        if mode == "refuse":
+            _log(3, "ggml_backend_cpu_buffer_type_alloc_buffer: failed to allocate buffer of size 12884901888")
+            self._model = SimpleNamespace(model=None)
+            return
+        self._model = SimpleNamespace(model=1)
+    def generate_image(self, prompt="", width=64, height=64, seed=0, init_image=None, ref_images=None, strength=0.75, **kw):
+        if os.environ.get("FAKE_SD_MODE") == "gencrash":
+            ctypes.string_at(0)
+        from PIL import Image
+        if init_image is not None:
+            assert isinstance(init_image, str) and os.path.isfile(init_image)   # no processo à parte a imagem chega como arquivo
+        return [Image.new("RGB", (width, height), (10, 20, 30))]
+'''
+
+    def real_worker(self, mode):
+        """Instala uma «stable_diffusion_cpp» de mentira, mas de ARQUIVO (como a de verdade): o ASTA então roda o modelo no processo à parte, de verdade."""
+        import importlib
+
+        from asta.canvas import media as M
+
+        d = Path(tempfile.mkdtemp())
+        (d / "stable_diffusion_cpp").mkdir()
+        (d / "stable_diffusion_cpp" / "__init__.py").write_text(self.FAKE_LIB)
+        sys.path.insert(0, str(d))
+        old = sys.modules.pop("stable_diffusion_cpp", None)
+        self.addCleanup(lambda: (sys.path.remove(str(d)), sys.modules.pop("stable_diffusion_cpp", None), old and sys.modules.__setitem__("stable_diffusion_cpp", old), M._LOCAL_CACHE.clear(), setattr(M, "_SD_CB", None)))
+        env = mock.patch.dict(os.environ, {"FAKE_SD_MODE": mode, "PYTHONPATH": str(d), "ASTA_HOME": str(d)})
+        env.start()
+        self.addCleanup(env.stop)
+        importlib.import_module("stable_diffusion_cpp")
+        M._LOCAL_CACHE.clear()
+        return d
+
+    def test_the_model_runs_in_a_separate_process_and_stays_loaded_between_images(self):
+        from asta.canvas import media as M
+
+        self.real_worker("ok")
+        prov = self.prov()
+        out = prov.image("x", size="512x512")
+        self.assertEqual(out[0].mime, "image/png")
+        proxy = next(iter(M._LOCAL_CACHE.values()))
+        self.assertIsInstance(proxy, M._SDProxy)
+        prov.image("y", size="512x512")
+        self.assertIs(next(iter(M._LOCAL_CACHE.values())), proxy)   # o mesmo processo: não recarrega o modelo
+        proxy.close()
+
+    def test_a_segfault_while_loading_does_not_take_asta_down(self):
         from asta.canvas import media as M
         from asta.providers.base import ProviderError
 
-        M._SD_LITE.clear()
-        M._LOCAL_CACHE.clear()
-        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
-        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
-        write_gguf(self.img / "qwen-image-2.1-Q4_K_M.gguf", ["outro.layout.0.weight", "blk.0.attn.weight"])
-        mod, loads, runs = self.fake()
-        home = Path(tempfile.mkdtemp())
-        # o teste de carga cai (falha de segmentação = -11): o ASTA NÃO chama a biblioteca no próprio processo
-        with mock.patch.dict(os.environ, {"ASTA_HOME": str(home)}), mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), \
-                mock.patch("subprocess.run", return_value=mock.Mock(returncode=-11, stderr=b"stable-diffusion.cpp:299 - get sd version from file failed: ''\n")) as sp, \
-                self.assertRaises(ProviderError) as cm:
+        d = self.real_worker("crash")
+        with self.assertRaises(ProviderError) as cm:
             self.prov().image("x", size="512x512")
-        self.assertEqual(loads, [])
-        self.assertEqual(sp.call_count, 1)
         msg = str(cm.exception)
-        self.assertIn("transformer_blocks.0.img_mod.1.weight", msg)
-        self.assertIn("-11", msg)
-        self.assertIn("outro.layout.0.weight", msg)
-        self.assertTrue((home / "sd_needs_newer").is_file())
-        # se o teste carrega, segue normalmente
-        M._LOCAL_CACHE.clear()
-        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), mock.patch("subprocess.run", return_value=mock.Mock(returncode=0, stderr=b"")):
-            out = self.prov().image("x", size="512x512")
-        self.assertEqual(len(out), 1)
-        # com o tensor esperado nem testa em separado
-        write_gguf(self.img / "qwen-image-2.1-Q4_K_M.gguf", ["transformer_blocks.0.img_mod.1.weight"])
-        M._LOCAL_CACHE.clear()
-        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), mock.patch("subprocess.run", side_effect=AssertionError("não deveria testar em separado")):
+        self.assertIn("não reconhece o formato", msg)
+        self.assertIn("falha de segmentação", msg)           # o processo dela caiu (-11), o do teste (o ASTA) continua aqui
+        self.assertEqual(M._LOCAL_CACHE, {})
+        self.assertTrue((d / "sd_needs_newer").is_file())
+
+    def test_a_refused_model_reports_the_log_of_the_separate_process(self):
+        from asta.providers.base import ProviderError
+
+        self.real_worker("refuse")
+        with self.assertRaises(ProviderError) as cm:
             self.prov().image("x", size="512x512")
+        self.assertIn("failed to allocate buffer", str(cm.exception))
+        self.assertIn("falta de memória", str(cm.exception))
+
+    def test_a_segfault_while_generating_is_reported_and_the_next_image_reloads(self):
+        from asta.canvas import media as M
+        from asta.providers.base import ProviderError
+
+        self.real_worker("gencrash")
+        prov = self.prov()
+        with self.assertRaises(ProviderError) as cm:
+            prov.image("x", size="512x512")
+        self.assertIn("fechou de repente", str(cm.exception))
+        self.assertEqual(M._LOCAL_CACHE, {})
+        os.environ["FAKE_SD_MODE"] = "ok"                      # o worker novo herda o ambiente: agora funciona
+        out = prov.image("x", size="512x512")
+        self.assertEqual(len(out), 1)
+        next(iter(M._LOCAL_CACHE.values())).close()
+
+    def test_image_to_image_sends_the_reference_as_a_file_to_the_separate_process(self):
+        from asta.canvas import media as M
+        from tests.test_canvas import PNG
+
+        self.real_worker("ok")
+        out = self.prov().image("x", size="512x512", refs=[(PNG, "image/png")])
+        self.assertEqual(len(out), 1)
+        proxy = next(iter(M._LOCAL_CACHE.values()))
+        self.assertIn("init_image", proxy._params)             # os parâmetros aceitos vêm da biblioteca, lidos na carga
+        proxy.close()
 
     def test_the_vae_of_flux_and_z_image_is_never_used_for_qwen_image(self):
         from asta.providers.base import ProviderError

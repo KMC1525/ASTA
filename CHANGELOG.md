@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.16] — 2026-11-09
+
+### Corrigido — o ASTA fechava («Falha de segmentação») ao gerar imagem com um modelo GGUF
+- A stable-diffusion.cpp é código C++: ao recusar um modelo que não reconhece (`get sd version from file failed`) ou ao faltar memória, ela **derruba o processo inteiro** — e o Python não consegue interceptar isso. Conferir o arquivo antes (v0.17.15) só cobria um caso.
+- Agora o modelo roda **sempre em um processo à parte** (`asta/canvas/sd_worker.py`), que fica carregado entre uma imagem e outra (sem recarregar a cada vez) e some junto com o modelo quando você troca de modelo ou o ASTA descarrega a memória. Se a biblioteca cair, cai só esse processo: o nó mostra o erro (modelo não reconhecido, falta de memória, ou «o processo fechou de repente (código -11)»), com o log da biblioteca e, para Qwen-Image/FLUX, os nomes de tensores do arquivo; a próxima geração sobe outro processo. O ASTA continua aberto.
+- Imagem → imagem e edição (v0.17.10) funcionam igual: as referências seguem como arquivos para o processo. `ASTA_SD_INPROC=1` volta ao modo antigo, no mesmo processo.
+- Versão 0.17.16 (o núcleo Rust não mudou).
+
 ## [0.17.15] — 2026-11-09
 
 ### Corrigido — o ASTA fechava («Falha de segmentação») ao gerar com um GGUF que a stable-diffusion.cpp não reconhece

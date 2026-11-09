@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.16] — 2026-11-09
+
+### Fixed — ASTA closed («Segmentation fault») when generating an image with a GGUF model
+- stable-diffusion.cpp is C++ code: when it rejects a model it does not recognize (`get sd version from file failed`) or runs out of memory, it **takes the whole process down** — and Python cannot intercept that. Checking the file beforehand (v0.17.15) only covered one case.
+- The model now **always runs in a separate process** (`asta/canvas/sd_worker.py`), which stays loaded between images (no reload each time) and goes away with the model when you switch models or ASTA frees memory. If the library crashes, only that process dies: the node shows the error (model not recognized, out of memory, or «the process closed suddenly (code -11)»), with the library's log and, for Qwen-Image/FLUX, the file's tensor names; the next generation starts another process. ASTA stays open.
+- Image → image and editing (v0.17.10) work the same: references travel as files to the process. `ASTA_SD_INPROC=1` goes back to the old in-process mode.
+- Version 0.17.16 (the Rust core did not change).
+
 ## [0.17.15] — 2026-11-09
 
 ### Fixed — ASTA closed («Segmentation fault») when generating with a GGUF that stable-diffusion.cpp does not recognize
