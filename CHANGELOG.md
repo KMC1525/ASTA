@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.32] — 2026-11-09
+
+### Melhorado — OpenRouter no Canvas: edição de imagens, transcrição e modelos pelas modalidades
+- **Imagens:** geração como antes pela rota `/images`; se o servidor não a tem (404/405/501), cai no **chat com `modalities` e `image_config`** (proporção e tamanho 1K/2K/4K pelo lado maior pedido) e lembra disso. Modelos que só geram imagem ou não conhecem `image_config` ganham uma segunda tentativa mais simples. **Edição:** o nó Imagem agora aceita **até 4 imagens de referência** (as imagens seguem como partes `image_url` do chat). Se o modelo não devolve imagem, o erro mostra o que ele respondeu e manda escolher um modelo com saída de imagem.
+- **Transcrição (novo):** o OpenRouter agora serve ao nó Transcrever (e ao Studio) por um modelo de chat que ouve áudio (`input_audio`; padrão `google/gemini-2.5-flash`; `temperature` 0, pedido de transcrição literal, idioma opcional). WAV, MP3, M4A, OGG, FLAC, AAC e AIFF seguem direto; os demais (WebM…) viram MP3 pelo ffmpeg.
+- **Modelos:** «Carregar modelos» lê as modalidades declaradas pelo OpenRouter: imagem = saída de imagem; voz = saída de áudio (mais as sugestões de TTS); transcrição = entrada de áudio com saída de texto; vídeo = `/videos/models`. Sem som/música (o OpenRouter não tem rota para isso).
+- **Erros:** 402 vira «sem créditos» com o endereço para recarregar; erros de provedor devolvidos com status 200 aparecem com a mensagem do provedor.
+- **Limites honestos:** a documentação do OpenRouter **não estava acessível** no ambiente de build (rede bloqueada): a integração segue a API como a conhecemos e o que não pôde ser confirmado tem caminho alternativo (rota `/images` ou chat; transcrição por chat). Testada só contra um servidor simulado (`tests/test_openrouter_media.py`), **não contra o serviço real** nem com créditos. O núcleo Rust não mudou.
+- Versão 0.17.32.
+
 ## [0.17.31] — 2026-11-09
 
 ### Adicionado — mais modelos da Unsloth: FLUX.2 dev, vozes Orpheus e CSM, Whisper

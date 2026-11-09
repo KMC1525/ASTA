@@ -30,7 +30,7 @@ import threading
 import time
 import wave
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Set, Tuple
 
 from .. import native as _native
 from .. import perf
@@ -595,26 +595,128 @@ class GoogleMedia(MediaProvider):
         return f"conectado ({len(res.get('models', []))}+ modelos)"
 
 
+def _image_size_tier(size: str) -> str:
+    """O «image_size» do OpenRouter (1K/2K/4K) que corresponde ao lado maior pedido."""
+    w, h = parse_wh(size)
+    side = max(w, h)
+    return "1K" if side <= 1280 else "2K" if side <= 2560 else "4K"
+
+
+def _data_uri(data: bytes, mime: str) -> str:
+    return f"data:{mime or 'image/png'};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+_DATA_URI = re.compile(r"data:(image/[\w.+-]+);base64,([A-Za-z0-9+/=\s]+)")
+
+
+def _openrouter_images(res: Any) -> List[Tuple[Optional[str], str]]:
+    """As imagens de uma resposta de chat do OpenRouter: `message.images[].image_url.url`, partes `image_url` do conteúdo ou data URIs soltas no texto → [(mime|None, data URI ou URL)]."""
+    out: List[Tuple[Optional[str], str]] = []
+    for ch in (res.get("choices") if isinstance(res, dict) else None) or []:
+        msg = (ch or {}).get("message") or {}
+        parts = list(msg.get("images") or [])
+        if isinstance(msg.get("content"), list):
+            parts += [p for p in msg["content"] if isinstance(p, dict) and p.get("type") in ("image_url", "output_image", "image")]
+        for p in parts:
+            u = p.get("image_url") if isinstance(p, dict) else None
+            url = u.get("url") if isinstance(u, dict) else (u if isinstance(u, str) else (p.get("url") if isinstance(p, dict) else None))
+            if isinstance(url, str) and url:
+                out.append((None, url))
+        if not out and isinstance(msg.get("content"), str):
+            out += [(m.group(1), m.group(0)) for m in _DATA_URI.finditer(msg["content"])]
+    return out
+
+
+_OR_AUDIO_FORMATS = {"wav": "wav", "mp3": "mp3", "mpeg": "mp3", "aiff": "aiff", "aac": "aac", "ogg": "ogg", "flac": "flac", "m4a": "m4a", "mp4": "m4a", "x-wav": "wav", "wave": "wav"}
+
+
 class OpenRouterMedia(MediaProvider):
-    """OpenRouter: imagens (POST /images), vídeos (POST /videos, assíncrono: envia, consulta e baixa) e voz (POST /audio/speech, formato da OpenAI) com a MESMA chave do OpenRouter.
-    Serve ao Studio e ao Canvas. Os modelos disponíveis mudam sempre: «Carregar modelos» lista os atuais."""
+    """OpenRouter com a MESMA chave do chat: **imagens** (geração e edição com até 4 referências), **vídeos** (POST /videos, assíncrono: envia, consulta e baixa), **vozes** (POST /audio/speech)
+    e **transcrição** (modelos de chat que ouvem áudio). Serve ao Studio e ao Canvas. Os modelos mudam sempre: «Carregar modelos» lista os atuais de cada tipo, pelas modalidades que o OpenRouter
+    declara (`architecture.input_modalities`/`output_modalities`).
+
+    Imagens: tenta a rota própria `/images`; se o servidor não a tem (404/405), usa o chat com `modalities` (`image_config`: proporção e 1K/2K/4K), e lembra disso. Com referências, vai direto pelo chat
+    (as imagens seguem como partes `image_url` da mensagem)."""
 
     id, label = "openrouter", "OpenRouter"
-    caps = ("image", "video", "voice")
-    supports_refs = False
+    caps = ("image", "video", "voice", "stt")
+    supports_refs = True
+    #: servidores (base) em que a rota `/images` não existe: a imagem vai direto pelo chat
+    _no_images: Set[str] = set()
+
+    def max_refs(self, model: str = "") -> int:
+        return 4
 
     def _h(self) -> Dict[str, str]:
         self.need_key()
-        return {"Authorization": f"Bearer {self.key}", "X-Title": "ASTA"}
+        return {"Authorization": f"Bearer {self.key}", "X-Title": "ASTA", "HTTP-Referer": "https://github.com/KMC1525/ASTA"}
+
+    def _chat(self, body: Dict[str, Any], timeout: float = 300) -> Dict[str, Any]:
+        try:
+            res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/chat/completions", body, self._h(), timeout=timeout))
+        except ProviderError as exc:
+            if exc.status == 402:
+                raise ProviderError("OpenRouter: sem créditos para esta chamada. Adicione créditos em openrouter.ai/credits ou escolha um modelo mais barato.", status=402) from None
+            raise
+        if isinstance(res, dict) and isinstance(res.get("error"), dict):   # o OpenRouter devolve erros de provedor com status 200
+            raise ProviderError(f"{self.label}: {res['error'].get('message') or res['error']}")
+        return res if isinstance(res, dict) else {}
+
+    def _image_via_chat(self, prompt: str, size: str, count: int, negative: str, refs: Sequence[Ref], model: str, extra: Optional[Dict[str, Any]]) -> List[Media]:
+        """Geração/edição pelo chat: `modalities` + `image_config`; as referências vão como `image_url` (data URI) antes do texto."""
+        text_part = prompt + (f"\n\nEvite: {negative}" if negative else "")
+        content: Any = text_part
+        if refs:
+            content = [{"type": "text", "text": text_part}] + [{"type": "image_url", "image_url": {"url": _data_uri(d, m)}} for d, m in list(refs)[:4]]
+        body: Dict[str, Any] = {"model": model, "messages": [{"role": "user", "content": content}], "modalities": ["image", "text"],
+                                "image_config": {"aspect_ratio": aspect_of(size), "image_size": _image_size_tier(size)}}
+        body.update(extra or {})
+        out: List[Media] = []
+        for _ in range(max(1, count)):
+            try:
+                res = self._chat(body)
+            except ProviderError as exc:
+                msg = str(exc).lower()
+                if exc.status in (400, 404, 422) and ("modalit" in msg or "image_config" in msg or "image_size" in msg):   # o modelo só gera imagem (ou não conhece a configuração): tenta de novo mais simples
+                    self.ctl.note("O modelo não aceitou estas opções de imagem: tentando de novo só com a proporção…")
+                    body["modalities"] = ["image"]
+                    body["image_config"] = {"aspect_ratio": aspect_of(size)}
+                    res = self._chat(body)
+                else:
+                    raise
+            got = 0
+            for mime, url in _openrouter_images(res):
+                m = _DATA_URI.match(url) if url.startswith("data:") else None
+                if m:
+                    out.append(expect_media(base64.b64decode(re.sub(r"\s", "", m.group(2))), m.group(1), "image", self.label))
+                    got += 1
+                elif url.startswith("http"):
+                    data, mt = http.get_bytes(url, self._h(), timeout=300)
+                    out.append(expect_media(data, mt, "image", self.label))
+                    got += 1
+            if not got:
+                txt = str((((res.get("choices") or [{}])[0] or {}).get("message") or {}).get("content") or "")[:200].strip()
+                raise ProviderError(f"{self.label}: o modelo {model} não devolveu imagem" + (f" (respondeu: «{txt}»)" if txt else "") + ". Escolha um modelo com saída de imagem («Carregar modelos»).")
+            if len(out) >= count:
+                break
+        return out[:max(1, count)]
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
         h = self._h()
         model = self.model_for("image", model) or "google/gemini-2.5-flash-image"
+        if refs or self.base in self._no_images:
+            return self._image_via_chat(prompt, size, count, negative, refs, model, extra)
         body: Dict[str, Any] = {"model": model, "prompt": prompt + (f"\n\nEvite: {negative}" if negative else ""), "aspect_ratio": aspect_of(size)}
         body.update(extra or {})
         out: List[Media] = []
         for _ in range(max(1, count)):
-            res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=300))
+            try:
+                res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=300))
+            except ProviderError as exc:
+                if exc.status in (404, 405, 501) and not out:   # sem a rota própria de imagens: o chat com `modalities` é o caminho
+                    OpenRouterMedia._no_images.add(self.base)
+                    return self._image_via_chat(prompt, size, count, negative, refs, model, extra)
+                raise
             items = (res.get("data") if isinstance(res, dict) else None) or []
             got = 0
             for it in items:
@@ -678,15 +780,57 @@ class OpenRouterMedia(MediaProvider):
         data, mime = _retry(self.ctl, lambda: http.post_bytes(f"{self.base}/audio/speech", body, h, timeout=300))
         return expect_media(data, mime or "audio/mpeg", "audio", self.label)
 
+    def transcribe(self, data, filename, mime, *, language="", model=""):
+        """Transcrição por um modelo de chat que ouve áudio (`input_audio` em base64): pede a fala palavra por palavra, sem comentários. Formatos fora da lista viram MP3 pelo ffmpeg."""
+        h = self._h()
+        model = self.model_for("stt", model) or "google/gemini-2.5-flash"
+        ext = (filename.rsplit(".", 1)[-1] if "." in (filename or "") else "").lower() or (mime or "").split("/")[-1].lower()
+        fmt = _OR_AUDIO_FORMATS.get(ext) or _OR_AUDIO_FORMATS.get((mime or "").split("/")[-1].lower())
+        if not fmt:
+            ff = proc.ffmpeg_path()
+            if not ff:
+                raise ProviderError(f"OpenRouter: o formato de áudio «{ext or mime}» não é aceito e não há ffmpeg para converter em MP3. Envie WAV, MP3, M4A, OGG ou FLAC.")
+            with tempfile.TemporaryDirectory() as tmp:
+                src, dst = Path(tmp) / ("in." + (ext or "bin")), Path(tmp) / "out.mp3"
+                src.write_bytes(data)
+                r = subprocess.run([ff, "-y", "-i", str(src), "-vn", "-ac", "1", "-ar", "16000", "-b:a", "64k", str(dst)], capture_output=True, timeout=300)
+                if r.returncode != 0 or not dst.is_file():
+                    raise ProviderError("OpenRouter: não consegui converter o áudio para MP3 (o arquivo é um áudio válido?).")
+                data, fmt = dst.read_bytes(), "mp3"
+        lang = f" O idioma da fala é «{language.split('-')[0]}»." if language and language != "auto" else ""
+        body = {"model": model, "temperature": 0, "messages": [{"role": "user", "content": [
+            {"type": "text", "text": "Transcreva a fala deste áudio palavra por palavra, no idioma original, sem traduzir, sem resumir e sem comentários." + lang + " Responda só com a transcrição."},
+            {"type": "input_audio", "input_audio": {"data": base64.b64encode(data).decode("ascii"), "format": fmt}}]}]}
+        res = self._chat(body, timeout=600)
+        msg = (((res.get("choices") or [{}])[0] or {}).get("message") or {})
+        content = msg.get("content")
+        txt = "".join(p.get("text", "") for p in content if isinstance(p, dict)) if isinstance(content, list) else str(content or "")
+        txt = txt.strip()
+        if not txt:
+            raise ProviderError(f"OpenRouter: o modelo {model} não devolveu texto. Escolha um modelo que aceite áudio de entrada («Carregar modelos»).")
+        return txt
+
     def list_models(self, cap: str) -> List[str]:
+        """Modelos de cada tipo pelas modalidades declaradas: imagem = saída de imagem; voz = saída de áudio; transcrição = entrada de áudio com saída de texto; vídeo = `/videos/models`."""
         self.need_key()
         if cap == "video":
             res = http.get_json(f"{self.base}/videos/models", self._h(), timeout=30)
             return sorted({m.get("id") for m in (res.get("data") or []) if isinstance(m, dict) and m.get("id")})
-        if cap == "image":
-            res = http.get_json(f"{self.base}/models?output_modalities=image", self._h(), timeout=30)
-            return sorted({m.get("id") for m in (res.get("data") or []) if isinstance(m, dict) and m.get("id")})
-        return list(MEDIA_PRESETS["openrouter"]["suggest"].get(cap, []))
+        if cap not in ("image", "voice", "stt"):
+            return []   # o OpenRouter não tem som/música: nada a listar
+        res = http.get_json(f"{self.base}/models" + ("?output_modalities=image" if cap == "image" else ""), self._h(), timeout=30)
+        want_in, want_out = {"image": (None, "image"), "voice": (None, "audio"), "stt": ("audio", "text")}[cap]
+        ids = set()
+        for m in (res.get("data") or []) if isinstance(res, dict) else []:
+            if not isinstance(m, dict) or not m.get("id"):
+                continue
+            arch = m.get("architecture") if isinstance(m.get("architecture"), dict) else {}
+            ins, outs = set(arch.get("input_modalities") or []), set(arch.get("output_modalities") or [])
+            if cap == "image" and not arch:
+                ids.add(m["id"])   # a resposta já veio filtrada pelo servidor (sem detalhes de arquitetura)
+            elif (want_in is None or want_in in ins) and (want_out is None or want_out in outs):
+                ids.add(m["id"])
+        return sorted(ids | (set(MEDIA_PRESETS["openrouter"]["suggest"].get(cap, [])) if cap in ("voice",) else set()))
 
     def test(self) -> str:
         res = http.get_json(f"{self.base}/auth/key", self._h(), timeout=30)
@@ -2011,10 +2155,11 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "hint": 'Vozes realistas (no nó Voz use o nome ou o ID da voz), efeitos sonoros e música (experimental).',
     },
     "openrouter": {
-        "label": "OpenRouter", "kind": "openrouter", "caps": ["image", "video", "voice"], "base_url": "https://openrouter.ai/api/v1", "needs_key": True,
-        "docs": "https://openrouter.ai/keys", "models": {"image": "google/gemini-2.5-flash-image", "video": "google/veo-3.1", "voice": "openai/gpt-4o-mini-tts"},
-        "suggest": {"image": ["google/gemini-2.5-flash-image", "openai/gpt-image-1"], "video": ["google/veo-3.1"], "voice": ["openai/gpt-4o-mini-tts", "openai/tts-1"]},
-        "hint": "Imagens, vídeos e vozes com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo.",
+        "label": "OpenRouter", "kind": "openrouter", "caps": ["image", "video", "voice", "stt"], "base_url": "https://openrouter.ai/api/v1", "needs_key": True,
+        "docs": "https://openrouter.ai/keys", "models": {"image": "google/gemini-2.5-flash-image", "video": "google/veo-3.1", "voice": "openai/gpt-4o-mini-tts", "stt": "google/gemini-2.5-flash"},
+        "suggest": {"image": ["google/gemini-2.5-flash-image", "openai/gpt-image-1"], "video": ["google/veo-3.1"], "voice": ["openai/gpt-4o-mini-tts", "openai/tts-1"],
+                    "stt": ["google/gemini-2.5-flash", "google/gemini-2.5-flash-lite", "openai/gpt-4o-audio-preview"]},
+        "hint": "Imagens (geração e edição com até 4 referências), vídeos, vozes e transcrição com a mesma chave (ou login) do OpenRouter, a mesma do chat. Use «Carregar modelos» para ver os modelos atuais de cada tipo (as modalidades vêm do próprio OpenRouter).",
     },
     "google": {
         "label": "Google (Gemini / Veo)", "kind": "google", "caps": ["image", "video"], "base_url": "https://generativelanguage.googleapis.com/v1beta", "needs_key": True,

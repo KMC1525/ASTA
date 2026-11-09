@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.32] — 2026-11-09
+
+### Improved — OpenRouter in the Canvas: image editing, transcription and models by modality
+- **Images:** generation as before through the `/images` route; if the server does not have it (404/405/501), it falls back to **chat with `modalities` and `image_config`** (aspect ratio and 1K/2K/4K size from the requested long side) and remembers that. Models that only make images or do not know `image_config` get a simpler second try. **Editing:** the Image node now accepts **up to 4 reference images** (sent as `image_url` parts of the chat). If the model returns no image, the error shows what it answered and tells you to pick a model with image output.
+- **Transcription (new):** OpenRouter now serves the Transcribe node (and Studio) through a chat model that hears audio (`input_audio`; default `google/gemini-2.5-flash`; `temperature` 0, a verbatim-transcription prompt, optional language). WAV, MP3, M4A, OGG, FLAC, AAC and AIFF go straight; others (WebM…) become MP3 through ffmpeg.
+- **Models:** "Load models" reads the modalities OpenRouter declares: image = image output; voice = audio output (plus the TTS suggestions); transcription = audio input with text output; video = `/videos/models`. No sound/music (OpenRouter has no route for it).
+- **Errors:** 402 becomes "no credits" with the address to top up; provider errors returned with status 200 show the provider's message.
+- **Honest limits:** the OpenRouter documentation was **not reachable** from the build environment (network blocked): the integration follows the API as we know it, and what could not be confirmed has a fallback path (`/images` route or chat; transcription through chat). Tested only against a simulated server (`tests/test_openrouter_media.py`), **not against the real service** nor with credits. The Rust core did not change.
+- Version 0.17.32.
+
 ## [0.17.31] — 2026-11-09
 
 ### Added — more Unsloth models: FLUX.2 dev, Orpheus and CSM voices, Whisper
