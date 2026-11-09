@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.25] — 2026-11-09
+
+### Fixed — Code: hitting the action limit threw away the work already done and skipped the rest
+In a «Create the “vibe coder” section on the portfolio» session (Medium effort: 24 actions per agent), the Coder edited `index.html` and `style.css` and hit the limit; the task became **«Failed»** and everything that depended on it — tests, branch cleanup, publishing and documentation — was **skipped**, as if nothing had been done.
+- **One-time extension:** if the worker reaches the limit but is making progress (it already changed files and its last actions worked), it gets **more actions** (a third of the limit, at least 6) to finish what is missing, once.
+- **Last action warned at every level:** the «last action: finish now» message used to exist only at the levels with self-check.
+- **«Incomplete» instead of «Failed»:** if the limit still runs out with work done, the task is **incomplete** (not failed): the summary says what is already in the files, the next steps (tests, review) run **on what exists**, the run ends «Partial» (never «Done»), the report lists «Incomplete: …», the plan screen shows «Incomplete (action limit)» with a warning icon, and the «Not published» message mentions it. With no change made, it is still «Failed».
+- **Fix round:** with an incomplete task and fix rounds in the effort level (High or above), the fixer gets the «Unfinished tasks» list to finish exactly what is missing.
+- Version 0.17.25 (the Rust core did not change).
+
 ## [0.17.24] — 2026-11-09
 
 ### Added — Code: «ASTA as a project co-author» option (and the git identity is no longer overridden)

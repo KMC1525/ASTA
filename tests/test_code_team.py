@@ -256,6 +256,84 @@ class TeamTests(TeamCase):
         self.assertEqual(run["status"], "partial")
         self.assertIn("Não terminou", run["summary"] + run["plan"]["steps"][0]["summary"] + "Não terminou")
 
+    def test_a_worker_that_hits_the_action_limit_after_doing_work_is_incomplete_not_failed(self):
+        """O limite de ações com trabalho já feito não pode jogar o trabalho fora nem pular tudo o que dependia da tarefa (testes, revisão, documentação)."""
+        calls = {"n": 0}
+
+        def worker(payload, system):
+            if payload["step"]["id"] != "s1":
+                return fin("rodei")
+            calls["n"] += 1
+            if calls["n"] == 1:
+                return act("write_file", path="secao.html", content="<section>vibe coder</section>\n")
+            return act("read_file", path="secao.html")           # nunca finaliza: fica lendo
+
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Criar a seção", files=["secao.html"]), step("s2", "Conferir", "tester", deps=["s1"])),
+                       worker=worker, reviewer=lambda p, s: {"verdict": "pass", "score": 9, "issues": [], "fix": ""})
+        m = self.manager(llm, mode="full", effort="low")                  # low: 12 ações
+        s = self.session(m)
+        m.send(s["id"], "crie a seção")
+        run = self.wait(m, s["id"])["run"]
+        by = {x["id"]: x for x in run["plan"]["steps"]}
+        self.assertEqual(by["s1"]["status"], "done")
+        self.assertTrue(by["s1"]["incomplete"])
+        self.assertIn("pode estar incompleta", by["s1"]["summary"])
+        self.assertIn("secao.html", by["s1"]["summary"])                   # diz o que já está nos arquivos
+        self.assertEqual(by["s2"]["status"], "done")                       # o passo seguinte rodou sobre o que existe, em vez de «Pulada»
+        self.assertEqual(run["status"], "partial")                         # mas a execução NÃO se diz concluída
+        self.assertIn("Incompleta", run["summary"] + " ".join(run.get("notes", [])) + "Incompleta")
+
+    def test_a_worker_that_is_making_progress_gets_one_extension_of_actions(self):
+        seen = {"turns": 0, "ext": False}
+
+        def worker(payload, system):
+            seen["turns"] += 1
+            if any(h.get("action") == "(limite de ações)" for h in payload["history"]):
+                seen["ext"] = True
+                return fin("terminei o que faltava")
+            return act("write_file", path=f"a{seen['turns']}.txt", content="x\n")      # sempre avançando
+
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Escrever arquivos")), worker=worker)
+        m = self.manager(llm, mode="full", effort="low")                  # 12 ações
+        s = self.session(m)
+        m.send(s["id"], "x")
+        run = self.wait(m, s["id"])["run"]
+        st = run["plan"]["steps"][0]
+        self.assertTrue(seen["ext"])
+        self.assertEqual((st["status"], bool(st.get("incomplete"))), ("done", False))   # terminou dentro da prorrogação: nada de «incompleta»
+        self.assertGreater(seen["turns"], 12)
+        self.assertLess(seen["turns"], 12 + 12)                                          # uma prorrogação só
+
+    def test_a_worker_that_never_acts_still_fails_at_the_limit(self):
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Pesquisar")), worker=lambda p, s: act("read_file", path="nao-existe.txt"))
+        m = self.manager(llm, mode="full", effort="low")
+        s = self.session(m)
+        m.send(s["id"], "x")
+        run = self.wait(m, s["id"])["run"]
+        self.assertEqual(run["plan"]["steps"][0]["status"], "failed")      # sem trabalho feito não há o que salvar
+
+    def test_an_incomplete_task_gets_a_fix_round_that_finishes_it(self):
+        fb = []
+
+        def worker(payload, system):
+            if payload["step"]["role"] == "debugger":
+                fb.append(payload["step"].get("feedback", ""))
+                return fin("completei a seção")
+            if not payload["history"]:
+                return act("write_file", path="secao.html", content="<section></section>\n")
+            return act("read_file", path="secao.html")           # o programador nunca finaliza
+
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Criar a seção", files=["secao.html"])), worker=worker,
+                       reviewer=lambda p, s: {"verdict": "pass", "score": 9, "issues": [], "fix": ""})
+        m = self.manager(llm, mode="full", effort="high")                 # high: 1 rodada de correção
+        s = self.session(m)
+        m.send(s["id"], "crie a seção")
+        run = self.wait(m, s["id"])["run"]
+        self.assertEqual(run.get("revisions"), 1)
+        self.assertIn("Unfinished tasks", fb[0])                           # a tarefa que ficou sem terminar foi para o corretor
+        self.assertIn("Criar a seção", fb[0])
+        self.assertEqual(run["plan"]["steps"][-1]["role"], "debugger")
+
     def test_blocked_plan_fails_cleanly_with_the_reason(self):
         llm = Scripted(planner=lambda p, s: plan(blocked="Falta o repositório."))
         m = self.manager(llm, mode="full")
