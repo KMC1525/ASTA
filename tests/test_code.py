@@ -897,6 +897,30 @@ class GitHubTests(Env):
         with self.assertRaises(GH.GitHubError):
             self.gh.dispatch_workflow("o", "r", "../x", "main")
 
+    def test_asta_as_co_author_in_cloud_commits_and_pull_request_notes(self):
+        dest = self.tmp / "ws"
+        self.gh.download_repo("o", "r", "", dest)
+        ws = Workspace(dest, self.tmp / "sess", [])
+        repo = {"kind": "cloud", "owner": "o", "name": "r", "base_branch": "main", "branch": ""}
+        ctx = T.Context(sid="s", settings={}, cfg=normalize_config({"credit_asta": True, "credit_email": "bot@exemplo.com"}), ws=ws, inputs_dir=self.tmp / "i", scratch_dir=self.tmp / "sc", gh=self.gh, repo=repo)
+        T.execute(ctx, "write_file", {"path": "src/novo.py", "content": "x = 1\n"})
+        r = T.execute(ctx, "publish_changes", {"message": "feat: novo", "title": "Novo", "body": "## Resumo"})
+        self.assertTrue(r.ok, r.output)
+        commit = self.fake.commits[self.fake.branches[repo["branch"]]]
+        self.assertIn("Co-authored-by: ASTA Code <bot@exemplo.com>", commit["message"])
+        self.assertIn("ASTA Code", self.fake.prs[0]["body"])                 # nota no pull request
+        self.assertTrue(self.fake.prs[0]["body"].startswith("## Resumo"))    # sem apagar o texto original
+
+    def test_credit_helpers_clean_the_name_and_email_and_never_repeat(self):
+        cfg = {"credit_asta": True, "credit_name": "Bot\n<x>", "credit_email": "não é e-mail"}
+        self.assertEqual(T.credit_line(cfg), "Co-authored-by: Bot  x <noreply@asta.local>")   # nada de quebra de linha nem «<>» que quebrariam o trailer; e-mail inválido → o padrão
+        self.assertEqual(T.credit_line({"credit_asta": False}), "")
+        once = T.with_credit(cfg, "feat: a")
+        self.assertEqual(T.with_credit(cfg, once), once)
+        self.assertTrue(T.with_credit(cfg, "feat: a\n\nSigned-off-by: Eu <e@e.com>").endswith("Signed-off-by: Eu <e@e.com>\nCo-authored-by: Bot  x <noreply@asta.local>"))   # junta ao bloco de trailers
+        self.assertEqual(T.credit_pr_body({"credit_asta": False}, "x"), "x")
+        self.assertEqual(T.credit_pr_body(cfg, T.credit_pr_body(cfg, "x")).count("ASTA Code"), 1)
+
     def test_token_is_never_in_git_auth_arguments(self):
         env = GH.git_auth_env("sekret-token", "https://github.com")
         self.assertEqual(env["GIT_CONFIG_COUNT"], "1")
@@ -990,6 +1014,29 @@ class LocalGitTests(Env):
         self.assertFalse(T.execute(ctx, "git", {"args": ["reset", "--hard"]}).ok)
         r = T.execute(ctx, "git", {"args": ["log", "-1", "--format=%an"]})
         self.assertIn("ASTA Code", r.output)
+
+    def test_the_persons_own_git_identity_is_kept_and_asta_is_only_the_fallback(self):
+        ctx = make_ctx(self)
+        self.git("config", "user.name", "Maria Dev")
+        self.git("config", "user.email", "maria@exemplo.com")
+        T.execute(ctx, "write_file", {"path": "d.txt", "content": "d\n"})
+        self.assertTrue(T.execute(ctx, "commit_local", {"message": "feat: d"}).ok)
+        who = T.execute(ctx, "git", {"args": ["log", "-1", "--format=%an <%ae>"]}).output
+        self.assertIn("Maria Dev <maria@exemplo.com>", who)          # antes saía como «ASTA Code», por cima do user.name do git
+        self.assertNotIn("ASTA Code", who)
+
+    def test_asta_as_co_author_adds_the_trailer_to_commits_once(self):
+        ctx = make_ctx(self)
+        ctx.cfg.update(credit_asta=True, credit_name="ASTA Code", credit_email="asta@exemplo.com")
+        T.execute(ctx, "write_file", {"path": "e.txt", "content": "e\n"})
+        self.assertTrue(T.execute(ctx, "commit_local", {"message": "feat: e\n\ncorpo"}).ok)
+        msg = T.execute(ctx, "git", {"args": ["log", "-1", "--format=%B"]}).output
+        self.assertEqual(msg.count("Co-authored-by: ASTA Code <asta@exemplo.com>"), 1)
+        self.assertIn("corpo", msg)
+        ctx.cfg["credit_asta"] = False                                # desligado: nada de trailer
+        T.execute(ctx, "write_file", {"path": "f.txt", "content": "f\n"})
+        self.assertTrue(T.execute(ctx, "commit_local", {"message": "feat: f"}).ok)
+        self.assertNotIn("Co-authored-by", T.execute(ctx, "git", {"args": ["log", "-1", "--format=%B"]}).output)
 
     def test_publish_changes_local_git_pushes_a_branch(self):
         ctx = make_ctx(self, repo={"kind": "git", "base_branch": "main", "branch": "main"})

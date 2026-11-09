@@ -112,7 +112,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Code (vibe coding com equipes de agentes): ver code/manager.py (normalize_config). O token do GitHub é segredo (SECRET_PATHS): nunca vai ao navegador nem à exportação.
     "code": {"mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
              "effort": "high", "agents": 4, "max_sessions": 4, "ask_for": ["write", "delete", "run", "install", "git", "publish"], "run_timeout": 180, "max_download_mb": 200,
-             "allow_main": True, "branch_prefix": "asta/", "git_name": "", "git_email": "", "clone_depth": 20, "github_mode": "auto", "editor": "auto",
+             "allow_main": True, "branch_prefix": "asta/", "git_name": "", "git_email": "", "credit_asta": False, "credit_name": "", "credit_email": "", "clone_depth": 20, "github_mode": "auto", "editor": "auto",
              "github": {"api": "", "token": ""}, "finalize": {"docs": False, "publish": "none"}, "provider": {"id": "", "model": ""}},
     "canvas": {"template": "text_image"},
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py

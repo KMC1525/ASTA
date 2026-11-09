@@ -552,6 +552,56 @@ def _git_exe() -> str:
     return shutil.which("git") or ""
 
 
+_IDENTITY_CMDS = {"commit", "merge", "cherry-pick", "revert", "rebase", "am", "tag", "pull", "stash"}
+
+
+def _git_identity(ctx: Context, exe: str, cwd: Path) -> Dict[str, str]:
+    """Quem assina os commits: o que o git DESTE repositório já tem (`user.name`/`user.email`: é a identidade da pessoa) e, só para o que falta, o «Nome/E-mail nos commits» da Configuração (padrão
+    «ASTA Code»). Antes as variáveis GIT_AUTHOR_* eram sempre definidas e, por terem prioridade sobre o `user.name` do git, todo commit saía como «ASTA Code» — o contrário do que a tela dizia."""
+    out: Dict[str, str] = {}
+    for key, nm, em in (("user.name", "GIT_AUTHOR_NAME", "GIT_COMMITTER_NAME"), ("user.email", "GIT_AUTHOR_EMAIL", "GIT_COMMITTER_EMAIL")):
+        have = os.environ.get(nm) or ""
+        if not have:
+            try:
+                r = subprocess.run([exe, "config", "--get", key], cwd=str(cwd), capture_output=True, text=True, timeout=10)
+                have = r.stdout.strip() if r.returncode == 0 else ""
+            except (OSError, subprocess.SubprocessError):
+                have = ""
+        if have:
+            continue   # o git já sabe quem é: não sobrescreve
+        fallback = str(ctx.cfg.get("git_name") or "ASTA Code") if key == "user.name" else str(ctx.cfg.get("git_email") or "code@asta.local")
+        out[nm] = out[em] = fallback
+    return out
+
+
+def credit_line(cfg: Dict[str, Any]) -> str:
+    """O trailer «Co-authored-by: ASTA Code <e-mail>» (vazio se a opção «ASTA como co-autor» está desligada). Nome e e-mail são limpos: nada de quebra de linha nem de «<>» que quebrariam o trailer."""
+    if not cfg.get("credit_asta"):
+        return ""
+    name = re.sub(r"[\r\n<>]", " ", str(cfg.get("credit_name") or "ASTA Code")).strip()[:80] or "ASTA Code"
+    email = re.sub(r"[^\w.+@-]", "", str(cfg.get("credit_email") or "")).strip()[:120]
+    if not re.match(r"^[\w.+-]+@[\w.-]+$", email):
+        email = "noreply@asta.local"
+    return f"Co-authored-by: {name} <{email}>"
+
+
+def with_credit(cfg: Dict[str, Any], message: str) -> str:
+    """A mensagem do commit com o trailer de co-autoria (uma vez só: se já tem, não repete). Trailers vão no fim, separados por uma linha em branco do corpo."""
+    line = credit_line(cfg)
+    if not line or line.lower() in message.lower():
+        return message
+    last = message.rstrip().splitlines()[-1] if message.strip() else ""
+    glued = bool(re.match(r"^[A-Za-z-]+: .+", last)) and "\n\n" in message.rstrip()   # a mensagem já termina num bloco de trailers: junta ao bloco
+    return message.rstrip() + ("\n" if glued else "\n\n") + line
+
+
+def credit_pr_body(cfg: Dict[str, Any], body: str) -> str:
+    """O texto do pull request com uma nota de que o ASTA Code contribuiu (só com a opção ligada)."""
+    if not cfg.get("credit_asta") or "ASTA Code" in body:
+        return body
+    return (body.rstrip() + "\n\n" if body.strip() else "") + "---\nFeito com [ASTA Code](https://github.com/KMC1525/ASTA) (co-autor dos commits)."
+
+
 def _git_run(ctx: Context, args: List[str], timeout: float = 120, auth: bool = False, cwd: Optional[Path] = None) -> Tuple[int, str]:
     exe = _git_exe()
     if not exe:
@@ -559,9 +609,8 @@ def _git_run(ctx: Context, args: List[str], timeout: float = 120, auth: bool = F
     extra: Dict[str, str] = {}
     if auth and ctx.gh and ctx.gh.token:
         extra.update(git_auth_env(ctx.gh.token, ctx.gh.web))
-    name, email = str(ctx.cfg.get("git_name") or "ASTA Code"), str(ctx.cfg.get("git_email") or "code@asta.local")
-    for k, v in (("GIT_AUTHOR_NAME", name), ("GIT_COMMITTER_NAME", name), ("GIT_AUTHOR_EMAIL", email), ("GIT_COMMITTER_EMAIL", email)):
-        if not os.environ.get(k):
+    if args and args[0] in _IDENTITY_CMDS:   # a identidade de fallback só entra em comandos que gravam commits
+        for k, v in _git_identity(ctx, exe, cwd or ctx.root).items():
             extra.setdefault(k, v)
     with ctx.exec_lock:
         rc, out, to, _ = run_process(ctx, ["git"] + args, cwd or ctx.root, timeout, extra)
@@ -606,7 +655,7 @@ def t_commit_local(ctx: Context, a: Dict[str, Any]) -> Result:
         rc, out = _git_run(ctx, ["add", "-A", "--"] + files, 60)
     if rc != 0:
         raise ToolError(f"git add falhou: {out[:300]}")
-    rc, out = _git_run(ctx, ["commit", "-m", a["message"][:2000]], 90)
+    rc, out = _git_run(ctx, ["commit", "-m", with_credit(ctx.cfg, a["message"][:2000])], 90)
     return Result(ok=rc == 0, output=out[:1500] or "Commit feito.", meta={"exit": rc})
 
 
@@ -633,14 +682,15 @@ def t_publish_changes(ctx: Context, a: Dict[str, Any]) -> Result:
     if not re.match(r"^[\w][\w./-]{0,100}$", branch) or ".." in branch or branch.endswith("/") or branch.endswith(".lock"):
         raise ToolError("Nome de branch inválido.")
     want_pr = bool(a.get("pull_request", True)) and branch != base
-    title, body, draft = str(a.get("title") or msg.splitlines()[0])[:240], str(a.get("body") or "")[:60000], bool(a.get("draft", True))
+    title, body, draft = str(a.get("title") or msg.splitlines()[0])[:240], credit_pr_body(ctx.cfg, str(a.get("body") or "")[:59000])[:60000], bool(a.get("draft", True))
+    commit_msg = with_credit(ctx.cfg, msg[:5800])   # «ASTA como co-autor» (Configuração → Code): o trailer vai em todo commit que o ASTA publica
     lines: List[str] = []
     if repo.get("kind") == "cloud":
         gh = ctx.need_gh()
         owner, name = repo["owner"], repo["name"]
         ref = branch if gh.head_sha(owner, name, branch) else base
         changes = gh.diff_local(owner, name, ref, ctx.root)
-        res = gh.commit_changes(owner, name, branch=branch, base_branch=base, message=msg, root=ctx.root, changes=changes, modes=changes.get("modes"))
+        res = gh.commit_changes(owner, name, branch=branch, base_branch=base, message=commit_msg, root=ctx.root, changes=changes, modes=changes.get("modes"))
         lines.append(f"Commit {res['sha'][:8]} na branch {branch} ({res['files']} arquivo(s)): {res['url']}")
         repo["branch"] = branch
     elif _git_state(ctx).get("ok"):
@@ -658,7 +708,7 @@ def t_publish_changes(ctx: Context, a: Dict[str, Any]) -> Result:
             rc, out = _git_run(ctx, ["add", "-A", "--"] + files, 60)
         if rc != 0:
             raise ToolError(f"git add falhou: {out[:300]}")
-        rc, out = _git_run(ctx, ["commit", "-m", msg[:6000]], 90)
+        rc, out = _git_run(ctx, ["commit", "-m", commit_msg], 90)
         if rc != 0 and "nothing to commit" not in out.lower() and "nada a submeter" not in out.lower():
             raise ToolError(f"git commit falhou: {out[:400]}")
         lines.append("Commit feito na branch " + branch + (" (nada novo para commitar; usei o que já estava commitado)" if rc != 0 else "") + ".")
@@ -703,7 +753,7 @@ def t_create_pr(ctx: Context, a: Dict[str, Any]) -> Result:
     if not repo.get("owner"):
         raise ToolError("Esta sessão não está ligada a um repositório do GitHub.")
     base = a.get("base") or repo.get("base_branch") or "main"
-    pr = gh.create_pr(repo["owner"], repo["name"], head=a["head"], base=base, title=a["title"], body=a.get("body", ""), draft=bool(a.get("draft", True)))
+    pr = gh.create_pr(repo["owner"], repo["name"], head=a["head"], base=base, title=a["title"], body=credit_pr_body(ctx.cfg, str(a.get("body", ""))), draft=bool(a.get("draft", True)))
     repo["pr_url"] = pr["url"]
     if ctx.on_repo:
         ctx.on_repo(repo)
