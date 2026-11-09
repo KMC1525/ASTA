@@ -19,6 +19,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from .. import attachments as att
 from .. import native
+from .. import team as teamlib
 from ..agents.runner import Cancelled
 from ..providers import ProviderError, build_provider
 from ..util import now_iso
@@ -79,8 +80,9 @@ class Style:
 
 
 class CanvasEngine:
-    def __init__(self, store: Any, cid: str, emit: Optional[Callable[[dict], None]] = None, cancelled: Callable[[], bool] = lambda: False):
+    def __init__(self, store: Any, cid: str, emit: Optional[Callable[[dict], None]] = None, cancelled: Callable[[], bool] = lambda: False, team: Optional[Dict[str, Any]] = None):
         self.store = store
+        self.team_req = team or {}
         self.cs = store.canvases
         self.cid = cid
         self.settings = store.get_settings()
@@ -98,6 +100,21 @@ class CanvasEngine:
     def _check(self) -> None:
         if self.cancelled():
             raise Cancelled()
+
+    def team_chat(self, provider: Any, pid: str, messages: List[Dict[str, Any]], system: str, temperature: float, max_tokens: int) -> str:
+        """Uma chamada de texto da IA com a equipe do Canvas (`settings.canvas`: 1/4/8/12/16 agentes e esforço Low … Omni): o esforço pede o pensamento ao modelo e dá mais espaço à resposta;
+        com 4+ agentes, cada um escreve notas privadas (em paralelo) que o redator final usa. Com 1 agente e esforço High é a chamada de sempre."""
+        team = teamlib.from_config(self.settings.get("canvas"), self.team_req)
+        teamlib.apply_thinking(provider, team, pid)
+        notes = ""
+        if team.multi:
+            kept, provider.thinking = provider.thinking, "off"
+            try:
+                notes = teamlib.team_notes(provider, messages, team, cancelled=self.cancelled, note=lambda m: self.emit({"type": "note", "node": self._cur, "message": m}))
+            finally:
+                provider.thinking = kept
+            self._check()
+        return str(provider.chat(messages, system=system + teamlib.notes_block(notes), temperature=temperature, max_tokens=int(max_tokens * team.tokens_mult))).strip()
 
     def canvas(self) -> Dict[str, Any]:
         """O canvas atual. Só relê o arquivo quando alguém gravou depois da última leitura (fluxos grandes lidos nó a nó faziam centenas de leituras iguais)."""
@@ -246,7 +263,7 @@ class CanvasEngine:
                 if provider.vision:
                     content += [{"type": "image", **img} for img in att.collect_images(items, 6)]
                 self._check()
-                text = str(provider.chat([{"role": "user", "content": content}], system=STYLE_SYSTEM, temperature=0.3, max_tokens=500)).strip()
+                text = self.team_chat(provider, pid, [{"role": "user", "content": content}], STYLE_SYSTEM, 0.3, 500)
         except (ProviderError, ValueError) as exc:
             self.emit({"type": "note", "node": node["id"], "message": f"Não foi possível descrever o estilo com a IA ({exc}); usando as informações básicas dos arquivos."})
         if not text:
@@ -604,8 +621,8 @@ class CanvasEngine:
         system = LLM_SYSTEM + (f"\n\nEstilo do projeto (siga-o): {style.text}" if style.text else "")
         user = (p["instruction"].strip() + ("\n\n" if p["instruction"].strip() and source else "") + (f"Texto de entrada:\n{source}" if source else "")).strip()
         self._check()
-        out = provider.chat([{"role": "user", "content": user}], system=system, temperature=p["temperature"], max_tokens=1500)
-        return {"assets": [], "text": str(out).strip()}
+        out = self.team_chat(provider, pid, [{"role": "user", "content": user}], system, p["temperature"], 1500)
+        return {"assets": [], "text": out}
 
     # ------------------------------------------------------------------ Editor
     def resolve_clip(self, canvas: Dict[str, Any], clip: Dict[str, Any]) -> Optional[Dict[str, Any]]:

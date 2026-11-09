@@ -1,5 +1,5 @@
 // Code no navegador: a seção na barra lateral, pastas e subpastas (nome, 8 cores, recolher/expandir, persistência), nova sessão, as bolinhas de estado (cinza, piscando, azul-claro, laranja),
-// a pergunta Sim/Não do modo Ask, os controles (modo, esforço 1–8 agentes, modelo, ao terminar), a aba de Configuração (token do GitHub como segredo), inglês e celular.
+// a pergunta Sim/Não do modo Ask, os controles (modo, esforço, 1/4/8/12/16 agentes, modelo, ao terminar), a aba de Configuração (token do GitHub como segredo), inglês e celular.
 // Sem IA (Demo): as regras entendem «rode os testes» e «leia arquivo».
 const fs = require('fs');
 const os = require('os');
@@ -58,7 +58,7 @@ run('code', async ({ api, open, check, base }) => {
     await page.locator('#cd-new').click(); await page.waitForSelector('#cd-path');
     check('code:tres-origens-de-projeto', (await page.locator('.modal .seg button').count()) >= 3);
     check('code:oito-niveis-de-esforco', (await page.locator('#cd-effort option').allInnerTexts()).join(',') === 'Low,Medium,High,Extra,Mega,Max,Ultra,Omni');
-    check('code:agentes-de-1-a-8', (await page.locator('#cd-agents').getAttribute('max')) === '8' && (await page.locator('#cd-agents').getAttribute('min')) === '1');
+    check('code:agentes-1-4-8-12-16', (await page.locator('#cd-agents option').evaluateAll((os) => os.map((o) => o.value))).join(',') === '1,4,8,12,16');
     check('code:finalizar-opcoes', (await page.locator('#cd-publish option').count()) === 5);
     await page.locator('#cd-path').fill(proj);
     await page.locator('#cd-new-title').fill('Sessão A');
@@ -71,7 +71,7 @@ run('code', async ({ api, open, check, base }) => {
     check('code:painel-ambiente', (await page.locator('.cd-panel').innerText()).includes(path.basename(proj)));
 
     // ---- controles da sessão
-    check('code:controles-modo-esforco-agentes-modelo', (await page.locator('#cd-mode').count()) === 1 && (await page.locator('#cd-effort-sel option').count()) === 8 && (await page.locator('#cd-agents-sel option').count()) === 8 && (await page.locator('#cd-model-btn').count()) === 1 && (await page.locator('#cd-finalize').count()) === 1);
+    check('code:controles-modo-esforco-agentes-modelo', (await page.locator('#cd-mode').count()) === 1 && (await page.locator('#cd-effort-sel option').count()) === 8 && (await page.locator('#cd-agents-sel option').count()) === 5 && (await page.locator('#cd-model-btn').count()) === 1 && (await page.locator('#cd-finalize').count()) === 1);
     await page.locator('#cd-effort-sel').selectOption('omni'); await page.waitForTimeout(400);
     await page.locator('#cd-agents-sel').selectOption('8'); await page.waitForTimeout(400);
     const sess = (await api('/api/code/sessions')).sessions.find((s) => s.title === 'Sessão A');

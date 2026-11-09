@@ -6,6 +6,7 @@ import { gradient, h, icon, popover, select, seg, toast } from '../ui.js';
 import { openChat } from './avatars.js';
 import { createComposer } from './composer.js';
 import { clearJob, renderRun, saveJob, savedJob } from './run.js';
+import { teamPicker } from '../team_ui.js';
 import { GENRE_LABEL } from './steps.js';
 
 const toast0 = (msg) => toast(msg, 'err');
@@ -74,12 +75,13 @@ async function worldTool(root, project, carry, composer) {
     }) : h('div', { class: 'col', style: { padding: '10px' } }, h('span', { class: 'muted small' }, t('Você ainda não criou personagens.')), h('a', { href: '#/worlds/characters', class: 'small' }, t('Criar personagem'))));
     popover(charBtn, body);
   });
+  const team = teamPicker(state.settings.generation, null, { id: 'world-team' });   // esforço (Low … Omni) e 1/4/8/12/16 agentes: vêm marcados como em Configuração
   const cfg = {
     placeholder: project ? t('Descreva o que mudar neste mundo…') : t('Descreva o mundo que você quer criar…'),
-    extraReady: () => !!(m.wb || m.chars.length), tools: [h('span', { class: 'tool' }, icon('worldbuilding', 15), wbSel), charBtn, perspSeg],
+    extraReady: () => !!(m.wb || m.chars.length), tools: [h('span', { class: 'tool' }, icon('worldbuilding', 15), wbSel), charBtn, perspSeg, team.el],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
-      try { await startJob(root, '/api/generate', { prompt: text, attachment_ids: ids, worldbuilding_id: m.wb, character_ids: m.chars, settings: { perspective: m.persp }, project_id: project ? project.id : '' }, 'world', { prompt: text, project }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/generate', { prompt: text, attachment_ids: ids, worldbuilding_id: m.wb, character_ids: m.chars, settings: { perspective: m.persp }, team: team.get(), project_id: project ? project.id : '' }, 'world', { prompt: text, project }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   };
   paintChars(); paintPersp();
@@ -108,11 +110,12 @@ async function avatarTool(root, project, carry, composer) {
       + (m.ctype === 'real' && m.content === 'nsfw' ? t('Pessoas reais ficam sempre em SFW: o ASTA não cria conteúdo sexual sobre pessoas reais. Personagens fictícios adultos podem ser NSFW.') : '');
     composer.configure({ placeholder: m.base ? t('Opcional: nome, personalidade, história… (a imagem anexada é a base do visual)') : t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…') });
   };
+  const team = teamPicker(state.settings.avatars, null, { id: 'avatar-team' });
   const cfg = {
-    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), tools: [baseBtn, modeSeg, countEl, h('span', { class: 'tool' }, relSel), h('span', { class: 'tool' }, typeSel), contentSeg],
+    placeholder: t('Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…'), tools: [baseBtn, modeSeg, countEl, h('span', { class: 'tool' }, relSel), h('span', { class: 'tool' }, typeSel), contentSeg, team.el],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
-      try { await startJob(root, '/api/avatars/generate', { prompt: text, attachment_ids: ids, count: m.count, relationship: m.rel, character_type: m.ctype, content: m.content, from_images: m.base, images_mode: m.imgMode }, 'avatar', { prompt: text }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/avatars/generate', { prompt: text, attachment_ids: ids, count: m.count, relationship: m.rel, character_type: m.ctype, content: m.content, from_images: m.base, images_mode: m.imgMode, team: team.get() }, 'avatar', { prompt: text }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   };
   paintCount(); paintBase();
@@ -127,12 +130,13 @@ async function gameTool(root, project, carry, composer) {
   const genreSel = select([['auto', t('Gênero: automático')]].concat(genres.map((g) => [g.id, GENRE_LABEL[g.id] || g.label])), m.genre, (v) => { m.genre = v; });
   const lenSel = select([['short', t('Curto')], ['medium', t('Médio')], ['long', t('Longo')]], m.length, (v) => { m.length = v; });
   const contentSel = select([['free', t('Livre (SFW + NSFW)')], ['sfw', 'SFW']], m.content, (v) => { m.content = v; });
+  const team = teamPicker(state.settings.games, null, { id: 'game-team' });
   const cfg = {
     placeholder: upd ? t('Descreva o que mudar neste jogo…') : t('Descreva o jogo que você quer criar…'),
-    tools: [...(upd ? [] : [h('span', { class: 'tool' }, icon('games', 15), genreSel)]), h('span', { class: 'tool' }, lenSel), h('span', { class: 'tool' }, contentSel)],
+    tools: [...(upd ? [] : [h('span', { class: 'tool' }, icon('games', 15), genreSel)]), h('span', { class: 'tool' }, lenSel), h('span', { class: 'tool' }, contentSel), team.el],
     onSend: async ({ text, ids }) => {
       composer.setSending(true);
-      try { await startJob(root, '/api/games/generate', { prompt: text, attachment_ids: ids, genre: m.genre, length: m.length, content: m.content, project_id: upd ? upd.id : '' }, 'game', { prompt: text, project: upd }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/games/generate', { prompt: text, attachment_ids: ids, genre: m.genre, length: m.length, content: m.content, team: team.get(), project_id: upd ? upd.id : '' }, 'game', { prompt: text, project: upd }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   };
   return cfg;
@@ -249,12 +253,13 @@ async function rebuildTool(root, project, carry, composer) {
   const m = { refine: !(state.settings.rebuild && state.settings.rebuild.refine === false) };
   const refineBox = h('label', { class: 'tool', title: t('Uma equipe de agentes de IA (Perfilador → Polidor → Auditor) revisa só o TEXTO do jogo em etapas curtas, feita para modelos locais pequenos. A estrutura nunca muda. Sem IA configurada, só a limpeza automática roda.') },
     h('input', { type: 'checkbox', checked: m.refine, onchange: (e) => { m.refine = e.target.checked; } }), ' ', t('Revisar o texto com IA'));
+  const team = teamPicker(state.settings.rebuild, null, { id: 'rebuild-team' });
   const cfg = {
-    placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [refineBox],
+    placeholder: t("Anexe o ZIP do jogo (Ren'Py ou RPG Maker) que você quer reconstruir…"), allowEmpty: false, tools: [refineBox, team.el],
     onSend: async ({ ids }) => {
       if (!ids.length) { toast0(t('Anexe o ZIP do jogo (ou os scripts/arquivos de dados) para reconstruí-lo.')); return; }
       composer.setSending(true);
-      try { await startJob(root, '/api/games/rebuild', { attachment_ids: ids, refine: m.refine }, 'rebuild', { prompt: '' }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
+      try { await startJob(root, '/api/games/rebuild', { attachment_ids: ids, refine: m.refine, team: team.get() }, 'rebuild', { prompt: '' }, (msg) => toast0(msg)); } catch (e) { composer.refresh(); }
     },
   };
   return Object.assign(cfg, { below: h('div', { class: 'muted small', style: { textAlign: 'center', marginTop: '12px', maxWidth: '560px', marginInline: 'auto' } },

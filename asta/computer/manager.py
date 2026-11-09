@@ -14,6 +14,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 from .. import attachments as att
+from .. import team as teamlib
 from ..providers import resolve_provider
 from ..util import new_id, now_iso, num, read_json, text
 from . import files as F
@@ -42,7 +43,9 @@ def normalize_config(raw: Any) -> Dict[str, Any]:
         "max_parallel": int(num(d.get("max_parallel"), MAX_PARALLEL, 1, MAX_PARALLEL)),
         "max_steps": int(num(d.get("max_steps"), 40, 5, 200)),
         "team": "fast" if d.get("team") == "fast" else "full",
-        "revisions": int(num(d.get("revisions"), 1, 0, 2)),
+        "revisions": int(num(d.get("revisions"), 1, 0, 3)),
+        "agents": teamlib.normalize_agents(d.get("agents")),   # 1/4/8/12/16 agentes na mesa do Planejador e do Verificador
+        "effort": teamlib.normalize_effort(d.get("effort")),   # Low … Omni: pensamento do modelo, passos, rodadas de correção e crítica do plano
         "ask_for": list(dict.fromkeys(ask)),
         "game_dirs": [str(x)[:500] for x in (d.get("game_dirs") if isinstance(d.get("game_dirs"), list) else []) if isinstance(x, str) and x.strip()][:20],
         "app_wait": float(num(d.get("app_wait"), 2.0, 0, 15)),
@@ -191,12 +194,12 @@ class ComputerManager:
             running = sum(1 for tid in self.active if (self.get(tid) or {}).get("status") == "running")
             waiting = sum(1 for tid in self.active if (self.get(tid) or {}).get("status") == "waiting")
             queued = len(self.queue)
-        return {"enabled": cfg["enabled"], "mode": cfg["mode"], "max_parallel": cfg["max_parallel"], "running": running, "waiting": waiting, "queued": queued,
+        return {"enabled": cfg["enabled"], "mode": cfg["mode"], "max_parallel": cfg["max_parallel"], "agents": cfg["agents"], "effort": cfg["effort"], "team": teamlib.options(), "running": running, "waiting": waiting, "queued": queued,
                 "platform": drv.name, "platform_label": drv.label, "capabilities": drv.capabilities(), "libs": deps.report(drv.name), "gui_owner": self.gui.owner, "limit": MAX_PARALLEL}
 
     # ----------------------------------------------------------------- criar
     def submit(self, goal: str, *, mode: str = "", attachment_ids: Optional[List[str]] = None, chat_id: str = "", origin: str = "section",
-               before_start: Optional[Callable[[Dict[str, Any]], None]] = None) -> Dict[str, Any]:
+               before_start: Optional[Callable[[Dict[str, Any]], None]] = None, agents: Any = None, effort: Any = None) -> Dict[str, Any]:
         cfg = self.config()
         if not cfg["enabled"]:
             raise ComputerError(403, "O Computer Use está desligado. Ligue em Configuração → Computer Use.")
@@ -212,7 +215,8 @@ class ComputerManager:
         inputs, digest, images = self._take_inputs(tid, ids)
         doc: Dict[str, Any] = {"schema": SCHEMA, "id": tid, "goal": goal or "(anexos)", "mode": mode, "status": "queued", "created": now_iso(), "started": None, "finished": None,
                                "origin": origin, "chat_id": text(chat_id, "", 60), "inputs": inputs, "inputs_digest": digest, "plan": {"summary": "", "kind": "mixed", "steps": []},
-                               "steps": [], "agents": [], "warnings": [], "journal": [], "pending": None, "review": None, "summary": "", "error": "", "now": "", "note": ""}
+                               "steps": [], "agents": [], "warnings": [], "journal": [], "pending": None, "review": None, "summary": "", "error": "", "now": "", "note": "",
+                               **{k: v for k, v in (("agents_n", teamlib.normalize_agents(agents) if agents is not None else None), ("effort", teamlib.normalize_effort(effort) if effort is not None else None)) if v is not None}}
         runner = TaskRunner(self, doc, images)
         with self.lock:
             self.runners[tid] = runner

@@ -7,6 +7,12 @@ import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels
 import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 import { RISK } from '../computer_ui.js';
 import { EFFORT_LABEL, PUBLISH, RISK as CODE_RISK } from '../code_ui.js';
+import { AGENT_COUNTS, teamFields } from '../team_ui.js';
+
+// o cartão «Equipe de agentes» de uma seção: esforço (Low … Omni) e 1/4/8/12/16 agentes em paralelo (asta/team.py)
+const teamCard = (cfg, id, note, o = {}) => h('div', { class: 'card', id: id + '-card', style: { marginBottom: '16px' } }, h('h3', null, o.title || t('Equipe de agentes')),
+  h('p', { class: 'muted small', style: { marginTop: 0 } }, note || t('Os mesmos 8 níveis de esforço do Code (Low a Omni) e até 16 agentes trabalhando em paralelo em cada etapa, com um Sintetizador que junta o melhor de todos. Mais agentes e mais esforço = respostas melhores, mas mais tempo e mais chamadas à IA.')),
+  teamFields(cfg, Object.assign({ id }, o)));
 
 export default async function render(root, ctx) {
   let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers');   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
@@ -252,6 +258,7 @@ async function generation() {
       field(t('Máximo de tokens por agente'), h('input', { type: 'number', min: 1000, max: 32000, step: 500, value: g.max_tokens, oninput: (e) => { g.max_tokens = parseInt(e.target.value || '6000', 10); } })),
       h('div', { class: 'row' }, checkbox(t('Ciclo dia/noite'), g.day_cycle, (v) => { g.day_cycle = v; }), checkbox(t('Enviar anexos aos agentes'), g.include_attachments, (v) => { g.include_attachments = v; })),
       field(t('Autonomia dos NPCs'), select([['off', t('Desligada')], ['low', t('Baixa')], ['high', t('Alta')]], g.npc_autonomy, (v) => { g.npc_autonomy = v; }), t('NPCs decidem sozinhos o que fazer enquanto você joga (consome tokens).'))),
+    teamCard(g, 'gen'),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Geração dos personagens')),
       h('div', { class: 'grid2' }, field(t('Detalhe do system prompt'), seg([['short', t('Curto')], ['detailed', t('Detalhado')]], c.detail, (v) => { c.detail = v; })), h('div', null, checkbox(t('Criar também o personagem do jogador'), c.player_character, (v) => { c.player_character = v; }))),
       h('div', { class: 'grid2' }, field(t('Criatividade nas conversas'), range(0, 1.5, 0.05, c.temperature, (v) => { c.temperature = v; })),
@@ -297,6 +304,7 @@ async function chat() {
         checkbox(t('Continuar sozinho quando a resposta for cortada pelo limite'), c.auto_continue !== false, (v) => { c.auto_continue = v; }),
         num('continue_rounds', 0, 8, 1, t('Continuações no máximo'), t('Quantas vezes o ASTA pede para o modelo seguir de onde parou. 0 = nunca.'))),
       field(t('Instruções personalizadas'), h('textarea', { rows: 3, id: 'cc-instructions', maxlength: 3000, placeholder: t('Ex.: Responda sempre em português, de forma curta e com exemplos.'), oninput: (e) => { c.instructions = e.target.value; } }, c.instructions || ''), t('Entram em toda conversa do Chat, como um pedido seu ao assistente.'))),
+    teamCard(c, 'ch', t('Low a Omni pedem o raciocínio ao modelo (junto com o tempo de pensamento acima, vale o maior); de Extra para cima entra o Planejador e de Max para cima também o Revisor. Com 4 ou mais agentes, cada um escreve notas privadas em paralelo para o redator da resposta.'), { agentsKey: 'team_agents', defaultEffort: 'low' }),
     h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, 'Computer Use'),
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Recurso opcional do Chat: o botão Computer Use ao lado do Run manda a IA fazer tarefas no seu computador (arquivos, programas, jogos, pesquisa e escrita), no modo Ask (pergunta antes) ou Full Access (sem perguntar). Fica desligado até você ligar.')),
       h('div', { class: 'row' }, h('span', { class: 'chip ' + ((state.settings.computer || {}).enabled ? 'on' : '') }, (state.settings.computer || {}).enabled ? t('Ligado') : t('Desligado')),
@@ -520,11 +528,12 @@ async function sections() {
 async function canvasTab() {
   let tpls = [];
   try { tpls = (await api('/api/canvas-templates')).templates || []; } catch (e) { /* sem a lista, só o padrão */ }
-  const cv = JSON.parse(JSON.stringify(state.settings.canvas || { template: 'text_image' }));
+  const cv = JSON.parse(JSON.stringify(state.settings.canvas || { template: 'text_image', agents: 1, effort: 'high' }));
   const opts = (tpls.length ? tpls : [{ id: 'text_image', label: 'Texto → Imagem' }]).map((x) => [x.id, t(x.label)]);
   return h('div', null, secHead('canvas', ['canvas']),
     cfgCard(t('Novos canvases'), field(t('Modelo inicial'), select(opts, cv.template, (v) => { cv.template = v; }), t('O modelo que vem marcado ao criar um canvas novo. Os provedores de imagem, vídeo, som e voz ficam em Mídia.')),
       h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', onclick: () => go('config', { tab: 'media' }) }, icon('config', 13), t('Provedores de mídia')))),
+    teamCard(cv, 'cv', t('Vale para os nós de texto com IA do Canvas (Texto IA, Refinar texto e a descrição de estilo): o esforço pede o raciocínio ao modelo e, com 4 ou mais agentes, cada um escreve notas que o redator final usa.')),
     saveRow(() => saveSettings({ canvas: cv })));
 }
 
@@ -560,12 +569,13 @@ async function studioTab() {
     cfgCard(t('Edição automática'),
       h('div', { class: 'grid2' }, field(t('Estilo padrão'), select(meta.edit_styles.map((x) => [x.id, t(x.label)]), st.autoedit_style, (v) => { st.autoedit_style = v; })),
         field(t('Duração alvo (segundos; 0 = automática)'), numInput(st, 'autoedit_target', 0, 21600, 5)))),
+    teamCard(st, 'st', t('Vale para os agentes do Studio (roteiro, cenas, narração e revisão) e para a edição automática: esforço e agentes em paralelo por etapa. A geração de imagem, vídeo e voz continua nos provedores de mídia.')),
     saveRow(async () => { setT(); await saveSettings({ studio: st }); }));
 }
 
 // ---------------------------------------------------------------------------------- computer use
 async function computerTab() {
-  const cu = Object.assign({ enabled: false, mode: 'ask', max_parallel: 8, max_steps: 40, team: 'full', revisions: 1, ask_for: ['write', 'delete', 'run', 'input', 'screen'], game_dirs: [], app_wait: 2 }, JSON.parse(JSON.stringify(state.settings.computer || {})));
+  const cu = Object.assign({ enabled: false, mode: 'ask', max_parallel: 8, max_steps: 40, team: 'full', revisions: 1, agents: 1, effort: 'high', ask_for: ['write', 'delete', 'run', 'input', 'screen'], game_dirs: [], app_wait: 2 }, JSON.parse(JSON.stringify(state.settings.computer || {})));
   let status = null, inv = null, prompts = [];
   try { status = await api('/api/computer/status'); } catch (e) { /* servidor antigo: segue sem o painel */ }
   try { inv = await api('/api/computer/inventory'); } catch (e) { /* idem */ }
@@ -600,7 +610,8 @@ async function computerTab() {
         field(t('Tarefas ao mesmo tempo'), range(1, 8, 1, cu.max_parallel, (v) => { cu.max_parallel = v; }), t('No máximo 8. As que passam disso esperam na fila. Tela, teclado e mouse são um só: só uma tarefa por vez os usa; arquivos, pesquisa e programas de linha de comando seguem em paralelo.'))),
       h('div', { class: 'grid2' },
         field(t('Máximo de passos por tarefa'), numInput(cu, 'max_steps', 5, 200, 5), t('Cada passo é uma ação. Ao chegar no limite a tarefa para e conta o que conseguiu.')),
-        field(t('Rodadas de correção do Revisor'), select([['0', t('Nenhuma')], ['1', '1'], ['2', '2']], String(cu.revisions), (v) => { cu.revisions = parseInt(v, 10); }), t('Se o Revisor achar que faltou algo, o Operador tenta corrigir.')))),
+        field(t('Rodadas de correção do Revisor'), select([['0', t('Nenhuma')], ['1', '1'], ['2', '2'], ['3', '3']], String(cu.revisions), (v) => { cu.revisions = parseInt(v, 10); }), t('Se o Revisor achar que faltou algo, o Operador tenta corrigir.')))),
+    teamCard(cu, 'cu', t('O esforço pede o raciocínio ao modelo, escala os passos do Operador (High é o padrão) e as rodadas de correção; com 4 ou mais agentes, o Planejador e o Verificador viram uma mesa de agentes em paralelo. O Operador age um passo por vez: tela, teclado e mouse são um só.')),
     cfgCard(t('Jogos'),
       field(t('Pastas de jogos'), dirs, t('Uma pasta por linha. A Steam e o Lutris são achados sozinhos; aqui entram jogos soltos em pastas (executáveis, AppImage, .app e jogos de navegador).'))),
     saveRow(async () => { cu.max_steps = Math.max(5, Math.min(200, cu.max_steps)); await saveSettings({ computer: cu }); await refreshState(); }),
@@ -656,7 +667,7 @@ async function codeTab() {
         field(t('Modo padrão'), seg([['ask', 'Ask'], ['full', 'Full Access']], cd.mode, (v) => { cd.mode = v; }), t('Ask: antes de cada ação que muda algo, aparece Sim ou Não. Full Access: executa tudo sem perguntar (os limites de segurança continuam valendo). Dá para escolher em cada sessão.')),
         field(t('Esforço padrão'), select((stt.efforts || []).map((e) => [e.id, EFFORT_LABEL[e.id]]), cd.effort, (v) => { cd.effort = v; }), t('Os 8 níveis (Low a Omni) valem para modelos de nuvem e locais: mais passos, mais rodadas de correção, testes e revisão.'))),
       h('div', { class: 'grid2' },
-        field(t('Agentes por sessão'), range(1, 8, 1, cd.agents, (v) => { cd.agents = v; }), t('Até 8 agentes trabalhando ao mesmo tempo numa sessão.')),
+        field(t('Agentes por sessão'), select([...new Set([...AGENT_COUNTS, cd.agents])].sort((a, b) => a - b).map((n) => [n, t('{n} agente(s)', { n })]), cd.agents, (v) => { cd.agents = parseInt(v, 10); }, { id: 'cd-agents-cfg' }), t('Até 16 agentes (1, 4, 8, 12 ou 16) trabalhando ao mesmo tempo numa sessão.')),
         field(t('Sessões em segundo plano ao mesmo tempo'), range(1, 8, 1, cd.max_sessions, (v) => { cd.max_sessions = v; }), t('As que passam disso esperam na fila. Com modelos locais, o modelo atende uma geração por vez.')))),
     cfgCard(t('Quando perguntar (modo Ask)'),
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Só ler, listar, buscar e pesquisar nunca pergunta. Marque o que deve pedir um Sim ou Não:')),
@@ -725,6 +736,7 @@ async function rebuildTab() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Depois de reconstruir, o Perfilador, o Polidor e o Auditor revisam só o TEXTO do jogo (erros de digitação, pontuação, nomes genéricos), sem mudar a estrutura. Sem IA configurada, só a limpeza automática roda.')),
       checkbox(t('Revisar o texto com IA (marcado por padrão no Rebuild)'), rb.refine !== false, (v) => { rb.refine = v; }),
       field(t('Limite de chamadas ao modelo por reconstrução'), numInput(rb, 'max_calls', 5, 200, 5), t('Menos chamadas = mais rápido e barato; com modelos locais pequenos, 20 a 40 costuma bastar.'))),
+    teamCard(rb, 'rb', t('Vale para a revisão do texto por IA: com 4 ou mais agentes, o Perfilador e o Auditor viram uma mesa de agentes em paralelo (o Polidor, que roda por lote de falas, fica com um agente só).')),
     cfgCard(t('O que o Rebuild lê'),
       h('p', { class: 'muted small', style: { margin: 0 } }, t("Ren'Py (scripts .rpy) e RPG Maker 2000, 2003, XP, VX, VX Ace, MV e MZ. Só a estrutura é reconstruída; a arte e o áudio originais nunca são lidos nem copiados. Só para uso pessoal: não publique o resultado na Steam nem em outras plataformas."))),
     saveRow(() => saveSettings({ rebuild: rb })));
@@ -1069,6 +1081,8 @@ async function avatars() {
       h('div', { class: 'grid2' }, field(t('Memória de curto prazo (turnos)'), num(av, 'history_turns', 2, 80)), field(t('Memórias de longo prazo por avatar'), num(av, 'memory_limit', 5, 200))),
       h('div', { class: 'row' }, checkbox(t('Em grupo, os avatars conversam entre si sem você pedir'), av.auto_talk, (v) => { av.auto_talk = v; }), checkbox(t('Responder também por voz'), av.voice_reply, (v) => { av.voice_reply = v; })),
       h('div', { class: 'grid2' }, field(t('Máximo de falas seguidas entre avatars'), num(av, 'auto_talk_max', 1, 40), t('Depois disso eles esperam uma mensagem sua.')), field(t('Segundos entre falas autônomas'), num(av, 'auto_talk_delay', 1, 60)))),
+    teamCard(av, 'av', t('Vale para a CRIAÇÃO de avatars (Analista, Designer, system prompt e Revisor): esforço e agentes em paralelo por etapa.'), { title: t('Equipe de agentes — criação') }),
+    teamCard(av, 'avc', t('Vale para a CONVERSA com os avatars. Low = sem pensamento longo, para responder rápido; com 4 ou mais agentes, cada um escreve notas privadas antes de cada fala (mais lento).'), { title: t('Equipe de agentes — conversa'), agentsKey: 'chat_agents', effortKey: 'chat_effort', defaultEffort: 'low' }),
     saveRow(() => saveSettings({ avatars: av })));
 }
 
@@ -1080,5 +1094,6 @@ async function games() {
       h('div', { class: 'grid2' }, field(t('Tamanho padrão do jogo'), seg([['short', t('Curto')], ['medium', t('Médio')], ['long', t('Longo')]], g.length, (v) => { g.length = v; })),
         field(t('Rodadas de revisão'), select([['0', t('Nenhuma (mais rápido)')], ['1', '1'], ['2', '2']], String(g.revisions), (v) => { g.revisions = parseInt(v, 10); }), t('O agente Revisor pode pedir correções.'))),
       h('div', { class: 'grid2' }, field(t('Criatividade (temperatura)'), range(0, 1.5, 0.05, g.temperature, (v) => { g.temperature = v; })), field(t('Máximo de tokens por agente'), num(g, 'max_tokens', 1000, 32000, 500)))),
+    teamCard(g, 'gm'),
     saveRow(() => saveSettings({ games: g })));
 }

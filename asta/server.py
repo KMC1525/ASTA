@@ -16,7 +16,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import __version__, builder, hf, native, voice
+from . import __version__, builder, hf, native, team, voice
 from .agents.llm import call_json
 from .agents.pipeline import Cancelled, Pipeline, create_edit_version  # noqa: F401
 from .cards import character_from_png, import_character, normalize_character
@@ -142,6 +142,7 @@ class App:
         a = self.add
         a("GET", r"/api/state", self.r_state)
         a("GET", r"/api/settings", self.r_settings_get)
+        a("GET", r"/api/team", self.r_team)
         a("PUT", r"/api/settings", self.r_settings_put)
         a("GET", r"/api/settings/export", self.r_settings_export)
         a("POST", r"/api/settings/import", self.r_settings_import)
@@ -231,6 +232,10 @@ class App:
             "presets": describe_presets(), "settings": self.store.public_settings(),
             "configured": [pid for pid in s["providers"] if s["providers"][pid].get("api_key") or s["providers"][pid].get("model") or s["providers"][pid].get("base_url")],
         })
+
+    def r_team(self, req: "Request") -> None:
+        """As opções de equipe de TODAS as seções: 1/4/8/12/16 agentes e os oito níveis de esforço (Low … Omni)."""
+        req.json(team.options())
 
     def r_settings_get(self, req: "Request") -> None:
         req.json(self.store.public_settings())
@@ -470,7 +475,7 @@ class App:
         pipeline_req = {
             "prompt": text(body.get("prompt"), "", 20000), "attachment_ids": [x for x in _as_list(body.get("attachment_ids")) if isinstance(x, str)][:40],
             "worldbuilding_id": text(body.get("worldbuilding_id"), "", 60), "character_ids": [x for x in _as_list(body.get("character_ids")) if isinstance(x, str)][:24],
-            "settings": body.get("settings") if isinstance(body.get("settings"), dict) else {},
+            "settings": {**(body.get("settings") if isinstance(body.get("settings"), dict) else {}), **team.request_team(body)},
             "project_id": text(body.get("project_id"), "", 60),
         }
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
+from . import team as teamlib
 from .computer import ComputerError, ComputerManager, promptlib
 from .computer import osdrv, rulebased
 from .jobs import HttpError
@@ -111,7 +112,8 @@ class ComputerRoutes:
 
         try:
             doc = self.m.submit(text(b.get("goal"), "", 8000), mode=str(b.get("mode") or ""), attachment_ids=b.get("attachment_ids") if isinstance(b.get("attachment_ids"), list) else [],
-                                chat_id=chat_id, origin="chat" if chat_id else "section", before_start=attach)
+                                chat_id=chat_id, origin="chat" if chat_id else "section", before_start=attach,
+                                agents=teamlib.request_team(b).get("agents"), effort=teamlib.request_team(b).get("effort"))
         except ComputerError as exc:
             raise _http(exc) from None
         out["task"] = doc
@@ -142,7 +144,7 @@ class ComputerRoutes:
             raise HttpError(404, "Tarefa não encontrada")
         b = self._body(req)
         try:
-            req.json({"task": self.m.submit(old["goal"], mode=str(b.get("mode") or old.get("mode") or ""))}, 201)
+            req.json({"task": self.m.submit(old["goal"], mode=str(b.get("mode") or old.get("mode") or ""), agents=old.get("agents_n"), effort=old.get("effort"))}, 201)
         except ComputerError as exc:
             raise _http(exc) from None
 

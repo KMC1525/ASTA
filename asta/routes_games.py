@@ -8,6 +8,7 @@ from .agents.game_pipeline import GamePipeline
 from .games2d import GENRES
 from .games2d import schema as S
 from .jobs import HttpError, Job
+from .team import request_team as _team_of
 from .util import text
 
 
@@ -43,7 +44,7 @@ class GameRoutes:
             raise HttpError(400, "Anexe o ZIP do jogo (ou os arquivos de dados/scripts) para reconstruí-lo.")
 
         def work(job: Job) -> None:
-            RebuildPipeline(self.store, job.emit, lambda: job.cancelled).run({"attachment_ids": ids, "refine": (body["refine"] is not False) if "refine" in body else bool((self.store.get_settings().get("rebuild") or {}).get("refine", True))})
+            RebuildPipeline(self.store, job.emit, lambda: job.cancelled).run({"attachment_ids": ids, "team": _team_of(body), "refine": (body["refine"] is not False) if "refine" in body else bool((self.store.get_settings().get("rebuild") or {}).get("refine", True))})
 
         job = self.app.jobs.start("game_rebuild", work)
         req.json({"job_id": job.id})
@@ -63,6 +64,7 @@ class GameRoutes:
             "length": body.get("length") if body.get("length") in S.LENGTHS else "",
             "content": "sfw" if body.get("content") == "sfw" else ("free" if body.get("content") == "free" else ""),
             "project_id": text(body.get("project_id"), "", 60), "language": text(body.get("language"), "", 12),
+            "team": _team_of(body),
         }
 
         def work(job: Job) -> None:

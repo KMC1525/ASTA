@@ -14,6 +14,7 @@ from typing import Any, Callable, Dict, List, Optional
 
 from . import avatars as av
 from .agents import rulebased
+from . import team as teamlib
 from .providers import ProviderError, resolve_provider
 from .storage import Store
 from .util import new_id, now_iso, num
@@ -306,6 +307,18 @@ class ChatEngine:
         hold = max([len(n) for n in other_names] + [10]) + 4  # segura o fim do texto (pode ser o início de "Outro: …" ou de uma tag)
         temp = num(settings["avatars"].get("temperature"), 0.9, 0, 2)
         max_tok = int(num(settings["avatars"].get("max_tokens"), 500, 16, 8000))
+        # equipe da conversa (Low … Omni · 1/4/8/12/16): o esforço pede o pensamento ao modelo e dá mais espaço à fala; com 4+ agentes, cada um escreve notas privadas para o avatar
+        team = teamlib.from_config({"agents": settings["avatars"].get("chat_agents"), "effort": settings["avatars"].get("chat_effort")}, default_effort="low")
+        teamlib.apply_thinking(provider, team)
+        max_tok = int(min(8000, max_tok * team.tokens_mult))
+        if team.multi and not getattr(provider, "demo", False) and getattr(provider, "id", "") != "demo":
+            kept, provider.thinking = getattr(provider, "thinking", "off"), "off"
+            try:
+                notes = teamlib.team_notes(provider, messages[-6:], team, cancelled=cancelled)
+            finally:
+                provider.thinking = kept
+            if notes and not cancelled():
+                system += teamlib.notes_block(notes)
 
         def consume(chunks) -> None:
             nonlocal raw, sent

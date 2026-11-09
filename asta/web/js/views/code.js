@@ -1,12 +1,16 @@
-// Code — vibe coding de bases de código longas com equipes de agentes (até 8 por sessão, várias sessões em segundo plano), em pastas do computador e em repositórios do GitHub.
+// Code — vibe coding de bases de código longas com equipes de agentes (até 16 por sessão, várias sessões em segundo plano), em pastas do computador e em repositórios do GitHub.
 // Barra lateral: pastas e subpastas (nome, uma de 8 cores, recolher/expandir) com as sessões e a bolinha de estado de cada uma. Centro: a conversa e o que a equipe está fazendo. Direita: ambiente, plano, agentes e saídas.
 import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { state } from '../main.js';
 import { renderMarkdown } from '../markdown.js';
+import { AGENT_COUNTS } from '../team_ui.js';
 import { AGENT, EFFORT_LABEL, FILE_STATUS, MODE, MODE_HINT, PLAN_STATUS, PUBLISH, ROLE, RUN_STATUS, STATE, STEP_STATUS, TOOL_ICON, approvalCards, describeAction, fmtClock, fmtDur, fmtWhen, isBusy, stateDot, subscribe } from '../code_ui.js';
 import { confirmDialog, fill, h, icon, modal, popover, seg, toast } from '../ui.js';
 import { createComposer } from './composer.js';
+
+// 1 · 4 · 8 · 12 · 16 agentes; uma sessão antiga com outro número (2, 3, 5…) continua mostrando o dela
+const countsWith = (n) => [...new Set([...AGENT_COUNTS, n])].sort((a, b) => a - b);
 
 const idFromHash = () => { const m = location.hash.match(/^#\/code\/([\w-]+)/); return m ? m[1] : ''; };
 const cfg = () => (state.settings && state.settings.code) || {};
@@ -189,8 +193,7 @@ export default async function render(root, ctx) {
     walk(null, 0);
     const effortSel = h('select', { id: 'cd-effort', onchange: (e) => { f.effort = e.target.value; hint.textContent = t((stt.efforts.find((x) => x.id === f.effort) || {}).hint || ''); } }, (stt.efforts || []).map((e) => h('option', { value: e.id, selected: e.id === f.effort }, EFFORT_LABEL[e.id] || e.id)));
     const hint = h('div', { class: 'hint' }, t(((stt.efforts || []).find((x) => x.id === f.effort) || {}).hint || ''));
-    const agents = h('input', { id: 'cd-agents', type: 'range', min: 1, max: 8, step: 1, value: f.agents }), agentsOut = h('output', { id: 'cd-agents-out' }, String(f.agents));
-    agents.addEventListener('input', () => { f.agents = parseInt(agents.value, 10); agentsOut.textContent = String(f.agents); });
+    const agents = h('select', { id: 'cd-agents', onchange: (e) => { f.agents = parseInt(e.target.value, 10); } }, countsWith(f.agents).map((n) => h('option', { value: n, selected: n === f.agents }, t('{n} agente(s)', { n }))));
     let provs = [];
     try { provs = (await api('/api/chat/providers')).providers.filter((p) => p.usable || p.model); } catch (e) { /* sem lista: usa o padrão */ }
     const provSel = h('select', { id: 'cd-provider', onchange: (e) => { f.provider = e.target.value; } }, [h('option', { value: '' }, t('O padrão (o provedor escolhido em Configuração)')), ...provs.map((p) => h('option', { value: p.id }, t(p.label) + (p.local ? ' · ' + t('local') : ' · ' + t('nuvem'))))]);
@@ -202,7 +205,7 @@ export default async function render(root, ctx) {
         h('div', null, h('label', { class: 'f' }, t('Modo')), seg([['ask', MODE().ask], ['full', MODE().full]], f.mode, (v) => { f.mode = v; modeHint.textContent = MODE_HINT()[v]; }))),
       h('div', { class: 'hint', id: 'cd-mode-hint' }, ''),
       h('div', { class: 'grid2', style: { marginTop: '12px' } }, h('div', null, h('label', { class: 'f' }, t('Esforço')), effortSel, hint),
-        h('div', null, h('label', { class: 'f' }, t('Agentes ao mesmo tempo')), h('div', { class: 'row' }, agents, agentsOut))),
+        h('div', null, h('label', { class: 'f' }, t('Agentes ao mesmo tempo')), agents, h('div', { class: 'hint' }, t('Até 16 agentes (1, 4, 8, 12 ou 16) trabalhando ao mesmo tempo.')))),
       h('div', { class: 'grid2', style: { marginTop: '12px' } }, h('div', null, h('label', { class: 'f' }, t('Modelo de IA')), provSel), h('div', null, h('label', { class: 'f' }, t('Modelo (nome)')), modelIn)),
       h('label', { class: 'f', style: { marginTop: '12px' } }, t('Ao terminar')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'cd-docs', checked: f.docs, onchange: (e) => { f.docs = e.target.checked; } }), h('span', null, t('Atualizar README, changelogs e notas de versão'))),
@@ -329,7 +332,7 @@ export default async function render(root, ctx) {
     const modeBtn = h('button', { class: 'tool cd-modebtn ' + d.mode, type: 'button', id: 'cd-mode', title: MODE_HINT()[d.mode], onclick: async () => { const next = d.mode === 'ask' ? 'full' : 'ask'; if (next === 'full' && !(await confirmDialog(t('No Full Access o Code executa tudo sem perguntar nada (os limites fixos de segurança continuam valendo). Ativar?'), false, t('Ativar')))) return; await patch({ mode: next }); } },
       icon(d.mode === 'full' ? 'warn' : 'lock', 14), MODE()[d.mode]);
     const effort = h('select', { class: 'cd-sel', id: 'cd-effort-sel', title: t('Nível de esforço'), 'aria-label': t('Nível de esforço'), onchange: (e) => patch({ effort: e.target.value }) }, ((st.status || {}).efforts || []).map((e) => h('option', { value: e.id, selected: e.id === d.effort }, EFFORT_LABEL[e.id])));
-    const agents = h('select', { class: 'cd-sel', id: 'cd-agents-sel', title: t('Agentes ao mesmo tempo'), 'aria-label': t('Agentes ao mesmo tempo'), onchange: (e) => patch({ agents: parseInt(e.target.value, 10) }) }, [1, 2, 3, 4, 5, 6, 7, 8].map((n) => h('option', { value: n, selected: n === d.agents }, t('{n} agente(s)', { n }))));
+    const agents = h('select', { class: 'cd-sel', id: 'cd-agents-sel', title: t('Agentes ao mesmo tempo'), 'aria-label': t('Agentes ao mesmo tempo'), onchange: (e) => patch({ agents: parseInt(e.target.value, 10) }) }, countsWith(d.agents).map((n) => h('option', { value: n, selected: n === d.agents }, t('{n} agente(s)', { n }))));
     const modelBtn = h('button', { class: 'tool', type: 'button', id: 'cd-model-btn', title: t('Modelo de IA desta sessão'), onclick: (e) => modelPicker(e.currentTarget, d) }, icon('sparkle', 14), (d.provider && (d.provider.model || d.provider.id)) ? (d.provider.model || d.provider.id) : t('Modelo'));
     const fin = h('button', { class: 'tool', type: 'button', id: 'cd-finalize', title: t('O que fazer ao terminar'), onclick: (e) => finalizeMenu(e.currentTarget, d, finalize) }, icon('upload', 14), finalize.publish !== 'none' || finalize.docs ? t('Ao terminar: {x}', { x: [finalize.docs ? t('docs') : '', finalize.publish !== 'none' ? PUBLISH()[finalize.publish] : ''].filter(Boolean).join(' + ') }) : t('Ao terminar'));
     bar.push(modeBtn, effort, agents, modelBtn, fin);

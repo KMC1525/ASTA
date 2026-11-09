@@ -70,6 +70,7 @@ class AvatarPromptPipeline(Runner):
         pid = info["id"]
         if info["demo"]:
             self.warnings.append("modo Demo (sem IA): " + info["reason"])
+        self.configure_team(settings.get("avatars"), req, pid)
         self.emit({"type": "start", "steps": STEPS, "provider": pid, "model": self.provider.model, "content": want, "avatar_id": avatar_id})
 
         produced = self.produce(card, instructions, want, hint, detail)

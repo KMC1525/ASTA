@@ -10,6 +10,7 @@ import { confirmDialog, fill, fmtDate, h, icon, kindIcon, modal, popover, toast 
 import { createComposer, kindOf } from './composer.js';
 import { HINTS, MODES, TITLES, TOOL_BUILDERS, resumeIfRunning } from './home.js';
 import { clearJob } from './run.js';
+import { teamPicker } from '../team_ui.js';
 import { MODE, MODE_HINT, liveCard } from '../computer_ui.js';
 
 const LAST_KEY = 'asta.chat', WEB_KEY = 'asta.web', SIDE_KEY = 'asta.sources', TABS_KEY = 'asta.tabs';
@@ -146,7 +147,10 @@ export default async function render(root, ctx) {
       h('div', { class: 'mp-foot' }, h('a', { href: '#/config', onclick: () => { pop.close(); go('config', { tab: 'chat' }); return false; } }, icon('config', 13), t('Mais opções do Chat…')))));
   }
 
-  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, cuBtn, webBtn], rightTools: [thinkBtn, modelBtn], onSend: (x) => (st.cu ? cuRun(x) : st.tool ? toolRun(x) : sendChat(x)) });
+  // equipe do Chat: esforço (Low … Omni) e 1/4/8/12/16 agentes (notas privadas para a resposta); fica salvo em Configuração → Chat
+  const chatCfg = state.settings.chat || {};
+  const chatTeam = teamPicker({ agents: chatCfg.team_agents, effort: chatCfg.effort }, (v) => { saveSettings({ chat: { effort: v.effort, team_agents: v.agents } }).catch((e) => toast(e.message, 'err')); }, { id: 'chat-team', defaultEffort: 'low' });
+  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, cuBtn, webBtn], rightTools: [chatTeam.el, thinkBtn, modelBtn], onSend: (x) => (st.cu ? cuRun(x) : st.tool ? toolRun(x) : sendChat(x)) });
 
   // ------------------------------------------------------------------ ferramentas de criação (ativadores)
   let toolCfg = null;

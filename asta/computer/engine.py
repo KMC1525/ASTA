@@ -20,6 +20,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from .. import team as teamlib
 from ..providers import ProviderError, resolve_provider
 from ..util import new_id, now_iso
 from . import agents as A
@@ -96,6 +97,7 @@ class TaskRunner:
         self.env: Dict[str, Any] = {}
         self.lang = "pt"
         self.turns = 0
+        self.team = teamlib.Team()
 
     # ----------------------------------------------------------------- controle externo
     def cancel(self) -> None:
@@ -154,6 +156,10 @@ class TaskRunner:
         self.demo = bool(info.get("demo")) or getattr(self.provider, "id", "") == "demo"
         self.vision = bool(getattr(self.provider, "vision", False))
         d["provider"] = {"id": info.get("id", ""), "label": info.get("label", ""), "model": info.get("model", ""), "vision": self.vision, "demo": self.demo}
+        want = {k: d.get(src) for k, src in (("agents", "agents_n"), ("effort", "effort")) if d.get(src) is not None}
+        self.team = teamlib.from_config(self.cfg, want)   # a equipe: a da tarefa (se escolhida ao criar) ou a das configurações
+        teamlib.apply_thinking(self.provider, self.team, info.get("id", ""), info.get("model", ""))
+        d["agents_n"], d["effort"] = self.team.agents, self.team.effort
         folders = rulebased.known_folders()
         self.env = {"os": f"{driver.label} {platform.release()}".strip(), "home": str(guard.home()), "folders": {k: str(v) for k, v in folders.items() if k != "home"},
                     "now": time.strftime("%Y-%m-%d %H:%M"), "screen": list(driver.screen_size() or [])}
@@ -244,7 +250,9 @@ class TaskRunner:
             if not d.get("blocked"):
                 outcome = self._operate()
                 review = self._review(outcome)
-                if review and review["verdict"] != "pass" and review["fix"] and self.cfg["revisions"] > 0 and not self.rules_only and not self.cancelled() and outcome is not None:
+                for _ in range(self.team.revisions(self.cfg["revisions"])):
+                    if not (review and review["verdict"] != "pass" and review["fix"] and not self.rules_only and not self.cancelled() and outcome is not None):
+                        break
                     self.doc["revisions"] = self.doc.get("revisions", 0) + 1
                     outcome = self._operate(feedback=review["fix"], extra=12) or outcome
                     review = self._review(outcome)
@@ -300,7 +308,8 @@ class TaskRunner:
                        "vision": self.vision, "mode": d["mode"],
                        "known_apps": [a["name"] for a in self.m.driver.apps()[:60]] if self.m.driver.capabilities()["apps"]["ok"] else [],
                        "known_games": [g["name"] for g in self._games()[:40]]}
-            obj = self.brain.ask("planner", self._system("planner", tools="", unavailable=""), A.PLAN_INSTR, payload, images=self.input_images or None, max_tokens=1500)
+            sys = self._system("planner", tools="", unavailable="")
+            obj = self.brain.ask_team(self.team, "planner", sys, A.PLAN_INSTR, payload, images=self.input_images or None, max_tokens=1500, critique=True)
             plan = A.normalize_plan(obj, goal) if obj else A.fallback_plan(goal)
             if plan["blocked"]:
                 d["blocked"] = plan["blocked"]
@@ -326,7 +335,7 @@ class TaskRunner:
             self.op_system = self._system("operator", kind=plan.get("kind", "mixed"), tools=T.catalog_text(self.names),
                                           unavailable="\n".join(f"- {n}: {w}" for n, w in self.missing.items()), uses_gui=uses_gui)
         self._agent("operator", "running", "")
-        max_turns = self.cfg["max_steps"] + extra
+        max_turns = self.steps_limit() + extra
         local_turns, bad = 0, 0
         while True:
             if self.cancelled():
@@ -361,6 +370,11 @@ class TaskRunner:
             if self._execute(turn) == "stop":
                 self._agent("operator", "error", "repetiu a mesma ação com erro")
                 return {"success": False, "summary": "Parei porque a mesma ação falhou várias vezes seguidas." if self.lang == "pt" else "I stopped because the same action kept failing."}
+
+    def steps_limit(self) -> int:
+        """Passos do Operador: o ajuste da seção, escalado pelo esforço (High é o ponto neutro: Low faz menos, Omni faz mais)."""
+        scale = self.team.prof["turns"] / teamlib.efforts.PROFILES["high"]["turns"]
+        return int(max(5, min(400, round(self.cfg["max_steps"] * scale))))
 
     def _scripted_turn(self) -> Dict[str, Any]:
         acts = (self.script or {}).get("actions", [])
@@ -543,7 +557,7 @@ class TaskRunner:
         if self.vision and self.last_shot and self.last_shot.exists():
             self.pending_image = self.last_shot
             images = self._take_image()
-        obj = self.brain.ask("verifier", self._system("verifier"), A.REVIEW_INSTR, payload, images=images, max_tokens=900)
+        obj = self.brain.ask_team(self.team, "verifier", self._system("verifier"), A.REVIEW_INSTR, payload, images=images, max_tokens=900)
         rev = A.normalize_review(obj)
         if rev is None:
             rev = det

@@ -4,6 +4,7 @@ import { go, state } from '../main.js';
 import { confirmDialog, fill, fmtDate, h, icon, modal, select, seg, toast } from '../ui.js';
 import { createComposer } from './composer.js';
 import { fmtDur, mountTimeline } from './studio_timeline.js';
+import { teamPicker } from '../team_ui.js';
 
 // Seção Studio: gera, edita e revisa vídeos com IA. Lista de projetos (único/série), criação com duração/estilo, edição automática e a página do projeto (cenas, timeline, exportar).
 export const subRoute = () => { const m = location.hash.match(/^#\/studio\/([\w-]+)(?:\/(scenes|timeline|export))?/); return m ? { id: m[1], tab: m[2] || '' } : { id: '', tab: '' }; };
@@ -120,8 +121,9 @@ async function renderList(root, ctx, meta) {
   // ---- novo projeto
   const kindSeg = chips([['single', t('Único'), t('começa e termina num vídeo')], ['series', t('Série'), t('vários episódios que continuam a história')]], m.kind, (v) => { m.kind = v; }, 'kinds');
   const nameIn = h('input', { id: 'st-name', placeholder: t('Nome do projeto (opcional)'), oninput: (e) => { m.name = e.target.value; } });
+  const team = teamPicker(D, null, { id: 'st-new-team' });   // esforço (Low … Omni) e 1/4/8/12/16 agentes
   const composer = createComposer({ placeholder: t('Descreva o vídeo: tema, história, personagens, tom… (ou anexe roteiros, imagens e documentos)'), sendLabel: t('Gerar'), sendTitle: t('Planeja e gera o vídeo cena a cena'), tools: [
-    h('button', { class: 'tool', type: 'button', id: 'st-only', title: t('Cria o projeto sem gerar nada ainda'), onclick: () => start(false) }, icon('plus', 15), t('Só criar o projeto'))],
+    h('button', { class: 'tool', type: 'button', id: 'st-only', title: t('Cria o projeto sem gerar nada ainda'), onclick: () => start(false) }, icon('plus', 15), t('Só criar o projeto')), team.el],
   onSend: () => start(true) });
   async function start(generate) {
     const text = composer.text(), attachIds = composer.fileIds();
@@ -132,7 +134,7 @@ async function renderList(root, ctx, meta) {
       const p = await api('/api/studio/projects', { method: 'POST', body: { name: m.name.trim() || text.trim().slice(0, 50) || t('Novo projeto'), kind: m.kind, duration_type: m.dtype, target_seconds: m.target, style: m.style, style_custom: m.style_custom, aspect: m.aspect,
         language: m.language, motion: m.motion, captions: m.captions, music: m.music, revisions: m.revisions, voice: m.voice, prompt: text, premise: text } });
       let job = null;
-      if (generate) job = (await api(`/api/studio/projects/${p.id}/episodes/${p.episodes[0].id}/generate`, { method: 'POST', body: { prompt: text, attachment_ids: attachIds } })).job_id;
+      if (generate) job = (await api(`/api/studio/projects/${p.id}/episodes/${p.episodes[0].id}/generate`, { method: 'POST', body: { prompt: text, attachment_ids: attachIds, team: team.get() } })).job_id;
       state.ctx = job ? { job } : {};
       location.hash = '#/studio/' + p.id + (job ? '/scenes' : '');
     } catch (e) { toast(e.message, 'err'); composer.setSending(false); composer.refresh(); }
@@ -144,7 +146,8 @@ async function renderList(root, ctx, meta) {
   const ae = { style: D.autoedit_style || 'gameplay', target: D.autoedit_target || 0, aspect: '16:9', bpm: 0, name: '' };
   const aeHost = h('div'), aeBpm = h('input', { type: 'number', min: 60, max: 240, placeholder: 'BPM', id: 'ae-bpm', oninput: (e) => { ae.bpm = parseInt(e.target.value || '0', 10) || 0; } });
   const aeTarget = h('input', { type: 'number', min: 0, max: 21600, placeholder: t('auto'), id: 'ae-target', oninput: (e) => { ae.target = parseInt(e.target.value || '0', 10) || 0; } });
-  const aeComposer = createComposer({ placeholder: t('Anexe os vídeos, imagens e áudios (vários) e diga o que quer: momentos, ritmo, tom, o que destacar…'), sendLabel: t('Editar'), sendTitle: t('Monta a edição automaticamente'), tools: [], onSend: () => runAuto() });
+  const aeTeam = teamPicker(D, null, { id: 'st-ae-team' });
+  const aeComposer = createComposer({ placeholder: t('Anexe os vídeos, imagens e áudios (vários) e diga o que quer: momentos, ritmo, tom, o que destacar…'), sendLabel: t('Editar'), sendTitle: t('Monta a edição automaticamente'), tools: [aeTeam.el], onSend: () => runAuto() });
   const craftNote = h('p', { class: 'muted small', id: 'ae-craft', style: { margin: '6px 0 0' } });
   const showCraft = (id) => { const x = meta.edit_styles.find((y) => y.id === id); craftNote.textContent = x && x.craft ? t('Técnica: ') + t(x.craft) : ''; };
   setTimeout(() => showCraft(ae.style), 0);
@@ -154,7 +157,7 @@ async function renderList(root, ctx, meta) {
     aeComposer.setSending(true);
     try {
       const ids = aeComposer.fileIds();
-      const r = await api('/api/studio/autoedit', { method: 'POST', body: { attachment_ids: ids, prompt: aeComposer.text(), style: ae.style, target_seconds: ae.target, aspect: ae.aspect, bpm: ae.bpm, name: ae.name, language: m.language } });
+      const r = await api('/api/studio/autoedit', { method: 'POST', body: { attachment_ids: ids, prompt: aeComposer.text(), style: ae.style, target_seconds: ae.target, aspect: ae.aspect, bpm: ae.bpm, name: ae.name, language: m.language, team: aeTeam.get() } });
       follow(aeHost, r.job_id, { steps: ['attachments', 'analyst', 'director', 'reviewer', 'assemble'], labels: { attachments: 'Anexos', analyst: 'Analista', director: 'Diretor', reviewer: 'Revisor', assemble: 'Montagem' },
         onDone: (ev) => { toast(t('Edição pronta: {n} cortes, {d}.', { n: ev.cuts, d: fmtDur(ev.duration) }), 'ok'); location.hash = '#/studio/' + ev.project_id + '/timeline'; }, onRetry: () => go('studio', { mode: 'autoedit' }) });
     } catch (e) { toast(e.message, 'err'); aeComposer.setSending(false); aeComposer.refresh(); }
@@ -259,9 +262,10 @@ async function renderProject(root, ctx, meta, sub) {
       progTxt.textContent = n ? t('{d} de {n} cenas entregues', { d, n }) + ' · ' + t('{a} de {b}', { a: fmtDur(ep.timeline.duration), b: fmtDur(ep.target || p.target_seconds) }) : '';
       paintActions();
     };
+    const projTeam = teamPicker((state.settings && state.settings.studio) || {}, null, { id: 'st-gen-team' });
     const paintActions = () => {
       const n = ep.scenes.length, d = delivered();
-      fill(actions, h('button', { class: 'btn primary', id: 'st-gen', disabled: busy, onclick: () => generate({}) }, icon('play', 14), !n ? t('Gerar') : d < n ? t('Continuar a geração') : t('Gerar de novo')),
+      fill(actions, projTeam.el, h('button', { class: 'btn primary', id: 'st-gen', disabled: busy, onclick: () => generate({}) }, icon('play', 14), !n ? t('Gerar') : d < n ? t('Continuar a geração') : t('Gerar de novo')),
         n ? h('button', { class: 'btn', id: 'st-replan', disabled: busy, title: t('Escreve um roteiro novo e refaz todas as cenas'), onclick: async () => { if (await confirmDialog(t('Replanejar descarta as cenas e a timeline deste episódio e gera tudo de novo. Continuar?'), true, t('Replanejar'))) generate({ replan: true }); } }, icon('refresh', 14), t('Replanejar tudo')) : null,
         busy ? h('button', { class: 'btn', id: 'st-cancel', onclick: async () => { await api('/api/jobs/' + jobId + '/cancel', { method: 'POST' }).catch(() => {}); } }, t('Cancelar')) : null,
         d ? h('button', { class: 'btn ghost', onclick: () => { tab = 'timeline'; paintTabs(); paintBody(); } }, icon('film', 14), t('Abrir na timeline')) : null);
@@ -270,7 +274,7 @@ async function renderProject(root, ctx, meta, sub) {
       if (busy) return;
       try {
         await api(`/api/studio/projects/${p.id}/episodes/${ep.id}/meta`, { method: 'POST', body: { prompt: prompt.value } });
-        const r = await api(`/api/studio/projects/${p.id}/episodes/${ep.id}/generate`, { method: 'POST', body: Object.assign({ prompt: prompt.value }, extra) });
+        const r = await api(`/api/studio/projects/${p.id}/episodes/${ep.id}/generate`, { method: 'POST', body: Object.assign({ prompt: prompt.value, team: projTeam.get() }, extra) });
         attach(r.job_id);
       } catch (e) { if (e.status === 409 && e.data && e.data.job_id) attach(e.data.job_id); else toast(e.message, 'err'); }
     }
@@ -356,7 +360,7 @@ async function renderProject(root, ctx, meta, sub) {
     const ae = { style: 'gameplay', target: 0, bpm: 0 };
     const ep = epOf(), hasContent = ep.timeline.clips.length > 0;
     if (hasContent && p.kind === 'single' && !(await confirmDialog(t('Este projeto já tem uma timeline. A edição automática vai substituí-la. Continuar?'), true, t('Substituir')))) return;
-    const host = h('div'), cmp = createComposer({ placeholder: t('Anexe os arquivos e diga o que quer…'), sendLabel: t('Editar'), tools: [], onSend: () => run() });
+    const host = h('div'), aeT = teamPicker((state.settings && state.settings.studio) || {}, null, { id: 'st-ae2-team' }), cmp = createComposer({ placeholder: t('Anexe os arquivos e diga o que quer…'), sendLabel: t('Editar'), tools: [aeT.el], onSend: () => run() });
     const target = h('input', { type: 'number', min: 0, placeholder: t('auto'), oninput: (e) => { ae.target = parseInt(e.target.value || '0', 10) || 0; } });
     const bpm = h('input', { type: 'number', min: 60, max: 240, placeholder: 'BPM', oninput: (e) => { ae.bpm = parseInt(e.target.value || '0', 10) || 0; } });
     const list = chips(meta.edit_styles.map((s) => [s.id, t(s.label), t(s.hint)]), ae.style, (v) => { ae.style = v; }, 'estyles');
@@ -366,7 +370,7 @@ async function renderProject(root, ctx, meta, sub) {
     async function run() {
       cmp.setSending(true);
       try {
-        const r = await api('/api/studio/autoedit', { method: 'POST', body: { attachment_ids: cmp.fileIds(), prompt: cmp.text(), style: ae.style, target_seconds: ae.target, aspect: p.aspect, bpm: ae.bpm, project_id: p.id, language: p.language } });
+        const r = await api('/api/studio/autoedit', { method: 'POST', body: { attachment_ids: cmp.fileIds(), prompt: cmp.text(), style: ae.style, target_seconds: ae.target, aspect: p.aspect, bpm: ae.bpm, project_id: p.id, language: p.language, team: aeT.get() } });
         follow(host, r.job_id, { steps: ['attachments', 'analyst', 'director', 'reviewer', 'assemble'], labels: { attachments: 'Anexos', analyst: 'Analista', director: 'Diretor', reviewer: 'Revisor', assemble: 'Montagem' },
           onDone: async (ev) => { document.querySelector('.modal-bg')?.remove(); await reload(); epId = ev.episode_id; CUR_EP[p.id] = epId; tab = 'timeline'; paintAll(); toast(t('Edição pronta: {n} cortes, {d}.', { n: ev.cuts, d: fmtDur(ev.duration) }), 'ok'); }, onRetry: () => { cmp.setSending(false); cmp.refresh(); host.replaceChildren(); } });
       } catch (e) { toast(e.message, 'err'); cmp.setSending(false); cmp.refresh(); }
