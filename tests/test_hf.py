@@ -157,6 +157,24 @@ class DownloadTests(TmpCase):
 class GgufKindsTests(ServerCase):
     """Modelos GGUF separados por tipo: texto, imagem, vídeo, som, voz e outros (busca, pasta e lista próprias)."""
 
+    def test_image_gguf_download_also_fetches_vae_and_text_encoder(self):
+        from asta.canvas import support
+
+        calls = []
+
+        def fake_support(folder, name, token="", progress=None, cancelled=lambda: False, note=lambda m: None):
+            calls.append(name)
+            return ["ae.safetensors"]
+
+        def fake_many(repo, names, dest, *a, **k):
+            return dest / names[0]
+
+        with mock.patch.object(hf, "download_many", fake_many), mock.patch.object(support, "download_missing", fake_support):
+            for kind, file in (("image", "flux-2-klein-4b-Q4_K_M.gguf"), ("text", "flux-2-klein-4b-Q4_K_M.gguf"), ("image", "tiny-Q4_K_M.gguf")):
+                job = self.c.json("POST", "/api/hf/download", {"repo": "dono/modelo", "file": file, "quant": "Q4_K_M", "kind": kind})[1]
+                self.c.sse(f"/api/jobs/{job['job_id']}/events")
+        self.assertEqual(calls, ["flux-2-klein-4b-Q4_K_M.gguf"])   # só imagem/vídeo de família conhecida; texto e modelos sem família não baixam apoios
+
     def test_search_download_list_and_delete_per_kind(self):
         fake = FakeHF()
         try:

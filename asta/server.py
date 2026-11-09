@@ -671,7 +671,8 @@ class App:
         if not names:
             raise HttpError(400, "Escolha uma quantização para baixar.")
         try:
-            dest = hf.kind_dir(self.store.models_dir, text(body.get("kind"), "text", 8) or "text", create=True)
+            kind = text(body.get("kind"), "text", 8) or "text"
+            dest = hf.kind_dir(self.store.models_dir, kind, create=True)
         except ProviderError as exc:
             raise HttpError(400, str(exc))
         sizes = {n: int(body["sizes"].get(n, 0)) for n in names} if isinstance(body.get("sizes"), dict) and all(isinstance(v, (int, float)) for v in body["sizes"].values()) else {}
@@ -686,7 +687,18 @@ class App:
                     job.emit({"type": "progress", "done": done, "total": total})
 
             path = hf.download_many(repo, names, dest, self._hf_token(), sizes, progress, lambda: job.cancelled)
-            job.emit({"type": "done", "name": path.name})
+            extra: list = []
+            if kind in ("image", "video") and path.suffix.lower() == ".gguf":   # modelo de difusão de família conhecida (Qwen-Image, FLUX, Z-Image, Wan…): baixa junto o VAE e o codificador de texto
+                from .canvas import support
+
+                info = support.missing(dest, path.name)
+                if info["missing"]:
+                    job.emit({"type": "note", "message": "Baixando também os arquivos de apoio: " + ", ".join(m["label"] for m in info["missing"]) + f" (≈ {info['approx_gb']} GB)…"})
+                    try:
+                        extra = support.download_missing(dest, path.name, self._hf_token(), progress, lambda: job.cancelled, lambda m: job.emit({"type": "note", "message": m}))
+                    except ProviderError as exc:   # o modelo já está baixado: a falha dos apoios não o desfaz (o nó oferece o botão de baixar depois)
+                        job.emit({"type": "note", "message": f"Os arquivos de apoio não baixaram ({exc}); use «Baixar os arquivos de apoio» no nó."})
+            job.emit({"type": "done", "name": path.name, "support": extra})
 
         job = self.jobs.start("download", work)
         req.json({"job_id": job.id})

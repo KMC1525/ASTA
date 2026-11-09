@@ -181,3 +181,18 @@ class InstallAndUseTests(TmpCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class NeedCompanionsTests(TmpCase):
+    def test_flux2_klein_without_vae_and_llm_asks_for_support_files_instead_of_running_sd_cli(self):
+        folder = self.tmp / "image"
+        folder.mkdir()
+        model = folder / "flux-2-klein-4b-Q4_K_M.gguf"
+        model.write_bytes(b"x")
+        with self.assertRaises(ProviderError) as cm:
+            M.GGUFMedia._need_companions(model, {})
+        self.assertIn("asta-support:flux-2-klein-4b-Q4_K_M.gguf", str(cm.exception))
+
+
+if __name__ == "__main__":
+    unittest.main()

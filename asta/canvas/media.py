@@ -1977,10 +1977,19 @@ class GGUFMedia(MediaProvider):
             + ("Parece falta de memória: o modelo e o codificador de texto juntos não cabem na RAM livre; feche outros programas ou use uma quantização menor (Q3/Q2). " if re.search(r"alloc|out of memory|oom|memory", why, re.I) or crashed in (-9, 137) else "")
             + f"Arquivos carregados: {files}. " + hint + _sd_env(sdc))
 
+    @staticmethod
+    def _need_companions(path: Path, load: Dict[str, Any]) -> None:
+        """Modelo de família conhecida sem os arquivos de apoio (VAE, codificador de texto): o sd-cli receberia só `-m` e falharia com «get sd version from file failed». Avisa o que falta e oferece baixar."""
+        info = support.missing(path.parent, path.name)
+        if info["missing"] and not any(k != "model_path" and k.endswith("_path") and v for k, v in load.items() if v != "@model"):
+            raise ProviderError(f"Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB); sem eles o modelo não carrega. "
+                                f"Use o botão «Baixar os arquivos de apoio» no nó, ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]")
+
     def _image_cli(self, path: Path, load: Dict[str, Any], extra: Dict[str, Any], prompt: str, size: str, count: int, seed: int, negative: str, refs: Sequence[Ref]) -> List[Media]:
         """A imagem pelo `sd-cli` pré-compilado (a biblioteca Python não reconhece o modelo): os mesmos arquivos de apoio e parâmetros; referências por `-r` (modelos multi-referência) ou imagem inicial `-i`."""
         cli = sdcli.find()
         assert cli is not None
+        self._need_companions(path, load)
         kw = self._load_kwargs(path, load)
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))
@@ -2178,6 +2187,7 @@ class GGUFMedia(MediaProvider):
         """O vídeo pelo `sd-cli` (`-M vid_gen`): os quadros saem numerados e o ASTA os monta em MP4 pelo ffmpeg."""
         cli = sdcli.find()
         assert cli is not None
+        self._need_companions(path, load)
         vinfo = (fam or {}).get("video") or {}
         fps = int(vinfo.get("fps") or 16)
         run_p = {k: v for k, v in extra.items() if k != "load"}
