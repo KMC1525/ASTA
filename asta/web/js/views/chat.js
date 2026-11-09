@@ -67,7 +67,7 @@ export default async function render(root, ctx) {
   const cuBtn = h('button', { class: 'tool cubtn', type: 'button', id: 'chat-cu', title: t('Computer Use: a IA faz tarefas no seu computador (arquivos, programas, jogos, pesquisa, escrita)'), 'aria-haspopup': 'true', onclick: (e) => openCuMenu(e.currentTarget) });
   const paintCuBtn = () => {
     cuBtn.classList.toggle('on', !!st.cu);
-    cuBtn.replaceChildren(icon('computer', 15), st.cu ? 'Computer Use · ' + MODE()[st.cu] : 'Computer Use',
+    cuBtn.replaceChildren(icon('computer', 15), h('span', { class: 'cu-l' }, st.cu ? 'Computer Use · ' + MODE()[st.cu] : 'Computer Use'),
       st.cu ? h('span', { class: 'x', title: t('Voltar a só conversar'), onclick: (e) => { e.stopPropagation(); setCu(''); } }, '×') : icon('chev', 12));
   };
   paintCuBtn();   // sem isto o botão do Computer Use ficava como uma pílula vazia até alguém clicar
