@@ -135,11 +135,19 @@ def call_json(
     ]
     last_err = "desconhecido"
     raw = ""
+    json_mode = True
     want = re.search(r"Output JSON:\s*(\{.*\})", instruction, re.S)  # o formato esperado, repetido na nova tentativa
     for attempt in range(attempts):
         if cancelled and cancelled():
             raise ProviderError("cancelado")
-        raw = provider.chat(messages, system=system, temperature=temperature, max_tokens=max_tokens, json_mode=True)
+        raw = provider.chat(messages, system=system, temperature=temperature, max_tokens=max_tokens, json_mode=json_mode)
+        if not str(raw or "").strip():
+            # resposta VAZIA: o mais comum é um modelo que «pensa» e gasta todo o limite de tokens no raciocínio, ou um servidor que devolve vazio com o modo JSON ligado. Repete a MESMA pergunta com
+            # mais espaço e sem forçar o modo JSON — mandar de volta uma mensagem vazia da IA (como nas respostas inválidas) só confunde o modelo e alguns provedores recusam.
+            last_err = "resposta vazia"
+            max_tokens = min(max_tokens * 2, 16384)
+            json_mode = False
+            continue
         try:
             obj = extract_json(str(raw), lenient=attempt == attempts - 1)  # na última tentativa aceita o JSON escrito dentro do raciocínio
             if not isinstance(obj, dict):

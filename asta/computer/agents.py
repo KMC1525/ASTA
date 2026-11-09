@@ -52,6 +52,9 @@ class Brain:
                 raise
             except ValueError as exc:   # JSON inválido mesmo depois do reparo
                 last = exc
+                if "vazio" in str(exc) and attempt < 2:   # a IA respondeu vazio (raciocínio que comeu o limite de tokens): mais uma rodada com o dobro de espaço
+                    max_tokens = min(max_tokens * 2, 12000)
+                    continue
                 break
         self.warn(f"{agent}: a IA não devolveu um JSON válido ({str(last)[:120]})")
         return None
