@@ -146,4 +146,7 @@ EN = {
     "Núcleo em Rust ativo (pré-compilado):": "Rust core active (pre-built):",
     "Núcleo Rust: já ativo ({p}).": "Rust core: already active ({p}).",
     "Sem a biblioteca pré-compilada e sem compilador neste computador, o ASTA segue em Python (mais lento). ": "Without the pre-built library and without a compiler on this computer, ASTA keeps running in Python (slower). ",
+    "baixa o executável pronto da stable-diffusion.cpp (sd-cli), sem compilar, para modelos de imagem que a biblioteca Python não reconhece": "downloads the ready-made stable-diffusion.cpp executable (sd-cli), no compiling, for image models the Python library does not recognize",
+    "{p}% baixado": "{p}% downloaded",
+    "sd-cli instalado em {p}. O Canvas o usa nos modelos que a biblioteca Python não reconhece.": "sd-cli installed at {p}. The Canvas uses it for models the Python library does not recognize.",
 }

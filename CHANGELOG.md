@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.34] — 2026-11-09
+
+### Adicionado — Canvas: sd-cli pré-compilado quando a biblioteca Python não reconhece o modelo (sem compilar)
+Continuação do relato «a stable-diffusion.cpp instalada não reconhece o modelo» (FLUX.2 klein GGUF): a biblioteca do PyPI (0.4.7) é antiga demais, e a saída que existia — compilar a do GitHub — exige git, cmake e compilador C++ e leva muitos minutos (na captura ficou em «git submodule update…»).
+- **Botão «Baixar o executável pronto (sem compilar)»** no erro do nó (e `asta libs --sd-cli`): baixa o `sd-cli` oficial da **Release mais nova** da stable-diffusion.cpp (`leejet/stable-diffusion.cpp`; escolhe o arquivo do seu sistema: Linux x86_64, macOS arm64 ou Windows x64; CPU por padrão, `ASTA_SD_BACKEND=vulkan|cuda` muda) para `<dados>/bin/sd-cpp/`, abre o pacote com as travas de segurança do ASTA, confere que o executável roda e guarda a versão. **Só a pedido**, por HTTPS do repositório oficial; nada é instalado fora da pasta de dados.
+- **Uso automático:** quando a biblioteca Python não reconhece o modelo (ou nem está instalada) e há um `sd-cli`, o nó Imagem e o nó Vídeo passam a gerar por ele, como processo à parte (com cancelamento), com os mesmos arquivos de apoio e parâmetros das famílias (`support.FAMILIES`): `--diffusion-model/--vae/--llm/--t5xxl`, `--cfg-scale`, `--steps`, `--sampling-method`, `--flow-shift`, referências `-r` (modelos multi-referência) ou imagem inicial `-i`, `-M vid_gen` com `--video-frames`/`--fps` (o ASTA monta o MP4). Opções sem equivalente são ignoradas com aviso. As opções foram conferidas no código-fonte da stable-diffusion.cpp.
+- Sem o `sd-cli`, o erro agora oferece primeiro o download e só depois a compilação.
+- **Limites honestos:** o fluxo de download usa a Release mais nova, cujos nomes de arquivo seguem o workflow de build do repositório (não consultei a API de Releases daqui); se não houver arquivo para o seu sistema (ex.: Linux ARM, macOS Intel), o ASTA diz isso e a compilação continua sendo a saída. Testado com um `sd-cli` de mentira (script) e uma Release simulada — **não rodei com o `sd-cli` e os modelos reais**. O núcleo Rust não mudou.
+- Versão 0.17.34.
+
 ## [0.17.33] — 2026-11-09
 
 ### Corrigido — Canvas: referências descartadas no modo Gerar e tamanho trocado pela 1ª foto

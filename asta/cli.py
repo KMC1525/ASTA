@@ -219,9 +219,32 @@ def _ensure_pip() -> bool:
         return False
 
 
+def _sd_cli_install() -> int:
+    """`asta libs --sd-cli`: baixa o sd-cli pré-compilado da stable-diffusion.cpp (sem git nem compilador) para a pasta de dados."""
+    from .canvas import sdcli
+    from .providers import ProviderError
+
+    last = [0.0]
+
+    def progress(done: int, total: int) -> None:
+        if total and time.time() - last[0] > 2:
+            last[0] = time.time()
+            print("  " + _("{p}% baixado", p=int(100 * done / total)), flush=True)
+
+    try:
+        exe = sdcli.install(progress, lambda: False, lambda m: print(m, flush=True))
+    except ProviderError as exc:
+        print("⚠  " + str(exc), file=sys.stderr)
+        return 1
+    print(_("sd-cli instalado em {p}. O Canvas o usa nos modelos que a biblioteca Python não reconhece.", p=exe))
+    return 0
+
+
 def _libs(args: argparse.Namespace) -> int:
     """Instala o que falta e atualiza (só se houver versão mais nova) as bibliotecas opcionais do ASTA. Uma que falhe não impede as outras.
     O que já está instalado não é instalado de novo: o pip só mexe nele se existir uma versão mais nova."""
+    if getattr(args, "sd_cli", False):
+        return _sd_cli_install()
     chosen, unknown = _wanted_libs(getattr(args, "extras", "") or "")
     sd_force = bool(getattr(args, "sd_latest", False))
     if unknown:
@@ -667,6 +690,7 @@ def main(argv=None) -> int:
     mod.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     libs = sub.add_parser("libs", help=_("instala/atualiza as bibliotecas opcionais do ASTA (docs, media, local)"))
     libs.add_argument("--extras", default="", help=_("all (padrão), none ou lista separada por vírgula (docs,media,local)"))
+    libs.add_argument("--sd-cli", action="store_true", help=_("baixa o executável pronto da stable-diffusion.cpp (sd-cli), sem compilar, para modelos de imagem que a biblioteca Python não reconhece"))
     libs.add_argument("--sd-latest", action="store_true", help=_("compila a stable-diffusion-cpp-python mais nova do GitHub (para modelos de imagem novos que a do PyPI não reconhece)"))
     nat = sub.add_parser("native", help=_("Rust e núcleo rápido do ASTA: status | build | install | update | setup"))
     nat.add_argument("action", choices=("status", "build", "install", "update", "setup"), nargs="?", default="status")
