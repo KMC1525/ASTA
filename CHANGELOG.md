@@ -5,6 +5,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.22] — 2026-11-09
+
+### Adicionado — suporte ao FLUX.3 Image Klein (`black-forest-labs/flux-3-image-klein`)
+O FLUX.3 Image Klein (5,6B, edição, texto → imagem e até **10 imagens de referência**) é restrito (licença FLUX Kommunity: aceite-a na página do modelo e configure o token do Hugging Face) e **não usa o pipeline comum do diffusers**: é um pipeline *modular*, com o Qwen3-VL-4B como codificador de texto e um expansor de prompt de 9B.
+- **Hugging Face local:** carrega pelo `ModularPipeline`, só com arquivos locais (o modo offline vale só durante a carga) e **sem o expansor de 9B** (18,8 GB, de outro repositório: nada é baixado em silêncio). Passos/guidance padrão: destilado 16 passos sem guidance; «base» 50 passos e guidance 3,5. Se esta versão do diffusers não tem o pipeline modular, o erro manda rodar `pip install -U diffusers transformers`.
+- **Download certo:** o repositório traz o mesmo transformer em três lugares (raiz, `transformer/` e as pastas `variants/` fp8/nvfp4 — cerca de 42 GB). O ASTA agora baixa uma cópia só (`transformer/`, `text_encoder/`, `vae/`) — cerca de 20 GB — e ignora as variantes.
+- **Modelo restrito:** se o download recusar por falta de licença/token, o erro diz para aceitar a licença em `huggingface.co/<modelo>` e colocar o token em Configuração, em vez de mostrar o erro cru do Hub.
+- **Expansão de prompt:** o modelo só rende bem com legendas de cena completas (um pedido curto «como digitado» sai genérico). O ASTA expande o prompt com o **modelo de texto já configurado**, com instruções próprias (meio e estilo, cena, luz e câmera, cada sujeito com cores, materiais e posição; na edição, a legenda do resultado), mantendo as marcações dos `@`. Prompts com 60 palavras ou mais seguem como estão; `{"upsample": false}` no «extra» do nó desliga; sem modelo de texto configurado, o nó avisa. O prompt expandido aparece nos avisos do nó.
+- **GGUF (stable-diffusion.cpp):** o FLUX.3 Image Klein (`leejet/flux-3-image-klein-GGUF`, `unsloth/flux-3-image-klein-GGUF`…) é uma família própria: VAE `flux2-vae.safetensors` e codificador **Qwen3-VL-4B-Instruct** `.gguf` na mesma pasta (o botão «Baixar os arquivos de apoio» baixa o que faltar: ≈ 0,3 GB + 2,5 GB), 16 passos sem guidance (base: 50 passos, 3,5). O expansor de prompt (`…-pup-…gguf`) é um modelo de texto e não é tratado como modelo de imagem. A stable-diffusion-cpp-python 0.4.7 do PyPI só conhece até o FLUX.2: o ASTA oferece o botão «Atualizar a biblioteca» (e o `asta update` compila a versão do GitHub quando há GGUF de difusão baixado).
+- FLUX.1 não é mais confundido com FLUX.2/3 (`flux1-dev` continua pedindo `clip_l` e `t5xxl`).
+- Versão 0.17.22 (o núcleo Rust não mudou).
+
 ## [0.17.21] — 2026-11-09
 
 ### Adicionado — suporte ao FLUX.2 klein (`black-forest-labs/FLUX.2-klein-4B` e 9B)

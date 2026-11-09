@@ -46,7 +46,7 @@ def select_files(files: List[Dict[str, Any]], precision: str) -> List[Dict[str, 
     """Quais arquivos do repositório baixar para a precisão escolhida (pesos duplicados em outros formatos/variantes ficam de fora)."""
     names = [f["name"] for f in files]
     has_st = any(n.endswith(".safetensors") for n in names)
-    diffusers_layout = "model_index.json" in names
+    diffusers_layout = "model_index.json" in names or "modular_model_index.json" in names   # o FLUX.3 usa o pipeline modular
     low = precision in ("fp16", "bf16")
 
     def is_variant(n: str) -> bool:
@@ -62,6 +62,8 @@ def select_files(files: List[Dict[str, Any]], precision: str) -> List[Dict[str, 
         low_n = n.lower()
         if n.startswith(".") or low_n.endswith(SKIP_EXT):
             continue
+        if diffusers_layout and n.startswith("variants/"):
+            continue  # versões quantizadas alternativas (fp8, nvfp4…), que o diffusers comum não lê: baixar também dobraria o tamanho
         if not low_n.endswith(WEIGHT_EXT):
             out.append(f)
             continue
@@ -170,12 +172,25 @@ def _incomplete_bytes(model: str) -> int:
         return 0
 
 
+def _gated_or(exc: Exception, model: str, token: str) -> ProviderError:
+    """Modelos «gated» (FLUX.3 klein…) só baixam depois de aceitar a licença no site, com o token da conta: explica isso em vez de mostrar o erro cru do Hub."""
+    name = exc.__class__.__name__
+    code = getattr(getattr(exc, "response", None), "status_code", 0)
+    if "Gated" in name or code in (401, 403) or re.search(r"\b(401|403)\b|gated|restricted|access to model", str(exc), re.I):
+        return ProviderError(f"O modelo «{model}» é restrito: abra https://huggingface.co/{model}, aceite a licença com a sua conta e coloque o token (com permissão de leitura) em Configuração → Hugging Face"
+                             + ("" if token else " — nenhum token está configurado agora") + ". Depois baixe de novo.", status=403)
+    return ProviderError(f"Não foi possível baixar «{model}»: {exc}")
+
+
 def download(model: str, precision: str, token: str = "", progress: Optional[Callable[[int, int], None]] = None, cancelled: Callable[[], bool] = lambda: False) -> Path:
     """Baixa os arquivos da precisão escolhida, um a um (dá para cancelar entre arquivos), e registra a escolha."""
     if precision not in PRECISIONS:
         raise ProviderError("Escolha a precisão (quantização) do modelo antes de baixar.")
     hub = _hub()
-    files = select_files(_siblings(model, token), precision)
+    try:
+        files = select_files(_siblings(model, token), precision)
+    except Exception as exc:  # noqa: BLE001
+        raise _gated_or(exc, model, token) from None
     if not files:
         raise ProviderError("Nenhum arquivo utilizável neste repositório.")
     total = sum(f["size"] for f in files)
@@ -194,6 +209,10 @@ def download(model: str, precision: str, token: str = "", progress: Optional[Cal
         t.start()
         try:
             snap = Path(hub.hf_hub_download(model, f["name"], token=token or None)).parents[len(Path(f["name"]).parts) - 1]
+        except ProviderError:
+            raise
+        except Exception as exc:  # noqa: BLE001
+            raise _gated_or(exc, model, token) from None
         finally:
             stop.set()
             t.join(1)

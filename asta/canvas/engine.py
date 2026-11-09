@@ -27,6 +27,7 @@ from . import media as media_mod
 from .media import Ctl, Media, build_media, media_config, pick_provider
 from .render import render_timeline
 from . import mentions as mentions_mod
+from . import upsample
 from . import nodes_ext
 from .schema import EXT_TYPES, GENERATORS, NODE_TYPES, normalize_result
 
@@ -292,8 +293,8 @@ class CanvasEngine:
                 data["provider"] = self.provider_for(node)
             except ProviderError:
                 data["provider"] = "?"
-        if t in ("llm", "text_refine"):
-            data["llm"] = self.settings["active"].get("generation", "demo")
+        if t in ("llm", "text_refine") or (t == "image" and upsample.wants(node["params"].get("model", ""))):
+            data["llm"] = self.settings["active"].get("generation", "demo")   # o texto de saída (ou o prompt expandido do FLUX.3) depende do modelo de texto configurado
         if t in ("in_vars", "in_url", "out_gallery"):  # dependem de algo fora dos parâmetros: o resultado vale até o usuário pedir de novo
             data["fixed"] = True
         return _sig(data)
@@ -465,7 +466,8 @@ class CanvasEngine:
             refs = _unique_refs(ment_refs + self.image_inputs(canvas, node, "refs"))[:mentions_mod.MAX_REFS]   # a mesma imagem citada com @ e ligada em «Referências» vale uma vez só
             if p["mode"] == "edit" and not refs:
                 raise ValueError("No modo Editar, ligue uma imagem na entrada \"Referências\".")
-            prompt = base + (f"\n\nStyle: {style.text}" if style.text else "")
+            body = base
+            prompt = body + (f"\n\nStyle: {style.text}" if style.text else "")
             use_refs = list(refs)
             if not use_refs and style.images and getattr(prov, "supports_refs", False) and _style_refs_ok(pid, model):
                 use_refs = list(style.images)  # modelos que aceitam várias imagens usam o Style Folder como referência
@@ -483,8 +485,22 @@ class CanvasEngine:
                 warnings.append(f"{prov.label} não aceita imagens de referência — usei só o texto.")
                 use_refs = []
             if ment_ids and not use_refs:   # as imagens citadas não chegam ao modelo: sem a marcação «reference image N», que não apontaria para nada
-                prompt = mentions_mod.plain(canvas, raw_base) + (f"\n\nStyle: {style.text}" if style.text else "")
-            medias = prov.image(prompt, size=p["size"], count=p["count"], seed=seed, negative=p["negative"], refs=use_refs, model=p["model"], extra=p["extra"])
+                body = mentions_mod.plain(canvas, raw_base)
+                prompt = body + (f"\n\nStyle: {style.text}" if style.text else "")
+            extra = dict(p["extra"])
+            if extra.pop("upsample", True) and upsample.wants(p["model"] or model) and not upsample.is_caption(body):   # FLUX.3 Image Klein: pede legendas de cena completas
+                try:
+                    llm_pid = self.settings["active"].get("generation", "demo")
+                    if llm_pid == "demo":
+                        warnings.append("O FLUX.3 Image Klein rende melhor com legendas de cena completas: configure um modelo de texto em Configuração para o ASTA expandir o prompt (ou escreva a legenda inteira).")
+                    else:
+                        self._check()
+                        caption = upsample.expand(build_provider(self.settings, llm_pid, self.store.models_dir), body, edit=bool(use_refs), refs=len(use_refs))
+                        prompt = caption + (f"\n\nStyle: {style.text}" if style.text else "")
+                        warnings.append("Prompt expandido para o FLUX.3: " + caption[:300] + ("…" if len(caption) > 300 else ""))
+                except (ProviderError, ValueError) as exc:
+                    warnings.append(f"Não consegui expandir o prompt ({exc}); usei o texto como está — o FLUX.3 rende melhor com legendas completas.")
+            medias = prov.image(prompt, size=p["size"], count=p["count"], seed=seed, negative=p["negative"], refs=use_refs, model=p["model"], extra=extra)
             for i, m in enumerate(medias):
                 ids.append(self._save(node, m, "image", f"{self._title(node, 'Imagem')} {i + 1}", prompt, pid, model))
             return {"assets": ids, "text": "", "warnings": warnings}
