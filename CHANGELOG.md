@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.36] — 2026-11-09
+
+### Corrigido — Canvas: «o processo fechou de repente (código -9)» por falta de memória
+O código -9 é o sistema (o OOM killer do Linux) encerrando a stable-diffusion.cpp porque a RAM acabou — não é defeito do modelo: o FLUX.2 klein carrega o modelo, o codificador de texto (um LLM de ~4 B) e o VAE, e a 1024×1024 as ativações somam mais. Agora o ASTA **recarrega o processo e gera de novo em resolução menor** (≈ 56 % e depois ≈ 37 % do lado), avisando no nó; só se mesmo assim faltar memória o erro aparece, dizendo que foi falta de RAM (também no `sd-cli`). Limite honesto: com pouca RAM livre ainda é preciso uma quantização menor (Q3/Q2), fechar outros programas ou usar a nuvem; a imagem de uma nova tentativa sai menor que a pedida.
+
 ## [0.17.35] — 2026-11-09
 
 ### Corrigido — Canvas: «get sd version from file failed» ao gerar com FLUX.2 klein GGUF pelo sd-cli

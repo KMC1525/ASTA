@@ -240,7 +240,8 @@ def run(args: Sequence[str], exe: Path, cancelled: Callable[[], bool] = lambda: 
         if p.stdout:
             p.stdout.close()
     if p.returncode != 0:
-        raise ProviderError(f"O sd-cli falhou (código {p.returncode}): " + " | ".join(tail)[-500:])
+        oom = " O sistema o encerrou por falta de memória (RAM): use uma resolução ou quantização menores, ou feche outros programas." if p.returncode in (-9, 137) else ""
+        raise ProviderError(f"O sd-cli falhou (código {p.returncode}):{oom} " + " | ".join(tail)[-500:])
     return "\n".join(tail)
 
 
