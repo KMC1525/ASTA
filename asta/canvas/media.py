@@ -202,6 +202,11 @@ class MediaProvider:
     label = "Provedor"
     caps: Tuple[str, ...] = ()
     supports_refs = False  # aceita imagens de referência (edição/estilo) no nó Imagem
+    refs_edit_only = False  # só usa as referências no modo Editar (imagem → imagem); no modo Gerar elas não podem virar a imagem de partida
+
+    def max_refs(self, model: str = "") -> int:
+        """Quantas imagens de referência o modelo realmente usa (as demais seriam ignoradas em silêncio)."""
+        return 8
 
     def __init__(self, cfg: Dict[str, Any], ctl: Optional[Ctl] = None):
         self.cfg = cfg
@@ -1136,6 +1141,10 @@ class LocalHFMedia(MediaProvider):
     id, label = "local_hf", "Hugging Face local (embutido)"
     caps = ("image", "video", "sound", "voice", "stt")
     supports_refs = True   # imagem → imagem pelo mesmo modelo
+    refs_edit_only = True
+
+    def max_refs(self, model: str = "") -> int:
+        return 1
 
     def _pick(self, cap: str, model: str, default: str) -> str:
         """O modelo pedido; se ele ainda não foi baixado, usa outro já baixado da mesma função (o padrão ou uma sugestão) em vez de falhar. Se nenhum foi baixado, devolve o pedido
@@ -1512,6 +1521,10 @@ class GGUFMedia(MediaProvider):
     id, label = "gguf_local", "GGUF local (stable-diffusion.cpp)"
     caps = ("image", "video")
     supports_refs = True   # imagem → imagem (init_image) ou, em modelos de edição (Qwen-Image-Edit, FLUX Kontext), ref_images
+    refs_edit_only = True
+
+    def max_refs(self, model: str = "") -> int:
+        return 4 if re.search(r"edit|kontext", Path(self.model_for("image", model) or model or "").name, re.I) else 1   # os demais modelos usam só uma imagem de partida
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name

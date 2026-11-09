@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.19] — 2026-11-09
+
+### Fixed — image references on nodes with a local model
+- **Generate mode no longer becomes image → image.** Since 0.17.10, any image connected to «References» (or cited with `@`) on a node with a local model became the starting image: on a thumb with `@foto-perfil`, `@fnaf-1-office`…, the first image became the base and the others were silently ignored. Local models now only use references in **Edit** mode; in Generate mode they become text only, with a warning on the node.
+- In Edit mode, the node says how many images the model really uses (1 on regular models; up to 4 on edit models such as Qwen-Image-Edit and FLUX Kontext) and warns how many it ignored.
+- When images cited with `@` do not reach the model, the prompt loses the «(reference image N)» mark, which would point at nothing.
+- Checked, no problem found: Image → Image → Image chains (including `count` 2 and Edit mode), running only the final node redoing what changed, the cache, and nodes skipped after a failure.
+- **The `qwen-image-2.1` error** is still the file's architecture (265 tensors; shared modulation instead of per-block `img_mod.1.weight`), which stable-diffusion.cpp 0.4.7 does not recognize. Update ASTA (0.17.18+) so the «Update the library now» button works without `cmake`.
+- Version 0.17.19 (the Rust core did not change).
+
 ## [0.17.18] — 2026-11-09
 
 ### Fixed — the newest stable-diffusion.cpp now installs and updates by itself
