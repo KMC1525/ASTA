@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.30] — 2026-11-09
+
+### Adicionado — modelos da Unsloth no Canvas (imagem e vídeo)
+- **Novas famílias de GGUF** (`canvas/support.py`), reconhecidas pelo nome do arquivo, com as receitas dos cartões `unsloth/*-GGUF`: **Qwen-Image 2.1** (VAE `qwen_image_2.1_vae_bf16` + codificador Qwen3-VL-8B-Instruct; 20 passos, CFG 6; **Turbo**: 8 passos, CFG 1; edita com até 4 imagens de referência), **Z-Image** (VAE `ae` + Qwen3-4B-Instruct-2507; base 30 passos, CFG 4; **Turbo**: 8 passos, CFG 1) e **Wan2.2 TI2V 5B** (**vídeo**: VAE `Wan2.2_VAE` + UMT5-XXL). Antes, esses arquivos caíam em «NULL pointer access» por falta de VAE/codificador ou usavam o codificador errado (o Qwen-Image 2.1 usa o Qwen3-VL, não o Qwen2.5-VL do Qwen-Image antigo, que segue como estava).
+- **Vídeo GGUF com famílias:** o Wan2.2 acha os arquivos de apoio ao lado do modelo (ou mostra o botão «Baixar os arquivos de apoio», agora também na pasta de vídeo — `POST /api/media/support/download` aceita `cap: "video"`), usa 720p (1280×704 ou 704×1280), 24 fps e quadros 4k+1 (até 121 ≈ 5 s), aceita imagem inicial e **descarta, com aviso, os parâmetros que a versão da stable-diffusion-cpp-python não conhece** em vez de falhar. Vídeos GGUF de outras famílias seguem como antes.
+- Sugestões no provedor *Hugging Face local*: `unsloth/Z-Image-Turbo`, `unsloth/FLUX.2-klein-4B`, `unsloth/FLUX.1-schnell`.
+- **Fora do alcance (dito com franqueza):** GGUF MOSS-Image, LTX-2.x e MiniMax-H3 (precisam de uma stable-diffusion.cpp mais nova e de arquivos/parâmetros — tokenizer, conectores, VAE de áudio — que a biblioteca Python não expõe de forma verificável) e modelos de voz da Unsloth (Orpheus, Spark-TTS, Llasa, CSM: precisam de decodificadores de áudio próprios, e nenhum áudio/«som» GGUF de difusão é publicado). **Nada disso rodou com a stable-diffusion.cpp de verdade** (sem GPU/modelos de vários GB aqui): as receitas vêm dos cartões dos modelos e a suíte usa um módulo simulado; a biblioteca do PyPI (0.4.7) pode não reconhecer os mais novos — o botão «Atualizar a biblioteca» continua valendo.
+- Versão 0.17.30. O núcleo Rust não mudou.
+
 ## [0.17.29] — 2026-11-09
 
 ### Adicionado — Code: pastas vazias (ou que ainda não existem) para escrever o código depois

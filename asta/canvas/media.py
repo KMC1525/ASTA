@@ -1622,7 +1622,7 @@ class GGUFMedia(MediaProvider):
         name = Path(self.model_for("image", model) or model or "").name
         if re.search(r"flux[-_. ]?3", name, re.I):
             return 10
-        return 4 if re.search(r"edit|kontext|klein", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        return 4 if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1739,7 +1739,7 @@ class GGUFMedia(MediaProvider):
             except (TypeError, ValueError):
                 params = set()
             w, h = _size_like(pil[0], w, h, 16)
-            if re.search(r"edit|kontext|klein", path.name, re.I) and "ref_images" in params:
+            if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1", path.name, re.I) and "ref_images" in params:
                 ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
             elif "init_image" in params:
                 ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem
@@ -1792,16 +1792,52 @@ class GGUFMedia(MediaProvider):
         return out
 
     def video(self, prompt, *, duration=5, aspect="16:9", image=None, model="", extra=None, seed=0, long_side=0):
+        import inspect
+
         extra = dict(extra or {})
         path = self._path("video", model)
-        sd = self._engine("video", path, extra.pop("load", None) or {})
+        fam = support.family_of(path.name)
+        fam = fam if fam and fam.get("cap") == "video" else None
+        base: Dict[str, Any] = {}
+        if fam and not extra.get("load"):   # família conhecida (Wan2.2 TI2V…, ver `support.FAMILIES`): acha o VAE e o codificador de texto ao lado do modelo
+            found = support.find_companions(path.parent, path, fam)
+            if any(v is None for v in found.values()):
+                info = support.missing(path.parent, path.name)
+                raise ProviderError(f"Faltam os arquivos de apoio do {info['label']}: {', '.join(m['label'] for m in info['missing'])} (≈ {info['approx_gb']} GB). Use o botão «Baixar os arquivos de apoio» no nó, "
+                                    f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]")
+            base = {"load": {"diffusion_model_path": "@model", **found, **fam.get("options", {})}, "run": support.run_for(fam, path.name)}
+        extra = {**base.get("run", {}), **extra}
+        sd = self._engine("video", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
         fn = getattr(sd, "txt2vid", None) or getattr(sd, "generate_video", None)
         if fn is None:
             raise ProviderError("A versão instalada da stable-diffusion-cpp-python não gera vídeo. Atualize-a (asta libs) ou use outro provedor de vídeo.")
-        w, h = size_of_aspect(aspect, long_side or 640)
+        try:
+            params = set(getattr(sd, "_params", None) or inspect.signature(fn).parameters)   # no processo à parte, os parâmetros vêm da carga
+        except (TypeError, ValueError):
+            params = set()
+        vinfo = (fam or {}).get("video") or {}
+        fps = int(vinfo.get("fps") or 16)
+        kw: Dict[str, Any] = {}
+        if vinfo:   # tamanho e número de quadros que o modelo aceita (Wan2.2 TI2V 5B: só 720p; quadros = 4k+1)
+            w, h = vinfo["sizes"]["portrait" if str(aspect) in ("9:16", "3:4") else "landscape"]
+            frames_n = max(5, min(int(vinfo.get("max_frames") or 121), 4 * round((max(1, int(duration)) * fps - 1) / 4) + 1))
+            kw[next((k for k in ("video_frames", "num_frames", "frames") if k in params), "video_frames")] = frames_n
+        else:
+            w, h = size_of_aspect(aspect, long_side or 640)
+            w, h = w // 8 * 8, h // 8 * 8
+        if image is not None and "init_image" in params:   # imagem inicial (modelos TI2V aceitam texto + imagem)
+            pil = _pil_refs([image])
+            if pil:
+                kw["init_image"] = pil[0].resize((w, h))
+        kw = {"prompt": prompt, "width": w, "height": h, "seed": int(seed) if seed else -1, **kw, **extra}
+        if params:   # versões da biblioteca diferem nos parâmetros: o que ela não conhece é descartado (com aviso) em vez de derrubar a geração
+            dropped = [k for k in kw if k not in params]
+            if dropped:
+                self.ctl.note("Esta versão da stable-diffusion-cpp-python não aceita: " + ", ".join(dropped) + " (ignorados).")
+                kw = {k: v for k, v in kw.items() if k in params}
         self.ctl.note("Gerando vídeo com o modelo GGUF (pode demorar)…")
-        frames = fn(prompt=prompt, width=w // 8 * 8, height=h // 8 * 8, seed=int(seed) if seed else -1, **extra)
-        return _frames_to_mp4(frames, 16)
+        frames = fn(**kw)
+        return _frames_to_mp4(frames, fps)
 
     def test(self) -> str:
         _local_import("stable_diffusion_cpp", extra="local")
@@ -1901,7 +1937,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
     "local_hf": {
         "label": "Hugging Face local (embutido)", "kind": "local_hf", "caps": ["image", "video", "sound", "voice", "stt"], "needs_key": False, "local": True,
         "models": {"image": "stabilityai/sd-turbo", "video": "Lightricks/LTX-Video", "sound": "facebook/musicgen-small", "voice": "suno/bark-small", "stt": "openai/whisper-small"},
-        "suggest": {"image": ["stabilityai/sd-turbo", "stabilityai/sdxl-turbo", "black-forest-labs/FLUX.1-schnell"], "video": ["Lightricks/LTX-Video"],
+        "suggest": {"image": ["stabilityai/sd-turbo", "stabilityai/sdxl-turbo", "black-forest-labs/FLUX.1-schnell", "unsloth/Z-Image-Turbo", "unsloth/FLUX.2-klein-4B", "unsloth/FLUX.1-schnell"], "video": ["Lightricks/LTX-Video"],
                     "sound": ["facebook/musicgen-small"], "voice": ["suno/bark-small", "facebook/mms-tts-por"], "stt": ["openai/whisper-small", "openai/whisper-large-v3-turbo"]},
         "hint": 'Roda modelos do Hugging Face dentro do ASTA. Requer:  pip install "asta[media]". Antes de usar, escolha a precisão (quantização) e baixe cada modelo aqui mesmo — nada é baixado em silêncio. Vídeo exige GPU.',
     },
