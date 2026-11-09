@@ -13,6 +13,8 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 - Real cause, found in the stable-diffusion-cpp-python 0.4.7 source: when the model **fails to load**, the library raises no error (it checks `is None`, but a failed load returns a null pointer, which is not `None`) and carries on with an empty context; generation only fails later, with «NULL pointer access». The real reason (memory, format…) is logged at **load** time — and ASTA was wiping that log before generating. That is why the message always said «no reason».
 - ASTA now checks that the model loaded, keeps the load log and shows the reason (with a memory hint when that is the case) and the files loaded. A model that failed to load is never cached.
 - If loading fails with `diffusion_flash_attn`/`offload_params_to_cpu`, it retries without them before showing the error.
+- **The second attempt in v0.17.12 could crash the program** («Segmentation fault» on generate): it called generation with a model that had not loaded, and stable-diffusion.cpp dereferences the null pointer. Generation is now never called without a loaded model.
+- If the log shows `get sd version from file failed`, the stable-diffusion.cpp in the installed library is older than the model and does not recognize it: the error says to update the library (`pip install -U stable-diffusion-cpp-python`) and does not retry.
 - Version 0.17.13 (the Rust core did not change).
 
 ## [0.17.12] — 2026-11-08

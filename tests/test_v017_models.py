@@ -226,6 +226,37 @@ class QwenImageGGUFTests(unittest.TestCase):
         M._SD_LITE.clear()
         M._SD_CB = None
 
+    def test_an_unrecognized_model_version_asks_to_update_the_library_and_is_not_retried(self):
+        from types import SimpleNamespace
+
+        from asta.canvas import media as M
+        from asta.providers.base import ProviderError
+
+        M._SD_LITE.clear()
+        M._LOCAL_CACHE.clear()
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        cbs, loads, gens = [], [], []
+
+        class Old:
+            def __init__(self, **kw):
+                loads.append(kw)
+                cbs[0](2, b"stable-diffusion.cpp:299  - get sd version from file failed: ''\n", None)
+                self._model = SimpleNamespace(model=None)
+
+            def generate_image(self, **kw):
+                gens.append(kw)   # gerar com um contexto nulo derruba o programa inteiro (falha de segmentação)
+
+        mod = mock.MagicMock(StableDiffusion=Old)
+        mod.sd_log_callback = lambda f: f
+        mod.sd_set_log_callback = lambda f, d: cbs.append(f)
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+            self.prov().image("x", size="512x512")
+        self.assertIn("não reconhece o formato", str(cm.exception))
+        self.assertIn("pip install -U stable-diffusion-cpp-python", str(cm.exception))
+        self.assertEqual((len(loads), gens), (1, []))   # sem nova tentativa e sem chamar a geração
+        M._SD_CB = None
+
     def test_a_null_pointer_is_retried_without_flash_attention_and_cpu_offload(self):
         from tests.test_canvas import PNG
 

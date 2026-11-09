@@ -11,6 +11,8 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 - Causa real, achada no código da stable-diffusion-cpp-python 0.4.7: quando o modelo **não carrega**, a biblioteca não dá erro (ela confere `is None`, mas a carga que falha devolve um ponteiro nulo, que não é `None`) e segue com um contexto vazio; a geração só falha depois, com «NULL pointer access». O motivo verdadeiro (memória, formato…) é registrado na hora da **carga** — e o ASTA apagava esse log antes de gerar. Por isso a mensagem sempre dizia «nenhum motivo».
 - Agora o ASTA confere se o modelo carregou, guarda o log da carga e mostra o motivo (com dica de memória quando for o caso) e os arquivos carregados. Um modelo que não carregou nunca fica em cache.
 - Se a carga falha com `diffusion_flash_attn`/`offload_params_to_cpu`, tenta de novo sem eles antes de mostrar o erro.
+- **A segunda tentativa da v0.17.12 podia derrubar o programa** («Falha de segmentação» ao gerar): ela chamava a geração com um modelo que não tinha carregado, e a stable-diffusion.cpp acessa o ponteiro nulo. Agora a geração nunca é chamada sem um modelo carregado.
+- Se o log traz `get sd version from file failed`, a stable-diffusion.cpp da biblioteca instalada é mais antiga que o modelo e não o reconhece: o erro diz para atualizar a biblioteca (`pip install -U stable-diffusion-cpp-python`) e não tenta de novo.
 - Versão 0.17.13 (o núcleo Rust não mudou).
 
 ## [0.17.12] — 2026-11-08
