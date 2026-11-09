@@ -272,7 +272,26 @@ export function nodeResult(c, n) {
   if (error) {
     const sup = /\[\[asta-support:([^\]]+)\]\]/.exec(error);   // GGUF de difusão sem VAE/codificador de texto: oferece baixar o que falta
     const upd = /\[\[asta-sd-update\]\]/.test(error);   // a stable-diffusion.cpp instalada não reconhece o modelo: oferece compilar a versão mais nova
-    box.append(h('div', { class: 'err' }, error.replace(/\s*\[\[asta-support:[^\]]+\]\]/, '').replace(/\s*\[\[asta-sd-update\]\]/, '')));
+    const cli = /\[\[asta-sd-cli\]\]/.test(error);   // sem compilar: baixa o executável pronto (sd-cli) da stable-diffusion.cpp
+    box.append(h('div', { class: 'err' }, error.replace(/\s*\[\[asta-support:[^\]]+\]\]/, '').replace(/\s*\[\[asta-sd-update\]\]/, '').replace(/\s*\[\[asta-sd-cli\]\]/, '')));
+    if (cli) {
+      const cb = h('button', { class: 'btn sm primary nodrag', type: 'button', id: 'sdcli-' + n.id, style: { marginTop: '6px', marginRight: '6px' } }, icon('download', 13), t('Baixar o executável pronto (sem compilar)'));
+      cb.onclick = async () => {
+        cb.disabled = true;
+        try {
+          const r = await api('/api/media/sd-cli', { method: 'POST', body: {} });
+          toast(t('Baixando o sd-cli da stable-diffusion.cpp…'));
+          events('/api/jobs/' + r.job_id + '/events', (ev) => {
+            if (ev.type === 'note') cb.lastChild.textContent = ' ' + ev.message.slice(0, 40);
+            else if (ev.type === 'progress' && ev.total) cb.lastChild.textContent = ' ' + Math.round(100 * ev.done / ev.total) + '%';
+            else if (ev.type === 'done') { toast(t('sd-cli pronto. Execute o nó de novo.'), 'ok'); cb.remove(); }
+            else if (ev.type === 'error') { toast(ev.message, 'err'); cb.disabled = false; }
+            else if (ev.type === 'cancelled') { cb.disabled = false; }
+          });
+        } catch (e) { cb.disabled = false; toast(e.status === 409 ? t('Já há um download do sd-cli em andamento.') : e.message, 'err'); }
+      };
+      box.append(cb);
+    }
     if (upd) {
       const ub = h('button', { class: 'btn sm primary nodrag', type: 'button', id: 'sdup-' + n.id, style: { marginTop: '6px' } }, icon('download', 13), t('Atualizar a biblioteca agora'));
       ub.onclick = async () => {

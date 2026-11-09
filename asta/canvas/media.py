@@ -39,7 +39,7 @@ from ..util import hardware_info
 from ..providers import http
 from ..providers.base import ProviderError
 from . import procedural as proc
-from . import gguf_info, support
+from . import gguf_info, sdcli, support
 
 CAP_LABELS = {"image": "imagens", "video": "vídeos", "sound": "sons e músicas", "voice": "vozes", "stt": "transcrição de áudio"}
 Ref = Tuple[bytes, str]  # (bytes, mime) de uma imagem de referência
@@ -197,6 +197,10 @@ def _auth(key: str, header: str = "Authorization", scheme: str = "Bearer ") -> D
 # --------------------------------------------------------------------------- base
 
 
+#: GGUF que juntam várias imagens de referência na mesma geração (edição, Kontext, FLUX.2 klein/dev, Qwen-Image 2.1): as referências valem também no modo Gerar
+_GGUF_MULTI_REF = re.compile(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", re.I)
+
+
 class MediaProvider:
     id = "media"
     label = "Provedor"
@@ -207,6 +211,10 @@ class MediaProvider:
     def max_refs(self, model: str = "") -> int:
         """Quantas imagens de referência o modelo realmente usa (as demais seriam ignoradas em silêncio)."""
         return 8
+
+    def refs_need_edit(self, model: str = "") -> bool:
+        """As referências só valem no modo Editar? Modelos que juntam várias referências na mesma imagem (FLUX.2 klein, Qwen-Image 2.1, Kontext…) as usam também no modo Gerar; os de «imagem → imagem» não."""
+        return bool(self.refs_edit_only)
 
     def __init__(self, cfg: Dict[str, Any], ctl: Optional[Ctl] = None):
         self.cfg = cfg
@@ -1325,6 +1333,9 @@ class LocalHFMedia(MediaProvider):
             return 10   # FLUX.3 Image Klein: até 10 imagens de referência no mesmo pedido
         return 4 if "klein" in name else 1   # FLUX.2 klein edita com várias imagens de uma vez; os demais fazem imagem → imagem com uma
 
+    def refs_need_edit(self, model: str = "") -> bool:
+        return self.max_refs(model) <= 1   # klein e FLUX.3 juntam várias referências também no modo Gerar
+
     @staticmethod
     def _defaults(model: str) -> Tuple[int, float]:
         """Passos e guidance do modelo (o padrão de cada família): FLUX.2 klein destilado 4 passos sem CFG; klein «base» 50 passos e guidance 4; FLUX.1 schnell 4 passos; FLUX.1 dev 28 passos e guidance 3,5;
@@ -1443,7 +1454,8 @@ class LocalHFMedia(MediaProvider):
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
         i2i = None
         if pil:
-            w, h = _size_like(pil[0], w, h, 16 if (klein or flux3) else 8)
+            if len(pil) == 1:   # só uma imagem (edição): mantém a proporção dela; com várias referências vale o tamanho pedido
+                w, h = _size_like(pil[0], w, h, 16 if (klein or flux3) else 8)
             if not klein and not flux3:   # imagem → imagem: reaproveita os pesos já carregados (o FLUX.2 klein edita pelo próprio pipeline, com várias imagens)
                 i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
         out = []
@@ -1878,7 +1890,11 @@ class GGUFMedia(MediaProvider):
         name = Path(self.model_for("image", model) or model or "").name
         if re.search(r"flux[-_. ]?3", name, re.I):
             return 10
-        return 4 if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        return 4 if _GGUF_MULTI_REF.search(name) else 1   # os demais modelos usam só uma imagem de partida
+
+    def refs_need_edit(self, model: str = "") -> bool:
+        name = Path(self.model_for("image", model) or model or "").name
+        return not (_GGUF_MULTI_REF.search(name) or re.search(r"flux[-_. ]?3", name, re.I))
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1889,9 +1905,9 @@ class GGUFMedia(MediaProvider):
             raise ProviderError(f"Modelo GGUF não encontrado: {path}. Baixe-o em Configuração → Modelos locais.")
         return path
 
-    def _engine(self, cap: str, path: Path, load: Dict[str, Any]) -> Any:
-        (sdc,) = _local_import("stable_diffusion_cpp", extra="local")
-        _install_sd_log(sdc)   # guarda as mensagens da stable-diffusion.cpp: quando a geração falha com «NULL pointer access», o motivo de verdade está nelas
+    @staticmethod
+    def _load_kwargs(path: Path, load: Dict[str, Any]) -> Dict[str, Any]:
+        """Os parâmetros de carga com «@model» e os nomes de arquivo resolvidos para caminhos (a pasta do modelo)."""
         kw: Dict[str, Any] = {}
         for k, v in load.items():
             if isinstance(v, str) and v == "@model":
@@ -1902,6 +1918,24 @@ class GGUFMedia(MediaProvider):
                 kw[k] = v
         if not kw:
             kw["model_path"] = str(path)
+        return kw
+
+    def _cancelled(self) -> bool:
+        try:
+            self.ctl.check()
+            return False
+        except Exception:  # noqa: BLE001  (o `check` do job levanta o cancelamento)
+            return True
+
+    @staticmethod
+    def _cli_fallback(exc: Exception) -> bool:
+        """A biblioteca não serve para este modelo (não o reconhece ou nem está instalada) e há um `sd-cli` pré-compilado para tentar? (`sdcli.find`; é baixado só a pedido, pelo botão do nó)"""
+        return sdcli.find() is not None and (isinstance(exc, _SDUnsupportedModel) or "bibliotecas opcionais" in str(exc))
+
+    def _engine(self, cap: str, path: Path, load: Dict[str, Any]) -> Any:
+        (sdc,) = _local_import("stable_diffusion_cpp", extra="local")
+        _install_sd_log(sdc)   # guarda as mensagens da stable-diffusion.cpp: quando a geração falha com «NULL pointer access», o motivo de verdade está nelas
+        kw = self._load_kwargs(path, load)
         isolated = isinstance(getattr(sdc, "__file__", None), str) and os.environ.get("ASTA_SD_INPROC", "") in ("", "0")   # biblioteca de verdade: roda em processo à parte (ver `_SDProxy`)
 
         def build() -> Any:
@@ -1933,7 +1967,7 @@ class GGUFMedia(MediaProvider):
                 f"A stable-diffusion.cpp instalada não reconhece o modelo {path.name} («get sd version from file failed»)"
                 + (f" e fechou (código {crashed}) — o ASTA a roda em outro processo e continua aberto" if crashed else "") + ". " + hint
                 + "Provavelmente é de outra arquitetura ou mais novo que a biblioteca (a do PyPI é a 0.4.7, a mais nova publicada). "
-                "Atualize-a pelo botão abaixo (compila a versão do GitHub: precisa de git, cmake e compilador C++) ou use outro arquivo/quantização. [[asta-sd-update]]" + _sd_env(sdc, short=True))
+                "Use o botão «Baixar o executável pronto» (a stable-diffusion.cpp mais nova, sem compilar), ou atualize a biblioteca (compila a versão do GitHub: precisa de git, cmake e compilador C++), ou use outro arquivo/quantização. [[asta-sd-cli]] [[asta-sd-update]]" + _sd_env(sdc, short=True))
         why = _sd_reason()
         files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
         return _SDLoadError(
@@ -1942,6 +1976,42 @@ class GGUFMedia(MediaProvider):
             + (f"Motivo informado pela biblioteca: {why}. " if why else "A biblioteca não registrou nenhum motivo. ")
             + ("Parece falta de memória: o modelo e o codificador de texto juntos não cabem na RAM livre; feche outros programas ou use uma quantização menor (Q3/Q2). " if re.search(r"alloc|out of memory|oom|memory", why, re.I) or crashed in (-9, 137) else "")
             + f"Arquivos carregados: {files}. " + hint + _sd_env(sdc))
+
+    def _image_cli(self, path: Path, load: Dict[str, Any], extra: Dict[str, Any], prompt: str, size: str, count: int, seed: int, negative: str, refs: Sequence[Ref]) -> List[Media]:
+        """A imagem pelo `sd-cli` pré-compilado (a biblioteca Python não reconhece o modelo): os mesmos arquivos de apoio e parâmetros; referências por `-r` (modelos multi-referência) ou imagem inicial `-i`."""
+        cli = sdcli.find()
+        assert cli is not None
+        kw = self._load_kwargs(path, load)
+        w, h = parse_wh(size)
+        k = min(1.0, 1024.0 / max(w, h))
+        w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)
+        pil = _pil_refs(refs, self.max_refs("")) if refs else []
+        if refs and not pil:
+            raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
+        ref_png: List[bytes] = []
+        for im in pil:
+            b = io.BytesIO()
+            im.save(b, format="PNG")
+            ref_png.append(b.getvalue())
+        multi = bool(_GGUF_MULTI_REF.search(path.name) or re.search(r"flux[-_. ]?3", path.name, re.I))
+        if len(pil) == 1:
+            w, h = _size_like(pil[0], w, h, 16)
+        run_p = {k2: v for k2, v in extra.items() if k2 not in ("load",)}
+        out: List[Media] = []
+        self.ctl.note(f"A stable-diffusion-cpp-python não reconhece este modelo: gerando pelo sd-cli ({cli.name}).")
+        for i in range(max(1, count)):
+            self.ctl.check()
+            try:
+                data, warns = sdcli.generate_image(cli, kw, run_p, prompt=prompt, width=w, height=h, seed=int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i, negative=negative,
+                                                    refs=ref_png if multi else [], init=None if multi or not ref_png else ref_png[0], cancelled=self._cancelled, note=self.ctl.note)
+            except ProviderError as exc:
+                if str(exc) == "cancelado":
+                    self.ctl.check()   # o trabalho foi cancelado: levanta o cancelamento de verdade
+                raise
+            if warns and i == 0:
+                self.ctl.note("Opções sem equivalente no sd-cli (ignoradas): " + ", ".join(sorted(set(warns))))
+            out.append(Media(data, "image/png"))
+        return out
 
     def _auto_load(self, path: Path) -> Dict[str, Any]:
         """Para um GGUF de família conhecida (Qwen-Image, FLUX…, ver `support.FAMILIES`), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
@@ -1967,9 +2037,11 @@ class GGUFMedia(MediaProvider):
             load = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
         try:
             sd = self._engine("image", path, load)
-        except _SDUnsupportedModel:
-            raise
-        except _SDLoadError:
+        except ProviderError as exc:
+            if self._cli_fallback(exc):   # a biblioteca não reconhece o modelo (ou não está instalada): o sd-cli pré-compilado faz a imagem, com os mesmos arquivos e parâmetros
+                return self._image_cli(path, load, extra, prompt, size, count, seed, negative, refs)
+            if isinstance(exc, _SDUnsupportedModel) or not isinstance(exc, _SDLoadError):
+                raise
             lite = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
             if len(lite) == len(load):
                 raise
@@ -1982,7 +2054,7 @@ class GGUFMedia(MediaProvider):
         w, h = parse_wh(size)
         k = min(1.0, 1024.0 / max(w, h))   # o lado maior vai até 1024 mantendo a proporção (antes cada lado era cortado sozinho: 1280×720 virava 1024×720)
         w, h = max(256, int(w * k) // 16 * 16), max(256, int(h * k) // 16 * 16)   # múltiplos de 16: Qwen-Image/FLUX/Z-Image falham com tamanhos que não são
-        pil = _pil_refs(refs) if refs else []
+        pil = _pil_refs(refs, self.max_refs(model)) if refs else []
         if refs and not pil:
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
         ref_kw: Dict[str, Any] = {}
@@ -1994,8 +2066,9 @@ class GGUFMedia(MediaProvider):
                 params = set(getattr(sd, "_params", None) or (inspect.signature(gen_fn).parameters if gen_fn else ()))   # no processo à parte, os parâmetros vêm da carga
             except (TypeError, ValueError):
                 params = set()
-            w, h = _size_like(pil[0], w, h, 16)
-            if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", path.name, re.I) and "ref_images" in params:
+            if len(pil) == 1:   # uma só imagem (edição): mantém a proporção dela; com várias referências vale o tamanho pedido (uma thumb não pode herdar a forma da 1ª foto)
+                w, h = _size_like(pil[0], w, h, 16)
+            if _GGUF_MULTI_REF.search(path.name) and "ref_images" in params:
                 ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
             elif "init_image" in params:
                 ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem
@@ -2063,7 +2136,13 @@ class GGUFMedia(MediaProvider):
                                     f"ou ponha-os na pasta {path.parent}. [[asta-support:{path.name}]]")
             base = {"load": {"diffusion_model_path": "@model", **found, **fam.get("options", {})}, "run": support.run_for(fam, path.name)}
         extra = {**base.get("run", {}), **extra}
-        sd = self._engine("video", path, {**base.get("load", {}), **(extra.pop("load", None) or {})})
+        vload = {**base.get("load", {}), **(extra.pop("load", None) or {})}
+        try:
+            sd = self._engine("video", path, vload)
+        except ProviderError as exc:
+            if self._cli_fallback(exc):   # a biblioteca não reconhece o modelo: o sd-cli pré-compilado gera os quadros
+                return self._video_cli(path, vload, extra, fam, prompt, duration, aspect, image, seed, long_side)
+            raise
         fn = getattr(sd, "txt2vid", None) or getattr(sd, "generate_video", None)
         if fn is None:
             raise ProviderError("A versão instalada da stable-diffusion-cpp-python não gera vídeo. Atualize-a (asta libs) ou use outro provedor de vídeo.")
@@ -2094,6 +2173,39 @@ class GGUFMedia(MediaProvider):
         self.ctl.note("Gerando vídeo com o modelo GGUF (pode demorar)…")
         frames = fn(**kw)
         return _frames_to_mp4(frames, fps)
+
+    def _video_cli(self, path: Path, load: Dict[str, Any], extra: Dict[str, Any], fam: Optional[Dict[str, Any]], prompt: str, duration: int, aspect: str, image: Optional[Ref], seed: int, long_side: int) -> Media:
+        """O vídeo pelo `sd-cli` (`-M vid_gen`): os quadros saem numerados e o ASTA os monta em MP4 pelo ffmpeg."""
+        cli = sdcli.find()
+        assert cli is not None
+        vinfo = (fam or {}).get("video") or {}
+        fps = int(vinfo.get("fps") or 16)
+        run_p = {k: v for k, v in extra.items() if k != "load"}
+        if vinfo:
+            w, h = vinfo["sizes"]["portrait" if str(aspect) in ("9:16", "3:4") else "landscape"]
+            run_p["video_frames"] = max(5, min(int(vinfo.get("max_frames") or 121), 4 * round((max(1, int(duration)) * fps - 1) / 4) + 1))
+        else:
+            w, h = size_of_aspect(aspect, long_side or 640)
+            w, h = w // 8 * 8, h // 8 * 8
+        init = None
+        if image is not None:
+            pil = _pil_refs([image])
+            if pil:
+                b = io.BytesIO()
+                pil[0].resize((w, h)).save(b, format="PNG")
+                init = b.getvalue()
+        self.ctl.note(f"A stable-diffusion-cpp-python não reconhece este modelo: gerando o vídeo pelo sd-cli ({cli.name}). Pode demorar bastante.")
+        try:
+            frames, warns = sdcli.generate_video(cli, self._load_kwargs(path, load), run_p, prompt=prompt, width=w, height=h, seed=int(seed) if seed else -1, fps=fps, init=init, cancelled=self._cancelled, note=self.ctl.note)
+        except ProviderError as exc:
+            if str(exc) == "cancelado":
+                self.ctl.check()
+            raise
+        if warns:
+            self.ctl.note("Opções sem equivalente no sd-cli (ignoradas): " + ", ".join(sorted(set(warns))))
+        from PIL import Image  # type: ignore
+
+        return _frames_to_mp4([Image.open(io.BytesIO(f)).convert("RGB") for f in frames], fps)
 
     def test(self) -> str:
         _local_import("stable_diffusion_cpp", extra="local")

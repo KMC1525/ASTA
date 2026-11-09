@@ -5,6 +5,26 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.34] — 2026-11-09
+
+### Adicionado — Canvas: sd-cli pré-compilado quando a biblioteca Python não reconhece o modelo (sem compilar)
+Continuação do relato «a stable-diffusion.cpp instalada não reconhece o modelo» (FLUX.2 klein GGUF): a biblioteca do PyPI (0.4.7) é antiga demais, e a saída que existia — compilar a do GitHub — exige git, cmake e compilador C++ e leva muitos minutos (na captura ficou em «git submodule update…»).
+- **Botão «Baixar o executável pronto (sem compilar)»** no erro do nó (e `asta libs --sd-cli`): baixa o `sd-cli` oficial da **Release mais nova** da stable-diffusion.cpp (`leejet/stable-diffusion.cpp`; escolhe o arquivo do seu sistema: Linux x86_64, macOS arm64 ou Windows x64; CPU por padrão, `ASTA_SD_BACKEND=vulkan|cuda` muda) para `<dados>/bin/sd-cpp/`, abre o pacote com as travas de segurança do ASTA, confere que o executável roda e guarda a versão. **Só a pedido**, por HTTPS do repositório oficial; nada é instalado fora da pasta de dados.
+- **Uso automático:** quando a biblioteca Python não reconhece o modelo (ou nem está instalada) e há um `sd-cli`, o nó Imagem e o nó Vídeo passam a gerar por ele, como processo à parte (com cancelamento), com os mesmos arquivos de apoio e parâmetros das famílias (`support.FAMILIES`): `--diffusion-model/--vae/--llm/--t5xxl`, `--cfg-scale`, `--steps`, `--sampling-method`, `--flow-shift`, referências `-r` (modelos multi-referência) ou imagem inicial `-i`, `-M vid_gen` com `--video-frames`/`--fps` (o ASTA monta o MP4). Opções sem equivalente são ignoradas com aviso. As opções foram conferidas no código-fonte da stable-diffusion.cpp.
+- Sem o `sd-cli`, o erro agora oferece primeiro o download e só depois a compilação.
+- **Limites honestos:** o fluxo de download usa a Release mais nova, cujos nomes de arquivo seguem o workflow de build do repositório (não consultei a API de Releases daqui); se não houver arquivo para o seu sistema (ex.: Linux ARM, macOS Intel), o ASTA diz isso e a compilação continua sendo a saída. Testado com um `sd-cli` de mentira (script) e uma Release simulada — **não rodei com o `sd-cli` e os modelos reais**. O núcleo Rust não mudou.
+- Versão 0.17.34.
+
+## [0.17.33] — 2026-11-09
+
+### Corrigido — Canvas: referências descartadas no modo Gerar e tamanho trocado pela 1ª foto
+Numa thumb feita com um Texto com `@foto-perfil`, `@fnaf-…`, uma Mídia ligada em «Referências» e um Style Folder (modelo FLUX.2 klein GGUF, modo «Gerar»), **as referências nunca chegavam ao modelo**.
+- **Referências no modo Gerar:** o provedor GGUF (e o Hugging Face local) tinha `refs_edit_only` fixo: no modo Gerar, a engine descartava todas as referências com o aviso «só usa imagens de referência no modo Editar». Isso vale para os modelos de «imagem → imagem», mas **não** para os que juntam várias referências na mesma geração. Agora é **por modelo** (`refs_need_edit`): FLUX.2 klein/dev, FLUX.3 Klein, Qwen-Image 2.1, Kontext e Qwen-Image-Edit usam as referências também em Gerar; os demais seguem pedindo Editar.
+- **Tamanho:** com referências, o tamanho de saída virava o da **primeira** imagem (um retrato como `foto-perfil` fazia a thumb 16:9 sair em pé). Agora só a edição de **uma** imagem mantém a proporção dela; com várias, vale o tamanho pedido.
+- **FLUX.3 GGUF:** lia no máximo 4 referências; agora lê até o limite do modelo (10).
+- Não corrigido (ambiente): «a stable-diffusion.cpp instalada não reconhece o modelo» — a biblioteca do PyPI (0.4.7) é antiga demais para alguns GGUF; o botão «Atualizar a biblioteca» compila a mais nova (precisa de git, cmake e compilador C++). Testes novos em `tests/test_canvas_refs.py`; **não rodei com a stable-diffusion.cpp de verdade**.
+- Versão 0.17.33.
+
 ## [0.17.32] — 2026-11-09
 
 ### Melhorado — OpenRouter no Canvas: edição de imagens, transcrição e modelos pelas modalidades

@@ -53,6 +53,7 @@ class CanvasRoutes:
         a("GET", r"/api/media/installed", self.r_media_installed)
         a("POST", r"/api/media/support/download", self.r_support_download)
         a("POST", r"/api/media/sd-latest", self.r_sd_latest)
+        a("POST", r"/api/media/sd-cli", self.r_sd_cli)
         a("GET", r"/api/media/hub/search", self.r_hub_search)
         a("POST", r"/api/media/hub/use", self.r_hub_use)
         a("GET", r"/api/media/local/state", self.r_local_state)
@@ -338,6 +339,28 @@ class CanvasRoutes:
 
         job = self.app.jobs.start("support_files", work)
         req.json({"job_id": job.id, "files": [m["label"] for m in info["missing"]], "approx_gb": info["approx_gb"]})
+
+    def r_sd_cli(self, req) -> None:
+        """Baixa o `sd-cli` pré-compilado da stable-diffusion.cpp (sem git nem compilador) para `<dados>/bin/sd-cpp/`: o Canvas passa a usá-lo nos modelos que a biblioteca Python não reconhece. Só a pedido (botão no nó)."""
+        running = self.app.jobs.running("sd_cli")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+
+        def work(job: Job) -> None:
+            from .canvas import media, sdcli
+            from .providers import ProviderError
+
+            job.emit({"type": "start"})
+            try:
+                exe = sdcli.install(lambda done, total: job.emit({"type": "progress", "done": done, "total": total}), lambda: job.cancelled, lambda m: job.emit({"type": "note", "message": m}))
+            except ProviderError as exc:
+                job.emit({"type": "cancelled"} if str(exc) == "cancelado" else {"type": "error", "message": str(exc)[:400]})
+                return
+            media._media_unload()
+            job.emit({"type": "done", "path": str(exe)})
+
+        job = self.app.jobs.start("sd_cli", work)
+        req.json({"job_id": job.id})
 
     def r_sd_latest(self, req) -> None:
         """Compila a stable-diffusion-cpp-python mais nova do GitHub (`asta libs --sd-latest`) quando o modelo não é reconhecido pela que veio do PyPI. Só a pedido da pessoa (botão no nó); leva minutos."""
