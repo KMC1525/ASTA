@@ -654,8 +654,29 @@ class OpenRouterMedia(MediaProvider):
     #: servidores (base) em que a rota `/images` não existe: a imagem vai direto pelo chat
     _no_images: Set[str] = set()
 
+    #: limites conhecidos de referências por modelo (o catálogo e a mensagem de erro do provedor valem mais do que isto)
+    _REF_LIMITS = ((re.compile(r"^x-ai/|grok", re.I), 3),)
+
     def max_refs(self, model: str = "") -> int:
+        """Quantas referências o modelo aceita: o catálogo (`input_references` com `max`), o limite aprendido de uma recusa («must have between 0 and 3 items»), um limite conhecido (xAI: 3) ou 4."""
+        name = model or self.model_for("image", model) or ""
+        learned = OpenRouterMedia._learned_refs.get(name)
+        if learned:
+            return learned
+        try:
+            sp = (self._catalog("images").get(name) or {}).get("supported_parameters") or {}
+        except Exception:  # noqa: BLE001
+            sp = {}
+        d = sp.get("input_references")
+        if isinstance(d, dict) and isinstance(d.get("max"), int) and d["max"] > 0:
+            return int(d["max"])
+        for rx, n in self._REF_LIMITS:
+            if rx.search(name):
+                return n
         return 4
+
+    #: modelo → limite de referências aprendido de uma recusa do provedor
+    _learned_refs: Dict[str, int] = {}
 
     def _h(self) -> Dict[str, str]:
         self.need_key()
@@ -790,7 +811,16 @@ class OpenRouterMedia(MediaProvider):
                 if exc.status in (404, 405, 501) and not out and not entry:   # sem a rota própria (servidor compatível mais simples): o chat com `modalities` é o caminho
                     OpenRouterMedia._no_images.add(self.base)
                     return self._image_via_chat(prompt, size, count, negative, refs, model, extra, via_images=True)
-                if exc.status in (400, 422) and body != minimal:   # alguma opção (proporção, resolução, seed…) não vale para este modelo: tenta de novo só com o essencial
+                m = re.search(r"between\s+\d+\s+and\s+(\d+)\s+items|at most\s+(\d+)\s+(?:items|images|references)|maximum of\s+(\d+)", str(exc), re.I)
+                lim = int(next(g for g in m.groups() if g)) if m else 0
+                if exc.status in (400, 422) and lim and refs and len(body.get("input_references") or []) > lim:   # «input_references: must have between 0 and 3 items» (xAI): usa só as primeiras e lembra o limite
+                    OpenRouterMedia._learned_refs[model] = lim
+                    self.ctl.note(f"Este modelo aceita no máximo {lim} imagens de referência: usando só as {lim} primeiras.")
+                    minimal["input_references"] = minimal["input_references"][:lim]
+                    full["input_references"] = full["input_references"][:lim]
+                    body = dict(full)
+                    res = _retry(self.ctl, lambda: http.post_json(f"{self.base}/images", body, h, timeout=600))
+                elif exc.status in (400, 422) and body != minimal:   # alguma opção (proporção, resolução, seed…) não vale para este modelo: tenta de novo só com o essencial
                     self.ctl.note("O modelo não aceitou algumas opções de imagem: tentando de novo só com o texto e as referências…")
                     body = dict(minimal)
                     full = dict(minimal)

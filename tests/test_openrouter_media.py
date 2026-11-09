@@ -15,9 +15,10 @@ from tests.test_canvas import PNG, provider  # noqa: E402
 
 
 class FakeOR:
-    def __init__(self, images_route=True, chat_status=200, catalog=None, video_models=None, bad_params=()):
+    def __init__(self, images_route=True, chat_status=200, catalog=None, video_models=None, bad_params=(), ref_limit=None):
         self.seen = []
         self.images_route, self.chat_status = images_route, chat_status
+        self.ref_limit = ref_limit   # a rota /images recusa mais referências do que isso (como a xAI)
         self.catalog, self.video_models, self.bad_params = catalog, video_models, set(bad_params)   # catalog: modelos de /images/models; bad_params: campos que /images e /videos recusam com 400
         outer = self
 
@@ -69,6 +70,8 @@ class FakeOR:
                     bad = [k for k in body if k in outer.bad_params]
                     if bad:
                         return self._send({"error": {"message": "Invalid request parameters: " + ",".join(bad)}}, 400)
+                    if outer.ref_limit is not None and len(body.get("input_references") or []) > outer.ref_limit:
+                        return self._send({"error": {"message": f"No provider for {body['model']} supports the requested parameter(s): input_references ({len(body['input_references'])} items). Provider rejections: xAI: input_references: must have between 0 and {outer.ref_limit} items"}}, 400)
                     if not outer.images_route:
                         return self._send({"error": {"message": "not found"}}, 404)
                     return self._send({"data": [{"b64_json": base64.b64encode(PNG).decode()}]})
@@ -105,6 +108,7 @@ class FakeOR:
 class OpenRouterMediaTests(unittest.TestCase):
     def setUp(self):
         M.OpenRouterMedia._no_images.clear()
+        M.OpenRouterMedia._learned_refs.clear()
 
     def run_with(self, **kw):
         fake = FakeOR(**kw)
@@ -179,6 +183,29 @@ class OpenRouterMediaTests(unittest.TestCase):
         out = p.image("x", model="openai/gpt-image-2.6-flare")
         self.assertEqual(out[0].data, PNG)
         self.assertEqual([path for m, path in fake.paths() if m == "POST"], ["/api/v1/chat/completions", "/api/v1/images"])
+
+    def test_xai_models_use_at_most_three_references_by_default(self):
+        fake, p = self.run_with(ref_limit=3)
+        self.assertEqual(p.max_refs("x-ai/grok-imagine-image-2.0"), 3)
+        self.assertEqual(p.max_refs("openai/gpt-image-1"), 4)
+        refs = [(PNG, "image/png")] * 4
+        out = p.image("x", model="x-ai/grok-imagine-image-2.0", refs=refs[:3])
+        self.assertEqual(out[0].data, PNG)
+
+    def test_the_catalog_limit_for_references_wins(self):
+        cat = [{"id": "m/y", "supported_parameters": {"input_references": {"type": "range", "min": 0, "max": 6}}}]
+        _, p = self.run_with(catalog=cat)
+        self.assertEqual(p.max_refs("m/y"), 6)
+
+    def test_a_reference_limit_in_the_provider_error_is_learned_and_applied(self):
+        M.OpenRouterMedia._learned_refs.clear()
+        fake, p = self.run_with(ref_limit=2)
+        out = p.image("x", model="m/z", refs=[(PNG, "image/png")] * 4)   # o catálogo não diz nada: a recusa («between 0 and 2 items») ensina o limite
+        self.assertEqual(out[0].data, PNG)
+        posts = [b for m, path, b in fake.seen if m == "POST"]
+        self.assertEqual([len(b["input_references"]) for b in posts], [4, 2])
+        self.assertEqual(p.max_refs("m/z"), 2)   # e as próximas imagens já saem com o limite
+        M.OpenRouterMedia._learned_refs.clear()
 
     def test_video_follows_the_catalog_and_downloads_from_the_signed_url_list(self):
         vm = [{"id": "x-ai/grok-imagine-video", "supported_durations": [5, 8, 10], "supported_aspect_ratios": ["16:9", "9:16"], "supported_resolutions": ["480p", "720p"]}]
