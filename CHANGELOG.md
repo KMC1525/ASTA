@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.20] — 2026-11-09
+
+### Corrigido — node Texto com várias referências (`@`) na hora de gerar/editar imagens
+- **Imagens enviadas em dobro.** Um `@foto-perfil` no Texto e o node Mídia com a mesma foto ligado em «Referências» mandavam a imagem duas vezes ao modelo (4 citações + 4 ligadas = 6 imagens, só 4 diferentes): as cópias ocupavam vagas do limite e a numeração «(reference image N)» do prompt passava a apontar também para cópias. Agora as referências repetidas (mesmo conteúdo) valem uma vez, na ordem de quem aparece primeiro: as citadas no texto e depois as ligadas.
+- `@foto_perfil` (com sublinhado) agora também casa com `foto-perfil`, no servidor e nas fichas do node.
+- Se uma imagem citada não puder ser lida (arquivo ausente, vídeo sem quadro), o nó avisa em vez de seguir com a numeração das referências trocada.
+- **Texto cortado.** O campo de texto (Texto, Texto IA, Imagem, Vídeo…) agora cresce junto com o conteúdo, até um limite, em vez de esconder o fim de um prompt longo; o que você puxou à mão não é encolhido.
+- **Conexões que ficavam no lugar errado** ao redimensionar ou ao crescer um campo: as linhas entre os nós agora se redesenham sempre que a altura de um nó muda.
+- Ao escolher uma menção na lista, não entra mais um espaço a mais quando já há espaço ou pontuação depois.
+- Versão 0.17.20 (o núcleo Rust não mudou).
+
 ## [0.17.19] — 2026-11-09
 
 ### Corrigido — referências de imagem nos nós com modelo local
