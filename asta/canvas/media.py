@@ -1131,6 +1131,38 @@ def _wav_from_array(arr: Any, rate: int) -> bytes:
     return buf.getvalue()
 
 
+# ---- Vozes da Unsloth que não passam pelo `pipeline("text-to-speech")`: Orpheus (LLM que fala em «tokens» de áudio, decodificados pelo SNAC) e Sesame CSM
+ORPHEUS_VOICES = ("tara", "leah", "jess", "leo", "dan", "mia", "zac", "zoe")
+ORPHEUS_CODEC = "hubertsiuzdak/snac_24khz"
+_ORPHEUS_START, _ORPHEUS_END_TEXT, _ORPHEUS_END_HUMAN, _ORPHEUS_END_SPEECH, _ORPHEUS_START_SPEECH, _ORPHEUS_AUDIO_BASE = 128259, 128009, 128260, 128258, 128257, 128266
+
+
+def orpheus_codes(generated: Sequence[int]) -> List[int]:
+    """Os tokens gerados pelo Orpheus → códigos de áudio: corta depois do último «início de fala», tira o fim, aprova só grupos completos de 7 e tira o deslocamento dos tokens de áudio."""
+    ids = [int(t) for t in generated]
+    cut = max((i for i, t in enumerate(ids) if t == _ORPHEUS_START_SPEECH), default=-1)
+    ids = [t for t in ids[cut + 1:] if t != _ORPHEUS_END_SPEECH]
+    ids = ids[: len(ids) // 7 * 7]
+    return [t - _ORPHEUS_AUDIO_BASE for t in ids]
+
+
+def orpheus_layers(codes: Sequence[int]) -> Tuple[List[int], List[int], List[int]]:
+    """Cada grupo de 7 códigos vira 1 + 2 + 4 códigos das três camadas do SNAC (24 kHz), cada camada com o seu deslocamento de 4096."""
+    l1: List[int] = []
+    l2: List[int] = []
+    l3: List[int] = []
+    for i in range(len(codes) // 7):
+        c = codes[7 * i: 7 * i + 7]
+        l1.append(c[0])
+        l2.append(c[1] - 4096)
+        l3.append(c[2] - 2 * 4096)
+        l3.append(c[3] - 3 * 4096)
+        l2.append(c[4] - 4 * 4096)
+        l3.append(c[5] - 5 * 4096)
+        l3.append(c[6] - 6 * 4096)
+    return l1, l2, l3
+
+
 class LocalHFMedia(MediaProvider):
     """Modelos do Hugging Face dentro do próprio ASTA (diffusers/transformers).
 
@@ -1323,8 +1355,88 @@ class LocalHFMedia(MediaProvider):
         res = pipe(prompt, forward_params={"do_sample": True, "max_new_tokens": int(max(1, min(30, duration)) * 50), **(extra or {})})
         return Media(_wav_from_array(res["audio"], res["sampling_rate"]), "audio/wav")
 
+    def _voice_orpheus(self, text: str, voice: str, model: str, extra: Optional[Dict[str, Any]]) -> Media:
+        """Orpheus (unsloth/orpheus-3b-0.1-ft…): o LLM gera tokens de áudio e o SNAC (`hubertsiuzdak/snac_24khz`, baixado em Modelos locais) os decodifica em 24 kHz."""
+        from . import localmodels as lm
+
+        (tf,) = _local_import("transformers")
+        (torch,) = _local_import("torch")
+        try:
+            snac = __import__("snac", fromlist=["_"])
+        except ImportError:
+            raise ProviderError('O Orpheus precisa do decodificador de áudio SNAC:  pip install snac  (e baixe o modelo "' + ORPHEUS_CODEC + '" em Configuração → Mídia).') from None
+        ready = self._ready(model)
+        if not lm.downloaded_precision(ORPHEUS_CODEC):
+            raise ProviderError(f'O Orpheus usa o decodificador "{ORPHEUS_CODEC}" (≈ 80 MB), que ainda não foi baixado. Baixe-o em Configuração → Mídia antes de usar.', status=424)
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+
+        def load() -> Any:
+            old = os.environ.get("HF_HUB_OFFLINE")
+            os.environ["HF_HUB_OFFLINE"] = "1"   # nada é baixado em silêncio
+            try:
+                tok = tf.AutoTokenizer.from_pretrained(model, local_files_only=True)
+                lm_ = tf.AutoModelForCausalLM.from_pretrained(model, torch_dtype=ready["dtype"], local_files_only=True).to(dev)
+                codec = snac.SNAC.from_pretrained(ORPHEUS_CODEC).eval().to(dev)
+            finally:
+                if old is None:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = old
+            return tok, lm_, codec
+
+        tok, lm_, codec = _local_load("voice", model, load)
+        name = (voice or "tara").strip().lower()
+        prompt = f"{name if name in ORPHEUS_VOICES else 'tara'}: {text}"
+        ids = tok(prompt, return_tensors="pt").input_ids
+        ids = torch.cat([torch.tensor([[_ORPHEUS_START]]), ids, torch.tensor([[_ORPHEUS_END_TEXT, _ORPHEUS_END_HUMAN]])], dim=1).to(dev)
+        self.ctl.note("Sintetizando voz com o Orpheus (local)…")
+        gen_kw: Dict[str, Any] = {"max_new_tokens": 1200, "do_sample": True, "temperature": 0.6, "top_p": 0.95, "repetition_penalty": 1.1, "eos_token_id": _ORPHEUS_END_SPEECH, **(extra or {})}
+        with torch.no_grad():
+            out = lm_.generate(input_ids=ids, attention_mask=torch.ones_like(ids), **gen_kw)
+        codes = orpheus_codes(out[0].tolist())
+        if not codes:
+            raise ProviderError("O Orpheus não devolveu áudio para este texto. Tente um texto maior ou outra voz.")
+        l1, l2, l3 = orpheus_layers(codes)
+        with torch.no_grad():
+            audio = codec.decode([torch.tensor(l, device=dev).unsqueeze(0) for l in (l1, l2, l3)])
+        return Media(_wav_from_array(audio.detach().cpu().numpy(), 24000), "audio/wav")
+
+    def _voice_csm(self, text: str, voice: str, model: str, extra: Optional[Dict[str, Any]]) -> Media:
+        """Sesame CSM (unsloth/csm-1b): `CsmForConditionalGeneration` + `processor.apply_chat_template`; o «falante» é 0 ou 1."""
+        (tf,) = _local_import("transformers")
+        (torch,) = _local_import("torch")
+        ready = self._ready(model)
+        dev = "cuda" if torch.cuda.is_available() else "cpu"
+
+        def load() -> Any:
+            old = os.environ.get("HF_HUB_OFFLINE")
+            os.environ["HF_HUB_OFFLINE"] = "1"
+            try:
+                return tf.AutoProcessor.from_pretrained(model, local_files_only=True), tf.CsmForConditionalGeneration.from_pretrained(model, torch_dtype=ready["dtype"], local_files_only=True).to(dev)
+            except AttributeError:
+                raise ProviderError("Esta versão do transformers não tem o CSM (CsmForConditionalGeneration). Atualize:  pip install -U transformers") from None
+            finally:
+                if old is None:
+                    os.environ.pop("HF_HUB_OFFLINE", None)
+                else:
+                    os.environ["HF_HUB_OFFLINE"] = old
+
+        proc, lm_ = _local_load("voice", model, load)
+        speaker = "1" if str(voice).strip() == "1" else "0"
+        conv = [{"role": speaker, "content": [{"type": "text", "text": text}]}]
+        inputs = proc.apply_chat_template(conv, tokenize=True, return_dict=True).to(dev)
+        self.ctl.note("Sintetizando voz com o CSM (local)…")
+        with torch.no_grad():
+            audio = lm_.generate(**inputs, output_audio=True, **(extra or {}))
+        first = audio[0] if isinstance(audio, (list, tuple)) else audio
+        return Media(_wav_from_array(first.to(torch.float32).cpu().numpy(), 24000), "audio/wav")
+
     def voice(self, text, *, voice="", speed=1.0, model="", extra=None, instructions=""):
         model = self._pick("voice", model, "suno/bark-small")
+        if re.search(r"orpheus", model, re.I):
+            return self._voice_orpheus(text, voice, model, extra)
+        if re.search(r"(^|/)csm-1b", model, re.I):
+            return self._voice_csm(text, voice, model, extra)
         (tf,) = _local_import("transformers")
         ready = self._ready(model)
         pipe = _local_load("voice", model, lambda: tf.pipeline("text-to-speech", model=model, torch_dtype=ready["dtype"], model_kwargs={"local_files_only": True}))
@@ -1622,7 +1734,7 @@ class GGUFMedia(MediaProvider):
         name = Path(self.model_for("image", model) or model or "").name
         if re.search(r"flux[-_. ]?3", name, re.I):
             return 10
-        return 4 if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        return 4 if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", name, re.I) else 1   # os demais modelos usam só uma imagem de partida
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1739,7 +1851,7 @@ class GGUFMedia(MediaProvider):
             except (TypeError, ValueError):
                 params = set()
             w, h = _size_like(pil[0], w, h, 16)
-            if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1", path.name, re.I) and "ref_images" in params:
+            if re.search(r"edit|kontext|klein|qwen[-_]?image[-_]?2[._]?1|flux[-_. ]?2[-_. ]?dev", path.name, re.I) and "ref_images" in params:
                 ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
             elif "init_image" in params:
                 ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem
@@ -1938,7 +2050,8 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "label": "Hugging Face local (embutido)", "kind": "local_hf", "caps": ["image", "video", "sound", "voice", "stt"], "needs_key": False, "local": True,
         "models": {"image": "stabilityai/sd-turbo", "video": "Lightricks/LTX-Video", "sound": "facebook/musicgen-small", "voice": "suno/bark-small", "stt": "openai/whisper-small"},
         "suggest": {"image": ["stabilityai/sd-turbo", "stabilityai/sdxl-turbo", "black-forest-labs/FLUX.1-schnell", "unsloth/Z-Image-Turbo", "unsloth/FLUX.2-klein-4B", "unsloth/FLUX.1-schnell"], "video": ["Lightricks/LTX-Video"],
-                    "sound": ["facebook/musicgen-small"], "voice": ["suno/bark-small", "facebook/mms-tts-por"], "stt": ["openai/whisper-small", "openai/whisper-large-v3-turbo"]},
+                    "sound": ["facebook/musicgen-small"], "voice": ["suno/bark-small", "facebook/mms-tts-por", "unsloth/orpheus-3b-0.1-ft", "unsloth/csm-1b"],
+                    "stt": ["openai/whisper-small", "openai/whisper-large-v3-turbo", "unsloth/whisper-large-v3-turbo", "unsloth/whisper-small", "unsloth/whisper-base"]},
         "hint": 'Roda modelos do Hugging Face dentro do ASTA. Requer:  pip install "asta[media]". Antes de usar, escolha a precisão (quantização) e baixe cada modelo aqui mesmo — nada é baixado em silêncio. Vídeo exige GPU.',
     },
     "gguf_local": {

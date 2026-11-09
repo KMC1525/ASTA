@@ -40,6 +40,12 @@ FAMILIES: List[Dict[str, Any]] = [
      "need": "o VAE (qwen_image_vae.safetensors, em Comfy-Org/Qwen-Image_ComfyUI) e o codificador de texto Qwen2.5-VL (um .gguf, ex.: unsloth/Qwen2.5-VL-7B-Instruct-GGUF)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/Qwen-Image_ComfyUI", "file": "split_files/vae/qwen_image_vae.safetensors", "label": "VAE do Qwen-Image", "approx": 0.25},
                    "llm_path": {"repo": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf", "label": "Codificador de texto Qwen2.5-VL (Q4_K_M)", "approx": 4.7}}},
+    {"id": "flux2-dev", "name": r"flux[-_. ]?2[-_. ]?dev", "label": "FLUX.2 dev (32B)", "cap": "image",   # unsloth/FLUX.2-dev-GGUF: o codificador de texto é o Mistral-Small-3.2-24B (receita do cartão da stable-diffusion.cpp)
+     "load": {"vae_path": r"flux2[-_]?(ae|vae)", "llm_path": r"^mistral[-_]?small[-_]?3[._]?2[-_]?24b[-_]?instruct[-_]?2506(?!.*mmproj)[^/]*\.gguf$"},
+     "run": {"cfg_scale": 1.0, "sample_steps": 28, "sample_method": "euler"}, "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
+     "need": "o VAE do FLUX.2 (flux2-vae.safetensors, em Comfy-Org/flux2-dev) e o codificador de texto Mistral-Small-3.2-24B-Instruct (um .gguf, ex.: unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF)",
+     "downloads": {"vae_path": {"repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors", "label": "VAE do FLUX.2", "approx": 0.34},
+                   "llm_path": {"repo": "unsloth/Mistral-Small-3.2-24B-Instruct-2506-GGUF", "file": "Mistral-Small-3.2-24B-Instruct-2506-Q4_K_M.gguf", "label": "Codificador de texto Mistral-Small-3.2-24B (Q4_K_M)", "approx": 14.3}}},
     {"id": "flux2-klein-9b", "name": r"flux[-_. ]?2.*9b", "label": "FLUX.2 klein (9B)",
      "load": {"vae_path": r"flux2[-_]?(ae|vae)", "llm_path": r"^qwen[-_]?3[-_]8b(?![-_]?(instruct|vl|thinking|embedding|2507))[^/]*\.gguf$"}, "marker": "double_blocks.",
      "run": {"cfg_scale": 1.0, "sample_steps": 4, "sample_method": "euler"}, "run_base": {"cfg_scale": 4.0, "sample_steps": 50, "sample_method": "euler"},   # klein é destilado (4 passos, sem CFG); o «base» usa 50 passos e CFG 4

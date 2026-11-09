@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.31] — 2026-11-09
+
+### Added — more Unsloth models: FLUX.2 dev, Orpheus and CSM voices, Whisper
+- **FLUX.2 dev (GGUF)** gets its own family (`canvas/support.py`): the FLUX.2 VAE + the **Mistral-Small-3.2-24B-Instruct** text encoder (optional download, ≈ 14 GB), 28 steps and CFG 1, up to 4 reference images. It had no family before (and is never treated as FLUX.1).
+- **Local voice (Canvas → Voice node, "Hugging Face local" provider):** **Orpheus** (`unsloth/orpheus-3b-0.1-ft`; voices tara, leah, jess, leo, dan, mia, zac, zoe): the model generates audio tokens and **SNAC** (`hubertsiuzdak/snac_24khz`) decodes them to 24 kHz — needs `pip install snac` (not in the installers) and the decoder downloaded in Settings → Media; nothing is downloaded silently. **Sesame CSM** (`unsloth/csm-1b`; speaker 0 or 1) through transformers' `CsmForConditionalGeneration`. Other voice models keep going through the old `pipeline`.
+- **Suggestions:** `unsloth/orpheus-3b-0.1-ft`, `unsloth/csm-1b` (voice) and `unsloth/whisper-large-v3-turbo`, `whisper-small`, `whisper-base` (transcription).
+- **Out of scope:** MOSS-Image, ERNIE-Image, LTX-2.x, MiniMax-H3, Qwen-Image-Layered, Spark-TTS, Llasa/OuteTTS and the Orpheus GGUF — their support files/loading parameters are not verifiable here. Unsloth **publishes no** sound-effect or music model.
+- **Honest limits:** Orpheus and CSM were written from the model cards/docs and tested with simulated modules (the token → SNAC-layer decoding has its own test); they **did not run with the real models** (several GB, no GPU here). Same for FLUX.2 dev.
+- Version 0.17.31. The Rust core did not change.
+
 ## [0.17.30] — 2026-11-09
 
 ### Added — Unsloth models in the Canvas (image and video)
