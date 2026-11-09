@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.21] — 2026-11-09
+
+### Added — FLUX.2 klein support (`black-forest-labs/FLUX.2-klein-4B` and 9B)
+- **Hugging Face local (diffusers):** `black-forest-labs/FLUX.2-klein-4B` (pipeline `Flux2KleinPipeline`) now loads — if the installed diffusers' `AutoPipeline` does not know it yet, the class comes from `model_index.json`; if no version loads it, the error says to run `pip install -U diffusers transformers`. The model is distilled: it runs with **4 steps and guidance 1.0** (the «base» variant, 50 steps and guidance 4), and the pipeline gets no negative prompt (FLUX's does not accept one). The download already skips the root `flux-2-klein-4b.safetensors`, which repeats the weights of `transformer/`. The model shows up among the provider's suggestions.
+- **Editing with several images:** klein edits through its own pipeline with **up to 4 images at once** (Hugging Face local and GGUF, via `ref_images`) — ideal for the Text node's `@`.
+- **GGUF (stable-diffusion.cpp):** FLUX.2 klein (`leejet/FLUX.2-klein-4B-GGUF`, `unsloth/FLUX.2-klein-4B-GGUF`…) is now its own family. Before, `flux` matched FLUX.1 and asked for `clip_l` and `t5xxl`, which FLUX.2 does not use. ASTA now finds the **FLUX.2 VAE** (`flux2-vae.safetensors`) and the **Qwen3 text encoder** (4B for klein 4B, 8B for 9B; Z-Image's Qwen3-4B-Instruct does not fit) in the same folder, applies klein's settings (4 steps, CFG 1; «base»: 50 steps, CFG 4) and, if something is missing, offers the **Download the support files** button (≈ 0.3 GB of VAE + 2.5 GB of Qwen3-4B).
+- FLUX.2 **dev** (32B, Mistral 24B encoder) has no family: it is no longer treated as FLUX.1.
+- Default steps and guidance per model: FLUX.1 dev 28 steps and guidance 3.5; FLUX.1 schnell 4 steps.
+- Version 0.17.21 (the Rust core did not change).
+
 ## [0.17.20] — 2026-11-09
 
 ### Fixed — Text node with several references (`@`) when generating/editing images

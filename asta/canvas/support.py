@@ -17,13 +17,34 @@ FAMILIES: List[Dict[str, Any]] = [
      "need": "o VAE (qwen_image_vae.safetensors, em Comfy-Org/Qwen-Image_ComfyUI) e o codificador de texto Qwen2.5-VL (um .gguf, ex.: unsloth/Qwen2.5-VL-7B-Instruct-GGUF)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/Qwen-Image_ComfyUI", "file": "split_files/vae/qwen_image_vae.safetensors", "label": "VAE do Qwen-Image", "approx": 0.25},
                    "llm_path": {"repo": "unsloth/Qwen2.5-VL-7B-Instruct-GGUF", "file": "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf", "label": "Codificador de texto Qwen2.5-VL (Q4_K_M)", "approx": 4.7}}},
-    {"id": "flux", "name": r"flux", "label": "FLUX",
+    {"id": "flux2-klein-9b", "name": r"flux[-_. ]?2.*9b", "label": "FLUX.2 klein (9B)",
+     "load": {"vae_path": r"flux2[-_]?(ae|vae)", "llm_path": r"^qwen[-_]?3[-_]8b(?![-_]?(instruct|vl|thinking|embedding|2507))[^/]*\.gguf$"}, "marker": "double_blocks.",
+     "run": {"cfg_scale": 1.0, "sample_steps": 4, "sample_method": "euler"}, "run_base": {"cfg_scale": 4.0, "sample_steps": 50, "sample_method": "euler"},   # klein é destilado (4 passos, sem CFG); o «base» usa 50 passos e CFG 4
+     "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
+     "need": "o VAE do FLUX.2 (flux2-vae.safetensors, em Comfy-Org/flux2-dev) e o codificador de texto Qwen3-8B (um .gguf, ex.: unsloth/Qwen3-8B-GGUF)",
+     "downloads": {"vae_path": {"repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors", "label": "VAE do FLUX.2", "approx": 0.34},
+                   "llm_path": {"repo": "unsloth/Qwen3-8B-GGUF", "file": "Qwen3-8B-Q4_K_M.gguf", "label": "Codificador de texto Qwen3-8B (Q4_K_M)", "approx": 5.0}}},
+    {"id": "flux2-klein-4b", "name": r"flux[-_. ]?2.*4b", "label": "FLUX.2 klein (4B)",
+     "load": {"vae_path": r"flux2[-_]?(ae|vae)", "llm_path": r"^qwen[-_]?3[-_]4b(?![-_]?(instruct|vl|thinking|embedding|2507))[^/]*\.gguf$"}, "marker": "double_blocks.",
+     "run": {"cfg_scale": 1.0, "sample_steps": 4, "sample_method": "euler"}, "run_base": {"cfg_scale": 4.0, "sample_steps": 50, "sample_method": "euler"},   # klein é destilado (4 passos, sem CFG); o «base» usa 50 passos e CFG 4
+     "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
+     "need": "o VAE do FLUX.2 (flux2-vae.safetensors, em Comfy-Org/flux2-dev) e o codificador de texto Qwen3-4B (um .gguf, ex.: unsloth/Qwen3-4B-GGUF)",
+     "downloads": {"vae_path": {"repo": "Comfy-Org/flux2-dev", "file": "split_files/vae/flux2-vae.safetensors", "label": "VAE do FLUX.2", "approx": 0.34},
+                   "llm_path": {"repo": "unsloth/Qwen3-4B-GGUF", "file": "Qwen3-4B-Q4_K_M.gguf", "label": "Codificador de texto Qwen3-4B (Q4_K_M)", "approx": 2.5}}},
+    {"id": "flux", "name": r"flux(?![-_. ]?2)", "label": "FLUX",
      "load": {"vae_path": r"^ae\.safetensors$", "clip_l_path": r"clip[_-]?l.*\.safetensors$", "t5xxl_path": r"t5xxl.*\.(safetensors|gguf)$"}, "marker": "double_blocks.", "run": {}, "options": {"offload_params_to_cpu": True, "diffusion_flash_attn": True},
      "need": "o VAE (ae.safetensors), o clip_l.safetensors e o t5xxl (safetensors ou .gguf)",
      "downloads": {"vae_path": {"repo": "Comfy-Org/z_image_turbo", "file": "split_files/vae/ae.safetensors", "label": "VAE (ae.safetensors)", "approx": 0.33},
                    "clip_l_path": {"repo": "comfyanonymous/flux_text_encoders", "file": "clip_l.safetensors", "label": "clip_l", "approx": 0.25},
                    "t5xxl_path": {"repo": "comfyanonymous/flux_text_encoders", "file": "t5xxl_fp8_e4m3fn.safetensors", "label": "t5xxl (fp8)", "approx": 4.9}}},
 ]
+
+
+def run_for(fam: Dict[str, Any], filename: str) -> Dict[str, Any]:
+    """Os parâmetros de geração da família; a variante «base» (sem destilação) usa os de `run_base`, se a família tem."""
+    if fam.get("run_base") and re.search(r"base", Path(filename).name, re.I):
+        return dict(fam["run_base"])
+    return dict(fam.get("run") or {})
 
 
 def family_of(filename: str) -> Optional[Dict[str, Any]]:
