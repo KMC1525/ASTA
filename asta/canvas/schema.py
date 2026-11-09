@@ -164,7 +164,7 @@ def normalize_params(ntype: str, p: Any) -> Dict[str, Any]:
 def normalize_result(r: Any) -> Dict[str, Any]:
     r = r if isinstance(r, dict) else {}
     state = r.get("state") if r.get("state") in ("idle", "running", "done", "error") else "idle"
-    return {"state": state, "assets": _files(r.get("assets")), "text": text(r.get("text"), "", 40000), "error": text(r.get("error"), "", 800), "hash": text(r.get("hash"), "", 64),
+    return {"state": state, "assets": _files(r.get("assets")), "text": text(r.get("text"), "", 40000), "error": text(r.get("error"), "", 1600), "hash": text(r.get("hash"), "", 64),
             "ts": text(r.get("ts"), "", 40), "digest": text(r.get("digest"), "", 4000), "digest_key": text(r.get("digest_key"), "", 64)}
 
 

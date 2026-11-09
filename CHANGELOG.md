@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.17] — 2026-11-09
+
+### Corrigido — mensagem de erro do modelo não reconhecido cortada e sem saída
+- O erro do nó era cortado em 800 caracteres (terminava em «(preci»). O limite agora é 1600 e a mensagem ficou bem mais curta.
+- O arquivo do modelo (`qwen-image-2.1-Q4_K_M.gguf`, 265 tensores com nomes como `img_in.weight`, `modulation.1.weight`, `norm_out.linear.weight`, `proj_out.weight`) não tem o tensor `transformer_blocks.0.img_mod.1.weight` do Qwen-Image: a arquitetura não é a que a stable-diffusion.cpp 0.4.7 (a mais nova do PyPI) conhece. A mensagem agora mostra os nomes de fora dos blocos e os do primeiro bloco, que revelam a arquitetura.
+- Novo botão **«Atualizar a biblioteca agora»** no nó com esse erro: compila a stable-diffusion-cpp-python mais nova do GitHub (`asta libs --sd-latest`; precisa de git, cmake e compilador C++; leva minutos), com o progresso no botão, e depois é só rodar o nó de novo (o modelo roda em processo próprio: não precisa reiniciar o ASTA).
+- Versão 0.17.17 (o núcleo Rust não mudou).
+
 ## [0.17.16] — 2026-11-09
 
 ### Corrigido — o ASTA fechava («Falha de segmentação») ao gerar imagem com um modelo GGUF

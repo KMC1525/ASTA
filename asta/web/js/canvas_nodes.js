@@ -269,7 +269,25 @@ export function nodeResult(c, n) {
   const error = st.state === 'error' ? st.message : (r.state === 'error' ? r.error : '');
   if (error) {
     const sup = /\[\[asta-support:([^\]]+)\]\]/.exec(error);   // GGUF de difusão sem VAE/codificador de texto: oferece baixar o que falta
-    box.append(h('div', { class: 'err' }, error.replace(/\s*\[\[asta-support:[^\]]+\]\]/, '')));
+    const upd = /\[\[asta-sd-update\]\]/.test(error);   // a stable-diffusion.cpp instalada não reconhece o modelo: oferece compilar a versão mais nova
+    box.append(h('div', { class: 'err' }, error.replace(/\s*\[\[asta-support:[^\]]+\]\]/, '').replace(/\s*\[\[asta-sd-update\]\]/, '')));
+    if (upd) {
+      const ub = h('button', { class: 'btn sm primary nodrag', type: 'button', id: 'sdup-' + n.id, style: { marginTop: '6px' } }, icon('download', 13), t('Atualizar a biblioteca agora'));
+      ub.onclick = async () => {
+        ub.disabled = true;
+        try {
+          const r = await api('/api/media/sd-latest', { method: 'POST', body: {} });
+          toast(t('Compilando a stable-diffusion.cpp mais nova… pode levar vários minutos.'));
+          events('/api/jobs/' + r.job_id + '/events', (ev) => {
+            if (ev.type === 'note') ub.lastChild.textContent = ' ' + ev.message.slice(0, 40);
+            else if (ev.type === 'done') { toast(t('Biblioteca atualizada. Execute o nó de novo.'), 'ok'); ub.remove(); }
+            else if (ev.type === 'error') { toast(ev.message, 'err'); ub.disabled = false; }
+            else if (ev.type === 'cancelled') { ub.disabled = false; }
+          });
+        } catch (e) { ub.disabled = false; toast(e.status === 409 ? t('Já há uma atualização da biblioteca em andamento.') : e.message, 'err'); }
+      };
+      box.append(ub);
+    }
     if (sup) {
       const btn = h('button', { class: 'btn sm primary nodrag', type: 'button', id: 'sup-' + n.id, style: { marginTop: '6px' } }, icon('download', 13), t('Baixar os arquivos de apoio'));
       btn.onclick = async () => {

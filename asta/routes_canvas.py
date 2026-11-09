@@ -49,6 +49,7 @@ class CanvasRoutes:
         a("GET", r"/api/media/models", self.r_media_models)
         a("GET", r"/api/media/installed", self.r_media_installed)
         a("POST", r"/api/media/support/download", self.r_support_download)
+        a("POST", r"/api/media/sd-latest", self.r_sd_latest)
         a("GET", r"/api/media/hub/search", self.r_hub_search)
         a("POST", r"/api/media/hub/use", self.r_hub_use)
         a("GET", r"/api/media/local/state", self.r_local_state)
@@ -313,6 +314,41 @@ class CanvasRoutes:
 
         job = self.app.jobs.start("support_files", work)
         req.json({"job_id": job.id, "files": [m["label"] for m in info["missing"]], "approx_gb": info["approx_gb"]})
+
+    def r_sd_latest(self, req) -> None:
+        """Compila a stable-diffusion-cpp-python mais nova do GitHub (`asta libs --sd-latest`) quando o modelo não é reconhecido pela que veio do PyPI. Só a pedido da pessoa (botão no nó); leva minutos."""
+        running = self.app.jobs.running("sd_latest")
+        if running:
+            raise HttpError(409, json.dumps({"job_id": running.id}))
+
+        def work(job: Job) -> None:
+            import subprocess
+            import sys as _sys
+
+            from .canvas import media
+
+            job.emit({"type": "start"})
+            media._media_unload()   # fecha o processo da biblioteca antiga: o próximo uso sobe um com a nova
+            proc = subprocess.Popen([_sys.executable, "-m", "asta", "libs", "--extras", "none", "--sd-latest"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
+            tail: list = []
+            for raw in proc.stdout:
+                line = raw.decode("utf-8", "replace").rstrip()
+                if line:
+                    tail = (tail + [line])[-8:]
+                    job.emit({"type": "note", "message": line[:200]})
+                if job.cancelled:
+                    proc.terminate()
+                    break
+            code = proc.wait()
+            if job.cancelled:
+                job.emit({"type": "cancelled"})
+            elif code == 0:
+                job.emit({"type": "done"})
+            else:
+                job.emit({"type": "error", "message": " | ".join(tail)[-400:] or "A compilação falhou."})
+
+        job = self.app.jobs.start("sd_latest", work)
+        req.json({"job_id": job.id})
 
     def r_media_installed(self, req) -> None:
         """Modelos instalados neste computador para um tipo (image, video, sound, voice, stt): GGUF baixados e modelos do Hugging Face local."""

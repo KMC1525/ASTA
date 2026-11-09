@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.17] — 2026-11-09
+
+### Fixed — error message for an unrecognized model was cut off and had no way out
+- The node error was cut at 800 characters (ending at «(preci»). The limit is now 1600 and the message is much shorter.
+- The model file (`qwen-image-2.1-Q4_K_M.gguf`, 265 tensors named like `img_in.weight`, `modulation.1.weight`, `norm_out.linear.weight`, `proj_out.weight`) lacks Qwen-Image's `transformer_blocks.0.img_mod.1.weight` tensor: the architecture is not one stable-diffusion.cpp 0.4.7 (the newest on PyPI) knows. The message now shows the names outside the blocks and those of the first block, which reveal the architecture.
+- New **«Update the library now»** button on the node with that error: builds the newest stable-diffusion-cpp-python from GitHub (`asta libs --sd-latest`; needs git, cmake and a C++ compiler; takes minutes), with progress on the button; then just run the node again (the model runs in its own process: no ASTA restart needed).
+- Version 0.17.17 (the Rust core did not change).
+
 ## [0.17.16] — 2026-11-09
 
 ### Fixed — ASTA closed («Segmentation fault») when generating an image with a GGUF model

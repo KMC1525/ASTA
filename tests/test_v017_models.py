@@ -278,8 +278,8 @@ class StableDiffusion:
         with self.assertRaises(ProviderError) as cm:
             self.prov().image("x", size="512x512")
         msg = str(cm.exception)
-        self.assertIn("não reconhece o formato", msg)
-        self.assertIn("falha de segmentação", msg)           # o processo dela caiu (-11), o do teste (o ASTA) continua aqui
+        self.assertIn("não reconhece o modelo", msg)
+        self.assertIn("código -11", msg)           # o processo dela caiu (-11), o do teste (o ASTA) continua aqui
         self.assertEqual(M._LOCAL_CACHE, {})
         self.assertTrue((d / "sd_needs_newer").is_file())
 
@@ -395,8 +395,8 @@ class StableDiffusion:
         with mock.patch.dict(os.environ, {"ASTA_HOME": str(home)}), mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
             self.prov().image("x", size="512x512")
         self.assertTrue((home / "sd_needs_newer").is_file())   # avisa o `asta libs`: na próxima instalação/atualização ele compila a biblioteca mais nova
-        self.assertIn("não reconhece o formato", str(cm.exception))
-        self.assertIn("asta libs --sd-latest", str(cm.exception))
+        self.assertIn("não reconhece o modelo", str(cm.exception))
+        self.assertIn("[[asta-sd-update]]", str(cm.exception))   # a tela troca isto pelo botão «Atualizar a biblioteca»
         self.assertEqual((len(loads), gens), (1, []))   # sem nova tentativa e sem chamar a geração
         M._SD_CB = None
 
@@ -648,6 +648,27 @@ class SupportFilesTests(ServerCase):
         s, r = self.c.json("POST", "/api/media/support/download", {"model": "qwen-image-2.1-Q4_K_M.gguf"})
         self.assertEqual(s, 400)                                                       # agora está tudo lá
         self.assertIn("já estão", json.dumps(r, ensure_ascii=False))
+
+    def test_sd_latest_route_runs_asta_libs_in_a_job_and_reports_the_outcome(self):
+        cmds = []
+
+        def fake_popen(cmd, **kw):
+            cmds.append(cmd)
+            code = 1 if len(cmds) == 2 else 0
+            return mock.Mock(stdout=iter([b"Instalando a stable-diffusion-cpp-python mais nova\n", b"ERRO: cmake nao encontrado\n" if code else b"pronto\n"]), wait=lambda: code)
+
+        with mock.patch("subprocess.Popen", side_effect=fake_popen), mock.patch("asta.canvas.media._media_unload") as unload:
+            s, r = self.c.json("POST", "/api/media/sd-latest", {})
+            self.assertEqual(s, 200, r)
+            ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+            self.assertEqual([e["type"] for e in ev if e["type"] in ("done", "error")], ["done"])
+            s, r = self.c.json("POST", "/api/media/sd-latest", {})
+            ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
+        err = [e for e in ev if e["type"] == "error"]
+        self.assertEqual(len(err), 1)
+        self.assertIn("cmake", err[0]["message"])
+        self.assertEqual(cmds[0][-3:], ["--extras", "none", "--sd-latest"])
+        self.assertEqual(unload.call_count, 2)               # fecha o processo da biblioteca antiga antes de compilar
 
     def test_route_validation(self):
         self.assertEqual(self.c.json("POST", "/api/media/support/download", {"model": "../x.gguf"})[0], 400)
