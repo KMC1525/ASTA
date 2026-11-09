@@ -392,6 +392,9 @@ class BrowserTests(unittest.TestCase):
     def test_42_canvas_prompt_box_generates_a_flow_and_minimizes(self):
         self.run_script("canvas_flow_ui.js")
 
+    def test_43_creation_toolbar_with_many_options_stays_inside_the_box(self):
+        self.run_script("composer_overflow_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

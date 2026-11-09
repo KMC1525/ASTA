@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.37] — 2026-11-09
+
+### Corrigido — Avatares: a barra de opções vazava da caixa
+Na criação de avatares a barra (foto/arte como base, quantidade, relação, tipo, SFW/NSFW, equipe e Run) é longa, e em telas largas ela ficava forçada em uma só linha: «High» e «Run» saíam pela borda direita da caixa. Agora a barra com muitas opções **quebra em duas linhas** (o Run fica à direita), enquanto a do Chat continua em uma linha. Teste de navegador novo em 1400, 1100 e 900 px.
+
 ## [0.17.36] — 2026-11-09
 
 ### Corrigido — Canvas: «o processo fechou de repente (código -9)» por falta de memória

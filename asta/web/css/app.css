@@ -299,3 +299,5 @@ input:focus-visible,select:focus-visible,textarea:focus-visible{outline-offset:0
 @container (min-width:560px) and (max-width:760px){.composer .tools .rt .tool.mbtn{min-width:104px}}
 @container (min-width:560px){.composer .tools .rt .tool.mbtn{min-width:104px}}
 @container (max-width:760px){.composer .tools>.tool[title] .tl{display:none}.composer .tools>.tool:has(>.tl){padding:6px 10px}}
+/* barra com muitas opções (ex.: Avatares: base, quantidade, relação, tipo, SFW/NSFW, equipe): quebra em duas linhas em vez de vazar da caixa */
+@container (min-width:560px){.composer .tools.multi{flex-wrap:wrap}.composer .tools.multi .rt{flex:1 1 auto;min-width:max-content}}
