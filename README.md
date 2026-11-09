@@ -44,10 +44,10 @@ Pick the file for your system on the [**latest Release**](https://github.com/KMC
 
 | System | File | How |
 |---|---|---|
-| **Windows 10/11** (64-bit) | `ASTA-0-17-38-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
-| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-17-38-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
-| **Linux** (x86_64; `-arm64` too) | `ASTA-0-17-38-Linux.appimage` | `chmod +x ASTA-0-17-38-Linux.appimage && ./ASTA-0-17-38-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-17-38-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
+| **Windows 10/11** (64-bit) | `ASTA-0-17-39-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
+| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-17-39-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
+| **Linux** (x86_64; `-arm64` too) | `ASTA-0-17-39-Linux.appimage` | `chmod +x ASTA-0-17-39-Linux.appimage && ./ASTA-0-17-39-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-17-39-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
 
 Every release also carries the **pre-built Rust core** of each platform (`asta-core-*`) and `SHA256SUMS.txt` (verify with `sha256sum -c`). The installers are not code-signed (that needs a paid certificate): Windows may show SmartScreen ("More info → Run anyway"). They are built by [GitHub Actions](.github/workflows/release.yml) and were **not run on real Windows/macOS/Android devices by the author of this change** (what could be checked is listed in the [changelog](CHANGELOG.en.md)). The terminal installers below remain available.
 
@@ -142,7 +142,7 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
-**The Android app needs no computer.** Download `ASTA-0-17-38-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
+**The Android app needs no computer.** Download `ASTA-0-17-39-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
 
 <img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
 

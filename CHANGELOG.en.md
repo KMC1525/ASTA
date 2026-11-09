@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.39] — 2026-11-09
+
+### Fixed — full sweep (tests of every mode)
+I ran the 52 test modules, the 43 browser tests (every screen and mode), the Rust core and the translation check. Three things failed, and all three were fixed:
+- **Library (Games, Worlds, Avatars): the "Atualizar" button showed as "Refresh" in English** (the same word had two translations and the last won). The button is now "Atualizar com IA" ("Update with AI").
+- **The audit test hung forever**: Code's live-events route (`/api/code/events`, which never closes) was part of the invalid-body sweep. It is now excluded; the other Code routes are still tested and return no 500s.
+- **The "Download the support files" button test** could not find the button because the Canvas prompt box (v0.17.27) covered the node; the test now minimizes it.
+Not run with real models (only the tests' simulated ones).
+
 ## [0.17.38] — 2026-11-09
 
 ### Fixed — Code: "done" without having written any file to the chosen folder

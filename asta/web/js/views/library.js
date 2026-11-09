@@ -127,7 +127,7 @@ export async function renderLibrary(root, ctx, opts) {
     const foot = k === 'avatar' ? [h('button', { class: 'btn sm primary', onclick: () => openChat([p.id]) }, icon('send', 13), t('Conversar')), h('a', { class: 'btn sm', href: '#/avatars/edit/' + p.id }, icon('edit', 13), t('Editar'))]
       : k === 'canvas' ? [h('a', { class: 'btn sm primary', href: '#/canvas/edit/' + p.id }, icon('canvas', 13), t('Abrir'))]
         : [h('a', { class: 'btn sm primary', href: '/play/' + p.id + '/', target: '_blank', rel: 'noopener' }, icon('play', 13), t('Jogar')),
-          h('button', { class: 'btn sm', title: t('Atualizar com IA — o mesmo jogo, várias vezes'), onclick: () => (creator && !opts.noUpdate ? creator.setProject({ id: p.id, name: p.name, current: p.current, kind: k }) : go('main', { project: { id: p.id, name: p.name, current: p.current, kind: k } })) }, icon('refresh', 13), t('Atualizar')),
+          h('button', { class: 'btn sm', title: t('Atualizar com IA — o mesmo jogo, várias vezes'), onclick: () => (creator && !opts.noUpdate ? creator.setProject({ id: p.id, name: p.name, current: p.current, kind: k }) : go('main', { project: { id: p.id, name: p.name, current: p.current, kind: k } })) }, icon('refresh', 13), t('Atualizar com IA')),
           k === 'world' ? h('button', { class: 'btn sm ghost', title: t('Configurar mundo'), onclick: () => go('worlds', { select: p.id }) }, icon('edit', 13)) : null,
           h('a', { class: 'btn sm ghost', title: t('Baixar ZIP'), href: '/api/projects/' + p.id + '/download' }, icon('download', 13))];
     if (selecting) thumb.append(selectBox(p));
