@@ -189,6 +189,43 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.assertIn("VAE do Qwen-Image", str(cm.exception))
         self.assertIn("[[asta-support:", str(cm.exception))
 
+    def test_a_model_that_failed_to_load_is_reported_with_the_load_log_and_never_cached(self):
+        from types import SimpleNamespace
+
+        from asta.canvas import media as M
+        from asta.providers.base import ProviderError
+
+        M._SD_LITE.clear()
+        M._LOCAL_CACHE.clear()
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        cbs, loads = [], []
+
+        class Broken:
+            def __init__(self, **kw):
+                loads.append(kw)
+                cbs[0](3, b"ggml_backend_cpu_buffer_type_alloc_buffer: failed to allocate buffer of size 12884901888\n", None)
+                self._model = SimpleNamespace(model=None)   # a biblioteca não levanta erro: segue com o contexto nulo
+
+            def generate_image(self, **kw):
+                raise AssertionError("não deveria gerar com um modelo que não carregou")
+
+        mod = mock.MagicMock(StableDiffusion=Broken)
+        mod.sd_log_callback = lambda f: f
+        mod.sd_set_log_callback = lambda f, d: cbs.append(f)
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
+            self.prov().image("x", size="512x512")
+        msg = str(cm.exception)
+        self.assertIn("não carregou", msg)
+        self.assertIn("failed to allocate buffer", msg)      # o motivo vem do log da carga, não é apagado antes
+        self.assertIn("falta de memória", msg)
+        self.assertIn("qwen_image_vae.safetensors", msg)
+        self.assertEqual(len(loads), 2)                      # 2ª tentativa, sem flash attention/offload
+        self.assertNotIn("diffusion_flash_attn", loads[1])
+        self.assertEqual(M._LOCAL_CACHE, {})                 # nunca guarda um modelo quebrado
+        M._SD_LITE.clear()
+        M._SD_CB = None
+
     def test_a_null_pointer_is_retried_without_flash_attention_and_cpu_offload(self):
         from tests.test_canvas import PNG
 

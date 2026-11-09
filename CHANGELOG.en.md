@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.13] — 2026-11-09
+
+### Fixed — «NULL pointer access»: the model actually failed to load (and the reason was being erased)
+- Real cause, found in the stable-diffusion-cpp-python 0.4.7 source: when the model **fails to load**, the library raises no error (it checks `is None`, but a failed load returns a null pointer, which is not `None`) and carries on with an empty context; generation only fails later, with «NULL pointer access». The real reason (memory, format…) is logged at **load** time — and ASTA was wiping that log before generating. That is why the message always said «no reason».
+- ASTA now checks that the model loaded, keeps the load log and shows the reason (with a memory hint when that is the case) and the files loaded. A model that failed to load is never cached.
+- If loading fails with `diffusion_flash_attn`/`offload_params_to_cpu`, it retries without them before showing the error.
+- Version 0.17.13 (the Rust core did not change).
+
 ## [0.17.12] — 2026-11-08
 
 ### Fixed — «NULL pointer access» on Qwen-Image GGUF even with the right VAE and text encoder

@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.13] — 2026-11-09
+
+### Corrigido — «NULL pointer access»: o modelo na verdade não carregava (e o motivo era apagado)
+- Causa real, achada no código da stable-diffusion-cpp-python 0.4.7: quando o modelo **não carrega**, a biblioteca não dá erro (ela confere `is None`, mas a carga que falha devolve um ponteiro nulo, que não é `None`) e segue com um contexto vazio; a geração só falha depois, com «NULL pointer access». O motivo verdadeiro (memória, formato…) é registrado na hora da **carga** — e o ASTA apagava esse log antes de gerar. Por isso a mensagem sempre dizia «nenhum motivo».
+- Agora o ASTA confere se o modelo carregou, guarda o log da carga e mostra o motivo (com dica de memória quando for o caso) e os arquivos carregados. Um modelo que não carregou nunca fica em cache.
+- Se a carga falha com `diffusion_flash_attn`/`offload_params_to_cpu`, tenta de novo sem eles antes de mostrar o erro.
+- Versão 0.17.13 (o núcleo Rust não mudou).
+
 ## [0.17.12] — 2026-11-08
 
 ### Corrigido — «NULL pointer access» no Qwen-Image GGUF mesmo com VAE e codificador de texto certos
