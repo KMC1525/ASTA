@@ -104,7 +104,7 @@ class AvatarRoutes:
         raw = req.body_bytes(12 * 1024 * 1024)
         try:
             card = avatar_from_png(raw) if raw[:4] == b"\x89PNG" else import_avatar(_clean_json(json.loads(raw.decode("utf-8"))))
-        except (ValueError, UnicodeDecodeError) as exc:
+        except (ValueError, UnicodeDecodeError, RecursionError) as exc:
             raise HttpError(400, f"Não foi possível importar: {exc}")
         saved = self.store.avatars.save(card)
         if raw[:4] == b"\x89PNG":  # o PNG do card já é a imagem do personagem

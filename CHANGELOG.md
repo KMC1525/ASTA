@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.44] — 2026-11-09
+
+### Corrigido — segunda varredura de bugs (arquivos adulterados, JSON enorme e textos soltos na tela)
+Desta vez com fuzz de leitores de arquivos (ZIP, TAR, GGUF, marshal do Ruby, cartões PNG, Ren'Py, DOCX/XLSX/PPTX/ODT/PDF/RTF/WAV), JSON aninhado ao extremo, 24 clientes simultâneos e uma varredura de todas as telas em português e inglês. Achados e corrigidos:
+- **O texto «null» aparecia nas telas de criação (Mundos, Avatares, Jogos 2D, Rebuild) e no botão «Fontes» do Chat.** O `replaceChildren(…, null)` do navegador escreve «null» como texto (o `h()` do ASTA já ignorava null; as chamadas diretas, não). Agora `replaceChildren`/`append`/`prepend`/`before`/`after` ignoram null/undefined/false, e o botão de enviar do compositor deixou de ter «null» dentro (nome acessível errado para leitores de tela).
+- **ZIP com «versão do formato» inválida** (`zip file version 9.9`) lançava `NotImplementedError` solto; agora é um aviso claro de ZIP corrompido.
+- **WAV adulterado** (bloco que diz ter 2 GB) lançava `RuntimeError` ao medir a duração do anexo; agora fica sem duração.
+- **JSON com milhares de níveis de aninhamento** (`[[[[…`) dava erro 500 com `RecursionError`; agora é 400 («aninhado fundo demais»), inclusive na importação de cartões. Acima de 100 níveis é recusado (nenhuma tela manda isso).
+Sem problemas nos 24 clientes simultâneos (0 erros, todos os arquivos JSON íntegros) nem nos leitores de TAR, GGUF, marshal, PNG, Ren'Py e documentos. Testes novos em `test_audit` e o teste de navegador `null_text_ui.js` (falha sem a correção).
+
 ## [0.17.43] — 2026-11-09
 
 ### Corrigido — varredura geral de bugs

@@ -267,7 +267,7 @@ def _duration(path: Path) -> Optional[float]:
         try:
             with wave.open(str(path), "rb") as w:
                 return w.getnframes() / float(w.getframerate())
-        except (wave.Error, EOFError):
+        except (wave.Error, EOFError, RuntimeError, struct.error, OSError, ValueError):
             return None
     return None
 

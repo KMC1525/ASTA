@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.44] — 2026-11-09
+
+### Fixed — second bug sweep (tampered files, huge JSON and stray texts on screen)
+This time with fuzzing of file readers (ZIP, TAR, GGUF, Ruby marshal, PNG cards, Ren'Py, DOCX/XLSX/PPTX/ODT/PDF/RTF/WAV), extremely nested JSON, 24 simultaneous clients and a sweep of every screen in Portuguese and English. Found and fixed:
+- **The text "null" showed on the creation screens (Worlds, Avatars, 2D games, Rebuild) and on the Chat's "Sources" button.** The browser's `replaceChildren(…, null)` writes "null" as text (ASTA's `h()` already ignored null; direct calls did not). `replaceChildren`/`append`/`prepend`/`before`/`after` now ignore null/undefined/false, and the composer's send button no longer has "null" inside (a wrong accessible name for screen readers).
+- **A ZIP with an invalid "format version"** (`zip file version 9.9`) raised a stray `NotImplementedError`; it is now a clear corrupt-ZIP notice.
+- **A tampered WAV** (a chunk claiming 2 GB) raised a `RuntimeError` when measuring the attachment's duration; it now simply has no duration.
+- **JSON nested thousands of levels** (`[[[[…`) gave a 500 error with `RecursionError`; it is now a 400 ("nested too deep"), including in card imports. Beyond 100 levels it is refused (no screen sends that).
+No problems with the 24 simultaneous clients (0 errors, every JSON file intact) nor with the TAR, GGUF, marshal, PNG, Ren'Py and document readers. New tests in `test_audit` and the browser test `null_text_ui.js` (fails without the fix).
+
 ## [0.17.43] — 2026-11-09
 
 ### Fixed — general bug sweep

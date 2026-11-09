@@ -279,7 +279,7 @@ export async function mountCreator(root, { mode, section, project }) {
     try { cfg = await TOOL_BUILDERS[mode](root, proj, '', composer); } catch (e) { body.replaceChildren(h('div', { class: 'errbox' }, e.message)); return; }
     composer.configure({ placeholder: cfg.placeholder, tools: cfg.tools || [], extraReady: cfg.extraReady || null, allowEmpty: !!cfg.allowEmpty,
       onSend: (x) => { ORIGIN = section; try { return cfg.onSend(x); } finally { ORIGIN = ''; } } });
-    body.replaceChildren(composer.el, cfg.below || null);
+    body.replaceChildren(composer.el, cfg.below);
   };
   const head = h('div', { class: 'row', style: { marginBottom: '8px' } });
   const paintHead = () => {

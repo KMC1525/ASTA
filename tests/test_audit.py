@@ -164,6 +164,12 @@ class OddInputTests(ServerCase):
         for fid in ({"a": 1}, [1], 5):
             self.assertLess(self.c.json("POST", "/api/code/sessions", {"folder_id": fid, "workspace": {"type": "new", "name": "x"}})[0], 500)
 
+    def test_absurdly_deep_json_is_a_400_not_a_stack_overflow(self):
+        for depth in (150, 100000):
+            for path, method in (("/api/chats", "POST"), ("/api/settings", "PUT"), ("/api/avatars/import", "POST")):
+                status, _h, _body = self.c.req(method, path, raw=b'{"a":' * depth + b"1" + b"}" * depth, headers={"Content-Type": "application/json"})
+                self.assertEqual(status, 400, (path, depth))
+
     def test_static_files_are_matched_by_folder_not_by_text_prefix(self):
         from asta.server import _under
 
@@ -172,6 +178,36 @@ class OddInputTests(ServerCase):
         root.mkdir()
         self.assertTrue(_under((root / "a.js").resolve(), root))
         self.assertFalse(_under((Path(self.tmp) / "web2" / "a.js").resolve(), root))   # «web2» começa com «web», mas não está dentro dele
+
+
+class CorruptFileTests(TmpCase):
+    """v0.17.44: arquivos adulterados (ZIP com versão de formato inválida, WAV com bloco absurdo) dão um aviso claro, nunca uma exceção solta."""
+
+    def test_a_zip_with_an_unreadable_format_version_is_an_archive_error(self):
+        import io
+        import zipfile
+
+        from asta import archives
+
+        b = io.BytesIO()
+        with zipfile.ZipFile(b, "w") as z:
+            z.writestr("a.txt", "oi")
+        d = bytearray(b.getvalue())
+        d[d.rindex(b"PK\x01\x02") + 6] = 99   # «versão necessária para extrair» que o Python não conhece
+        p = self.tmp / "x.zip"
+        p.write_bytes(bytes(d))
+        with self.assertRaises(archives.ArchiveError):
+            archives.extract(p, self.tmp / "out", "x.zip")
+
+    def test_a_wav_with_a_broken_chunk_has_no_duration_instead_of_crashing(self):
+        import struct
+
+        from asta import attachments
+
+        riff = b"RIFF" + struct.pack("<I", 4) + b"WAVE" + b"junk" + struct.pack("<I", 0x7FFFFFF0)   # bloco que diz ter 2 GB e termina no meio
+        p = self.tmp / "x.wav"
+        p.write_bytes(riff)
+        self.assertIsNone(attachments._duration(p))
 
 
 class PromptTests(unittest.TestCase):

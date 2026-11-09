@@ -165,7 +165,7 @@ def _copy_capped(src, dst: Path, limit: int) -> int:
 def _extract_zip(path: Path, sink: _Sink) -> None:
     try:
         zf = zipfile.ZipFile(path)
-    except (zipfile.BadZipFile, OSError) as exc:
+    except (zipfile.BadZipFile, OSError, NotImplementedError, EOFError, ValueError, OverflowError, RuntimeError) as exc:   # NotImplementedError: «zip file version 9.4» (cabeçalho adulterado/de uma versão do formato que o Python não lê)
         raise ArchiveError(f"O ZIP está corrompido ou não é um ZIP válido ({exc}).") from None
     with zf:
         infos = [i for i in zf.infolist() if not i.is_dir()]

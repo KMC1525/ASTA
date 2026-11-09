@@ -395,6 +395,9 @@ class BrowserTests(unittest.TestCase):
     def test_43_creation_toolbar_with_many_options_stays_inside_the_box(self):
         self.run_script("composer_overflow_ui.js")
 
+    def test_44_no_screen_writes_the_text_null(self):
+        self.run_script("null_text_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()
