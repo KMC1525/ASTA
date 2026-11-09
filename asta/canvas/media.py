@@ -1368,6 +1368,10 @@ def _sd_reason() -> str:
     return " | ".join(l[:220] for l in lines)
 
 
+class _SDLoadError(ProviderError):
+    """O modelo não carregou na stable-diffusion.cpp (a biblioteca não avisa: devolve um contexto nulo e o erro só aparece depois como «NULL pointer access»)."""
+
+
 class GGUFMedia(MediaProvider):
     """Modelos GGUF de imagem e vídeo (FLUX, Stable Diffusion, Wan…) rodando dentro do ASTA pela stable-diffusion.cpp (`pip install "asta[local]"`).
 
@@ -1403,7 +1407,21 @@ class GGUFMedia(MediaProvider):
                 kw[k] = v
         if not kw:
             kw["model_path"] = str(path)
-        return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", lambda: sdc.StableDiffusion(**kw))
+
+        def build() -> Any:
+            _SD_LOG.clear()   # o motivo de uma falha de carga é registrado AQUI, durante a criação do modelo (antes, era apagado antes de gerar)
+            sd = sdc.StableDiffusion(**kw)
+            ctx = getattr(getattr(sd, "_model", None), "model", 1)   # a biblioteca confere `is None`, mas a carga que falha devolve um ponteiro NULO (que não é None): ela segue com um contexto vazio
+            if not ctx:
+                why = _sd_reason()
+                files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
+                raise _SDLoadError(f"O modelo {path.name} não carregou na stable-diffusion.cpp. "
+                                   + (f"Motivo informado pela biblioteca: {why}. " if why else "A biblioteca não registrou nenhum motivo — veja o terminal onde o ASTA roda. ")
+                                   + (" Parece falta de memória: o modelo e o codificador de texto juntos não cabem na RAM livre; feche outros programas ou use uma quantização menor (Q3/Q2)." if re.search(r"alloc|out of memory|oom|memory", why, re.I) else "")
+                                   + f" Arquivos carregados: {files}." + _sd_env(sdc))
+            return sd
+
+        return _local_load("gguf-" + cap, f"{path}|{sorted(kw.items())}", build)   # um modelo que não carregou nunca fica em cache
 
     def _auto_load(self, path: Path) -> Dict[str, Any]:
         """Para um GGUF de família conhecida (Qwen-Image, FLUX…, ver `support.FAMILIES`), acha os arquivos de apoio na mesma pasta e monta o carregamento. {} se não é uma família conhecida
@@ -1427,7 +1445,16 @@ class GGUFMedia(MediaProvider):
         load = {**base.get("load", {}), **(extra.pop("load", None) or {})}
         if path.name in _SD_LITE:   # este modelo já falhou com flash attention/offload nesta máquina: começa sem eles (não recarrega duas vezes a cada imagem)
             load = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
-        sd = self._engine("image", path, load)
+        try:
+            sd = self._engine("image", path, load)
+        except _SDLoadError:
+            lite = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
+            if len(lite) == len(load):
+                raise
+            self.ctl.note("O modelo não carregou: tentando de novo sem flash attention e sem descarregar pesos para a RAM…")
+            sd = self._engine("image", path, lite)   # se falhar de novo, o erro desta segunda tentativa vale
+            load = lite
+            _SD_LITE.add(path.name)
         sdc_mod = sys.modules.get("stable_diffusion_cpp")
         used = ", ".join(Path(v).name for k, v in load.items() if k.endswith("_path") and isinstance(v, str) and v != "@model")   # os arquivos de apoio de fato carregados (para o erro)
         w, h = parse_wh(size)
