@@ -601,10 +601,13 @@ class AutoEditTests(TmpCase):
             def chat(self, messages, **kw):
                 self.msgs.append(messages)
                 return self.outs.pop(0)
-        p = Seq("", '{"ok": true}')
+        p = Seq("isto não é JSON", '{"ok": true}')
         o, _ = call_json(p, "s", 'x\nOutput JSON: {"ok": bool}', {})
         self.assertTrue(o["ok"])
         self.assertIn('Expected format: {"ok": bool}', p.msgs[1][-1]["content"])  # a nova tentativa repete o formato
+        p = Seq("", '{"ok": true}')   # resposta VAZIA: a mesma pergunta é repetida (sem mensagem vazia da IA no meio)
+        o, _ = call_json(p, "s", 'x\nOutput JSON: {"ok": bool}', {})
+        self.assertEqual((o["ok"], p.msgs[1]), (True, p.msgs[0]))
         with self.assertRaises(ValueError) as cm:
             call_json(Seq("Claro! Segue a análise.", "Claro de novo."), "s", "x", {})
         self.assertIn("Claro de novo", str(cm.exception))  # o erro mostra o que a IA respondeu
