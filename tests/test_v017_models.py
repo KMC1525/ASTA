@@ -14,6 +14,22 @@ from asta.canvas.localmodels import MARKER  # noqa: E402
 from tests.test_server import ServerCase  # noqa: E402
 
 
+def write_gguf(path: Path, names):
+    """Um GGUF mínimo (só o cabeçalho e as informações dos tensores) para testar a leitura dos nomes."""
+    import struct
+
+    def string(t):
+        b = t.encode()
+        return struct.pack("<Q", len(b)) + b
+
+    out = b"GGUF" + struct.pack("<I", 3) + struct.pack("<QQ", len(names), 2)
+    out += string("general.architecture") + struct.pack("<I", 8) + string("qwen_image")
+    out += string("tokenizer.ggml.tokens") + struct.pack("<I", 9) + struct.pack("<IQ", 8, 2) + string("a") + string("bb")   # array de strings
+    for n in names:
+        out += string(n) + struct.pack("<I", 2) + struct.pack("<QQ", 4, 4) + struct.pack("<I", 0) + struct.pack("<Q", 0)
+    path.write_bytes(out + b"\0" * 64)
+
+
 def fake_hf_cache(root: Path, models):
     for repo, prec in models:
         snap = root / ("models--" + repo.replace("/", "--")) / "snapshots" / "abc123"
@@ -177,6 +193,50 @@ class QwenImageGGUFTests(unittest.TestCase):
                                     "offload_params_to_cpu": True, "diffusion_flash_attn": True})       # memória e atenção como na documentação da stable-diffusion.cpp
         self.assertEqual(runs[0]["cfg_scale"], 2.5)
         self.assertEqual((runs[0]["width"], runs[0]["height"]), (1024, 576))
+
+    def test_gguf_header_names_are_read_and_non_gguf_files_are_left_alone(self):
+        from asta.canvas import gguf_info
+
+        f = self.img / "m.gguf"
+        write_gguf(f, ["transformer_blocks.0.img_mod.1.weight", "x.y"])
+        self.assertEqual(gguf_info.tensor_names(f), ["transformer_blocks.0.img_mod.1.weight", "x.y"])
+        (self.img / "nao.gguf").write_bytes(b"isto nao e gguf")
+        self.assertIsNone(gguf_info.tensor_names(self.img / "nao.gguf"))
+        self.assertIsNone(gguf_info.tensor_names(self.img / "nao-existe.gguf"))
+
+    def test_a_qwen_file_without_the_expected_tensor_is_tested_in_a_separate_process(self):
+        from asta.canvas import media as M
+        from asta.providers.base import ProviderError
+
+        M._SD_LITE.clear()
+        M._LOCAL_CACHE.clear()
+        (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
+        (self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf").write_bytes(b"t")
+        write_gguf(self.img / "qwen-image-2.1-Q4_K_M.gguf", ["outro.layout.0.weight", "blk.0.attn.weight"])
+        mod, loads, runs = self.fake()
+        home = Path(tempfile.mkdtemp())
+        # o teste de carga cai (falha de segmentação = -11): o ASTA NÃO chama a biblioteca no próprio processo
+        with mock.patch.dict(os.environ, {"ASTA_HOME": str(home)}), mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), \
+                mock.patch("subprocess.run", return_value=mock.Mock(returncode=-11, stderr=b"stable-diffusion.cpp:299 - get sd version from file failed: ''\n")) as sp, \
+                self.assertRaises(ProviderError) as cm:
+            self.prov().image("x", size="512x512")
+        self.assertEqual(loads, [])
+        self.assertEqual(sp.call_count, 1)
+        msg = str(cm.exception)
+        self.assertIn("transformer_blocks.0.img_mod.1.weight", msg)
+        self.assertIn("-11", msg)
+        self.assertIn("outro.layout.0.weight", msg)
+        self.assertTrue((home / "sd_needs_newer").is_file())
+        # se o teste carrega, segue normalmente
+        M._LOCAL_CACHE.clear()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), mock.patch("subprocess.run", return_value=mock.Mock(returncode=0, stderr=b"")):
+            out = self.prov().image("x", size="512x512")
+        self.assertEqual(len(out), 1)
+        # com o tensor esperado nem testa em separado
+        write_gguf(self.img / "qwen-image-2.1-Q4_K_M.gguf", ["transformer_blocks.0.img_mod.1.weight"])
+        M._LOCAL_CACHE.clear()
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), mock.patch("subprocess.run", side_effect=AssertionError("não deveria testar em separado")):
+            self.prov().image("x", size="512x512")
 
     def test_the_vae_of_flux_and_z_image_is_never_used_for_qwen_image(self):
         from asta.providers.base import ProviderError
