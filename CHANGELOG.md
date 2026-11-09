@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.35] — 2026-11-09
+
+### Corrigido — Canvas: «get sd version from file failed» ao gerar com FLUX.2 klein GGUF pelo sd-cli
+O erro vermelho do `sd-cli` (código 1, «get sd version from file failed») vinha de o modelo ser entregue sozinho (`-m`): faltavam o VAE e o codificador de texto na pasta, e um GGUF só com a difusão não permite à stable-diffusion.cpp saber qual modelo é. Agora, antes de rodar o `sd-cli` (imagem e vídeo), o ASTA confere os arquivos de apoio da família e, se faltam, mostra quais e o botão **Baixar os arquivos de apoio** (≈ GB) em vez do erro críptico.
+
 ## [0.17.34] — 2026-11-09
 
 ### Adicionado — Canvas: sd-cli pré-compilado quando a biblioteca Python não reconhece o modelo (sem compilar)
