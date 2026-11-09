@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.38] — 2026-11-09
+
+### Fixed — Code: "done" without having written any file to the chosen folder
+Report: the site was "created" but the chosen folder (a USB drive, `…/VSCODE/Darkus`) still had 0 items. The engine accepted a worker's "finish" that named files (or pasted the code into the answer text) **without having written anything** to disk — the code stayed in the conversation only. That "finish" is now **refused**, with the instruction to create the files with `write_file`; if the model insists 3 times, the task ends as **failed**, naming the project folder, instead of looking done. When it does write, files land in the chosen folder (tested with an empty folder). Honest limit: I could not reproduce your case with your model; if nothing shows up still, the failure message now shows the exact path ASTA tried to write to.
+
+## [0.17.37] — 2026-11-09
+
+### Fixed — Avatars: the options bar spilled out of the box
+In avatar creation the bar (photo/art as base, count, relationship, type, SFW/NSFW, team and Run) is long, and on wide screens it was forced onto one line: "High" and "Run" stuck out of the box's right edge. A bar with many options now **wraps onto two lines** (Run stays on the right), while the Chat's stays on one line. New browser test at 1400, 1100 and 900 px.
+
 ## [0.17.36] — 2026-11-09
 
 ### Fixed — Canvas: "the process closed suddenly (code -9)" from running out of memory

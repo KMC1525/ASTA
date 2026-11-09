@@ -32,8 +32,8 @@ export function createComposer(opts) {
     sendBtn.title = busy ? t('Parar') : (o.sendTitle || o.sendLabel || t('Gerar')); sendBtn.setAttribute('aria-label', sendBtn.title);
   };
   const refresh = () => { sendBtn.disabled = busy ? false : (uploading() || !ready()); };
-  const paintTools = () => toolsBox.replaceChildren(h('button', { class: 'tool', type: 'button', title: t('Anexar arquivos'), onclick: () => fileInput.click() }, icon('clip', 15), h('span', { class: 'tl' }, t('Anexar'))),
-    ...(o.tools || []), h('div', { class: 'rt' }, ...(o.rightTools || []), sendBtn), fileInput);
+  const paintTools = () => { toolsBox.classList.toggle('multi', (o.tools || []).length >= 6); toolsBox.replaceChildren(h('button', { class: 'tool', type: 'button', title: t('Anexar arquivos'), onclick: () => fileInput.click() }, icon('clip', 15), h('span', { class: 'tl' }, t('Anexar'))),
+    ...(o.tools || []), h('div', { class: 'rt' }, ...(o.rightTools || []), sendBtn), fileInput); };
 
   const paintFiles = () => {
     attachRow.classList.toggle('hidden', !m.files.length);
