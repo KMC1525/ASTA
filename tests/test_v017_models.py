@@ -670,6 +670,64 @@ class SupportFilesTests(ServerCase):
         self.assertEqual(cmds[0][-3:], ["--extras", "none", "--sd-latest"])
         self.assertEqual(unload.call_count, 2)               # fecha o processo da biblioteca antiga antes de compilar
 
+    def test_flux2_klein_is_its_own_family_with_the_flux2_vae_and_a_qwen3_text_encoder(self):
+        from asta.canvas import support
+
+        k4, k9 = support.family_of("flux-2-klein-4b-Q4_K_M.gguf"), support.family_of("FLUX.2-klein-base-9B-Q8_0.gguf")
+        self.assertEqual((k4["id"], k9["id"]), ("flux2-klein-4b", "flux2-klein-9b"))
+        self.assertEqual(support.family_of("flux1-dev-Q4_0.gguf")["id"], "flux")             # FLUX.1 continua pedindo clip_l e t5xxl
+        self.assertIsNone(support.family_of("flux-2-dev-Q4_0.gguf"))                         # FLUX.2 dev (Mistral 24B) não é de nenhuma família: não é tratado como FLUX.1
+        self.assertEqual(support.run_for(k4, "flux-2-klein-4b-Q4_K_M.gguf"), {"cfg_scale": 1.0, "sample_steps": 4, "sample_method": "euler"})   # destilado: 4 passos, sem CFG
+        self.assertEqual(support.run_for(k9, "flux-2-klein-base-9b-Q8_0.gguf")["sample_steps"], 50)                                                # «base»: 50 passos, CFG 4
+        d = Path(tempfile.mkdtemp())
+        for n in ("flux2-vae.safetensors", "Qwen3-4B-Q4_K_M.gguf", "Qwen3-4B-Instruct-2507-Q4_K_M.gguf", "Qwen3-8B-Q4_K_M.gguf", "ae.safetensors", "flux-2-klein-4b-Q4_K_M.gguf"):
+            (d / n).write_bytes(b"x")
+        f4 = support.find_companions(d, d / "flux-2-klein-4b-Q4_K_M.gguf", k4)
+        self.assertEqual(f4, {"vae_path": "flux2-vae.safetensors", "llm_path": "Qwen3-4B-Q4_K_M.gguf"})   # o Instruct-2507 do Z-Image e o ae.safetensors do FLUX.1 não servem
+        f9 = support.find_companions(d, d / "x.gguf", k9)
+        self.assertEqual(f9["llm_path"], "Qwen3-8B-Q4_K_M.gguf")                                            # o klein 9B usa o Qwen3 de 8B
+        info = support.missing(self.img, "flux-2-klein-4b-Q4_K_M.gguf")
+        self.assertEqual({m["key"] for m in info["missing"]}, {"vae_path", "llm_path"})
+        self.assertEqual({m["repo"] for m in info["missing"]}, {"Comfy-Org/flux2-dev", "unsloth/Qwen3-4B-GGUF"})
+
+    def test_flux2_klein_gguf_loads_with_its_companions_and_edits_with_several_images(self):
+        from tests.test_canvas import PNG, proc
+
+        root = Path(tempfile.mkdtemp())
+        img = root / "image"
+        img.mkdir()
+        for n in ("flux2-vae.safetensors", "Qwen3-4B-Q4_K_M.gguf", "flux-2-klein-4b-Q4_K_M.gguf"):
+            (img / n).write_bytes(b"x")
+        loads, seen = [], []
+
+        class Img:
+            def save(self, buf, format="PNG"):
+                buf.write(PNG)
+
+        class SD:
+            def __init__(self, **kw):
+                loads.append(kw)
+
+            def generate_image(self, prompt="", width=0, height=0, seed=0, ref_images=None, init_image=None, cfg_scale=0, sample_steps=0, sample_method="", **kw):
+                seen.append({"refs": ref_images, "init": init_image, "cfg": cfg_scale, "steps": sample_steps})
+                return [Img()]
+
+        from asta.canvas import media as M
+
+        M._LOCAL_CACHE.clear()
+        prov = M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(root), "models": {"image": "flux-2-klein-4b-Q4_K_M.gguf"}, "needs_key": False})
+        refs = [(proc.image(f"r{i}", "64x64", i + 1), "image/png") for i in range(3)]
+        with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mock.MagicMock(StableDiffusion=SD)}):
+            prov.image("x", size="512x512", refs=refs)
+            self.assertEqual(prov.max_refs(""), 4)
+        self.assertEqual(loads[0]["diffusion_model_path"], str(img / "flux-2-klein-4b-Q4_K_M.gguf"))
+        self.assertEqual((loads[0]["vae_path"], loads[0]["llm_path"]), (str(img / "flux2-vae.safetensors"), str(img / "Qwen3-4B-Q4_K_M.gguf")))
+        self.assertNotIn("clip_l_path", loads[0])                                    # nada de clip_l/t5xxl do FLUX.1
+        self.assertEqual((seen[0]["cfg"], seen[0]["steps"]), (1.0, 4))
+        self.assertEqual(len(seen[0]["refs"]), 3)                                    # klein edita com ref_images (todas as imagens)
+        self.assertIsNone(seen[0]["init"])
+        M._LOCAL_CACHE.clear()
+
     def test_route_validation(self):
         self.assertEqual(self.c.json("POST", "/api/media/support/download", {"model": "../x.gguf"})[0], 400)
         self.assertEqual(self.c.json("POST", "/api/media/support/download", {"model": "meu-modelo.gguf"})[0], 400)

@@ -1144,7 +1144,22 @@ class LocalHFMedia(MediaProvider):
     refs_edit_only = True
 
     def max_refs(self, model: str = "") -> int:
-        return 1
+        return 4 if "klein" in (model or self.model_for("image", model) or "").lower() else 1   # FLUX.2 klein edita com várias imagens de uma vez; os demais fazem imagem → imagem com uma
+
+    @staticmethod
+    def _defaults(model: str) -> Tuple[int, float]:
+        """Passos e guidance do modelo (o padrão de cada família): FLUX.2 klein destilado 4 passos sem CFG; klein «base» 50 passos e guidance 4; FLUX.1 schnell 4 passos; FLUX.1 dev 28 passos e guidance 3,5;
+        modelos «turbo»/«lightning»/«lcm» 2 passos sem CFG; os demais 25 passos e guidance 7."""
+        name = model.lower()
+        if "klein" in name:
+            return (50, 4.0) if "base" in name else (4, 1.0)
+        if "schnell" in name:
+            return 4, 0.0
+        if any(k in name for k in ("turbo", "lightning", "lcm")):
+            return 2, 0.0
+        if "flux" in name:
+            return 28, 3.5
+        return 25, 7.0
 
     def _pick(self, cap: str, model: str, default: str) -> str:
         """O modelo pedido; se ele ainda não foi baixado, usa outro já baixado da mesma função (o padrão ou uma sugestão) em vez de falhar. Se nenhum foi baixado, devolve o pedido
@@ -1184,36 +1199,49 @@ class LocalHFMedia(MediaProvider):
             kw: Dict[str, Any] = {"torch_dtype": ready["dtype"], "local_files_only": True}
             if ready["variant"]:
                 kw["variant"] = ready["variant"]
-            pipe = diffusers.AutoPipelineForText2Image.from_pretrained(model, **kw)
+            try:
+                pipe = diffusers.AutoPipelineForText2Image.from_pretrained(model, **kw)
+            except Exception as exc:  # noqa: BLE001 — pipelines novos (FLUX.2 klein…) que o AutoPipeline da versão instalada ainda não conhece: a classe vem do model_index.json
+                try:
+                    pipe = diffusers.DiffusionPipeline.from_pretrained(model, **kw)
+                except Exception:  # noqa: BLE001
+                    raise ProviderError(f"Não foi possível carregar {model}: {exc}. Se o modelo é novo (FLUX.2…), atualize as bibliotecas:  pip install -U diffusers transformers  (ou: asta libs).") from None
             return _slim(pipe, dev)
 
         pipe = _local_load("image", model, load)
         (torch,) = _local_import("torch")
-        fast = any(k in model.lower() for k in ("turbo", "lightning", "schnell", "lcm"))
+        steps, guidance = self._defaults(model)
+        fast = guidance == 0.0 or "klein" in model.lower()   # modelos destilados: sem prompt negativo (e, no FLUX, o pipeline nem o aceita)
+        no_negative = fast or "flux" in model.lower()
+        klein = "klein" in model.lower()
         w, h = parse_wh(size)
         w, h = (min(w, 768), min(h, 768)) if dev == "cpu" else (w, h)
         w, h = max(256, w // 8 * 8), max(256, h // 8 * 8)
-        pil = _pil_refs(refs, 1) if refs else []
+        pil = _pil_refs(refs, 4 if klein else 1) if refs else []
         if refs and not pil:
             raise ProviderError("Não consegui ler as imagens de referência ligadas ao nó (formato não suportado).")
-        if pil:   # imagem → imagem: reaproveita os pesos já carregados
-            w, h = _size_like(pil[0], w, h, 8)
-            i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
+        i2i = None
+        if pil:
+            w, h = _size_like(pil[0], w, h, 16 if klein else 8)
+            if not klein:   # imagem → imagem: reaproveita os pesos já carregados (o FLUX.2 klein edita pelo próprio pipeline, com várias imagens)
+                i2i = diffusers.AutoPipelineForImage2Image.from_pipe(pipe)   # compartilha os pesos de `pipe` (não passa por _local_load: ele guarda um modelo só e descartaria o principal)
         out = []
         for i in range(max(1, count)):
             self.ctl.check()
             self.ctl.note("Gerando imagem localmente…")
-            kw = {"prompt": prompt, "width": w, "height": h, "num_inference_steps": 2 if fast else 25, "guidance_scale": 0.0 if fast else 7.0,
+            kw = {"prompt": prompt, "width": w, "height": h, "num_inference_steps": steps, "guidance_scale": guidance,
                   "generator": torch.Generator("cpu").manual_seed(int(seed + i) if seed else int(time.time() * 1000) % (2 ** 31) + i)}
-            if negative and not fast:
+            if negative and not no_negative:
                 kw["negative_prompt"] = negative
-            if pil:
+            if pil and klein:
+                kw["image"] = [p.resize((w, h)) for p in pil]   # edição do FLUX.2 klein: todas as imagens ligadas guiam o resultado
+            elif pil:
                 kw.pop("width"), kw.pop("height")
                 kw.update(image=pil[0].resize((w, h)), strength=0.8 if fast else 0.75)
                 if fast:
-                    kw["num_inference_steps"] = 4   # modelos «turbo»: com strength < 1 sobram menos passos, e precisam de pelo menos 1
+                    kw["num_inference_steps"] = max(4, steps)   # modelos «turbo»: com strength < 1 sobram menos passos, e precisam de pelo menos 1
             kw.update(extra or {})
-            img = (i2i if pil else pipe)(**kw).images[0]
+            img = (i2i or pipe)(**kw).images[0]
             buf = io.BytesIO()
             img.save(buf, format="PNG")
             out.append(Media(buf.getvalue(), "image/png"))
@@ -1524,7 +1552,7 @@ class GGUFMedia(MediaProvider):
     refs_edit_only = True
 
     def max_refs(self, model: str = "") -> int:
-        return 4 if re.search(r"edit|kontext", Path(self.model_for("image", model) or model or "").name, re.I) else 1   # os demais modelos usam só uma imagem de partida
+        return 4 if re.search(r"edit|kontext|klein", Path(self.model_for("image", model) or model or "").name, re.I) else 1   # os demais modelos usam só uma imagem de partida
 
     def _path(self, cap: str, model: str) -> Path:
         name = Path(self.model_for(cap, model)).name
@@ -1598,7 +1626,7 @@ class GGUFMedia(MediaProvider):
         found = support.find_companions(path.parent, path, fam)
         if any(v is None for v in found.values()):
             return {}
-        return {"load": {"diffusion_model_path": "@model", **found, **fam.get("options", {})}, "run": dict(fam["run"])}   # `options`: memória e atenção como na documentação da stable-diffusion.cpp
+        return {"load": {"diffusion_model_path": "@model", **found, **fam.get("options", {})}, "run": support.run_for(fam, path.name)}   # `options`: memória e atenção como na documentação da stable-diffusion.cpp
 
     def image(self, prompt, *, size="1024x1024", count=1, seed=0, negative="", refs=(), model="", extra=None):
         from .. import preinstalled
@@ -1641,7 +1669,7 @@ class GGUFMedia(MediaProvider):
             except (TypeError, ValueError):
                 params = set()
             w, h = _size_like(pil[0], w, h, 16)
-            if re.search(r"edit|kontext", path.name, re.I) and "ref_images" in params:
+            if re.search(r"edit|kontext|klein", path.name, re.I) and "ref_images" in params:
                 ref_kw["ref_images"] = pil                       # modelos de edição: as imagens guiam a edição
             elif "init_image" in params:
                 ref_kw["init_image"] = pil[0].resize((w, h))    # demais: imagem → imagem
@@ -1792,7 +1820,7 @@ MEDIA_PRESETS: Dict[str, Dict[str, Any]] = {
         "label": "Hugging Face (Inference)", "kind": "huggingface", "caps": ["image", "sound", "voice", "stt"], "base_url": "https://router.huggingface.co/hf-inference/models", "needs_key": True,
         "docs": "https://huggingface.co/settings/tokens",
         "models": {"image": "black-forest-labs/FLUX.1-schnell", "sound": "facebook/musicgen-small", "voice": "facebook/mms-tts-eng", "stt": "openai/whisper-large-v3"},
-        "suggest": {"image": ["black-forest-labs/FLUX.1-schnell", "stabilityai/stable-diffusion-xl-base-1.0"], "voice": ["facebook/mms-tts-eng", "facebook/mms-tts-por", "suno/bark-small"],
+        "suggest": {"image": ["black-forest-labs/FLUX.2-klein-4B", "black-forest-labs/FLUX.1-schnell", "stabilityai/stable-diffusion-xl-base-1.0"], "voice": ["facebook/mms-tts-eng", "facebook/mms-tts-por", "suno/bark-small"],
                     "sound": ["facebook/musicgen-small"], "stt": ["openai/whisper-large-v3", "openai/whisper-small"]},
         "hint": "Usa a mesma chave do Hugging Face (Configuração → Provedores). A disponibilidade de cada modelo depende do serviço.",
     },

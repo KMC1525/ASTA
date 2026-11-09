@@ -828,6 +828,58 @@ class LocalHFTests(unittest.TestCase):
         self.assertTrue(0 < kw["strength"] < 1 and kw["num_inference_steps"] >= 2)
         self.assertNotIn("kw", calls)   # o texto→imagem não rodou
 
+    def test_flux2_klein_loads_through_the_model_index_runs_distilled_and_edits_with_several_images(self):
+        from asta.canvas import localmodels as lm
+
+        mods, calls = self.fake_modules()
+        diffusers = mods["diffusers"]
+        diffusers.AutoPipelineForText2Image.from_pretrained.side_effect = ValueError("Flux2KleinPipeline não está no AutoPipeline desta versão")   # versão do diffusers que ainda não mapeia o FLUX.2
+        pipes = []
+
+        class Pipe:
+            def to(self, dev):
+                return self
+
+            def __call__(self, **kw):
+                calls["kw"] = kw
+                from tests.test_canvas import PNG as _P
+
+                class Img:
+                    def save(self, buf, format="PNG"):
+                        buf.write(_P)
+
+                return mock.Mock(images=[Img()])
+
+        diffusers.DiffusionPipeline.from_pretrained.side_effect = lambda model, **kw: (pipes.append(model), Pipe())[1]
+        refs = [(proc.image(f"r{i}", "64x64", i + 1), "image/png") for i in range(5)]
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value="bf16"), mock.patch.object(lm, "has_fp16_variant", return_value=False):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "black-forest-labs/FLUX.2-klein-4B"}, key="", needs_key=False)
+            p.image("um gato", size="512x512", negative="feio")
+            kw = dict(calls["kw"])
+            self.assertEqual(pipes, ["black-forest-labs/FLUX.2-klein-4B"])            # o AutoPipeline não conhece: a classe vem do model_index.json
+            self.assertEqual((kw["num_inference_steps"], kw["guidance_scale"]), (4, 1.0))   # destilado
+            self.assertNotIn("negative_prompt", kw)                                    # o pipeline do FLUX não aceita prompt negativo
+            self.assertNotIn("image", kw)
+            p.image("junte os dois", size="512x512", refs=refs)
+            kw = calls["kw"]
+            self.assertEqual(len(kw["image"]), 4)                                      # edita com até 4 imagens de uma vez
+            self.assertEqual(p.max_refs("black-forest-labs/FLUX.2-klein-4B"), 4)
+            self.assertEqual(p.max_refs("stabilityai/sd-turbo"), 1)
+
+    def test_a_new_pipeline_that_no_diffusers_version_loads_explains_how_to_update(self):
+        from asta.canvas import localmodels as lm
+
+        mods, _ = self.fake_modules()
+        mods["diffusers"].AutoPipelineForText2Image.from_pretrained.side_effect = ValueError("desconhecido")
+        mods["diffusers"].DiffusionPipeline.from_pretrained.side_effect = ValueError("Flux2KleinPipeline")
+        with mock.patch.dict(sys.modules, mods), mock.patch.object(lm, "downloaded_precision", return_value="bf16"), mock.patch.object(lm, "has_fp16_variant", return_value=False):
+            M._LOCAL_CACHE.clear()
+            p = provider("local_hf", "", {"image": "black-forest-labs/FLUX.2-klein-4B"}, key="", needs_key=False)
+            with self.assertRaises(ProviderError) as cm:
+                p.image("x")
+        self.assertIn("pip install -U diffusers", str(cm.exception))
+
     def test_image_pipeline_uses_the_downloaded_precision_and_only_local_files(self):
         from asta.canvas import localmodels as lm
 
