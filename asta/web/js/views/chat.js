@@ -62,65 +62,7 @@ export default async function render(root, ctx) {
       st.tool ? h('span', { class: 'x', title: t('Voltar a só conversar'), onclick: (e) => { e.stopPropagation(); setTool(''); } }, '×') : icon('chev', 12));
   };
 
-  // Computer Use (opcional): a IA faz a tarefa no computador do usuário. Modo Ask (pergunta Sim/Não antes de agir) ou Full Access (executa tudo sem perguntar).
-  const cuEnabled = () => !!(state.settings.computer && state.settings.computer.enabled);
-  const cuBtn = h('button', { class: 'tool cubtn', type: 'button', id: 'chat-cu', title: t('Computer Use: a IA faz tarefas no seu computador (arquivos, programas, jogos, pesquisa, escrita)'), 'aria-haspopup': 'true', onclick: (e) => openCuMenu(e.currentTarget) });
-  const paintCuBtn = () => {
-    cuBtn.classList.toggle('on', !!st.cu);
-    cuBtn.replaceChildren(icon('computer', 15), h('span', { class: 'cu-l' }, st.cu ? 'Computer Use · ' + MODE()[st.cu] : 'Computer Use'),
-      st.cu ? h('span', { class: 'x', title: t('Voltar a só conversar'), onclick: (e) => { e.stopPropagation(); setCu(''); } }, '×') : icon('chev', 12));
-  };
-  paintCuBtn();   // sem isto o botão do Computer Use ficava como uma pílula vazia até alguém clicar
-  const baseTools = () => [toolBtn, cuBtn, webBtn];
-  const CU_HINTS = () => [t('Organize minha pasta Downloads por tipo'), t('Crie as pastas Trabalho, Estudos e Lazer na Área de trabalho'), t('Pesquise as melhores configurações do OBS Studio e salve um resumo em Documentos'), t('Abra o Krita e crie uma tela nova de 1920x1080')];
-  async function setCu(mode) {
-    if (mode && st.tool) await setTool('');
-    st.cu = mode || ''; paintCuBtn();
-    composer.configure(mode ? { placeholder: t('Diga o que o computador deve fazer…'), tools: baseTools(), onSend: (x) => cuRun(x) } : { placeholder: t('Pergunte qualquer coisa…'), tools: baseTools(), onSend: (x) => (st.tool ? toolRun(x) : sendChat(x)) });
-    paintHero(); if (mode) composer.focus();
-  }
-  async function enableCu() {
-    const body = h('div', null,
-      h('p', { class: 'muted', style: { marginTop: 0 } }, t('É um recurso opcional. Com ele, a IA que você escolheu faz tarefas no seu computador: digitar e escrever, pesquisar, usar programas instalados (Krita, OBS Studio, Audacity…), organizar e criar arquivos e pastas e abrir jogos. Até 8 tarefas ao mesmo tempo, acompanhadas na seção Computer Use.')),
-      h('p', { class: 'small', style: { margin: '0 0 6px' } }, h('b', null, 'Ask'), ' — ', t('pergunta Sim ou Não antes de cada ação que muda algo.')),
-      h('p', { class: 'small', style: { margin: '0 0 10px' } }, h('b', null, 'Full Access'), ' — ', t('executa tudo sem perguntar nada.')),
-      h('p', { class: 'dim small', style: { margin: 0 } }, t('Sempre valem, em qualquer modo: não toca em senhas, chaves nem nos dados do ASTA, não mexe em pastas do sistema, não roda shells nem scripts, e o que é "apagado" vai para uma lixeira do ASTA (dá para desfazer).')));
-    const v = await modal(t('Ligar o Computer Use?'), body, [{ label: t('Agora não'), value: false }, { label: t('Ligar'), value: true, cls: 'primary' }]);
-    if (v !== true) return false;
-    try { await saveSettings({ computer: { enabled: true } }); toast(t('Computer Use ligado'), 'ok'); return true; } catch (e) { toast(e.message, 'err'); return false; }
-  }
-  function openCuMenu(anchor) {
-    const item = (mode, label, hint, ic) => h('div', { class: 'opt cuopt' + (st.cu === mode ? ' on' : ''), dataset: { mode }, role: 'menuitem', onclick: async () => {
-      pop.close();
-      if (!cuEnabled() && !(await enableCu())) return;
-      if (mode === 'full' && !(() => { try { return localStorage.getItem('asta.cu.fullok') === '1'; } catch (e) { return false; } })()) {
-        const ok = await confirmDialog(t('O modo Full Access executa tudo sem perguntar: criar, mover, mandar para a lixeira, abrir programas e jogos, digitar e clicar. Os limites de segurança do ASTA (senhas e chaves, pastas do sistema, dados do ASTA, shells e scripts) continuam valendo e as mudanças em arquivos podem ser desfeitas. Usar o Full Access?'), false, t('Usar Full Access'));
-        if (!ok) return;
-        try { localStorage.setItem('asta.cu.fullok', '1'); } catch (e) { /* ok */ }
-      }
-      setCu(mode);
-    } }, icon(ic, 16), h('div', null, h('div', null, label), h('div', { class: 'dim small' }, hint)));
-    const pop = popover(anchor, h('div', { class: 'toolmenu', role: 'menu' },
-      h('div', { class: 'mp-title' }, 'Computer Use'),
-      h('div', { class: 'dim small', style: { padding: '0 10px 8px', maxWidth: '300px' } }, cuEnabled() ? t('A IA faz a tarefa no seu computador. Acompanhe na seção Computer Use.') : t('Recurso opcional, desligado. Escolha um modo para ligar.')),
-      item('ask', 'Ask', MODE_HINT().ask, 'lock'), item('full', 'Full Access', MODE_HINT().full, 'warn'),
-      st.cu ? h('div', { class: 'opt', onclick: () => { pop.close(); setCu(''); } }, icon('x', 16), t('Só conversar')) : null,
-      h('div', { class: 'mp-foot' }, h('a', { href: '#/computer', onclick: () => { pop.close(); go('computer', {}); return false; } }, icon('computer', 13), t('Abrir a seção Computer Use')))));
-  }
-  async function cuRun({ text, ids }) {
-    const tb = tab, goal = String(text || '').trim();
-    if ((!goal && !(ids && ids.length)) || tb.busy) return;
-    if (!cuEnabled() && !(await enableCu())) return;
-    try { await ensureChat(tb); } catch (e) { return toast(e.message, 'err'); }
-    tb.banner.replaceChildren();
-    try {
-      const r = await api('/api/computer/tasks', { method: 'POST', body: { goal, mode: st.cu || 'ask', attachment_ids: ids || [], chat_id: tb.chat.id } });
-      if (!tb.chat.messages.length) tb.list.replaceChildren();
-      (r.messages || []).forEach((m) => { tb.chat.messages.push(m); tb.list.appendChild(msgEl(m)); });
-      if (!tb.chat.title) { tb.chat.title = goal.length > 58 ? goal.slice(0, 57) + '…' : goal; topTitle.textContent = tb.chat.title; }
-      composer.setText(''); composer.clearFiles(ids); tb.draft = ''; paintHero(); paintActs(tb); paintTabs(); paintSide(); scroll(true); refreshChats(); saveTabs();
-    } catch (e) { tb.banner.replaceChildren(h('div', { class: 'chx-note err' }, '⚠ ' + t(e.message))); }
-  }
+  const baseTools = () => [toolBtn, webBtn];
 
   // busca na web: vale para qualquer prompt — a pergunta do chat ou o prompt de uma ferramenta de criação
   const webBtn = h('button', { class: 'tool webbtn', type: 'button', id: 'chat-web', 'aria-pressed': 'false', title: t('Pesquisar na web antes de responder (qualquer prompt)'), onclick: () => setWeb(!st.web, true) });
@@ -151,15 +93,14 @@ export default async function render(root, ctx) {
   // equipe do Chat: esforço (Low … Omni) e 1/4/8/12/16 agentes (notas privadas para a resposta); fica salvo em Configuração → Chat
   const chatCfg = state.settings.chat || {};
   const chatTeam = teamPicker({ agents: chatCfg.team_agents, effort: chatCfg.effort }, (v) => { saveSettings({ chat: { effort: v.effort, team_agents: v.agents } }).catch((e) => toast(e.message, 'err')); }, { id: 'chat-team', defaultEffort: 'low' });
-  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, cuBtn, webBtn], rightTools: [chatTeam.el, thinkBtn, modelBtn], onSend: (x) => (st.cu ? cuRun(x) : st.tool ? toolRun(x) : sendChat(x)) });
+  const composer = createComposer({ placeholder: t('Pergunte qualquer coisa…'), sendLabel: t('Run'), sendTitle: t('Executar'), tools: [toolBtn, webBtn], rightTools: [chatTeam.el, thinkBtn, modelBtn], onSend: (x) => (st.cu ? cuRun(x) : st.tool ? toolRun(x) : sendChat(x)) });
 
   // ------------------------------------------------------------------ ferramentas de criação (ativadores)
   let toolCfg = null;
   async function setTool(id, text) {
-    if (id && st.cu) { st.cu = ''; paintCuBtn(); }   // ferramenta de criação e Computer Use não ficam ligados juntos
     st.tool = id; paintToolBtn(); tab.banner.replaceChildren(); below.replaceChildren();
     if (text != null) composer.setText(text);
-    if (!id) { toolCfg = null; composer.configure({ placeholder: t('Pergunte qualquer coisa…'), tools: baseTools(), extraReady: null, allowEmpty: false, onSend: (x) => (st.cu ? cuRun(x) : sendChat(x)) }); paintHero(); return; }
+    if (!id) { toolCfg = null; composer.configure({ placeholder: t('Pergunte qualquer coisa…'), tools: baseTools(), extraReady: null, allowEmpty: false, onSend: (x) => sendChat(x) }); paintHero(); return; }
     try { toolCfg = await TOOL_BUILDERS[id](root, updating, composer.text(), composer); }
     catch (e) { toast(e.message, 'err'); st.tool = ''; paintToolBtn(); return; }
     composer.configure({ placeholder: toolCfg.placeholder, tools: [...baseTools(), ...(toolCfg.tools || [])], extraReady: toolCfg.extraReady || null, allowEmpty: !!toolCfg.allowEmpty, onSend: toolRun });
@@ -373,8 +314,8 @@ export default async function render(root, ctx) {
     wrap.classList.toggle('empty', empty);
     topTitle.textContent = tabTitle(tab);
     if (empty) {
-      const hints = st.cu ? CU_HINTS() : st.tool ? HINTS()[st.tool] : SUGGESTIONS();
-      fill(hero, h('h1', null, st.cu ? t('O que o computador deve fazer?') : st.tool ? t(TITLES[st.tool][updating ? 1 : 0] || TITLES[st.tool][0]) : t('Como posso ajudar?')),
+      const hints = st.tool ? HINTS()[st.tool] : SUGGESTIONS();
+      fill(hero, h('h1', null, st.tool ? t(TITLES[st.tool][updating ? 1 : 0] || TITLES[st.tool][0]) : t('Como posso ajudar?')),
         updating && st.tool ? h('div', { class: 'ctxbar' }, h('span', { class: 'chip' }, icon('refresh', 13), t('Atualizando:') + ' ' + updating.name + ' (v' + updating.current + ')', h('span', { class: 'x', title: t('Criar algo novo'), onclick: () => go('main', { fresh: true }) }, '×'))) : null,
         composer.el, below, tab.banner,
         h('div', { class: 'suggest' }, (st.tool && updating ? [] : hints).map((x) => h('button', { type: 'button', onclick: () => { composer.setText(x); composer.focus(); } }, x.length > 62 ? x.slice(0, 60) + '…' : x))),

@@ -7,6 +7,13 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.28] — 2026-11-09
+
+### Changed — Chat: no Computer Use button; toolbar on a single line
+- **The "Computer Use" button left the Chat** (Computer Use stays in its own section in the side menu; old tasks started from the Chat keep their live card in those conversations).
+- **Composer toolbar aligned:** the team selector is compact ("High · 👥 1") and, in narrow boxes, "Attach" becomes icon-only; everything fits on one line (the team selector and the model button no longer overlap).
+- Version 0.17.28.
+
 ## [0.17.27] — 2026-11-09
 
 ### Added — Canvas: a prompt box under the canvas to generate flows with the agent team
