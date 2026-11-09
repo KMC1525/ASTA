@@ -15,9 +15,10 @@ from tests.test_canvas import PNG, provider  # noqa: E402
 
 
 class FakeOR:
-    def __init__(self, images_route=True, chat_status=200):
+    def __init__(self, images_route=True, chat_status=200, catalog=None, video_models=None, bad_params=()):
         self.seen = []
         self.images_route, self.chat_status = images_route, chat_status
+        self.catalog, self.video_models, self.bad_params = catalog, video_models, set(bad_params)   # catalog: modelos de /images/models; bad_params: campos que /images e /videos recusam com 400
         outer = self
 
         class H(BaseHTTPRequestHandler):
@@ -34,6 +35,18 @@ class FakeOR:
 
             def do_GET(self):
                 outer.seen.append(("GET", self.path, None))
+                if self.path.endswith("/images/models") and outer.catalog is not None:
+                    return self._send({"data": outer.catalog})
+                if self.path.endswith("/videos/models") and outer.video_models is not None:
+                    return self._send({"data": outer.video_models})
+                if "/videos/job1/content" in self.path:
+                    self.send_response(200)
+                    self.send_header("Content-Type", "video/mp4")
+                    self.send_header("Content-Length", "4")
+                    self.end_headers()
+                    return self.wfile.write(b"MP4!")
+                if self.path.endswith("/videos/job1"):
+                    return self._send({"id": "job1", "status": "completed", "unsigned_urls": [outer.url + "/videos/job1/content?index=0"]})
                 if self.path.startswith("/api/v1/models"):
                     models = [
                         {"id": "google/gemini-2.5-flash-image", "architecture": {"input_modalities": ["text", "image"], "output_modalities": ["image", "text"]}},
@@ -47,13 +60,23 @@ class FakeOR:
             def do_POST(self):
                 body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
                 outer.seen.append(("POST", self.path, body))
+                if self.path.endswith("/videos"):
+                    bad = [k for k in body if k in outer.bad_params]
+                    if bad:
+                        return self._send({"error": {"message": "Invalid request parameters: " + ",".join(bad)}}, 400)
+                    return self._send({"id": "job1", "polling_url": outer.url + "/videos/job1", "status": "pending"}, 202)
                 if self.path.endswith("/images"):
+                    bad = [k for k in body if k in outer.bad_params]
+                    if bad:
+                        return self._send({"error": {"message": "Invalid request parameters: " + ",".join(bad)}}, 400)
                     if not outer.images_route:
                         return self._send({"error": {"message": "not found"}}, 404)
                     return self._send({"data": [{"b64_json": base64.b64encode(PNG).decode()}]})
                 if self.path.endswith("/chat/completions"):
                     if outer.chat_status != 200:
                         return self._send({"error": {"message": "Insufficient credits"}}, outer.chat_status)
+                    if str(body.get("model", "")).endswith("-flare"):
+                        return self._send({"error": {"message": body["model"] + " is an image generation model and cannot be used with the chat/completions endpoint. Use the /api/v1/images endpoint instead.", "code": 400}}, 400)
                     if body.get("modalities") == ["image", "text"] and "image_config" in body and body.get("model") == "only-image":
                         return self._send({"error": {"message": "modalities not supported"}}, 400)
                     if body.get("modalities") == ["text"]:
@@ -114,15 +137,64 @@ class OpenRouterMediaTests(unittest.TestCase):
         p.image("outro")   # lembrou: não tenta /images de novo
         self.assertEqual([path for m, path in fake.paths() if m == "POST"], ["/api/v1/chat/completions"])
 
-    def test_references_edit_through_chat_with_image_url_parts(self):
+    def test_references_edit_through_the_images_route_with_input_references(self):
         fake, p = self.run_with()
         out = p.image("troque o fundo por uma praia", refs=[(PNG, "image/png"), (PNG, "image/png")], size="1024x1024")
         self.assertEqual(out[0].data, PNG)
         posts = [(path, b) for m, path, b in fake.seen if m == "POST"]
-        self.assertEqual([x[0] for x in posts], ["/api/v1/chat/completions"])   # com referências, direto pelo chat
-        parts = posts[0][1]["messages"][0]["content"]
-        self.assertEqual([x["type"] for x in parts], ["text", "image_url", "image_url"])
-        self.assertTrue(parts[1]["image_url"]["url"].startswith("data:image/png;base64,"))
+        self.assertEqual([x[0] for x in posts], ["/api/v1/images"])   # a rota dedicada também edita
+        refs = posts[0][1]["input_references"]
+        self.assertEqual([r["type"] for r in refs], ["image_url", "image_url"])
+        self.assertTrue(refs[0]["image_url"]["url"].startswith("data:image/png;base64,"))
+
+    def test_references_edit_through_chat_when_the_server_has_no_images_route(self):
+        fake, p = self.run_with(images_route=False)
+        out = p.image("troque o fundo por uma praia", refs=[(PNG, "image/png"), (PNG, "image/png")], size="1024x1024")
+        self.assertEqual(out[0].data, PNG)
+        chat = [b for m, path, b in fake.seen if path.endswith("/chat/completions")][0]
+        self.assertEqual([x["type"] for x in chat["messages"][0]["content"]], ["text", "image_url", "image_url"])
+
+    def test_the_catalog_decides_the_parameters_and_the_route(self):
+        cat = [{"id": "openai/gpt-image-2.6-flare", "supported_parameters": {"aspect_ratio": {"type": "enum", "values": ["1:1", "3:2", "2:3"]}, "resolution": {"type": "enum", "values": ["1K", "2K"]}, "seed": {"type": "boolean"}}},
+               {"id": "x-ai/grok-imagine", "supported_parameters": {"aspect_ratio": {"type": "enum", "values": ["1:1", "16:9", "9:16"]}}}]
+        fake, p = self.run_with(catalog=cat)
+        p.image("uma thumb", model="openai/gpt-image-2.6-flare", size="1920x1080", seed=7, refs=[(PNG, "image/png")])
+        p.image("outra", model="x-ai/grok-imagine", size="1920x1080")
+        posts = [b for m, path, b in fake.seen if m == "POST"]
+        self.assertEqual([x for x in posts[0] if x not in ("input_references",)], ["model", "prompt", "aspect_ratio", "resolution", "seed"])
+        self.assertEqual((posts[0]["aspect_ratio"], posts[0]["resolution"], posts[0]["seed"]), ("3:2", "2K", 7))   # 16:9 não existe neste modelo: a mais próxima
+        self.assertNotIn("size", posts[1])                                   # a xAI recusa «size» em pixels
+        self.assertEqual((posts[1]["aspect_ratio"], "resolution" in posts[1], "seed" in posts[1]), ("16:9", False, False))
+
+    def test_a_refused_option_gets_one_retry_with_only_the_essentials(self):
+        cat = [{"id": "m/x", "supported_parameters": {"aspect_ratio": {"type": "enum", "values": ["1:1"]}}}]
+        fake, p = self.run_with(catalog=cat, bad_params=["aspect_ratio"])
+        out = p.image("x", model="m/x", refs=[(PNG, "image/png")])
+        self.assertEqual(out[0].data, PNG)
+        posts = [b for m, path, b in fake.seen if m == "POST"]
+        self.assertEqual([sorted(b) for b in posts], [["aspect_ratio", "input_references", "model", "prompt"], ["input_references", "model", "prompt"]])
+
+    def test_a_model_that_is_image_only_is_redirected_from_chat_to_the_images_route(self):
+        fake, p = self.run_with(catalog=[{"id": "outro/modelo"}])   # o modelo não está no catálogo: vai pelo chat; a mensagem do OpenRouter manda usar /images
+        out = p.image("x", model="openai/gpt-image-2.6-flare")
+        self.assertEqual(out[0].data, PNG)
+        self.assertEqual([path for m, path in fake.paths() if m == "POST"], ["/api/v1/chat/completions", "/api/v1/images"])
+
+    def test_video_follows_the_catalog_and_downloads_from_the_signed_url_list(self):
+        vm = [{"id": "x-ai/grok-imagine-video", "supported_durations": [5, 8, 10], "supported_aspect_ratios": ["16:9", "9:16"], "supported_resolutions": ["480p", "720p"]}]
+        fake, p = self.run_with(video_models=vm)
+        out = p.video("um farol", duration=6, aspect="9:16", model="x-ai/grok-imagine-video", image=(PNG, "image/png"))
+        self.assertEqual((out.mime, out.data), ("video/mp4", b"MP4!"))
+        body = [b for m, path, b in fake.seen if m == "POST"][0]
+        self.assertEqual((body["duration"], body["aspect_ratio"], body["resolution"]), (5, "9:16", "720p"))   # 6 s → 5 s (a mais próxima); ~720p
+        self.assertEqual(body["frame_images"][0]["frame_type"], "first_frame")
+
+    def test_video_drops_options_the_model_refuses_one_at_a_time(self):
+        fake, p = self.run_with(video_models=[], bad_params=["frame_images", "resolution"])
+        out = p.video("x", model="m/v", image=(PNG, "image/png"))
+        self.assertEqual(out.data, b"MP4!")
+        posts = [b for m, path, b in fake.seen if m == "POST"]
+        self.assertNotIn("frame_images", posts[-1])
 
     def test_models_that_only_make_images_get_a_simpler_retry(self):
         fake, p = self.run_with(images_route=False)

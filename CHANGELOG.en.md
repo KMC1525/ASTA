@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.41] — 2026-11-09
+
+### Improved — OpenRouter in the Canvas: image-only models (OpenAI, xAI…) and video from the catalog
+Fixes "`openai/gpt-image-2.6-flare` is an image generation model and cannot be used with the chat/completions endpoint": editing with references went through chat. Images now go through the **`/images` route** (generation and editing via `input_references`) for the models in `GET /images/models`, with only the parameters the catalog accepts (aspect ratio, resolution, seed; never pixel `size`, which xAI rejects) and a retry with just the essentials when an option is refused. If chat says "use /images", ASTA switches route. **Video:** duration, aspect ratio and resolution chosen from `GET /videos/models`, refused options dropped one by one and download from the job's URL. "Load models" also lists the image catalog; new suggestions (gpt-image-2, FLUX.2 Pro, Seedream 4.5, Wan 2.7, Seedance 2.0, Hailuo 3). New tests with a simulated OpenRouter server. Honest limit: built from the documentation, **not tested on the real OpenRouter**.
+
 ## [0.17.40] — 2026-11-09
 
 ### Fixed — Canvas: stray "model name" field below the already chosen model
