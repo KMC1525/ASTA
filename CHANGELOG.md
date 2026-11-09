@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.24] — 2026-11-09
+
+### Adicionado — Code: opção «ASTA como co-autor do projeto» (e a identidade do git deixa de ser sobrescrita)
+- **Nova opção** em Configuração → Code: **«ASTA como co-autor do projeto»** (desligada por padrão). Ligada, todo commit que o ASTA faz (git local e modo nuvem do GitHub) leva o trailer `Co-authored-by: ASTA Code <e-mail>` — uma vez só, junto de outros trailers, sem quebrar a mensagem — e os pull requests que ele abre ganham uma nota «Feito com ASTA Code». Nome e e-mail do co-autor são configuráveis e limpos (nada de quebra de linha ou `<>`); para aparecer em *Contributors* no GitHub, use o e-mail de uma conta do GitHub.
+- **Bug corrigido: o ASTA assinava os commits no lugar da pessoa.** A tela dizia que «Nome/E-mail nos commits» valia «só quando o git não tem um nome configurado», mas o código sempre definia `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`, que têm prioridade sobre o `user.name` do git: todo commit local saía como «ASTA Code». Agora vale o que o git do repositório já tem; o nome do ASTA só entra no que faltar.
+- **Revisão da busca na web do Code:** o Code **já tem busca na web nativa**, independente do modelo (nuvem ou local): as ferramentas `search_web` (DuckDuckGo → Wikipédia sem chave; Brave, Tavily ou SearxNG com chave/endereço, os mesmos do Chat) e `fetch_url` (lê uma página pública), liberadas para todos os papéis, com o texto da web marcado como dado não confiável e páginas locais/privadas recusadas. Nenhuma mudança foi necessária.
+- Versão 0.17.24 (o núcleo Rust não mudou).
+
 ## [0.17.23] — 2026-11-09
 
 ### Corrigido — modo Code: execução que falhava em cadeia numa tarefa de portfólio

@@ -627,7 +627,7 @@ async function computerTab() {
 
 // ---------------------------------------------------------------------------------- code
 async function codeTab() {
-  const base = { mode: 'ask', effort: 'high', agents: 4, max_sessions: 4, ask_for: ['write', 'delete', 'run', 'install', 'git', 'publish'], run_timeout: 180, max_download_mb: 200, allow_main: true, branch_prefix: 'asta/', git_name: '', git_email: '',
+  const base = { mode: 'ask', effort: 'high', agents: 4, max_sessions: 4, ask_for: ['write', 'delete', 'run', 'install', 'git', 'publish'], run_timeout: 180, max_download_mb: 200, allow_main: true, branch_prefix: 'asta/', git_name: '', git_email: '', credit_asta: false, credit_name: '', credit_email: '',
     clone_depth: 20, github_mode: 'auto', editor: 'auto', github: { api: '' }, finalize: { docs: false, publish: 'none' }, provider: { id: '', model: '' } };
   const cd = Object.assign(base, JSON.parse(JSON.stringify(state.settings.code || {})));
   cd.github = { api: (cd.github || {}).api || '' };
@@ -638,6 +638,12 @@ async function codeTab() {
   try { prompts = (await api('/api/code/prompts')).prompts; } catch (e) { /* idem */ }
   try { gh = await api('/api/code/github?probe=1'); } catch (e) { /* idem */ }
   const asks = ['write', 'delete', 'run', 'install', 'git', 'publish'];
+  const credit = h('div', { id: 'cd-credit', class: 'grid2' },
+    field(t('Nome do co-autor'), h('input', { id: 'cd-credit-name', value: cd.credit_name, placeholder: 'ASTA Code', oninput: (e) => { cd.credit_name = e.target.value; } })),
+    field(t('E-mail do co-autor'), h('input', { id: 'cd-credit-email', value: cd.credit_email, placeholder: 'noreply@asta.local', oninput: (e) => { cd.credit_email = e.target.value; } }),
+      t('Para o ASTA aparecer como contribuidor no GitHub, use o e-mail de uma conta do GitHub (por exemplo, uma conta só do ASTA). Sem isso o nome aparece no commit, mas não na lista de contribuidores.')));
+  const paintCredit = () => credit.classList.toggle('hidden', cd.credit_asta !== true);
+  paintCredit();
   const askSet = new Set((cd.ask_for || []).filter((x) => asks.includes(x)));
   const stt = status || { efforts: [], languages: [], editors: {}, git: false, android: false };
   const tokenIn = h('input', { type: 'password', id: 'cd-gh-token', autocomplete: 'off', placeholder: tokenSet ? '•••••••• (' + t('salvo') + ')' : 'ghp_… / github_pat_…' });
@@ -676,6 +682,8 @@ async function codeTab() {
     cfgCard(t('Git, editor e comandos'),
       h('div', { class: 'grid2' }, field(t('Nome nos commits'), h('input', { id: 'cd-git-name', value: cd.git_name, placeholder: 'ASTA Code', oninput: (e) => { cd.git_name = e.target.value; } }), t('Só quando o git não tem um nome configurado.')),
         field(t('E-mail nos commits'), h('input', { id: 'cd-git-email', value: cd.git_email, placeholder: 'code@asta.local', oninput: (e) => { cd.git_email = e.target.value; } }))),
+      checkbox(t('ASTA como co-autor do projeto: coloca «Co-authored-by: ASTA Code» nos commits e uma nota nos pull requests'), cd.credit_asta === true, (v) => { cd.credit_asta = v; paintCredit(); }),
+      credit,
       h('div', { class: 'grid2' }, field(t('Editor preferido'), select([['auto', t('Automático')], ['vscode', 'VS Code'], ['cursor', 'Cursor']], cd.editor, (v) => { cd.editor = v; })),
         field(t('Tempo máximo de um comando (segundos)'), numInput(cd, 'run_timeout', 10, 1800, 10), t('Testes e builds que passam disso são encerrados.'))),
       field(t('Limite de download do Hugging Face por arquivo (MB)'), numInput(cd, 'max_download_mb', 1, 2000, 10))),

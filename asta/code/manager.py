@@ -61,6 +61,7 @@ def normalize_config(raw: Any) -> Dict[str, Any]:
         "allow_main": d.get("allow_main") is not False,
         "branch_prefix": re.sub(r"[^\w/.-]", "", str(d.get("branch_prefix") or "asta/"))[:30] or "asta/",
         "git_name": text(d.get("git_name"), "", 80), "git_email": text(d.get("git_email"), "", 120),
+        "credit_asta": d.get("credit_asta") is True, "credit_name": text(d.get("credit_name"), "", 80), "credit_email": text(d.get("credit_email"), "", 120),   # ASTA como co-autor dos commits
         "clone_depth": int(num(d.get("clone_depth"), 20, 0, 2000)),
         "github_mode": d.get("github_mode") if d.get("github_mode") in ("auto", "cloud", "git") else "auto",
         "github": {"api": text(gh.get("api"), "", 200), "token": str(gh.get("token") or "")[:300]},

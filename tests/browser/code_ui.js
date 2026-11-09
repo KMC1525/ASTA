@@ -138,6 +138,14 @@ run('code', async ({ api, open, check, base }) => {
     check('config:token-salvo-e-nunca-aparece-na-pagina', !html.includes('ghp_ui_secret') && (await page.locator('#cd-gh-token').getAttribute('placeholder')).includes('salvo') && (await api('/api/state')).settings.code.github.token_set === true);
     await page.locator('#cd-gh-remove').click(); await page.waitForTimeout(700);
     check('config:token-removido', (await api('/api/state')).settings.code.github.token_set === false);
+    // ---- ASTA como co-autor: os campos só aparecem com a opção ligada, e ela é salva
+    check('config:co-autor-desligado-por-padrao-e-campos-escondidos', (await api('/api/state')).settings.code.credit_asta !== true && (await page.locator('#cd-credit').isHidden()));
+    await page.locator('label:has-text("ASTA como co-autor") input[type=checkbox]').check();
+    check('config:co-autor-mostra-nome-e-email', (await page.locator('#cd-credit').isVisible()) && (await page.locator('#cd-credit-name').isVisible()));
+    await page.locator('#cd-credit-email').fill('asta-bot@exemplo.com');
+    await page.locator('#cfg-save').click(); await page.waitForTimeout(700);
+    const savedCredit = (await api('/api/state')).settings.code;
+    check('config:co-autor-salvo', savedCredit.credit_asta === true && savedCredit.credit_email === 'asta-bot@exemplo.com');
 
     // ---- celular: lista e sessão se alternam
     const phone = await open({ width: 390, height: 800 });

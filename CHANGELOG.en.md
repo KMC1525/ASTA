@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.24] — 2026-11-09
+
+### Added — Code: «ASTA as a project co-author» option (and the git identity is no longer overridden)
+- **New option** in Configuration → Code: **«ASTA as a project co-author»** (off by default). When on, every commit ASTA makes (local git and GitHub cloud mode) gets the trailer `Co-authored-by: ASTA Code <email>` — once, alongside other trailers, without breaking the message — and the pull requests it opens get a «Made with ASTA Code» note. The co-author's name and email are configurable and sanitized (no newlines or `<>`); to show up in *Contributors* on GitHub, use the email of a GitHub account.
+- **Bug fixed: ASTA signed commits instead of the person.** The screen said «Name/Email on commits» applied «only when git has no name configured», but the code always set `GIT_AUTHOR_NAME`/`GIT_AUTHOR_EMAIL`, which take priority over git's `user.name`: every local commit came out as «ASTA Code». Now what the repository's git already has is used; ASTA's name only fills in what is missing.
+- **Review of Code's web search:** Code **already has native web search**, independent of the model (cloud or local): the `search_web` tools (DuckDuckGo → Wikipedia with no key; Brave, Tavily or SearxNG with a key/address, the same as Chat) and `fetch_url` (reads a public page), available to every role, with web text marked as untrusted data and local/private pages refused. No change was needed.
+- Version 0.17.24 (the Rust core did not change).
+
 ## [0.17.23] — 2026-11-09
 
 ### Fixed — Code mode: a run that failed in a chain on a portfolio task
