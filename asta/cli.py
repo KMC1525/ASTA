@@ -256,6 +256,8 @@ def _libs(args: argparse.Namespace) -> int:
             print(_("⚠  Não foi possível instalar «{x}». O ASTA funciona sem ela; tente de novo depois com:  asta libs --extras {x}", x=extra))
     if ("local" in chosen or sd_force) and not _sd_latest(sd_force):
         failed.append("local (stable-diffusion.cpp mais nova)")
+    if not chosen:   # só a stable-diffusion.cpp (botão do Canvas): sem o resumo das outras bibliotecas
+        return 1 if failed else 0
     ok = [e for e in chosen if e not in failed]
     print("\n" + _("Bibliotecas prontas: {l}", l=", ".join(ok) or _("nenhuma")) + (_(" (já estavam instaladas: {p})", p=", ".join(present)) if present else "")
           + (_(" · com falha: {f}", f=", ".join(failed)) if failed else ""))
@@ -265,34 +267,88 @@ def _libs(args: argparse.Namespace) -> int:
 SD_GIT = "stable-diffusion-cpp-python @ git+https://github.com/william-murray1204/stable-diffusion-cpp-python.git"   # a versão do PyPI (0.4.7) pode ser mais antiga que os modelos novos; a do GitHub traz a stable-diffusion.cpp mais recente
 
 
-def _sd_marker():
+def _sd_dir():
     from .util import asta_home
 
-    return asta_home() / "sd_needs_newer"   # escrito pelo Canvas quando a stable-diffusion.cpp instalada não reconhece um modelo («get sd version from file failed»)
+    return asta_home()
+
+
+def _sd_marker():
+    return _sd_dir() / "sd_needs_newer"   # escrito pelo Canvas quando a stable-diffusion.cpp instalada não reconhece um modelo («get sd version from file failed»)
+
+
+def _sd_remote_sha() -> str:
+    """O commit mais novo da stable-diffusion-cpp-python no GitHub (vazio se não deu para consultar)."""
+    try:
+        r = subprocess.run(["git", "ls-remote", SD_GIT.split("@ git+", 1)[1], "HEAD"], capture_output=True, text=True, timeout=30)
+        return str(r.stdout).split()[0] if r.returncode == 0 and str(r.stdout).split() else ""
+    except Exception:  # noqa: BLE001  (sem git, sem rede, tempo esgotado…)
+        return ""
+
+
+def _uses_diffusion_ggufs() -> bool:
+    """A pessoa tem GGUF de difusão de imagem (Qwen-Image, FLUX…) baixado? Esses modelos dependem da stable-diffusion.cpp mais nova."""
+    from .canvas import support
+
+    folder = _sd_dir() / "models" / "image"
+    try:
+        return any(support.family_of(f.name) for f in folder.glob("*.gguf"))
+    except OSError:
+        return False
+
+
+def _build_tools_missing() -> list:
+    """O que falta para compilar a stable-diffusion.cpp: git e um compilador C/C++. (O cmake e o ninja o próprio pip baixa na hora de compilar, não precisam estar instalados.)"""
+    if os.name == "nt":
+        return []   # no Windows o compilador (Visual Studio Build Tools) é conferido pelo próprio pip, que mostra o erro
+    return [t for t in ("git",) if not shutil.which(t)] + ([] if any(shutil.which(c) for c in ("cc", "gcc", "clang")) else ["compilador C/C++"])
+
+
+def _build_tools_hint() -> str:
+    if sys.platform == "darwin":
+        return "xcode-select --install"
+    return "sudo apt install git build-essential" if shutil.which("apt") else "sudo dnf install git gcc-c++" if shutil.which("dnf") else "instale git e um compilador C/C++"
 
 
 def _sd_latest(force: bool = False) -> bool:
-    """Instala a stable-diffusion-cpp-python mais nova do GitHub (compila a stable-diffusion.cpp: precisa de git, cmake e um compilador C++, e leva alguns minutos).
-    Roda sozinho no `asta libs` (instalação e atualização) quando o Canvas avisou que um modelo não foi reconhecido (ASTA_SD_LATEST=auto, padrão), sempre (=always) ou nunca (=never).
+    """Mantém a stable-diffusion-cpp-python na versão mais nova do GitHub (compila a stable-diffusion.cpp: precisa de git e de um compilador C/C++, e leva alguns minutos). O PyPI parou na 0.4.7.
+    ASTA_SD_LATEST=auto (padrão): na instalação e na atualização, quando o Canvas avisou que um modelo não foi reconhecido ou a pessoa tem GGUF de difusão (Qwen-Image, FLUX…) — e só se o GitHub
+    tem commit novo desde a última compilação; =always: sempre que houver commit novo; =never: nunca. `force` (asta libs --sd-latest) compila sem perguntar.
     True se instalou ou não era preciso; False se tentou e falhou (o ASTA continua com a versão que já tinha)."""
     mode = (os.environ.get("ASTA_SD_LATEST") or "auto").strip().lower()
-    marker = _sd_marker()
-    if mode in ("never", "no", "0") or not (force or mode in ("always", "yes", "1") or marker.exists()):
+    marker, built = _sd_marker(), _sd_dir() / "sd_built_sha"
+    if mode in ("never", "no", "0") and not force:
         return True
-    if os.name != "nt":
-        miss = [t for t in ("git", "cmake") if not shutil.which(t)] + ([] if any(shutil.which(c) for c in ("cc", "gcc", "clang")) else ["compilador C/C++"])
-        if miss:
-            print("\n" + _("⚠  Para atualizar a stable-diffusion.cpp falta instalar: {m}. Depois rode:  asta libs --sd-latest", m=", ".join(miss)))
-            return False
+    wanted = force or mode in ("always", "yes", "1") or marker.exists() or _uses_diffusion_ggufs()
+    if not wanted:
+        return True
+    remote = _sd_remote_sha()
+    try:
+        have = built.read_text(encoding="utf-8").strip()
+    except OSError:
+        have = ""
+    if not force and not marker.exists() and remote and remote == have:
+        print("\n" + _("stable-diffusion-cpp-python: já está na versão mais recente do GitHub."))
+        return True
+    miss = _build_tools_missing()
+    if miss:
+        print("\n" + _("⚠  Para compilar a stable-diffusion.cpp mais nova falta: {m}. Instale com:  {c}  — e rode de novo:  asta libs --sd-latest", m=", ".join(miss), c=_build_tools_hint()))
+        return False
     print("\n" + _("Instalando a stable-diffusion-cpp-python mais nova (do GitHub): compila código nativo e pode levar vários minutos…"))
     res = subprocess.run([sys.executable, "-m", "pip", "install", "--upgrade", "--force-reinstall", "--no-deps", "--no-cache-dir", "--disable-pip-version-check", SD_GIT])
     if res.returncode != 0:
         print(_("⚠  Não consegui compilar a versão mais nova. O ASTA segue com a que já está instalada; tente de novo depois com:  asta libs --sd-latest"))
         return False
-    try:
-        marker.unlink()
-    except OSError:
-        pass
+    for f in (marker,):
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    if remote:
+        try:
+            built.write_text(remote, encoding="utf-8")
+        except OSError:
+            pass
     print(_("stable-diffusion-cpp-python atualizada. Abra o ASTA de novo para usá-la."))
     return True
 

@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.18] — 2026-11-09
+
+### Fixed — the newest stable-diffusion.cpp now installs and updates by itself
+- The «Update the library now» button stopped with «missing: cmake». `cmake` (and `ninja`) **do not need to be installed**: the library build fetches them through pip. ASTA now only checks what is really missing — `git` and a C/C++ compiler — and, if something is, shows the right command for your system (`sudo apt install git build-essential`, `xcode-select --install`…).
+- **Automatic on install and update** (`asta libs`, used by the installers and `asta update`): anyone with a diffusion GGUF downloaded (Qwen-Image, FLUX…) or who already had an unrecognized model gets the newest stable-diffusion-cpp-python from GitHub, **only when GitHub has a new commit** since the last build (kept in `sd_built_sha`) — no rebuild on every update. `ASTA_SD_LATEST=never` turns it off; `always` applies to everyone; `asta libs --sd-latest` forces it.
+- The button's output no longer shows the summary of the other libraries («Libraries ready: none…»), only what matters for the build.
+- Version 0.17.18 (the Rust core did not change).
+
 ## [0.17.17] — 2026-11-09
 
 ### Fixed — error message for an unrecognized model was cut off and had no way out

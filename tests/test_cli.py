@@ -18,7 +18,7 @@ REQUIRES = [
 ]
 
 
-def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0", marker=None):
+def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0", marker=None, remote_sha=""):
     """Executa `asta ...` simulando o pip. `results`: {palavra do requisito: código de saída}. `installed`: {nome da biblioteca: versão} já instalada.
     `remote`: versão do ASTA publicada (None = não deu para consultar). Devolve (código, comandos, saída)."""
     calls, results = [], results or {}
@@ -31,7 +31,7 @@ def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0", marke
     out = io.StringIO()
     have = installed or {}
     marker = marker or Path(tempfile.mkdtemp()) / "sd_needs_newer"   # nunca o ~/.asta de verdade
-    with mock.patch.object(cli, "_sd_marker", return_value=marker), mock.patch("importlib.metadata.requires", return_value=REQUIRES), mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
+    with mock.patch.object(cli, "_sd_dir", return_value=marker.parent), mock.patch.object(cli, "_sd_remote_sha", return_value=remote_sha), mock.patch("importlib.metadata.requires", return_value=REQUIRES), mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
             mock.patch.object(cli, "_installed_version", side_effect=lambda r: have.get(cli._req_name(r))), mock.patch.object(cli, "_remote_version", return_value=remote), \
             mock.patch.dict(os.environ, env or {}, clear=False), contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         if not env or "ASTA_EXTRAS" not in env:
@@ -74,8 +74,41 @@ class LibsTests(unittest.TestCase):
         with mock.patch.object(cli.shutil, "which", return_value=None), mock.patch.object(cli.os, "name", "posix"):
             code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker)
         self.assertEqual(code, 1)
-        self.assertIn("cmake", out)
+        self.assertIn("git", out)
+        self.assertIn("compilador", out)
         self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))
+
+    def test_cmake_is_not_required_because_pip_fetches_it_when_building(self):
+        marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"
+        marker.write_text("x")
+        have = {"git": "/usr/bin/git", "gcc": "/usr/bin/gcc"}   # sem cmake nem ninja no sistema
+        with mock.patch.object(cli.shutil, "which", side_effect=lambda t: have.get(t)), mock.patch.object(cli.os, "name", "posix"):
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker)
+        self.assertEqual(code, 0, out)
+        self.assertTrue(any(cli.SD_GIT in c for call in calls for c in call))
+
+    def test_diffusion_ggufs_get_the_newest_library_automatically_but_only_when_github_has_news(self):
+        home = Path(tempfile.mkdtemp())
+        (home / "models" / "image").mkdir(parents=True)
+        (home / "models" / "image" / "qwen-image-2.1-Q4_K_M.gguf").write_bytes(b"g")
+        marker = home / "sd_needs_newer"            # não existe: nenhum modelo falhou ainda
+        tools = mock.patch.object(cli.shutil, "which", return_value="/usr/bin/x")
+        with tools:
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker, remote_sha="abc123")
+        self.assertTrue(any(cli.SD_GIT in c for call in calls for c in call))      # tem GGUF de difusão: compila na instalação/atualização
+        self.assertEqual((home / "sd_built_sha").read_text(), "abc123")
+        with tools:
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker, remote_sha="abc123")
+        self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))     # nada novo no GitHub: não recompila
+        self.assertIn("já está na versão mais recente", out)
+        with tools:
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker, remote_sha="def456")
+        self.assertTrue(any(cli.SD_GIT in c for call in calls for c in call))      # commit novo: recompila
+        (home / "models" / "image" / "qwen-image-2.1-Q4_K_M.gguf").unlink()
+        (home / "sd_built_sha").unlink()
+        with tools:
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker, remote_sha="zzz")
+        self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))     # sem GGUF de difusão e sem aviso: não mexe
 
     def test_never_mode_and_the_flag(self):
         marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"

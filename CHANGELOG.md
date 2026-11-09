@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.18] — 2026-11-09
+
+### Corrigido — a stable-diffusion.cpp mais nova agora se instala e se atualiza sozinha
+- O botão «Atualizar a biblioteca agora» parava com «falta instalar: cmake». O `cmake` (e o `ninja`) **não precisam estar instalados**: o build da biblioteca os baixa sozinho pelo pip. Agora o ASTA só confere o que realmente falta — `git` e um compilador C/C++ — e, se faltar, mostra o comando certo para o seu sistema (`sudo apt install git build-essential`, `xcode-select --install`…).
+- **Automático na instalação e na atualização** (`asta libs`, usado pelos instaladores e pelo `asta update`): quem tem um GGUF de difusão baixado (Qwen-Image, FLUX…) ou já teve um modelo não reconhecido recebe a stable-diffusion-cpp-python mais nova do GitHub, **só quando o GitHub tem um commit novo** desde a última compilação (guardado em `sd_built_sha`) — sem recompilar a cada atualização. `ASTA_SD_LATEST=never` desliga; `always` vale para todos; `asta libs --sd-latest` força.
+- A saída do botão não mostra mais o resumo das outras bibliotecas («Bibliotecas prontas: nenhuma…»), só o que importa para a compilação.
+- Versão 0.17.18 (o núcleo Rust não mudou).
+
 ## [0.17.17] — 2026-11-09
 
 ### Corrigido — mensagem de erro do modelo não reconhecido cortada e sem saída
