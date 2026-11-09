@@ -310,10 +310,11 @@ class CanvasRoutes:
         model = text((body if isinstance(body, dict) else {}).get("model"), "", 200)
         if not _re.match(r"^[\w][\w .+()=-]{0,200}\.gguf$", model):
             raise HttpError(400, "Informe o arquivo GGUF do modelo.")
-        folder = hf.kind_dir(self.store.models_dir, "image", create=True)
+        cap = "video" if text((body if isinstance(body, dict) else {}).get("cap"), "", 8) == "video" else "image"
+        folder = hf.kind_dir(self.store.models_dir, cap, create=True)
         info = support.missing(folder, model)
         if not info["family"]:
-            raise HttpError(400, "Este modelo não é de uma família com arquivos de apoio conhecidos (Qwen-Image, FLUX).")
+            raise HttpError(400, "Este modelo não é de uma família com arquivos de apoio conhecidos (Qwen-Image, FLUX, Z-Image, Wan2.2…).")
         if not info["missing"]:
             raise HttpError(400, "Os arquivos de apoio deste modelo já estão na pasta.")
         running = self.app.jobs.running("support_files")

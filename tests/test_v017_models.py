@@ -153,13 +153,13 @@ class QwenImageGGUFTests(unittest.TestCase):
         self.tmp = Path(tempfile.mkdtemp())
         (self.tmp / "image").mkdir()
         self.img = self.tmp / "image"
-        (self.img / "qwen-image-2.1-Q4_K_M.gguf").write_bytes(b"g")
+        (self.img / "qwen-image-2512-Q4_K_M.gguf").write_bytes(b"g")
         M._LOCAL_CACHE.clear()
 
     def prov(self):
         from asta.canvas import media as M
 
-        return M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(self.tmp), "models": {"image": "qwen-image-2.1-Q4_K_M.gguf"}, "needs_key": False})
+        return M._KINDS["gguf_local"]({"id": "gguf_local", "label": "g", "models_dir": str(self.tmp), "models": {"image": "qwen-image-2512-Q4_K_M.gguf"}, "needs_key": False})
 
     def fake(self, fail=None):
         from tests.test_canvas import PNG
@@ -189,7 +189,7 @@ class QwenImageGGUFTests(unittest.TestCase):
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}):
             out = self.prov().image("um gato", size="1280x720")
         self.assertEqual(out[0].mime, "image/png")
-        self.assertEqual(loads[0], {"diffusion_model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf"), "vae_path": str(self.img / "qwen_image_vae.safetensors"), "llm_path": str(self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"),
+        self.assertEqual(loads[0], {"diffusion_model_path": str(self.img / "qwen-image-2512-Q4_K_M.gguf"), "vae_path": str(self.img / "qwen_image_vae.safetensors"), "llm_path": str(self.img / "Qwen2.5-VL-7B-Instruct-Q4_K_M.gguf"),
                                     "offload_params_to_cpu": True, "diffusion_flash_attn": True})       # memória e atenção como na documentação da stable-diffusion.cpp
         self.assertEqual(runs[0]["cfg_scale"], 2.5)
         self.assertEqual((runs[0]["width"], runs[0]["height"]), (1024, 576))
@@ -326,7 +326,7 @@ class StableDiffusion:
         mod, loads, _ = self.fake(fail=ValueError("NULL pointer access"))
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
             self.prov().image("x")
-        self.assertEqual(loads[0], {"model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf")})   # sem o VAE certo: não monta o carregamento com o VAE errado
+        self.assertEqual(loads[0], {"model_path": str(self.img / "qwen-image-2512-Q4_K_M.gguf")})   # sem o VAE certo: não monta o carregamento com o VAE errado
         self.assertIn("VAE do Qwen-Image", str(cm.exception))
         self.assertIn("[[asta-support:", str(cm.exception))
 
@@ -457,10 +457,10 @@ class StableDiffusion:
         with mock.patch.dict(sys.modules, {"stable_diffusion_cpp": mod}), self.assertRaises(ProviderError) as cm:
             self.prov().image("x")
         msg = str(cm.exception)
-        self.assertEqual(loads[0], {"model_path": str(self.img / "qwen-image-2.1-Q4_K_M.gguf")})   # sem os apoios: carrega como arquivo único (como antes)
+        self.assertEqual(loads[0], {"model_path": str(self.img / "qwen-image-2512-Q4_K_M.gguf")})   # sem os apoios: carrega como arquivo único (como antes)
         self.assertIn("Qwen2.5-VL", msg)
         self.assertIn("VAE do Qwen-Image", msg)
-        self.assertIn("[[asta-support:qwen-image-2.1-Q4_K_M.gguf]]", msg)                  # a tela troca isto pelo botão «Baixar os arquivos de apoio»
+        self.assertIn("[[asta-support:qwen-image-2512-Q4_K_M.gguf]]", msg)                  # a tela troca isto pelo botão «Baixar os arquivos de apoio»
 
     def test_a_null_pointer_from_the_library_becomes_a_clear_message(self):
         from asta.providers.base import ProviderError
@@ -600,7 +600,7 @@ class StableDiffusion:
             prov.image("x")
         self.assertEqual(loads[0], {"model_path": str(self.img / "meu-modelo-Q4_K_M.gguf")})
         names = {i["model"] for i in INST.installed({}, self.tmp, "image") if i["provider"] == "gguf_local"}
-        self.assertEqual(names, {"qwen-image-2.1-Q4_K_M.gguf", "meu-modelo-Q4_K_M.gguf"})
+        self.assertEqual(names, {"qwen-image-2512-Q4_K_M.gguf", "meu-modelo-Q4_K_M.gguf"})
 
 
 class SupportFilesTests(ServerCase):
@@ -611,7 +611,7 @@ class SupportFilesTests(ServerCase):
         self.img.mkdir(parents=True, exist_ok=True)
         for f in list(self.img.iterdir()):
             f.unlink()
-        (self.img / "qwen-image-2.1-Q4_K_M.gguf").write_bytes(b"g")
+        (self.img / "qwen-image-2512-Q4_K_M.gguf").write_bytes(b"g")
 
     def fake_download(self, calls):
         def fake(repo, files, dest, token="", sizes=None, progress=None, cancelled=lambda: False, any_file=False):
@@ -626,17 +626,17 @@ class SupportFilesTests(ServerCase):
     def test_missing_lists_what_to_download_and_find_companions_matches_names(self):
         from asta.canvas import support
 
-        m = support.missing(self.img, "qwen-image-2.1-Q4_K_M.gguf")
+        m = support.missing(self.img, "qwen-image-2512-Q4_K_M.gguf")
         self.assertEqual((m["family"], [x["key"] for x in m["missing"]]), ("qwen-image", ["vae_path", "llm_path"]))
         self.assertGreater(m["approx_gb"], 4)
         self.assertEqual(support.missing(self.img, "meu-modelo.gguf")["family"], "")
         (self.img / "qwen_image_vae.safetensors").write_bytes(b"v")
-        self.assertEqual([x["key"] for x in support.missing(self.img, "qwen-image-2.1-Q4_K_M.gguf")["missing"]], ["llm_path"])
+        self.assertEqual([x["key"] for x in support.missing(self.img, "qwen-image-2512-Q4_K_M.gguf")["missing"]], ["llm_path"])
 
     def test_route_downloads_only_what_is_missing_and_then_refuses(self):
         calls = []
         with mock.patch("asta.hf.download_many", side_effect=self.fake_download(calls)):
-            s, r = self.c.json("POST", "/api/media/support/download", {"model": "qwen-image-2.1-Q4_K_M.gguf"})
+            s, r = self.c.json("POST", "/api/media/support/download", {"model": "qwen-image-2512-Q4_K_M.gguf"})
             self.assertEqual(s, 200, r)
             ev = self.c.sse(f"/api/jobs/{r['job_id']}/events")
         done = [e for e in ev if e["type"] == "done"]
@@ -645,7 +645,7 @@ class SupportFilesTests(ServerCase):
         self.assertEqual({c[0] for c in calls}, {"Comfy-Org/Qwen-Image_ComfyUI", "unsloth/Qwen2.5-VL-7B-Instruct-GGUF"})
         self.assertTrue(all(c[2] for c in calls))                                      # arquivos que não são .gguf também (any_file)
         self.assertTrue((self.img / "qwen_image_vae.safetensors").is_file())
-        s, r = self.c.json("POST", "/api/media/support/download", {"model": "qwen-image-2.1-Q4_K_M.gguf"})
+        s, r = self.c.json("POST", "/api/media/support/download", {"model": "qwen-image-2512-Q4_K_M.gguf"})
         self.assertEqual(s, 400)                                                       # agora está tudo lá
         self.assertIn("já estão", json.dumps(r, ensure_ascii=False))
 

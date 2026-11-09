@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.30] — 2026-11-09
+
+### Added — Unsloth models in the Canvas (image and video)
+- **New GGUF families** (`canvas/support.py`), recognized by file name, with the recipes from the `unsloth/*-GGUF` cards: **Qwen-Image 2.1** (VAE `qwen_image_2.1_vae_bf16` + Qwen3-VL-8B-Instruct encoder; 20 steps, CFG 6; **Turbo**: 8 steps, CFG 1; edits with up to 4 reference images), **Z-Image** (VAE `ae` + Qwen3-4B-Instruct-2507; base 30 steps, CFG 4; **Turbo**: 8 steps, CFG 1) and **Wan2.2 TI2V 5B** (**video**: VAE `Wan2.2_VAE` + UMT5-XXL). Before, those files ended in "NULL pointer access" for lack of VAE/encoder or used the wrong encoder (Qwen-Image 2.1 uses Qwen3-VL, not the older Qwen-Image's Qwen2.5-VL, which stays as it was).
+- **GGUF video with families:** Wan2.2 finds its support files next to the model (or shows the "Download the support files" button, now also for the video folder — `POST /api/media/support/download` accepts `cap: "video"`), uses 720p (1280×704 or 704×1280), 24 fps and 4k+1 frames (up to 121 ≈ 5 s), accepts a start image and **drops, with a notice, the parameters the installed stable-diffusion-cpp-python does not know** instead of failing. GGUF videos of other families behave as before.
+- Suggestions in the *Hugging Face local* provider: `unsloth/Z-Image-Turbo`, `unsloth/FLUX.2-klein-4B`, `unsloth/FLUX.1-schnell`.
+- **Out of scope (stated plainly):** the MOSS-Image, LTX-2.x and MiniMax-H3 GGUFs (they need a newer stable-diffusion.cpp and files/parameters — tokenizer, connectors, audio VAE — that the Python binding does not expose in a verifiable way) and Unsloth's voice models (Orpheus, Spark-TTS, Llasa, CSM: they need their own audio decoders, and no GGUF "sound" diffusion model is published). **None of this ran against the real stable-diffusion.cpp** (no GPU/multi-GB models here): the recipes come from the model cards and the suite uses a simulated module; the PyPI library (0.4.7) may not recognize the newest ones — the "Update the library" button still applies.
+- Version 0.17.30. The Rust core did not change.
+
 ## [0.17.29] — 2026-11-09
 
 ### Added — Code: empty (or not-yet-existing) folders to write the code later

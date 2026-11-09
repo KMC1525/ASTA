@@ -295,7 +295,7 @@ export function nodeResult(c, n) {
       btn.onclick = async () => {
         btn.disabled = true;
         try {
-          const r = await api('/api/media/support/download', { method: 'POST', body: { model: sup[1] } });
+          const r = await api('/api/media/support/download', { method: 'POST', body: { model: sup[1], cap: n.type === 'video' ? 'video' : 'image' } });
           toast(t('Baixando {f} (≈ {g} GB)…', { f: r.files.join(', '), g: r.approx_gb }));
           events('/api/jobs/' + r.job_id + '/events', (ev) => {
             if (ev.type === 'progress' && ev.total) btn.lastChild.textContent = ' ' + Math.round(ev.done / ev.total * 100) + '%';
