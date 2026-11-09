@@ -34,6 +34,8 @@ from .workspace import Workspace
 AGENT_LABELS = {"planner": "Planejador", "reviewer": "Revisor", "reporter": "Relator", "tests": "Testes", "engine": "Motor"}
 FINAL = ("done", "partial", "failed", "cancelled")
 OUT_LIMIT = 2500
+MUTATING = {"write_file", "edit_file", "delete_path", "make_dir", "move", "copy", "run_command", "run_tests", "install_packages", "write_system_prompts"}
+UNCLEAR_RE = re.compile(r"clare[zs]|ambig|intenç|intent\b|unclear|not clear|esclarec|clarif|exat[ao]|specific|especific|nova seção ou|which one|qual dos", re.I)   # «falta de clareza», «ambíguo», «unclear»…
 MAX_AGENTS = 8
 
 
@@ -438,6 +440,7 @@ class Runner:
         denied = bad = 0
         pending_image: Optional[Path] = None
         selfchecked = False
+        nudged = acted = False   # nudged: já empurrei o trabalhador que desistiu por «falta de clareza»; acted: já fez alguma mudança que deu certo
         outcome: Optional[Dict[str, Any]] = None
         max_turns = self.prof["turns"]
         hist_n = self.prof["history"]
@@ -463,6 +466,12 @@ class Runner:
             if t.get("memo"):
                 memo = (memo + [t["memo"]])[-8:]
             if t["kind"] == "finish":
+                if not t["success"] and not nudged and not acted and turn < max_turns and UNCLEAR_RE.search(t["summary"]):
+                    nudged = True   # desistir de uma tarefa por «não ficou claro» sem ter tentado nada não é um bloqueio de verdade: decide com o que o projeto já mostra e segue
+                    history.append({"action": "finish (recusado)", "ok": False, "output": "Falta de clareza não é um bloqueio" + (" e ninguém vai responder perguntas" if self.doc["mode"] == "full" else "") +
+                                    ". Escolha a interpretação mais razoável do pedido (o que o projeto já faz é a melhor pista: leia os arquivos relacionados), anote a suposição em «memo» e FAÇA o trabalho. "
+                                    "Só termine com success=false se uma ferramenta, uma permissão ou um arquivo realmente impedir."})
+                    continue
                 if self.prof["self_check"] and not selfchecked and t["success"] and turn < max_turns:
                     selfchecked = True
                     history.append({"action": "finish (pedido)", "ok": True, "output": "Antes de encerrar: confira com uma ação (ler o resultado, rodar o teste) que «done_when» foi atendido. Se estiver tudo certo, finalize de novo."})
@@ -494,6 +503,8 @@ class Runner:
                 failures[key] = failures.get(key, 0) + 1
             if res.image is not None and self.vision:
                 pending_image = res.image
+            if res.ok and tool in MUTATING:
+                acted = True
             history.append({"action": tool, "args": _short_args(args), "ok": res.ok, "output": A.trim_obs(res.output, self.prof["obs_chars"])})
         if outcome is None:
             outcome = {"success": False, "summary": f"Atingi o limite de {max_turns} ações sem terminar a tarefa." if self.lang == "pt" else f"Reached the limit of {max_turns} actions without finishing the task.", "files": []}
@@ -663,7 +674,7 @@ class Runner:
         for st in self.tail:
             if status != "done":
                 st["status"] = "skipped"
-                st["summary"] = ("Não publiquei: os testes/a revisão acusaram problemas. Corrija e peça de novo." if self.lang == "pt" else "Not published: tests/review reported problems. Fix them and ask again.")
+                st["summary"] = self._not_published(checks, review)
                 self.run.setdefault("notes", []).append(st["summary"])
                 continue
             st["feedback"] = f"Publish setting: {fin.get('publish')}. Use publish_changes with " + {"pr": "pull_request=true, draft=true", "branch": "pull_request=false", "main": "main=true", "commit": "commit_local (local git commit only)"}.get(fin.get("publish"), "") + "."
@@ -675,6 +686,24 @@ class Runner:
             refused = any(x.get("tool") in ("publish_changes", "commit_local") and x["status"] == "denied" for x in steps)
             if not published and not refused:
                 self._direct_publish(fin, st)
+
+    def _not_published(self, checks: List[Dict[str, Any]], review: Optional[Dict[str, Any]]) -> str:
+        """Por que a publicação foi pulada, dito como foi (antes dizia sempre «os testes/a revisão acusaram problemas», mesmo quando uma tarefa tinha falhado ou nada tinha sido verificado)."""
+        pt = self.lang == "pt"
+        steps = [x for x in self.run.get("plan", {}).get("steps", []) if x["role"] != "publisher"]
+        why: List[str] = []
+        bad = [x for x in steps if x["status"] == "failed"]
+        if bad:
+            why.append((f"uma tarefa do plano não terminou («{bad[0]['title'][:70]}»" + (f" e mais {len(bad) - 1}" if len(bad) > 1 else "") + ")") if pt else
+                       (f"a plan task did not finish («{bad[0]['title'][:70]}»" + (f" and {len(bad) - 1} more" if len(bad) > 1 else "") + ")"))
+        failed = [c for c in checks if not c.get("ok") and not c.get("skipped")]
+        if failed:
+            why.append(("os testes falharam (" + ", ".join(str(c.get("label")) for c in failed[:2]) + ")") if pt else ("tests failed (" + ", ".join(str(c.get("label")) for c in failed[:2]) + ")"))
+        if review and review.get("verdict") != "pass":
+            why.append("a revisão apontou problemas" if pt else "the review reported problems")
+        if not why:
+            why.append("o resultado não foi concluído por completo" if pt else "the result was not fully completed")
+        return (("Não publiquei: " + "; ".join(why) + ". Corrija e peça de novo.") if pt else ("Not published: " + "; ".join(why) + ". Fix it and ask again."))
 
     def _direct_publish(self, fin: Dict[str, Any], st: Dict[str, Any]) -> None:
         mode = fin.get("publish", "branch")

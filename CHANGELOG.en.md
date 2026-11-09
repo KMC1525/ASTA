@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.17.23] — 2026-11-09
+
+### Fixed — Code mode: a run that failed in a chain on a portfolio task
+A «Add a section to the portfolio» session ended «Partial»: the Coder failed, the Reviewer fell back to the automatic method («the AI answered empty») and publishing and documentation were skipped with «tests/review reported problems» — although no test had run.
+- **Empty AI reply.** A model that «thinks» spends the token limit on reasoning and returns empty (or the server returns empty with JSON mode on). Before, ASTA sent back an empty assistant message with a fix request — which confuses the model and some providers reject — and gave up after 2 tries with the same limit. Now the same question is repeated with **double the room** and **without forcing JSON mode**, and the agent (Planner, Reviewer, Reporter) gets up to 3 rounds, each with more room, before falling back to the automatic method.
+- **Giving up for «lack of clarity».** The Coder finished with «failed for lack of clarity about the exact intent (new section or update of an existing one)» without having tried anything, and that took down everything that depended on it. The worker instruction now says ambiguous instructions are **never a blocker** (look at what the project has, pick the most reasonable reading, note the assumption in `memo` and do the work), and, if it still gives up for clarity before making any change, the engine hands the request back **once** for it to decide and work. Real blockers (tool refused, permission, missing file) still stand.
+- **The real reason for «Not published».** The message always said «tests/review reported problems». It now says what happened: «a plan task did not finish («…»)», «tests failed (…)», «the review reported problems».
+- Version 0.17.23 (the Rust core did not change).
+
 ## [0.17.22] — 2026-11-09
 
 ### Added — FLUX.3 Image Klein support (`black-forest-labs/flux-3-image-klein`)

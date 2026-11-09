@@ -467,6 +467,72 @@ class TeamTests(TeamCase):
 # --------------------------------------------------------------------------- Ask / Full Access
 
 
+    def test_a_worker_that_gives_up_for_unclear_instructions_is_pushed_to_decide_and_work(self):
+        seen = []
+
+        def worker(payload, system):
+            seen.append([h.get("action") for h in payload["history"]])
+            if not payload["history"]:
+                return fin("Não consegui: faltou clareza sobre a intenção exata (nova seção ou atualização existente).", ok=False)
+            if any(h.get("action") == "finish (recusado)" for h in payload["history"]) and not any(h.get("action") == "write_file" for h in payload["history"]):
+                return act("write_file", path="secao.md", content="# Vibe coder\n")
+            return fin("Criei a seção (supus uma seção nova).")
+
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Adicionar seção", files=["secao.md"])), worker=worker)
+        m = self.manager(llm, mode="full", effort="medium")
+        s = self.session(m)
+        m.send(s["id"], "adicione a seção vibe coder")
+        run = self.wait(m, s["id"])["run"]
+        self.assertEqual(run["plan"]["steps"][0]["status"], "done")
+        self.assertTrue((self.proj / "secao.md").is_file())                         # o trabalho foi feito em vez de desistir
+        self.assertIn("finish (recusado)", seen[1])                                  # e o motivo foi devolvido ao modelo
+        # um bloqueio de verdade (sem relação com clareza) continua valendo
+        llm2 = Scripted(planner=lambda p, s: plan(step("s1", "Publicar")), worker=lambda p, s: fin("A ferramenta recusou: sem permissão de escrita.", ok=False))
+        m2 = self.manager(llm2, mode="full", effort="medium")
+        s2 = self.session(m2)
+        m2.send(s2["id"], "x")
+        run2 = self.wait(m2, s2["id"])["run"]
+        self.assertEqual(run2["plan"]["steps"][0]["status"], "failed")
+
+
+class EmptyReplyTests(unittest.TestCase):
+    """Uma resposta VAZIA da IA (modelo que «pensa» e gasta o limite de tokens, ou servidor que devolve vazio no modo JSON) não derruba o revisor/planejador."""
+
+    class Prov:
+        vision = False
+
+        def __init__(self, replies):
+            self.replies, self.calls = list(replies), []
+
+        def chat(self, messages, system="", temperature=0, max_tokens=0, json_mode=False, stream=False):
+            self.calls.append({"max_tokens": max_tokens, "json_mode": json_mode, "n": len(messages), "roles": [m["role"] for m in messages]})
+            return self.replies.pop(0) if self.replies else ""
+
+    def test_empty_reply_is_retried_with_more_room_and_without_an_empty_assistant_turn(self):
+        from asta.agents.llm import call_json
+
+        prov = self.Prov(["", '{"verdict": "pass", "score": 9, "issues": [], "fix": ""}'])
+        obj, _ = call_json(prov, "sys", "Review. Output JSON: {}", {"goal": "x"}, max_tokens=1000)
+        self.assertEqual(obj["verdict"], "pass")
+        self.assertEqual((prov.calls[0]["max_tokens"], prov.calls[1]["max_tokens"]), (1000, 2000))   # o dobro de espaço
+        self.assertEqual((prov.calls[0]["json_mode"], prov.calls[1]["json_mode"]), (True, False))      # e sem forçar o modo JSON
+        self.assertEqual(prov.calls[1]["roles"], ["user"])                                             # nenhuma mensagem vazia da IA volta como se ela tivesse falado
+
+    def test_brain_gives_the_agent_more_rounds_when_the_ai_answers_empty_and_then_falls_back(self):
+        from asta.computer.agents import Brain
+
+        warns = []
+        prov = self.Prov(["", "", "", "", '{"ok": true}'])
+        obj = Brain(prov, lambda: False, warns.append).ask("reviewer", "sys", "Review. Output JSON: {}", {"a": 1}, max_tokens=800)
+        self.assertEqual(obj, {"ok": True})                                  # a 3ª rodada, com 4x o espaço, deu certo
+        self.assertEqual(prov.calls[-1]["max_tokens"], 3200)
+        self.assertEqual(warns, [])
+        warns2 = []
+        none = Brain(self.Prov([]), lambda: False, warns2.append).ask("reviewer", "sys", "Review. Output JSON: {}", {"a": 1}, max_tokens=800)
+        self.assertIsNone(none)                                              # nunca respondeu: o chamador usa o método automático
+        self.assertIn("vazio", warns2[0])
+
+
 class ModeTests(TeamCase):
     def writer(self, n=2):
         def w(payload, system):
@@ -726,6 +792,22 @@ class PublishTests(TeamCase):
         self.assertEqual(len(self.fake.prs), 1)        # continua 1: este não publicou
         self.assertEqual(run["plan"]["steps"][-1]["status"], "skipped")
         self.assertIn("Não publiquei", run["summary"])
+
+    def test_the_publish_skip_message_names_the_real_reason(self):
+        self.fake.files.update({"README.md": b"# x\n"})
+        self.fake.branches["main"] = self.fake._commit_for(self.fake.files, [])
+        llm = Scripted(planner=lambda p, s: plan(step("s1", "Escrever a seção do portfólio")),
+                       worker=lambda p, s: fin("A ferramenta recusou: sem permissão.", ok=False))
+        m = self.manager(llm, mode="full", effort="medium", **self.cfg_gh)
+        d = self.cloud_session(m, finalize={"docs": False, "publish": "pr"})
+        m.send(d["id"], "x")
+        run = self.wait(m, d["id"])["run"]
+        pub = [x for x in run["plan"]["steps"] if x["role"] == "publisher"]
+        msg = (pub[0]["summary"] if pub else "") or " ".join(run.get("notes", []))
+        self.assertIn("Não publiquei", msg)
+        self.assertIn("uma tarefa do plano não terminou", msg)          # antes dizia «os testes/a revisão acusaram problemas»
+        self.assertIn("Escrever a seção do portfólio", msg)
+        self.assertNotIn("acusaram problemas", msg)
 
     def test_engine_publishes_directly_when_the_worker_forgets(self):
         llm = Scripted(planner=lambda p, s: plan(step("s1", "mexer", files=["x.txt"])),

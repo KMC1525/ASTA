@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.23] — 2026-11-09
+
+### Corrigido — modo Code: execução que falhava em cadeia numa tarefa de portfólio
+Uma sessão «Adicionar seção ao portfólio» terminou «Parcial»: o Programador falhou, o Revisor caiu para o método automático («a IA respondeu vazio») e a publicação e a documentação foram puladas com a mensagem «os testes/a revisão acusaram problemas» — sem que nenhum teste tivesse rodado.
+- **Resposta vazia da IA.** Um modelo que «pensa» gasta o limite de tokens no raciocínio e devolve vazio (ou o servidor devolve vazio com o modo JSON ligado). Antes, o ASTA mandava de volta uma mensagem vazia da IA com um pedido de correção — o que confunde o modelo e alguns provedores recusam — e desistia depois de 2 tentativas com o mesmo limite. Agora a mesma pergunta é repetida com o **dobro de espaço** e **sem forçar o modo JSON**, e o agente (Planejador, Revisor, Relator) ganha até 3 rodadas, cada uma com mais espaço, antes de cair para o método automático.
+- **Desistir por «falta de clareza».** O Programador terminou com «falhou por falta de clareza sobre a intenção exata (nova seção ou atualização existente)» sem ter tentado nada, e isso derrubou tudo o que dependia dele. Agora a instrução do trabalhador diz que instrução ambígua **nunca é um bloqueio** (olhe o que o projeto já tem, escolha a leitura mais razoável, anote a suposição em `memo` e faça o trabalho), e, se mesmo assim ele desistir por clareza antes de fazer qualquer mudança, o motor devolve o pedido **uma vez** para ele decidir e trabalhar. Bloqueios de verdade (ferramenta recusou, permissão, arquivo ausente) continuam valendo.
+- **Motivo real de «Não publiquei».** A mensagem dizia sempre «os testes/a revisão acusaram problemas». Agora diz o que aconteceu: «uma tarefa do plano não terminou («…»)», «os testes falharam (…)», «a revisão apontou problemas».
+- Versão 0.17.23 (o núcleo Rust não mudou).
+
 ## [0.17.22] — 2026-11-09
 
 ### Adicionado — suporte ao FLUX.3 Image Klein (`black-forest-labs/flux-3-image-klein`)
