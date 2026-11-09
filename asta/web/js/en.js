@@ -1851,6 +1851,7 @@ export default {
   "Direto na branch principal": "Straight to the main branch",
   "Pendente": "Pending",
   "Feita": "Done",
+  "Incompleta (limite de ações)": "Incomplete (action limit)",
   "Pulada": "Skipped",
   "Entende o pedido e monta o plano": "Understands the request and writes the plan",
   "Testes": "Tests",

@@ -200,13 +200,16 @@ def deterministic_report(goal: str, status: str, steps: List[dict], files: List[
     head = {"done": ("Pronto.", "Done."), "partial": ("Fiz uma parte do pedido.", "I did part of the request."), "failed": ("Não consegui concluir o pedido.", "I could not finish the request."),
             "cancelled": ("A sessão foi cancelada.", "The session was cancelled.")}.get(status, ("Terminei.", "Finished."))[0 if pt else 1]
     lines = [head]
-    ok = [s for s in steps if s.get("status") == "done"]
+    ok = [s for s in steps if s.get("status") == "done" and not s.get("incomplete")]
+    inc = [s for s in steps if s.get("status") == "done" and s.get("incomplete")]
     bad = [s for s in steps if s.get("status") == "failed"]
     if steps:
         lines.append((f"{len(ok)} de {len(steps)} tarefa(s) do plano concluída(s)." if pt else f"{len(ok)} of {len(steps)} plan task(s) completed."))
     for s in ok[:6]:
         if s.get("summary"):
             lines.append(f"- {s['title']}: {str(s['summary'])[:240]}")
+    for s in inc[:3]:
+        lines.append((f"- Incompleta: {s['title']} — {str(s.get('summary', ''))[:200]}" if pt else f"- Incomplete: {s['title']} — {str(s.get('summary', ''))[:200]}"))
     for s in bad[:3]:
         lines.append((f"- Não terminou: {s['title']} — {str(s.get('summary', ''))[:200]}" if pt else f"- Not finished: {s['title']} — {str(s.get('summary', ''))[:200]}"))
     if files:

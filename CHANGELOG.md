@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.25] — 2026-11-09
+
+### Corrigido — Code: bater no limite de ações jogava fora o trabalho já feito e pulava o resto
+Numa sessão «Criar a seção “vibe coder” no portfólio» (esforço Medium: 24 ações por agente), o Programador editou `index.html` e `style.css` e bateu no limite; a tarefa virou **«Falhou»** e tudo o que dependia dela — testes, limpeza de branches, publicação e documentação — foi **pulado**, como se nada tivesse sido feito.
+- **Prorrogação única:** se o trabalhador chega ao limite mas está avançando (já mudou arquivos e as últimas ações deram certo), ganha **mais ações** (um terço do limite, no mínimo 6) para terminar o que falta, uma vez só.
+- **Última ação avisada em todos os níveis:** a mensagem «última ação: finalize agora» antes só existia nos níveis com autoconferência.
+- **«Incompleta» em vez de «Falhou»:** se mesmo assim o limite acaba com trabalho feito, a tarefa fica **incompleta** (não falhada): o resumo diz o que já está nos arquivos, os passos seguintes (testes, revisão) rodam **sobre o que existe**, a execução termina «Parcial» (nunca «Concluída»), o relatório lista «Incompleta: …», a tela do plano mostra «Incompleta (limite de ações)» com um aviso, e a mensagem «Não publiquei» a cita. Sem nenhuma mudança feita, continua «Falhou».
+- **Rodada de correção:** com uma tarefa incompleta e rodadas de correção no nível de esforço (High ou acima), o corretor recebe a lista «Unfinished tasks» para terminar exatamente o que falta.
+- Versão 0.17.25 (o núcleo Rust não mudou).
+
 ## [0.17.24] — 2026-11-09
 
 ### Adicionado — Code: opção «ASTA como co-autor do projeto» (e a identidade do git deixa de ser sobrescrita)

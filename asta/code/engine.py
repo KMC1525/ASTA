@@ -444,10 +444,21 @@ class Runner:
         outcome: Optional[Dict[str, Any]] = None
         max_turns = self.prof["turns"]
         hist_n = self.prof["history"]
-        for turn in range(1, max_turns + 1):
+        turn, extended = 0, False
+        while True:
+            if turn >= max_turns:
+                if acted and not extended and any(h.get("ok") for h in history[-3:]):
+                    # o limite chegou, mas o trabalhador está avançando (mudou arquivos e as últimas ações deram certo): uma única prorrogação, em vez de jogar fora o trabalho feito
+                    extended = True
+                    extra = max(6, max_turns // 3)
+                    max_turns += extra
+                    history.append({"action": "(limite de ações)", "ok": True, "output": f"Você ganhou mais {extra} ações porque está progredindo. Termine só o que falta e finalize."})
+                else:
+                    break
+            turn += 1
             if self.cancelled():
                 raise A.Cancelled()
-            payload = self._worker_payload(st, history[-hist_n:], memo, turn, max_turns, selfchecked is False and self.prof["self_check"] and turn == max_turns)
+            payload = self._worker_payload(st, history[-hist_n:], memo, turn, max_turns, turn == max_turns)
             images = None
             if pending_image is not None:
                 images, pending_image = self._img(pending_image), None
@@ -506,14 +517,22 @@ class Runner:
             if res.ok and tool in MUTATING:
                 acted = True
             history.append({"action": tool, "args": _short_args(args), "ok": res.ok, "output": A.trim_obs(res.output, self.prof["obs_chars"])})
+        incomplete = False
         if outcome is None:
-            outcome = {"success": False, "summary": f"Atingi o limite de {max_turns} ações sem terminar a tarefa." if self.lang == "pt" else f"Reached the limit of {max_turns} actions without finishing the task.", "files": []}
+            mine = [x["path"] for x in self.ws.changed_files()][:12] if acted else []
+            if acted:   # o limite acabou, mas há trabalho feito: a tarefa fica «incompleta» (as seguintes — testes, revisão — rodam sobre o que existe) em vez de «falhou» e derrubar tudo o que dependia dela
+                incomplete = True
+                outcome = {"success": True, "summary": (f"Atingi o limite de {max_turns} ações antes de terminar: o que já foi feito está nos arquivos ({', '.join(mine) or 'veja as mudanças'}), mas a tarefa pode estar incompleta."
+                                                        if self.lang == "pt" else f"Reached the limit of {max_turns} actions before finishing: what was done is in the files ({', '.join(mine) or 'see the changes'}), but the task may be incomplete."), "files": mine}
+            else:
+                outcome = {"success": False, "summary": f"Atingi o limite de {max_turns} ações sem terminar a tarefa." if self.lang == "pt" else f"Reached the limit of {max_turns} actions without finishing the task.", "files": []}
         with self.lock:
+            st["incomplete"] = incomplete
             st["status"] = "done" if outcome["success"] else "failed"
             st["summary"] = outcome["summary"]
             st["result_files"] = outcome["files"]
             self.board[st["id"]] = {"title": st["title"], "summary": outcome["summary"][:500], "files": outcome["files"][:10], "ok": outcome["success"]}
-        self._agent(aid, "done" if outcome["success"] else "warn", outcome["summary"][:200], role=role, step=st["id"])
+        self._agent(aid, "done" if outcome["success"] and not incomplete else "warn", outcome["summary"][:200], role=role, step=st["id"])
         self._agent(aid, "idle", "", role=role, step="")
 
     def _tune_other(self, provider: Any, info: Dict[str, Any]) -> None:
@@ -640,7 +659,8 @@ class Runner:
             checks = self._run_checks()
             review = self._review(checks)
             failed = [c for c in checks if not c["ok"] and not c.get("skipped")]
-            needs_fix = bool(failed) or bool(review and review["verdict"] != "pass" and review["fix"])
+            unfinished = [x for x in self.run["plan"]["steps"] if x.get("incomplete") and not x.get("resumed")]   # tarefas que bateram no limite de ações
+            needs_fix = bool(failed) or bool(unfinished) or bool(review and review["verdict"] != "pass" and review["fix"])
             if not needs_fix or r == rounds:
                 break
             with self.lock:
@@ -648,6 +668,10 @@ class Runner:
                 plan = self.run["plan"]["steps"]
                 notes = ("; ".join(review["issues"][:6]) if review else "") + (" | " + review["fix"] if review and review["fix"] else "")
                 fb = ("Failing checks:\n" + "\n".join(f"{c['label']}:\n{str(c.get('output', ''))[-1800:]}" for c in failed) + "\n") if failed else ""
+                if unfinished:
+                    fb += "Unfinished tasks (they ran out of actions): " + "; ".join(f"{x['title']}" for x in unfinished) + ". Finish exactly what is missing.\n"
+                    for x in unfinished:
+                        x["resumed"] = True
                 st = {"id": f"s{len(plan) + 1}", "title": "Corrigir o que os testes/a revisão apontaram" if self.lang == "pt" else "Fix what the tests/review reported", "role": "debugger", "files": [], "depends_on": [],
                       "done_when": "the failing checks pass and the review issues are resolved", "feedback": (fb + "Review: " + notes)[:4000], "status": "pending"}
                 plan.append(st)
@@ -662,7 +686,7 @@ class Runner:
         done = [s for s in steps if s["status"] == "done"]
         if not done:
             return "failed"
-        if any(s["status"] == "failed" for s in steps) or any(not c["ok"] for c in checks) or (review and review["verdict"] == "fail"):
+        if any(s["status"] == "failed" or s.get("incomplete") for s in steps) or any(not c["ok"] for c in checks) or (review and review["verdict"] == "fail"):
             return "partial"
         if review and review["verdict"] == "partial":
             return "partial"
@@ -696,6 +720,9 @@ class Runner:
         if bad:
             why.append((f"uma tarefa do plano não terminou («{bad[0]['title'][:70]}»" + (f" e mais {len(bad) - 1}" if len(bad) > 1 else "") + ")") if pt else
                        (f"a plan task did not finish («{bad[0]['title'][:70]}»" + (f" and {len(bad) - 1} more" if len(bad) > 1 else "") + ")"))
+        todo = [x for x in steps if x.get("incomplete")]
+        if todo:
+            why.append((f"uma tarefa do plano ficou incompleta («{todo[0]['title'][:70]}»)") if pt else (f"a plan task is incomplete («{todo[0]['title'][:70]}»)"))
         failed = [c for c in checks if not c.get("ok") and not c.get("skipped")]
         if failed:
             why.append(("os testes falharam (" + ", ".join(str(c.get("label")) for c in failed[:2]) + ")") if pt else ("tests failed (" + ", ".join(str(c.get("label")) for c in failed[:2]) + ")"))
