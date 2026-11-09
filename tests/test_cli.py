@@ -3,6 +3,7 @@ import contextlib
 import io
 import os
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
@@ -17,7 +18,7 @@ REQUIRES = [
 ]
 
 
-def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0"):
+def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0", marker=None):
     """Executa `asta ...` simulando o pip. `results`: {palavra do requisito: código de saída}. `installed`: {nome da biblioteca: versão} já instalada.
     `remote`: versão do ASTA publicada (None = não deu para consultar). Devolve (código, comandos, saída)."""
     calls, results = [], results or {}
@@ -29,7 +30,8 @@ def run_cli(argv, env=None, results=None, installed=None, remote="99.0.0"):
 
     out = io.StringIO()
     have = installed or {}
-    with mock.patch("importlib.metadata.requires", return_value=REQUIRES), mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
+    marker = marker or Path(tempfile.mkdtemp()) / "sd_needs_newer"   # nunca o ~/.asta de verdade
+    with mock.patch.object(cli, "_sd_marker", return_value=marker), mock.patch("importlib.metadata.requires", return_value=REQUIRES), mock.patch.object(cli.subprocess, "run", side_effect=fake_run), \
             mock.patch.object(cli, "_installed_version", side_effect=lambda r: have.get(cli._req_name(r))), mock.patch.object(cli, "_remote_version", return_value=remote), \
             mock.patch.dict(os.environ, env or {}, clear=False), contextlib.redirect_stdout(out), contextlib.redirect_stderr(out):
         if not env or "ASTA_EXTRAS" not in env:
@@ -43,6 +45,48 @@ def pip_installs(calls):
 
 
 class LibsTests(unittest.TestCase):
+    def test_newest_stable_diffusion_is_built_from_github_only_when_the_canvas_asked_for_it(self):
+        marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"
+        code, calls, _ = run_cli(["libs"], marker=marker)   # sem o aviso do Canvas: só o PyPI, como antes
+        self.assertEqual(code, 0)
+        self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))
+        marker.write_text("qwen-image-2.1-Q4_K_M.gguf")      # o Canvas avisou: «get sd version from file failed»
+        with mock.patch.object(cli.shutil, "which", return_value="/usr/bin/x"):
+            code, calls, out = run_cli(["libs"], marker=marker)
+        self.assertEqual(code, 0)
+        git = [c for c in pip_installs(calls) if cli.SD_GIT in c]
+        self.assertEqual(len(git), 1)
+        self.assertIn("--force-reinstall", git[0])
+        self.assertFalse(marker.exists())                    # feito: não recompila a cada atualização
+
+    def test_failed_build_keeps_the_marker_and_reports_the_failure(self):
+        marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"
+        marker.write_text("x")
+        with mock.patch.object(cli.shutil, "which", return_value="/usr/bin/x"):
+            code, calls, out = run_cli(["libs"], results={"git+https": 1}, marker=marker)
+        self.assertEqual(code, 1)
+        self.assertTrue(marker.exists())
+        self.assertIn("asta libs --sd-latest", out)
+
+    def test_missing_build_tools_are_named_instead_of_failing_in_pip(self):
+        marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"
+        marker.write_text("x")
+        with mock.patch.object(cli.shutil, "which", return_value=None), mock.patch.object(cli.os, "name", "posix"):
+            code, calls, out = run_cli(["libs", "--extras", "local"], marker=marker)
+        self.assertEqual(code, 1)
+        self.assertIn("cmake", out)
+        self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))
+
+    def test_never_mode_and_the_flag(self):
+        marker = Path(tempfile.mkdtemp()) / "sd_needs_newer"
+        marker.write_text("x")
+        code, calls, _ = run_cli(["libs"], env={"ASTA_SD_LATEST": "never"}, marker=marker)
+        self.assertFalse(any(cli.SD_GIT in c for call in calls for c in call))
+        with mock.patch.object(cli.shutil, "which", return_value="/usr/bin/x"):
+            code, calls, _ = run_cli(["libs", "--sd-latest", "--extras", "none"], marker=Path(tempfile.mkdtemp()) / "nada")
+        self.assertTrue(any(cli.SD_GIT in c for call in calls for c in call))   # a flag força, mesmo sem aviso e sem outras bibliotecas
+
+
     def test_requirements_come_from_the_installed_metadata_per_extra(self):
         with mock.patch("importlib.metadata.requires", return_value=REQUIRES):
             self.assertEqual(cli._lib_requirements("media"), ["torch", "diffusers>=0.30"])

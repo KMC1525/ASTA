@@ -1372,6 +1372,10 @@ class _SDLoadError(ProviderError):
     """O modelo não carregou na stable-diffusion.cpp (a biblioteca não avisa: devolve um contexto nulo e o erro só aparece depois como «NULL pointer access»)."""
 
 
+class _SDUnsupportedModel(_SDLoadError):
+    """A stable-diffusion.cpp embutida na biblioteca instalada não reconhece o formato do modelo («get sd version from file failed»): tentar de novo não adianta."""
+
+
 class GGUFMedia(MediaProvider):
     """Modelos GGUF de imagem e vídeo (FLUX, Stable Diffusion, Wan…) rodando dentro do ASTA pela stable-diffusion.cpp (`pip install "asta[local]"`).
 
@@ -1413,6 +1417,15 @@ class GGUFMedia(MediaProvider):
             sd = sdc.StableDiffusion(**kw)
             ctx = getattr(getattr(sd, "_model", None), "model", 1)   # a biblioteca confere `is None`, mas a carga que falha devolve um ponteiro NULO (que não é None): ela segue com um contexto vazio
             if not ctx:
+                if any("get sd version" in t for _, t in list(_SD_LOG)):   # a versão do modelo não foi reconhecida: a stable-diffusion.cpp desta biblioteca é antiga demais para ele
+                    try:   # avisa o `asta libs` (instalação e atualização), que então compila a biblioteca mais nova do GitHub
+                        from ..util import asta_home
+
+                        (asta_home() / "sd_needs_newer").write_text(path.name, encoding="utf-8")
+                    except OSError:
+                        pass
+                    raise _SDUnsupportedModel(f"A stable-diffusion.cpp que vem na biblioteca instalada não reconhece o formato do modelo {path.name} («get sd version from file failed»): ela é mais antiga que o modelo. "
+                                              "Rode «asta update» (ou «asta libs --sd-latest»): o ASTA compila a versão mais nova da biblioteca a partir do GitHub (precisa de git, cmake e um compilador C++; a do PyPI já é a 0.4.7). Abra o ASTA de novo depois; se continuar, o modelo é mais novo que qualquer versão publicada — use outro modelo ou outra quantização." + _sd_env(sdc))
                 why = _sd_reason()
                 files = ", ".join(Path(v).name for k, v in kw.items() if k.endswith("_path") and isinstance(v, str))
                 raise _SDLoadError(f"O modelo {path.name} não carregou na stable-diffusion.cpp. "
@@ -1447,6 +1460,8 @@ class GGUFMedia(MediaProvider):
             load = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
         try:
             sd = self._engine("image", path, load)
+        except _SDUnsupportedModel:
+            raise
         except _SDLoadError:
             lite = {k: v for k, v in load.items() if k not in _SD_LITE_KEYS}
             if len(lite) == len(load):

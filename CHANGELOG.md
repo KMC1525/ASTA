@@ -5,12 +5,22 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.17.14] — 2026-11-09
+
+### Adicionado/Corrigido — a biblioteca de imagem mais nova entra na instalação e na atualização
+- **A v0.17.13 foi mergeada sem o segundo commit**: a proteção contra a «Falha de segmentação» (nunca gerar com um modelo que não carregou) e a explicação do `get sd version from file failed` não chegaram à `main`. Estão de volta nesta versão.
+- A stable-diffusion-cpp-python do PyPI já é a mais nova publicada (0.4.7), então `pip install -U` não resolve um modelo que ela não reconhece. Agora, quando o Canvas descobre isso, ele deixa um aviso e o `asta libs` — que roda na **instalação** e na **atualização** (`asta update`) — compila a versão mais nova **do GitHub** (precisa de git, cmake e um compilador C++; leva alguns minutos; se faltar algo, o ASTA diz o quê). Depois de instalar, o aviso some e não recompila a cada atualização.
+- `asta libs --sd-latest` força isso a qualquer momento; `ASTA_SD_LATEST=never|auto|always` controla o comportamento (padrão: `auto`).
+- Versão 0.17.14 (o núcleo Rust não mudou).
+
 ## [0.17.13] — 2026-11-09
 
 ### Corrigido — «NULL pointer access»: o modelo na verdade não carregava (e o motivo era apagado)
 - Causa real, achada no código da stable-diffusion-cpp-python 0.4.7: quando o modelo **não carrega**, a biblioteca não dá erro (ela confere `is None`, mas a carga que falha devolve um ponteiro nulo, que não é `None`) e segue com um contexto vazio; a geração só falha depois, com «NULL pointer access». O motivo verdadeiro (memória, formato…) é registrado na hora da **carga** — e o ASTA apagava esse log antes de gerar. Por isso a mensagem sempre dizia «nenhum motivo».
 - Agora o ASTA confere se o modelo carregou, guarda o log da carga e mostra o motivo (com dica de memória quando for o caso) e os arquivos carregados. Um modelo que não carregou nunca fica em cache.
 - Se a carga falha com `diffusion_flash_attn`/`offload_params_to_cpu`, tenta de novo sem eles antes de mostrar o erro.
+- **A segunda tentativa da v0.17.12 podia derrubar o programa** («Falha de segmentação» ao gerar): ela chamava a geração com um modelo que não tinha carregado, e a stable-diffusion.cpp acessa o ponteiro nulo. Agora a geração nunca é chamada sem um modelo carregado.
+- Se o log traz `get sd version from file failed`, a stable-diffusion.cpp da biblioteca instalada é mais antiga que o modelo e não o reconhece: o erro diz para atualizar a biblioteca (`pip install -U stable-diffusion-cpp-python`) e não tenta de novo.
 - Versão 0.17.13 (o núcleo Rust não mudou).
 
 ## [0.17.12] — 2026-11-08
