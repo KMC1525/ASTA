@@ -5,7 +5,7 @@
   • `digest`         — números exatos calculados pelo programa + Redator: resumo do dia/semana de uma pessoa, de um setor ou da organização.
   • `suggest`        — Roteador: quem deve receber um pedido, pelo cargo, função e carga de trabalho, junto do caminho no fluxograma.
 
-A IA escreve **dados** (JSON validado), nunca código. Quantos agentes (1·4·8·12·16) e o esforço (Low…Omni) vêm de `asta/team.py`, como em todas as seções.
+A IA escreve **dados** (JSON validado), nunca código. Quantos agentes (1·4·8·12·16·20·24·28·32) e o esforço (Low…Omni) vêm de `asta/team.py`, como em todas as seções.
 """
 from __future__ import annotations
 

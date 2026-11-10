@@ -117,7 +117,7 @@ class Runner:
     ) -> Tuple[Dict[str, Any], bool]:
         """Executa um agente. JSON inválido → fallback determinístico. Erro de rede/credencial → falha o job.
 
-        Com a equipe em 4/8/12/16 agentes (`self.team`), a etapa vira uma mesa em paralelo + um Sintetizador (`team.ensemble_json`); rodadas de correção (`feedback`) e etapas `solo` rodam com um só.
+        Com a equipe em 4 a 32 agentes (`self.team`), a etapa vira uma mesa em paralelo + um Sintetizador (`team.ensemble_json`); rodadas de correção (`feedback`) e etapas `solo` rodam com um só.
         De Max para cima, as etapas de plano ainda passam por uma rodada de crítica."""
         self._check()
         self._step(step, "running", revision=feedback)

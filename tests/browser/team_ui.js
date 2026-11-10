@@ -5,7 +5,7 @@ run('team', async ({ open, api, check, base }) => {
   await api('/api/settings', { method: 'PUT', body: { language: 'pt-BR', generation: { agents: 1, effort: 'high' }, avatars: { agents: 1, effort: 'high' }, games: { agents: 1, effort: 'high' }, chat: { team_agents: 1, effort: 'low' } } });
   const page = await open({ width: 1400, height: 950 });
   const opts = (sel) => page.locator(`${sel} option`).evaluateAll((os) => os.map((o) => o.value));
-  const EFFORTS = 'low,medium,high,extra,mega,max,ultra,omni', AGENTS = '1,4,8,12,16';
+  const EFFORTS = 'low,medium,high,extra,mega,max,ultra,omni', AGENTS = '1,4,8,12,16,20,24,28,32';
 
   // ---- Chat: seletor ao lado do modelo, valores salvos em Configuração → Chat
   await page.waitForSelector('#chat-team-effort', { timeout: 20000 });
@@ -47,6 +47,9 @@ run('team', async ({ open, api, check, base }) => {
   await tab('engine'); await openAcc('Mundos 3D|3D worlds');
   await page.locator('#gen-cfg-effort').selectOption('omni'); await page.locator('#gen-cfg-agents').selectOption('12');
   check('config:dica-do-custo', /13 chamadas/.test(await page.locator('#gen-fields').innerText()));
+  await page.locator('#gen-cfg-agents').selectOption('32');
+  check('config:equipe-grande-32-agentes-com-revisao-entre-pares', /41 chamadas/.test(await page.locator('#gen-fields').innerText()) && /8 deles/.test(await page.locator('#gen-fields').innerText()));
+  await page.locator('#gen-cfg-agents').selectOption('12');
   await page.locator('.acc.open button.btn.primary', { hasText: 'Salvar' }).last().click(); await page.waitForTimeout(900);
   const gen = (await api('/api/settings')).generation;
   check('config:mundos-salvo', gen.effort === 'omni' && gen.agents === 12);

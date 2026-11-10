@@ -58,7 +58,7 @@ run('code', async ({ api, open, check, base }) => {
     await page.locator('#cd-new').click(); await page.waitForSelector('#cd-path');
     check('code:tres-origens-de-projeto', (await page.locator('.modal .seg button').count()) >= 3);
     check('code:oito-niveis-de-esforco', (await page.locator('#cd-effort option').allInnerTexts()).join(',') === 'Low,Medium,High,Extra,Mega,Max,Ultra,Omni');
-    check('code:agentes-1-4-8-12-16', (await page.locator('#cd-agents option').evaluateAll((os) => os.map((o) => o.value))).join(',') === '1,4,8,12,16');
+    check('code:agentes-1-ate-32', (await page.locator('#cd-agents option').evaluateAll((os) => os.map((o) => o.value))).join(',') === '1,4,8,12,16,20,24,28,32');
     check('code:criar-pasta-vazia-marcado-por-padrao', (await page.locator('#cd-create').isChecked()));
     check('code:finalizar-opcoes', (await page.locator('#cd-publish option').count()) === 5);
     await page.locator('#cd-path').fill(proj);

@@ -444,7 +444,7 @@ class AssistantChat:
                 return
             if plan:
                 system += "\n[ANSWER PLAN — made by the team's Planner. Cover every item, in this order, and expand each with real substance; do not mention the plan itself.]\n" + plan + "\n[END OF PLAN]\n"
-        if team.multi and not info.get("demo"):   # equipe de 4/8/12/16 agentes: cada um escreve notas privadas (em paralelo) para o Redator
+        if team.multi and not info.get("demo"):   # equipe de 4 a 32 agentes: cada um escreve notas privadas (em paralelo) para o Redator
             ask = messages[-6:]
             while ask and ask[0]["role"] != "user":
                 ask = ask[1:]

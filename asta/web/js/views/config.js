@@ -9,9 +9,9 @@ import { RISK } from '../computer_ui.js';
 import { EFFORT_LABEL, PUBLISH, RISK as CODE_RISK } from '../code_ui.js';
 import { AGENT_COUNTS, teamFields } from '../team_ui.js';
 
-// o cartão «Equipe de agentes» de uma seção: esforço (Low … Omni) e 1/4/8/12/16 agentes em paralelo (asta/team.py)
+// o cartão «Equipe de agentes» de uma seção: esforço (Low … Omni) e 1/4/8/12/16/20/24/28/32 agentes em paralelo (asta/team.py)
 const teamCard = (cfg, id, note, o = {}) => h('div', { class: 'card', id: id + '-card', style: { marginBottom: '16px' } }, h('h3', null, o.title || t('Equipe de agentes')),
-  h('p', { class: 'muted small', style: { marginTop: 0 } }, note || t('Os mesmos 8 níveis de esforço do Code (Low a Omni) e até 16 agentes trabalhando em paralelo em cada etapa, com um Sintetizador que junta o melhor de todos. Mais agentes e mais esforço = respostas melhores, mas mais tempo e mais chamadas à IA.')),
+  h('p', { class: 'muted small', style: { marginTop: 0 } }, note || t('Os mesmos 8 níveis de esforço do Code (Low a Omni) e até 32 agentes trabalhando em paralelo em cada etapa, com um Sintetizador que junta o melhor de todos (a partir de 20, os agentes também revisam os rascunhos uns dos outros). Mais agentes e mais esforço = respostas melhores, mas mais tempo e mais chamadas à IA.')),
   teamFields(cfg, Object.assign({ id }, o)));
 
 export default async function render(root, ctx) {
@@ -667,7 +667,7 @@ async function codeTab() {
         field(t('Modo padrão'), seg([['ask', 'Ask'], ['full', 'Full Access']], cd.mode, (v) => { cd.mode = v; }), t('Ask: antes de cada ação que muda algo, aparece Sim ou Não. Full Access: executa tudo sem perguntar (os limites de segurança continuam valendo). Dá para escolher em cada sessão.')),
         field(t('Esforço padrão'), select((stt.efforts || []).map((e) => [e.id, EFFORT_LABEL[e.id]]), cd.effort, (v) => { cd.effort = v; }), t('Os 8 níveis (Low a Omni) valem para modelos de nuvem e locais: mais passos, mais rodadas de correção, testes e revisão.'))),
       h('div', { class: 'grid2' },
-        field(t('Agentes por sessão'), select([...new Set([...AGENT_COUNTS, cd.agents])].sort((a, b) => a - b).map((n) => [n, t('{n} agente(s)', { n })]), cd.agents, (v) => { cd.agents = parseInt(v, 10); }, { id: 'cd-agents-cfg' }), t('Até 16 agentes (1, 4, 8, 12 ou 16) trabalhando ao mesmo tempo numa sessão.')),
+        field(t('Agentes por sessão'), select([...new Set([...AGENT_COUNTS, cd.agents])].sort((a, b) => a - b).map((n) => [n, t('{n} agente(s)', { n })]), cd.agents, (v) => { cd.agents = parseInt(v, 10); }, { id: 'cd-agents-cfg' }), t('Até 32 agentes (1, 4, 8, 12, 16, 20, 24, 28 ou 32) trabalhando ao mesmo tempo numa sessão.')),
         field(t('Sessões em segundo plano ao mesmo tempo'), range(1, 8, 1, cd.max_sessions, (v) => { cd.max_sessions = v; }), t('As que passam disso esperam na fila. Com modelos locais, o modelo atende uma geração por vez.')))),
     cfgCard(t('Quando perguntar (modo Ask)'),
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Só ler, listar, buscar e pesquisar nunca pergunta. Marque o que deve pedir um Sim ou Não:')),

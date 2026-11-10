@@ -5,6 +5,15 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.7] — 2026-11-10
+
+### Adicionado — todos os modos: equipes de 20, 24, 28 e 32 agentes que se ajudam entre si
+- **Quatro novos tamanhos de equipe em todos os modos.** O seletor de agentes (ao lado de *Executar* e em *Configuração → aba da seção → Equipe de agentes*) agora oferece **1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32** no **Game Engine, Mundos 3D, Avatars, Jogos 2D, Studio, Rebuild, Canvas, Computer Use, Code, Work e Chat**. Qualquer valor fora da lista (ajuste editado à mão, API) vai para o mais próximo; no **Code**, até **32 trabalhadores em paralelo** (o plano continua ganhando pelo menos uma tarefa por agente).
+- **Eles se ajudam.** A partir de 20 agentes a mesa ganha o passo de **revisão entre pares**: depois dos rascunhos, **N/4 agentes (de 5 a 8)** leem, cada um, **todos** os rascunhos dos colegas, pegam o melhor de cada um e entregam uma versão melhorada; o Sintetizador junta essas versões — assim a síntese final nunca precisa ler 32 rascunhos de uma vez. Se todos os revisores falham, o Sintetizador lê os rascunhos como antes; se só um acerta, o resultado dele é o final; se a síntese falha, vale a primeira versão revisada; e o método automático continua garantindo uma saída.
+- **Todos ao mesmo tempo.** Uma mesa agora roda até **32 chamadas em paralelo** (eram 8). 16 **lentes** novas e distintas (precisão, surpresa, acessibilidade, desempenho, narrativa, contraste, convenção, risco mínimo, longevidade, primeira impressão, retorno ao usuário, conferência de consistência, público, economia, profundidade, acabamento) dão a cada um dos 32 agentes o seu ângulo.
+- **Custo honesto** na dica do seletor: N rascunhos + N/4 revisões + 1 síntese (32 agentes ≈ **41 chamadas por etapa**; `calls_per_step` e `peers` em `GET /api/team`). Provedores na nuvem podem limitar tantas chamadas simultâneas (o ASTA tenta de novo); modelos locais continuam atendendo uma por vez.
+- Versão 0.19.7; testes das contagens e do arredondamento, das 32 lentes distintas, do fluxo da revisão entre pares e dos seus fallbacks (todos os revisores falhando, só um acertando, síntese falhando, cancelamento), de uma execução do Game Engine com 24 agentes e dos seletores no navegador.
+
 ## [0.19.6] — 2026-11-10
 
 ### Corrigido — Timeline do Studio: tudo ao alcance em qualquer tamanho de janela
