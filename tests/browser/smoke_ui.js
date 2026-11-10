@@ -14,11 +14,11 @@ run('smoke', async ({ open, check }) => {
       await page.locator('.tabs button').nth(i).click(); await page.waitForTimeout(350);
       check(`${label}:config-aba-${i}`, (await page.locator('.errbox').count()) === 0);
     }
-    check(`${label}:abas-de-config`, tabs === 19);
+    check(`${label}:abas-de-config`, tabs === 20);
     await page.close();
   }
   const nav = await open();
-  check('nav:sem-personagens-e-worldbuilding-soltos', (await nav.locator('#side nav a').count()) === 11);
+  check('nav:sem-personagens-e-worldbuilding-soltos', (await nav.locator('#side nav a').count()) === 12);
   for (const [legacy, tab] of [['characters', 1], ['worldbuilding', 2]]) {
     await nav.evaluate((h) => { location.hash = '#/' + h; }, legacy); await nav.waitForTimeout(600);
     check(`legado:#/${legacy}-abre-a-aba-dentro-de-Mundos`, nav.url().endsWith('#/worlds/' + legacy) && (await nav.locator('.wtabs .tabs button.on').count()) === 1 && (await nav.locator('.wtabs .tabs button').nth(tab).getAttribute('class')) === 'on');

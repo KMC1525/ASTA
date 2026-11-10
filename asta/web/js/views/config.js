@@ -20,7 +20,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -28,8 +28,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -502,7 +502,7 @@ async function appearance() {
 async function sections() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
   return h('div', null,
@@ -510,7 +510,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
       h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
     cfgCard(t('Tela inicial'),
-      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
     cfgCard(t('Teclado'),
       checkbox(t('Atalhos de teclado (Alt+1…9 e 0, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
       field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
@@ -521,7 +521,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
       h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('generation', 'Mundos 3D', 'perspectiva, conteúdo, realismo, NPCs'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
         jump('games', 'Jogos 2D', 'tamanho, revisão, criatividade'), jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
-        jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('code', 'Code', 'modo, esforço, agentes, GitHub, git e editor'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
+        jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('code', 'Code', 'modo, esforço, agentes, GitHub, git e editor'), jump('work', 'Work', 'equipe de agentes, limites de arquivos, sessão e backups'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
 }
 
 // ---------------------------------------------------------------------------------- canvas
@@ -728,6 +728,29 @@ async function codeTab() {
   return body;
 }
 
+// ---------------------------------------------------------------------------------- work
+async function workTab() {
+  const wk = Object.assign({ max_file_mb: 4096, session_hours: 12, backup_keep: 14, interval: 15, agents: 1, effort: 'high' }, JSON.parse(JSON.stringify(state.settings.work || {})));
+  let prompts = [];
+  try { prompts = (await api('/api/work/prompts')).prompts; } catch (e) { /* servidor antigo */ }
+  return h('div', null, secHead('work', ['work']),
+    cfgCard(t('Work'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Trabalho em equipe: pessoas e cargos, quadro de fluxograma, setores com arquivos, pedidos, atividades e avisos em tempo real, sincronizando entre várias máquinas. Tudo fica em arquivos comuns em ~/.asta/work e só sai deste computador se você ligar a sincronização em Work → Rede.')),
+      h('div', { class: 'grid2' },
+        field(t('Tamanho máximo por arquivo (MB)'), numInput(wk, 'max_file_mb', 1, 102400, 64), t('Vale para cada arquivo enviado ao Work. O formato é livre.')),
+        field(t('Pedir o login de novo depois de (horas)'), numInput(wk, 'session_hours', 1, 168), t('A sessão do Work é por máquina e por navegador.'))),
+      h('div', { class: 'grid2' },
+        field(t('Sincronizar a cada (segundos)'), numInput(wk, 'interval', 5, 600), t('Mudanças locais sincronizam na hora; este é o intervalo de verificação das máquinas que não escutam na rede.')),
+        field(t('Cópias diárias dos documentos nas máquinas de backup'), numInput(wk, 'backup_keep', 1, 90), t('Quantas ficam guardadas; as mais antigas saem.')))),
+    teamCard(wk, 'wk', t('Vale para a IA do Work: rascunho de pedidos (Planejador → Redator → Revisor), fluxograma da empresa (Analista → Desenhista → Revisor) e resumos. Com 4 ou mais agentes, cada etapa criativa vira uma mesa em paralelo com um Sintetizador. Sem IA configurada, o Work usa regras automáticas.')),
+    cfgCard(t('A rede e as máquinas'), h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Tailscale, rede local, pasta de nuvem, convites, máquinas de backup e a escolha de onde guardar as senhas ficam na própria seção Work, na aba Rede.')),
+      h('a', { class: 'btn sm', href: '#/work/net', id: 'cfg-open-work-net', onclick: () => { state.ctx = {}; } }, icon('arrow', 13), t('Abrir Work → Rede'))),
+    saveRow(async () => { const { max_file_mb, session_hours, backup_keep, interval, agents, effort } = wk; await saveSettings({ work: { max_file_mb, session_hours, backup_keep, interval, agents, effort } }); await refreshState(); }),
+    cfgCard(t('System prompts internos'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Os textos que orientam cada agente do Work são arquivos .md abertos, no código do ASTA (asta/work/prompts). Aqui você só os lê.')),
+      h('div', { class: 'cu-cfg-prompts' }, prompts.map((p) => h('details', null, h('summary', { class: 'mono small' }, p.name + '.md'), h('pre', null, p.text))))));
+}
+
 // ---------------------------------------------------------------------------------- rebuild
 async function rebuildTab() {
   const rb = JSON.parse(JSON.stringify(state.settings.rebuild));
@@ -825,7 +848,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 

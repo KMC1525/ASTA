@@ -74,7 +74,7 @@ ela vê onde está, copia, move, exporta, apaga e leva embora — sem pedir perm
 
 **O que NÃO fazer.** Conta obrigatória; nuvem própria como padrão; sincronizar "para ajudar" sem pedir; chave de criptografia que a pessoa não controle.
 
-**Estado atual.** Princípio respeitado; sincronização opcional ainda não existe (ver [Futuro](#futuro-e-lacunas-honestas)).
+**Estado atual.** Princípio respeitado. Desde a v0.18 o **Work** tem sincronização e backup opcionais **só dos dados dele**: desligados por padrão, com destino à escolha (Tailscale, rede local ou uma pasta de nuvem que a pessoa já usa), mensagens assinadas e cifradas com a chave da rede, e dados exportáveis em ZIP. O resto do ASTA (chats, projetos, mídias) ainda não sincroniza (ver [Futuro](#futuro-e-lacunas-honestas)).
 
 ## 5. Interoperabilidade total entre tudo
 
@@ -126,7 +126,7 @@ ela vê onde está, copia, move, exporta, apaga e leva embora — sem pedir perm
 - Compartilhamento **opt-in, item por item**, com a licença do item; remoto nunca recebe chaves, memórias privadas ou anexos sem permissão explícita.
 - Evoluir os protocolos existentes (pareamento, `/api/version`, exportação) em vez de inventar um servidor central.
 
-**Estado atual.** **Ainda não implementado** — é direção, não funcionalidade. Já existe a base: pareamento por QR, API HTTP local documentada, pacotes exportáveis, modo "conectar a um ASTA de outro computador" no app Android.
+**Estado atual.** **Ainda não implementado como federação aberta** — é direção, não funcionalidade. O Work (v0.18) é um primeiro passo restrito: máquinas **da mesma organização** trocam documentos e arquivos sem central, por convite de uso único; não há descoberta nem troca entre organizações diferentes. Já existe a base: pareamento por QR, API HTTP local documentada, pacotes exportáveis, modo "conectar a um ASTA de outro computador" no app Android.
 
 ---
 
@@ -144,7 +144,7 @@ Antes de uma decisão de produto ou de arquitetura, pergunte:
 ### Futuro e lacunas honestas
 
 - Federation: protocolo e pacote assinado (acima) — pesquisa e primeiro protótipo.
-- Sincronização/backup opcional criptografado (destino à escolha).
+- Sincronização/backup opcional criptografado (destino à escolha) para o restante dos dados — o Work já faz isso para os dele (limites: cifra feita com a biblioteca padrão e sem auditoria; revogar uma máquina não troca a chave).
 - Exportar/importar um projeto inteiro em um único "pacote ASTA".
 - Assinar os instaladores do Windows/macOS quando houver certificado.
 

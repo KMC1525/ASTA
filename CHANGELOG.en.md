@@ -7,6 +7,32 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.18.0] — 2026-11-10
+
+### Added — Work: teamwork with AI, sync between machines and users
+A new section, **Work** (side menu, after Code), for companies and teams — bosses and employees. Standard library only, plain files (`~/.asta/work`), no ASTA server; nothing leaves the computer until syncing is turned on.
+- **Organizations, people and several computers.** Create an organization (the creator becomes administrator) or join one with an **invite code** (single use, valid for 24 h). People with **username, position, bio and function**; several people per computer, several organizations per machine, one organization across several computers.
+- **Custom positions and permissions by function.** *Administrator*, *Manager* and *Worker* + the user's own, each with a **level** and 17 permissions; **functions** add/remove permissions; per-person tweaks. Nobody can grant what they lack; an active administrator always exists.
+- **Flowchart board** (whiteboard with pan/zoom/drag): cards for people, positions, notes and AI agents; **sectors as folders/boxes**; links *reports to / hands over to / approves*; *Fill with people*, *Arrange* (tiers) and **Create with AI** (Analyst → Designer → Reviewer, reviewed by the user before applying, keyword-based fallback). A request's path through the flowchart shows on the request.
+- **Profiles and requests** (written, with files of any format, or both): a *Send request* button on the profile (`requests.send` permission); **Draft with AI** (Planner → Writer → Reviewer, reading the attachments' text), **Who should do it? (AI)**; states sent → seen → accepted → in progress → done/declined/cancelled; a thread with attachments; **take the request** to Chat, 3D worlds, 2D games, Avatars, Canvas, Studio, Code or Computer Use.
+- **Files of any format per sector**, with versions, sectors restricted by position/function/person, drag-and-drop upload, “use in ASTA” (becomes an attachment for every section) and “bring from the Library” (project as `.zip`). HTML/SVG are never served inline; configurable maximum size.
+- **Sync between machines, no central server:** newest edit wins per document; files by hash; **signed and encrypted HTTP** (a server separate from the WebUI, which stays on 127.0.0.1) over **Tailscale** (reads `tailscale status`, listens only on the tailnet IP), the local network or an address; and an **encrypted cloud folder** (Drive, Dropbox, NAS). Each machine keeps “only what is needed” (files of the people who use it, of sectors they can see and of their requests) or “everything”; the rest comes on demand. Machines that do not listen sync on their own initiative.
+- **Optional passwords, kept where the user chooses:** only on this machine, on another machine of the network (the login is checked by it) or replicated on all; PBKDF2-SHA256; temporary lockout after repeated failures.
+- **Backups on one or more chosen machines**, per person; daily document copies on backup machines; *Verify* and *Restore from here*; export everything as ZIP.
+- **Real-time notices** (bell, menu badge, SSE, optional system notifications) per person/position/everyone, and manager **broadcasts**.
+- **Activity log** started · continuing · finished, with a heartbeat every minute, “no signal” activities flagged, automatic records of uploads/requests, and an **AI digest** (numbers computed by the program; the AI only writes the text).
+- **Agent team** (1·4·8·12·16, Low→Omni) like the other sections; open `.md` prompts in `asta/work/prompts/` (readable in *Configuration → Work*); a new **Work** tab in Configuration; the `asta work` command.
+- UI in Portuguese and English; 20 tabs in Configuration; 12 items in the side menu.
+
+### Changed
+- `team.SECTIONS`, settings (export/reset), hideable sections and the start page include Work. Importing a settings file **never** turns on Work's network listening.
+- `Request.file` accepts extra headers; closing the server also stops Work.
+
+### Honest limits (what was not tested)
+- **Not tested against a real Tailscale**: only with the simulated output of `tailscale status --json`; two-machine sync was tested with two manager instances on `127.0.0.1`. **Not tested on real Windows, macOS or Android machines.** The AI was tested with simulated providers; no paid API was used.
+- The network cipher (SHAKE-256 stream + HMAC-SHA256, encrypt-then-MAC) uses only the standard library and **has not been audited by third parties**. Revoking a machine **does not change the network key**. Sign-in protects access through the app and the network; it does not encrypt files on disk. Conflicts: the latest edit of each document wins (machine clocks should be close).
+- New tests: `tests/test_work.py` (43 tests: permissions, passwords, store, HTTP and cloud-folder sync, backups, requests, activities, board, AI with fallback, API and events) and `tests/browser/work_ui.js`.
+
 ## [0.17.44] — 2026-11-09
 
 ### Fixed — second bug sweep (tampered files, huge JSON and stray texts on screen)

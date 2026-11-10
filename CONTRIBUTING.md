@@ -40,6 +40,7 @@ Python 3.9 is the minimum: do not use `match`, runtime `X | Y`, etc. (use `from 
 | Avatars (cards, conversation director, voice) | `avatars.py`, `avatar_chat.py`, `routes_avatars.py`, `agents/avatar_pipeline.py`, `web/js/views/avatar*.js` |
 | 2D games (a new genre or a rule) | `games2d/schema.py` (spec and validation), `agents/rulebased_games.py` (offline generator), `runtime2d/*.js` (engine); keep the condition grammar identical in Python (`parse_cond`) and JS (`G2.cond`) |
 | Canvas: new node type | `canvas/schema.py` (`NODE_TYPES`, parameters), `canvas/engine.py` (execution), `web/js/canvas_nodes.js` (controls) |
+| Work (people, positions/permissions, board, sector files, requests, activities, notices, sync between machines, backups) | `work/` (`perms.py`, `schema.py`, `store.py`, `manager.py`, `sync.py`, `agents.py`, `prompts/*.md`), `routes_work.py`, `web/js/views/work*.js`, `web/js/work_ui.js`; tests: `tests/test_work.py`, `tests/browser/work_ui.js` |
 | Pre-installed models (catalog) | `asta/preinstalled.py` (`CATALOG`: repository, file, quantization, size, auxiliary files) + translation of the `hint` in `web/js/en.js` |
 | Canvas: new media provider | class in `canvas/media.py` + entry in `MEDIA_PRESETS` + a test with a simulated server in `tests/test_canvas.py` (see `MediaMock`) |
 | Canvas video Editor | `canvas/render.py` (ffmpeg) and `web/js/canvas_timeline.js` (timeline and preview) |

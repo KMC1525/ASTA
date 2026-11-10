@@ -6,18 +6,19 @@ import { h, icon, toast } from './ui.js';
 import { initMobile, isMobile, offerUpdate } from './mobile.js';
 import { computerStatus, subscribe as subscribeComputer } from './computer_ui.js';
 import { codeStatus, subscribe as subscribeCode } from './code_ui.js';
+import { startEvents as startWork, subscribe as subscribeWork, workStatus } from './work_ui.js';
 
 // Estado global compartilhado entre as telas
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'], ['studio', 'Studio', 'film'], ['computer', 'Computer Use', 'computer'], ['code', 'Code', 'code'], ['rebuild', 'Rebuild', 'refresh'],
+  ['main', 'Chat', 'main'], ['worlds', 'Mundos', 'worlds'], ['avatars', 'Avatars', 'avatars'], ['games', 'Jogos 2D', 'games'], ['canvas', 'Canvas', 'canvas'], ['studio', 'Studio', 'film'], ['computer', 'Computer Use', 'computer'], ['code', 'Code', 'code'], ['work', 'Work', 'work'], ['rebuild', 'Rebuild', 'refresh'],
   ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
   main: () => import('./views/chat.js'), worlds: () => import('./views/worlds.js'),
   library: () => import('./views/library.js'), config: () => import('./views/config.js'),
-  avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), rebuild: () => import('./views/rebuild.js'), studio: () => import('./views/studio.js'), canvas: () => import('./views/canvas.js'), computer: () => import('./views/computer.js'), code: () => import('./views/code.js'),
+  avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), rebuild: () => import('./views/rebuild.js'), studio: () => import('./views/studio.js'), canvas: () => import('./views/canvas.js'), computer: () => import('./views/computer.js'), code: () => import('./views/code.js'), work: () => import('./views/work.js'),
 };
 
 // Recarrega a página (uma vez por falha: sem laço se o problema continuar). Devolve true se recarregou.
@@ -71,7 +72,7 @@ export function renderSide() {
   side.replaceChildren(
     h('div', { class: 'brand', title: 'ASTA', onclick: () => go('main', {}) }, h('span', { class: 'logo' }, 'A'), h('span', { class: 'word' }, 'ASTA')),
     h('button', { class: 'searchbtn', type: 'button', title: t('Buscar (Ctrl+K)'), onclick: () => shell && shell.openPalette() }, icon('search', 16), h('span', null, t('Buscar…')), h('span', { class: 'kbd' }, 'Ctrl K')),
-    h('nav', { 'aria-label': t('Telas') }, NAV.filter(([id]) => id === cur || !(ui().sidebar_hidden || []).includes(id)).map(([id, label, ic]) => h('a', { class: 'item' + (cur === id ? ' active' : ''), href: '#/' + id, title: t(label), 'aria-current': cur === id ? 'page' : null, onclick: () => { state.ctx = {}; } }, icon(ic, 19), h('span', { class: 'lbl' }, t(label)), id === 'computer' ? computerBadge() : id === 'code' ? codeBadge() : null))),
+    h('nav', { 'aria-label': t('Telas') }, NAV.filter(([id]) => id === cur || !(ui().sidebar_hidden || []).includes(id)).map(([id, label, ic]) => h('a', { class: 'item' + (cur === id ? ' active' : ''), href: '#/' + id, title: t(label), 'aria-current': cur === id ? 'page' : null, onclick: () => { state.ctx = {}; } }, icon(ic, 19), h('span', { class: 'lbl' }, t(label)), id === 'computer' ? computerBadge() : id === 'code' ? codeBadge() : id === 'work' ? workBadge() : null))),
     h('div', { class: 'foot' },
       h('div', { class: 'chipstat', title: t('Provedor de geração'), onclick: () => go('config', { tab: 'providers' }) }, h('span', { class: 'dot ' + (demo ? 'warn' : 'ok') }), h('span', { class: 't' }, presetOf(gen).label)),
       stale ? h('div', { class: 'small t', style: { padding: '4px', color: 'var(--warn, #f5b942)' } }, t('Versão {v} instalada: feche o ASTA e abra de novo.', { v: state.diskVersion })) : null,
@@ -90,6 +91,22 @@ function computerBadge() {
 function codeBadge() {
   const s = codeStatus(), n = s.waiting || 0, r = (s.running || 0) + (s.queued || 0);
   return h('span', { class: 'cu-badge' + (n ? ' ask' : r ? ' run' : ' hidden'), id: 'cd-badge', title: n ? t('Aguardando você') : t('Em execução') }, String(n || r || ''));
+}
+// Selo do Work na barra lateral: avisos não lidos (laranja). Atualiza sozinho pelos eventos ao vivo, enquanto houver uma pessoa logada no Work.
+function workBadge() {
+  const n = workStatus().unread || 0;
+  return h('span', { class: 'cu-badge' + (n ? ' ask' : ' hidden'), id: 'wk-badge', title: t('Avisos não lidos') }, n > 99 ? '99+' : String(n || ''));
+}
+function watchWork() {
+  if (watchWork.on) return;
+  watchWork.on = true;
+  subscribeWork(() => {
+    const b = document.getElementById('wk-badge'), n = workStatus().unread || 0;
+    if (!b) return;
+    b.className = 'cu-badge' + (n ? ' ask' : ' hidden');
+    b.textContent = n > 99 ? '99+' : String(n || '');
+  });
+  api('/api/work/status').then((s) => { if (s.session) startWork(); }).catch(() => {});   // quem já está logado no Work volta a receber os avisos ao abrir o ASTA
 }
 function watchCode() {
   if (watchCode.on) return;
@@ -169,6 +186,7 @@ addEventListener('hashchange', () => { render(); });
   }
   render();
   watchCode();
+  watchWork();
   if ((state.settings.computer || {}).enabled) watchComputer();   // só conecta nos eventos do Computer Use se o recurso opcional estiver ligado
   maybeWelcome(app).catch((e) => console.error(e));
   initMobile(state.version);

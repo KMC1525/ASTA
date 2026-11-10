@@ -657,6 +657,32 @@ def _doctor(_args: argparse.Namespace) -> int:
     return 0
 
 
+def _work(args: argparse.Namespace) -> int:
+    """`asta work`: mostra o estado do Work (máquina, Tailscale, redes e quem entrou) sem abrir a WebUI."""
+    if getattr(args, "home", None):
+        os.environ["ASTA_HOME"] = args.home
+    from .storage import Store
+    from .work import WorkManager, tailscale
+
+    store = Store()
+    mgr = WorkManager(store)
+    ts = tailscale.status(refresh=True)
+    print(_("Máquina: {n} ({i})", n=mgr.ident["name"], i=mgr.machine_id))
+    if not ts["installed"]:
+        print(_("Tailscale: não instalado (opcional — o Work também sincroniza pela rede local ou por uma pasta de nuvem)."))
+    elif ts["running"]:
+        print(_("Tailscale: conectado · IP {ip} · {n} máquina(s) na tailnet", ip=ts["ip"], n=len(ts["peers"])))
+    else:
+        print(_("Tailscale: instalado, mas {s}", s=ts.get("state") or _("desconectado")))
+    if not mgr.orgs:
+        print(_("Nenhuma rede do Work ainda: crie ou entre em uma na seção Work."))
+    for oid, st in sorted(mgr.orgs.items()):
+        meta = st.get("meta", "org") or {}
+        print(_("Rede «{n}» ({i}): {u} pessoa(s), {m} máquina(s), {f} arquivo(s)", n=meta.get("name", oid), i=oid, u=len(st.all("users")), m=len(st.all("machines")), f=len(st.all("files"))))
+    print(_("Dados do Work: {p}", p=mgr.root))
+    return 0
+
+
 def main(argv=None) -> int:
     from .util import fix_default_certs
 
@@ -699,6 +725,9 @@ def main(argv=None) -> int:
     fol.add_argument("--print", action="store_true", help=_("só mostra o caminho, sem abrir"))
     fol.add_argument("--app", action="store_true", help=_("abre a pasta do programa instalado em vez da dos dados"))
     fol.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
+    wk = sub.add_parser("work", help=_("mostra o estado do Work (redes, máquinas e Tailscale)"))
+    wk.add_argument("action", choices=("status",), nargs="?", default="status")
+    wk.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     sub.add_parser("doctor", help=_("mostra diagnóstico do ambiente"))
     sub.add_parser("version", help=_("mostra a versão"))
     args = parser.parse_args(argv)
@@ -712,6 +741,8 @@ def main(argv=None) -> int:
         return _native(args)
     if args.cmd == "folder":
         return _folder(args)
+    if args.cmd == "work":
+        return _work(args)
     if args.cmd == "doctor":
         return _doctor(args)
     if args.cmd == "version":
