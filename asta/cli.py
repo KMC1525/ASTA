@@ -719,6 +719,54 @@ def _engine(args: argparse.Namespace) -> int:
     return 0
 
 
+def _scriber(args: argparse.Namespace) -> int:
+    """`asta scriber`: lista os textos do Scriber, cria um (com a estrutura do esboço, sem IA), importa um arquivo ou exporta para .docx/.md/.txt/.html — sem abrir a WebUI."""
+    if getattr(args, "home", None):
+        os.environ["ASTA_HOME"] = args.home
+    from pathlib import Path
+
+    from .scriber import ScriberError, ScriberManager, agents as sai, docmodel as D, schema as S
+    from .storage import Store
+
+    mgr = ScriberManager(Store())
+    try:
+        if args.action == "new":
+            meta = mgr.create(args.name or args.project or "", args.type or S.DEFAULT_TYPE, args.language or "", args.prompt or "")
+            if args.prompt:
+                outline = sai.parse_outline(args.prompt)
+                if outline:
+                    mgr.save_doc(meta["id"], blocks=[b for s in outline for b in (D.block("h1", [D.run(s["title"])]), D.block("p", [D.run(s["summary"])]) if s["summary"] else D.block("p", []))], snapshot=False)
+            print(_("Texto criado: {i} ({n}, {t} · {l})", i=meta["id"], n=meta["name"], t=meta["type"], l=meta["language"]))
+            print(_("Abra o ASTA e vá em Scriber, ou exporte com:  asta scriber export {i} docx", i=meta["id"]))
+        elif args.action == "export":
+            if not args.project or args.format not in ("docx", "md", "txt", "html"):
+                print(_("Use:  asta scriber export <projeto> <docx|md|txt|html>"))
+                return 2
+            res = mgr.export(args.project, args.format)
+            print(_("Exportado: {f}", f=str(mgr.dir(args.project) / "exports" / res["name"])))
+        elif args.action == "import":
+            if not args.project or not args.format:
+                print(_("Use:  asta scriber import <projeto> <arquivo.docx|.md|.txt|.html>"))
+                return 2
+            path = Path(args.format)
+            if not path.is_file():
+                print(_("Arquivo não encontrado: {f}", f=str(path)))
+                return 1
+            res = mgr.import_file(args.project, path.name, path.read_bytes())
+            print(_("Importado: {w} palavras", w=res["stats"]["words"]))
+        else:
+            projects = mgr.list()
+            if not projects:
+                print(_("Nenhum texto do Scriber ainda: crie um na seção Scriber ou com  asta scriber new \"nome\" --type romance"))
+            for p in projects:
+                print(f"{p['id']}  {p['type']:12} {p['words']:>7} {p['name']}")
+            print(_("Dados do Scriber: {p}", p=mgr.root))
+    except ScriberError as exc:
+        print(exc.message)
+        return 1
+    return 0
+
+
 def main(argv=None) -> int:
     from .util import fix_default_certs
 
@@ -774,6 +822,15 @@ def main(argv=None) -> int:
     en.add_argument("--genre", default="", help=_("gênero (em new)"))
     en.add_argument("--theme", default="", help=_("tema (em new)"))
     en.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
+    sc = sub.add_parser("scriber", help=_("Scriber: lista, cria, importa ou exporta textos (romances, jornalismo, análises, copywriting, livros acadêmicos…)"))
+    sc.add_argument("action", choices=("list", "new", "export", "import"), nargs="?", default="list")
+    sc.add_argument("project", nargs="?", default="", help=_("nome (em new) ou id do texto (em export/import)"))
+    sc.add_argument("format", nargs="?", default="", help=_("docx, md, txt ou html (em export) · caminho do arquivo (em import)"))
+    sc.add_argument("--name", default="", help=_("título do texto (em new)"))
+    sc.add_argument("--prompt", default="", help=_("descrição ou esboço do texto (em new)"))
+    sc.add_argument("--type", default="", help=_("tipo de escrita: romance, journalism, analysis, copywriting, academic, scientific… (em new)"))
+    sc.add_argument("--language", default="", help=_("idioma, ex.: pt-BR, en-US (em new)"))
+    sc.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     sub.add_parser("doctor", help=_("mostra diagnóstico do ambiente"))
     sub.add_parser("version", help=_("mostra a versão"))
     args = parser.parse_args(argv)
@@ -793,6 +850,10 @@ def main(argv=None) -> int:
         if args.action == "new" and not args.name:
             args.name = args.project
         return _engine(args)
+    if args.cmd == "scriber":
+        if args.action == "new" and not args.name:
+            args.name = args.project
+        return _scriber(args)
     if args.cmd == "doctor":
         return _doctor(args)
     if args.cmd == "version":

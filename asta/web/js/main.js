@@ -12,11 +12,11 @@ import { startEvents as startWork, subscribe as subscribeWork, workStatus } from
 export const state = { settings: null, presets: [], hardware: {}, version: '', home: '', ctx: {} };
 
 export const NAV = [
-  ['main', 'Chat', 'main'], ['engine', 'Game Engine', 'engine'], ['avatars', 'Avatars', 'avatars'], ['canvas', 'Canvas', 'canvas'], ['studio', 'Studio', 'film'], ['computer', 'Computer Use', 'computer'], ['code', 'Code', 'code'], ['work', 'Work', 'work'], ['rebuild', 'Rebuild', 'refresh'],
+  ['main', 'Chat', 'main'], ['engine', 'Game Engine', 'engine'], ['scriber', 'Scriber', 'scriber'], ['avatars', 'Avatars', 'avatars'], ['canvas', 'Canvas', 'canvas'], ['studio', 'Studio', 'film'], ['computer', 'Computer Use', 'computer'], ['code', 'Code', 'code'], ['work', 'Work', 'work'], ['rebuild', 'Rebuild', 'refresh'],
   ['library', 'Biblioteca', 'library'], ['config', 'Configuração', 'config'],
 ];
 const VIEWS = {
-  main: () => import('./views/chat.js'), engine: () => import('./views/engine.js'), worlds: () => import('./views/worlds.js'),
+  main: () => import('./views/chat.js'), engine: () => import('./views/engine.js'), scriber: () => import('./views/scriber.js'), worlds: () => import('./views/worlds.js'),
   library: () => import('./views/library.js'), config: () => import('./views/config.js'),
   avatars: () => import('./views/avatars.js'), games: () => import('./views/games.js'), rebuild: () => import('./views/rebuild.js'), studio: () => import('./views/studio.js'), canvas: () => import('./views/canvas.js'), computer: () => import('./views/computer.js'), code: () => import('./views/code.js'), work: () => import('./views/work.js'),
 };
