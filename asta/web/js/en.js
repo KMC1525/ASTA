@@ -3415,4 +3415,12 @@ export default {
   "jogar.sh + .desktop + projeto Electron para AppImage/.deb (Node.js ou GitHub Actions).": "jogar.sh + .desktop + an Electron project for AppImage/.deb (Node.js or GitHub Actions).",
   "Projeto Capacitor para o APK (Node.js, JDK 17 e Android SDK — ou GitHub Actions). Play Store exige keystore e conta de desenvolvedor.": "Capacitor project for the APK (Node.js, JDK 17 and Android SDK — or GitHub Actions). The Play Store requires a keystore and a developer account.",
   "Projeto Capacitor para o Xcode (só em um Mac). Aparelho e App Store exigem conta Apple Developer; o GitHub Actions gera um build de simulador sem assinatura.": "Capacitor project for Xcode (Mac only). Devices and the App Store require an Apple Developer account; GitHub Actions builds an unsigned simulator build.",
+  "Ir direto para uma aba": "Jump straight to a tab",
+  "Criar o jogo com um prompt e ajustar a cena": "Create the game with a prompt and tweak the scene",
+  "Ver, criar e editar o código e as pastas do jogo": "View, create and edit the game's code and folders",
+  "Gerar e editar arte, ícones e interface em camadas": "Generate and edit art, icons and UI in layers",
+  "Gravar, limpar e gerar áudio, música e voz": "Record, clean up and generate audio, music and voice",
+  "Escrever roteiros e diálogos, com ajuda da IA": "Write scripts and dialogues, with AI help",
+  "Gerar e editar mapas e mundos 2D e 3D": "Generate and edit 2D and 3D maps and worlds",
+  "Exportar para Windows, macOS, Linux, Android e iOS": "Export to Windows, macOS, Linux, Android and iOS",
 };

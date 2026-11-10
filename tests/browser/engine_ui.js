@@ -6,6 +6,15 @@ run('engine', async ({ api, open, check, base, browser }) => {
   const page = await open({ width: 1500, height: 900 });
   check('engine:item-no-menu-e-sem-mundos-nem-jogos2d', (await page.locator('#side nav a[href="#/engine"]').count()) === 1 && (await page.locator('#side nav a[href="#/worlds"], #side nav a[href="#/games"]').count()) === 0);
 
+  // ---- atalho: ir direto para uma aba (sem nenhum projeto, cria um vazio e abre a aba)
+  await page.goto(base + '/#/engine'); await page.waitForSelector('#ge-new-composer');
+  check('engine:atalhos-das-7-abas', (await page.locator('#ge-direct .ge-direct-b').count()) === 7);
+  await page.locator('#ge-direct .ge-direct-b[data-tab="sound"]').click(); await page.waitForSelector('.ge-app', { timeout: 15000 }); await page.waitForTimeout(800);
+  check('engine:atalho-abre-a-aba-em-projeto-novo', /#\/engine\/[\w-]+\/sound$/.test(await page.evaluate(() => location.hash)) && (await page.locator('.ge-tab.on').innerText()).includes('Sound') && (await api('/api/engine/projects')).projects.length === 1);
+  await page.evaluate(() => { location.hash = '#/engine/map'; }); await page.waitForTimeout(1200);
+  check('engine:atalho-usa-o-ultimo-projeto', (await page.locator('.ge-tab.on').innerText()).includes('Map') && (await api('/api/engine/projects')).projects.length === 1);
+  for (const p of (await api('/api/engine/projects')).projects) await api('/api/engine/projects/' + p.id, { method: 'DELETE' });
+
   // ---- criar um jogo 3D com um prompt (sem IA: o gerador de regras)
   await page.goto(base + '/#/engine'); await page.waitForSelector('#ge-new-composer');
   await page.locator('.ge-kindbtn[data-kind="3d"]').click();

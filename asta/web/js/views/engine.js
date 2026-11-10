@@ -14,18 +14,33 @@ const TAB_MODULES = {
   main: () => import('./engine_main.js'), code: () => import('./engine_code.js'), assets: () => import('./engine_assets.js'), sound: () => import('./engine_sound.js'),
   scripts: () => import('./engine_scripts.js'), map: () => import('./engine_map.js'), publish: () => import('./engine_publish.js'),
 };
+const TAB_HINT = { main: 'Criar o jogo com um prompt e ajustar a cena', code: 'Ver, criar e editar o código e as pastas do jogo', assets: 'Gerar e editar arte, ícones e interface em camadas', sound: 'Gravar, limpar e gerar áudio, música e voz', scripts: 'Escrever roteiros e diálogos, com ajuda da IA', map: 'Gerar e editar mapas e mundos 2D e 3D', publish: 'Exportar para Windows, macOS, Linux, Android e iOS' };
 let current = null;   // o editor aberto (estado E): as abas se limpam ao sair
 
 function parse() {
   const m = location.hash.match(/^#\/engine(?:\/([\w-]+))?(?:\/([\w]+))?/);
   let pid = m && m[1] || '', tab = m && m[2] || '';
-  if (pid && TAB_IDS.includes(pid) && !tab) { tab = pid; pid = ''; try { pid = localStorage.getItem(LAST) || ''; } catch (e) { /* ok */ } }
-  return { pid, tab: TAB_IDS.includes(tab) ? tab : 'main' };
+  let direct = false;
+  if (pid && TAB_IDS.includes(pid) && !tab) { tab = pid; pid = ''; direct = true; try { pid = localStorage.getItem(LAST) || ''; } catch (e) { /* ok */ } }
+  return { pid, tab: TAB_IDS.includes(tab) ? tab : 'main', direct };
+}
+
+// Atalho para uma aba: usa o último projeto (ou o mais recente); sem nenhum projeto, cria um vazio para a pessoa já começar a trabalhar.
+async function openTabDirect(tab) {
+  try {
+    const { projects } = await api('/api/engine/projects');
+    let pid = '';
+    try { pid = localStorage.getItem(LAST) || ''; } catch (e) { /* ok */ }
+    if (!projects.some((p) => p.id === pid)) pid = projects[0] ? projects[0].id : '';
+    if (!pid) pid = (await api('/api/engine/projects', { method: 'POST', body: { name: t('Novo jogo'), kind: ((state.settings || {}).engine || {}).kind || '2d', genre: '', theme: 'forest', description: '', starter: false } })).id;
+    location.hash = `#/engine/${pid}/${tab}`;
+  } catch (e) { toast(e.message, 'err'); location.hash = '#/engine'; }
 }
 
 export default async function render(root, ctx) {
   if (current) { current.cleanup(); current = null; }
-  const { pid, tab } = parse();
+  const { pid, tab, direct } = parse();
+  if (!pid && direct) return openTabDirect(tab);
   if (!pid) return renderProjects(root, ctx);
   let E;
   try { E = await openProject(pid); }
@@ -110,6 +125,8 @@ async function renderProjects(root, ctx) {
   root.replaceChildren(h('div', { class: 'page ge-home' },
     h('div', { class: 'page-h' }, h('div', null, h('h1', null, 'Game Engine'), h('p', null, t('Crie jogos 2D, 2.5D, 3D, VR e AR com IA: descreva, ajuste a cena como no Godot, edite código, arte, som, roteiros e mapas, e exporte para Windows, macOS, Linux, Android e iOS.')))),
     h('div', { class: 'ge-newcard' }, kindSeg, composer.el), aiNote,
+    h('div', { class: 'ge-direct', id: 'ge-direct' }, h('span', { class: 'ge-direct-l' }, t('Ir direto para uma aba')),
+      TABS.map(([id, label, ic]) => h('a', { class: 'btn sm ge-direct-b', href: '#/engine/' + id, dataset: { tab: id }, title: t(TAB_HINT[id]) }, icon(ic, 14), t(label)))),
     projects.length ? h('h2', { class: 'ge-h2' }, t('Seus jogos')) : h('div', { class: 'empty' }, h('h3', null, t('Crie seu primeiro jogo')), h('p', null, t('Escreva o que você imagina, escolha o tipo (2D, 2.5D, 3D, VR ou AR) e o ASTA monta um jogo completo e jogável. Depois é só ajustar.'))),
     projects.length ? grid : null));
 }
