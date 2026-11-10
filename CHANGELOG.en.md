@@ -7,6 +7,18 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.2] — 2026-11-10
+
+### Fixed — Game Engine
+Bug hunt across the whole Game Engine (hostile inputs on every endpoint, every generator, all 5 game kinds exported to all 6 platforms, English UI, narrow screens). The paths and exports were already safe; these were the real findings:
+- **API.** A `kind`, `theme` or `genre` that was not text (a list or an object) made *create project* and *edit project* answer **500**; they now fall back to the defaults.
+- **Map tools.** The 3D brush with a `NaN` or infinite position crashed; the 2D generator crashed with a `NaN` amount of enemies/coins (top-down); *edit objects* crashed when the list or the "remove near" area had the wrong shape. All now ignore the bad value and keep the map valid.
+- **Music.** The sound generator had no limit on bars: asking for 500 locked the server for minutes. It is capped at 64 bars.
+- **Art.** Drawing a sprite with no colour crashed; it now uses the subject's usual colour.
+- **English.** The game *genre* showed as "Gender" (it is "Genre" now) and the app identifier hint stayed in Portuguese.
+- **Layout.** In the project bar the “…” menu wrapped to a second line on mid-size screens; the bar is now a single row (tabs scroll if there is no room).
+- Version 0.19.2 (runtime `GE.version`, mobile app). New regression tests (`RobustnessTests`).
+
 ## [0.19.0] — 2026-11-10
 
 ### Added — Game Engine: 2D, 2.5D, 3D, VR and AR games with AI, Godot-inspired

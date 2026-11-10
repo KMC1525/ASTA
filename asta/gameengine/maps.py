@@ -11,6 +11,15 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from . import schema as S
 
+
+def _num(v: Any, default: float = 0.0, lo: float = -1e9, hi: float = 1e9) -> float:
+    """Número finito dentro de [lo, hi]: texto, NaN e infinito (que o JSON do navegador pode trazer) viram o padrão."""
+    try:
+        x = float(v)
+    except (TypeError, ValueError):
+        return default
+    return default if math.isnan(x) or math.isinf(x) else max(lo, min(hi, x))
+
 # ============================================================================ ruído
 def _hash(ix: int, iz: int, seed: int) -> float:
     n = (ix * 374761393 + iz * 668265263 + seed * 2147483647) & 0xFFFFFFFF
@@ -295,7 +304,7 @@ GEN2D = {"platformer": gen_platformer, "topdown": gen_topdown, "shooter": gen_sh
 
 def generate_2d(genre: str, seed: int, theme: str = "forest", length: str = "medium", enemies: float = 1.0, coins: float = 1.0) -> Dict[str, Any]:
     fn = GEN2D.get(genre) or gen_platformer
-    return S.norm_map(fn(seed, theme, length, enemies, coins))
+    return S.norm_map(fn(seed, theme, length, _num(enemies, 1.0, 0, 20), _num(coins, 1.0, 0, 20)))
 
 
 def regen_region_2d(m: Dict[str, Any], region: Dict[str, int], seed: int = 0, prompt_hint: str = "") -> Dict[str, Any]:
@@ -453,6 +462,8 @@ def edit_region_3d(m: Dict[str, Any], op: str, cx: float, cz: float, radius: flo
     res, size = m["res"], m["size"]
     hm = list(m["heights"])
     rnd = random.Random(seed or 1)
+    cx, cz = _num(cx, 0.0, -1e6, 1e6), _num(cz, 0.0, -1e6, 1e6)
+    radius, strength = _num(radius, 1.0, 0.0, 1e6), _num(strength, 0.5, -10.0, 10.0)
     ci, cj = (cx / size + 0.5) * (res - 1), (cz / size + 0.5) * (res - 1)
     r_cells = max(1.0, radius / size * (res - 1))
     base = hm[int(max(0, min(res - 1, round(cj)))) * res + int(max(0, min(res - 1, round(ci))))]
@@ -495,10 +506,10 @@ def edit_region_3d(m: Dict[str, Any], op: str, cx: float, cz: float, radius: flo
 def edit_objects(m: Dict[str, Any], add: Optional[List[Dict[str, Any]]] = None, remove_near: Optional[Dict[str, float]] = None) -> Dict[str, Any]:
     out = dict(m)
     objs = list(m.get("objects", []))
-    if remove_near:
-        rx, rz, rr = remove_near.get("x", 0), remove_near.get("z", remove_near.get("y", 0)), remove_near.get("r", 1)
+    if isinstance(remove_near, dict) and remove_near:
+        rx, rz, rr = _num(remove_near.get("x"), 0), _num(remove_near.get("z", remove_near.get("y", 0)), 0), _num(remove_near.get("r"), 1)
         key = "z" if m.get("kind") == "3d" else "y"
         objs = [o for o in objs if o.get("type") in ("player",) or math.hypot(o.get("x", 0) - rx, o.get(key, 0) - rz) > rr]
-    objs.extend(add or [])
+    objs.extend(o for o in (add if isinstance(add, list) else []) if isinstance(o, dict))
     out["objects"] = objs
     return S.norm_map(out)

@@ -590,5 +590,43 @@ class ApiTests(unittest.TestCase):
         self.assertTrue(again["reused"])
 
 
+class RobustnessTests(unittest.TestCase):
+    """v0.19.2: valores inválidos que vêm do navegador (listas, NaN, números enormes) não derrubam a API nem travam os geradores."""
+
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = Path(tempfile.mkdtemp(prefix="asta-eng-rb-"))
+        cls.httpd, _ = make_server("127.0.0.1", 0, Store(cls.tmp))
+        threading.Thread(target=cls.httpd.serve_forever, daemon=True).start()
+        cls.c = Client(cls.httpd.server_address[1])
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.httpd.shutdown()
+        cls.httpd.server_close()
+        shutil.rmtree(cls.tmp, ignore_errors=True)
+
+    def test_non_text_kind_theme_genre_fall_back_to_defaults(self):
+        st, p = self.c.json("POST", "/api/engine/projects", {"name": "x", "kind": [], "genre": {}, "theme": []})
+        self.assertEqual(st, 201)
+        self.assertEqual(p["kind"], "2d")
+        st, p = self.c.json("PUT", f"/api/engine/projects/{p['id']}", {"kind": ["3d"], "theme": {}, "genre": []})
+        self.assertEqual((st, p["kind"]), (200, "2d"))
+
+    def test_music_length_is_capped(self):
+        t0 = time.time()
+        info = audio.wav_info(audio.music("calm", 500, 1))
+        self.assertLess(time.time() - t0, 20)
+        self.assertLessEqual(info["seconds"], 64 * 4 * 60 / 84 + 1)
+
+    def test_map_tools_ignore_nan_and_bad_shapes(self):
+        nan, inf = float("nan"), float("inf")
+        m3 = gmaps.generate_3d(1, "forest", res=33)
+        self.assertTrue(gmaps.edit_region_3d(m3, "raise", nan, inf, 5, 0.5, 1)["heights"])
+        self.assertTrue(gmaps.generate_2d("topdown", 0, "forest", "short", nan, -3)["layers"])
+        self.assertTrue(gmaps.edit_objects(m3, add="x", remove_near=5)["objects"] is not None)
+        self.assertTrue(art.sprite_svg("coin", None).startswith("<svg"))
+
+
 if __name__ == "__main__":
     unittest.main()

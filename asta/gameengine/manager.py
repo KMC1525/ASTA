@@ -49,6 +49,11 @@ CSP = ("sandbox allow-scripts allow-pointer-lock allow-modals allow-popups allow
        "style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; media-src 'self' data: blob:; connect-src 'self' data: blob:; font-src 'self' data:; worker-src blob:; frame-ancestors 'self'")
 
 
+
+def _ok(v, allowed) -> bool:
+    """`v in allowed` sem estourar com valores que não são texto (listas, objetos) vindos de um corpo JSON."""
+    return isinstance(v, str) and v in allowed
+
 class EngineError(Exception):
     def __init__(self, status: int, message: str):
         super().__init__(message)
@@ -118,7 +123,7 @@ class EngineManager:
         return out
 
     def summary(self, m: Dict[str, Any]) -> Dict[str, Any]:
-        theme = m.get("theme") if m.get("theme") in S.THEMES else "forest"
+        theme = m.get("theme") if _ok(m.get("theme"), S.THEMES) else "forest"
         c = S.THEME_COLORS[theme]
         d = self.root / m["id"]
         return {"id": m["id"], "name": m.get("name", ""), "kind": m.get("kind", "2d"), "genre": m.get("genre", ""), "theme": theme, "description": m.get("description", ""), "created": m.get("created", ""), "updated": m.get("updated", ""),
@@ -128,13 +133,13 @@ class EngineManager:
         with self.lock:
             if sum(1 for _ in self.root.iterdir()) >= MAX_PROJECTS:
                 raise EngineError(400, f"Limite de {MAX_PROJECTS} projetos. Apague algum para criar outro.")
-            kind = kind if kind in S.KINDS else "2d"
-            genre = genre if genre in S.GENRES and kind in S.GENRES[genre]["kinds"] else S.DEFAULT_GENRE[kind]
+            kind = kind if _ok(kind, S.KINDS) else "2d"
+            genre = genre if _ok(genre, S.GENRES) and kind in S.GENRES[genre]["kinds"] else S.DEFAULT_GENRE[kind]
             pid = (slugify(name or "jogo", "jogo", 24) + "-" + new_id()[:6]).lower()
             d = self.root / pid
             for sub in ("game/scenes", "game/maps", "game/scripts", "game/assets/images", "game/assets/sound", "game/data", "docs", "editor/assets", "editor/sound", "history", "exports"):
                 (d / sub).mkdir(parents=True, exist_ok=True)
-            meta = {"schema": S.SCHEMA_PROJECT, "id": pid, "name": text(name, "Meu jogo", 60), "kind": kind, "genre": genre, "theme": theme if theme in S.THEMES else "forest", "language": language if language in ("pt", "en") else "pt",
+            meta = {"schema": S.SCHEMA_PROJECT, "id": pid, "name": text(name, "Meu jogo", 60), "kind": kind, "genre": genre, "theme": theme if _ok(theme, S.THEMES) else "forest", "language": language if language in ("pt", "en") else "pt",
                     "description": text(description, "", 400), "created": now_iso(), "updated": now_iso(), "start": "main", "settings": S.norm_project_settings({}, kind), "version": 1, "engine": __version__, "log": [], "connections": {}, "publish": {}}
             write_json(d / "project.json", meta)
             return meta
@@ -146,16 +151,16 @@ class EngineManager:
                 m["name"] = text(patch["name"], m["name"], 60)
             if "description" in patch:
                 m["description"] = text(patch["description"], "", 400)
-            if patch.get("theme") in S.THEMES:
+            if _ok(patch.get("theme"), S.THEMES):
                 m["theme"] = patch["theme"]
             if patch.get("language") in ("pt", "en"):
                 m["language"] = patch["language"]
-            if patch.get("kind") in S.KINDS and patch["kind"] != m["kind"]:
+            if _ok(patch.get("kind"), S.KINDS) and patch["kind"] != m["kind"]:
                 if self.list_scenes(pid):
                     raise EngineError(400, "O tipo do jogo não muda depois de criado (as cenas são diferentes em 2D e 3D). Crie um jogo novo.")
                 m["kind"] = patch["kind"]
                 m["genre"] = S.DEFAULT_GENRE[m["kind"]]
-            if patch.get("genre") in S.GENRES and m["kind"] in S.GENRES[patch["genre"]]["kinds"]:
+            if _ok(patch.get("genre"), S.GENRES) and m["kind"] in S.GENRES[patch["genre"]]["kinds"]:
                 m["genre"] = patch["genre"]
             if isinstance(patch.get("settings"), dict):
                 m["settings"] = S.norm_project_settings(dict(m.get("settings") or {}, **patch["settings"]), m["kind"])

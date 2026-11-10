@@ -5,6 +5,18 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.2] — 2026-11-10
+
+### Corrigido — Game Engine
+Caça a bugs em todo o Game Engine (entradas hostis em cada endpoint, todos os geradores, os 5 tipos de jogo exportados para as 6 plataformas, interface em inglês e telas estreitas). Os caminhos de arquivo e as exportações já estavam seguros; estes foram os achados reais:
+- **API.** Um `kind`, `theme` ou `genre` que não fosse texto (lista ou objeto) fazia *criar projeto* e *editar projeto* responderem **500**; agora caem no padrão.
+- **Ferramentas de mapa.** O pincel 3D com posição `NaN` ou infinita quebrava; o gerador 2D quebrava com quantidade de inimigos/moedas `NaN` (visão de cima); *editar objetos* quebrava quando a lista ou a área de «remover perto» vinha no formato errado. Agora ignoram o valor ruim e o mapa continua válido.
+- **Música.** O gerador de som não tinha limite de compassos: pedir 500 travava o servidor por minutos. Agora o limite é 64 compassos.
+- **Arte.** Desenhar um sprite sem cor quebrava; agora usa a cor habitual do assunto.
+- **Inglês.** O *gênero* do jogo aparecia como «Gender» (agora «Genre») e a dica do identificador do app ficava em português.
+- **Layout.** Na barra do projeto o menu «…» caía para uma segunda linha em telas médias; agora a barra é uma linha só (as abas rolam se faltar espaço).
+- Versão 0.19.2 (`GE.version` do runtime, app móvel). Novos testes de regressão (`RobustnessTests`).
+
 ## [0.19.0] — 2026-11-10
 
 ### Adicionado — Game Engine: jogos 2D, 2.5D, 3D, VR e AR com IA, inspirado no Godot

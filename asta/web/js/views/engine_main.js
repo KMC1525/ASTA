@@ -245,7 +245,7 @@ export default async function render(body, E) {
     const mk = (opts, key, onch) => { const s = h('select', { id: 'ge-o-' + key }, opts.map(([v, l]) => h('option', { value: v, selected: choices[key] === v }, l))); s.addEventListener('change', () => { choices[key] = s.value; if (onch) onch(); }); return s; };
     const content = h('div', { class: 'ge-optpop' }); const paint = () => content.replaceChildren(
       propRow(t('Tipo'), mk(KINDS.map(([v, l]) => [v, l]), 'kind', () => { choices.genre = ''; paint(); })),
-      propRow(t('Gênero'), mk([['', t('automático')]].concat(Object.entries(cat.genres).filter(([, g]) => g.kinds.includes(choices.kind)).map(([id]) => [id, t(GENRE_LABEL[id] || id)])), 'genre')),
+      propRow(t('Gênero do jogo'), mk([['', t('automático')]].concat(Object.entries(cat.genres).filter(([, g]) => g.kinds.includes(choices.kind)).map(([id]) => [id, t(GENRE_LABEL[id] || id)])), 'genre')),
       propRow(t('Tema'), mk([['', t('automático')]].concat(cat.themes.map((x) => [x, t(THEME_LABEL[x] || x)])), 'theme')), propRow(t('Duração'), mk(Object.keys(SIZE_LABEL).map((k) => [k, t(SIZE_LABEL[k])]), 'length')),
       h('p', { class: 'muted small' }, t('Valem para «Criar do zero». Ao editar, o tipo do jogo não muda.')));
     paint(); popover(optsBtn, content);

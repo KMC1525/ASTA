@@ -183,6 +183,10 @@ THEME_MOOD = {"forest": "joyful", "desert": "mysterious", "snow": "calm", "night
 def music(mood: str = "calm", bars: int = 8, seed: int = 1, root: float = 220.0, tempo: int = 0) -> bytes:
     cfg = MOODS.get(mood) or MOODS["calm"]
     rnd = random.Random(seed)
+    try:
+        bars = max(1, min(64, int(bars)))   # sem limite, 500 compassos travavam a geração por minutos
+    except (TypeError, ValueError, OverflowError):
+        bars = 8
     bpm = tempo or cfg["tempo"]
     beat = 60.0 / bpm
     scale = cfg["scale"]
