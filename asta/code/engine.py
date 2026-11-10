@@ -1,7 +1,7 @@
 """O motor de uma execução do Code: a equipe **Planejador → Trabalhadores (até 8 ao mesmo tempo) → Testes → Revisor → Relator** trabalhando no projeto da sessão.
 
 * **Planejador** lê o pedido (texto + anexos multimodais), a visão geral do projeto e a conversa até aqui, e escreve um plano curto: tarefas com papel, arquivos prováveis e dependências.
-* **Trabalhadores** executam as tarefas **em paralelo** (até `agents`, no máximo 16: a tela oferece 1, 4, 8, 12 e 16): cada um é um laço *observar → agir → conferir* com **uma ação por vez** do catálogo fechado (`tools.py`); o motor valida,
+* **Trabalhadores** executam as tarefas **em paralelo** (até `agents`, no máximo 32: a tela oferece 1, 4, 8, 12, 16, 20, 24, 28 e 32): cada um é um laço *observar → agir → conferir* com **uma ação por vez** do catálogo fechado (`tools.py`); o motor valida,
   confere os limites fixos (`guard.py`), pergunta ao usuário no modo Ask e só então executa. Duas tarefas que mexem nos mesmos arquivos nunca rodam juntas.
 * **Testes:** o próprio motor roda os testes/build/lint do projeto (sem depender do que o agente diz) e guarda a saída como evidência.
 * **Revisor** confere o diff e as evidências contra o pedido; se achar problema (ou os testes falharem) e ainda houver rodadas de correção (nível de esforço), um agente corrige e tudo é conferido de novo.
@@ -36,7 +36,7 @@ FINAL = ("done", "partial", "failed", "cancelled")
 OUT_LIMIT = 2500
 MUTATING = {"write_file", "edit_file", "delete_path", "make_dir", "move", "copy", "run_command", "run_tests", "install_packages", "write_system_prompts"}
 UNCLEAR_RE = re.compile(r"clare[zs]|ambig|intenç|intent\b|unclear|not clear|esclarec|clarif|exat[ao]|specific|especific|nova seção ou|which one|qual dos", re.I)   # «falta de clareza», «ambíguo», «unclear»…
-MAX_AGENTS = 16   # a tela oferece 1 · 4 · 8 · 12 · 16 (ver team.py); a API aceita qualquer número de 1 a 16
+MAX_AGENTS = 32   # a tela oferece 1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 (ver team.py); a API aceita qualquer número de 1 a 32
 
 
 def _overlap(a: List[str], b: List[str]) -> bool:
@@ -177,7 +177,7 @@ class Runner:
             pass
 
     def plan_cap(self) -> int:
-        """Tarefas do plano: as do esforço, e pelo menos uma por agente (com 12 ou 16 agentes, um plano de 7 tarefas deixaria a maioria parada)."""
+        """Tarefas do plano: as do esforço, e pelo menos uma por agente (com 12 a 32 agentes, um plano de 7 tarefas deixaria a maioria parada)."""
         return max(int(self.prof["plan_steps"]), min(self.n_agents, MAX_AGENTS))
 
     def _web(self, query: str) -> Dict[str, Any]:

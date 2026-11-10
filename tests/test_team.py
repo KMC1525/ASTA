@@ -1,4 +1,4 @@
-"""Equipe de agentes de todas as seções: 1/4/8/12/16 agentes (mesa em paralelo + Sintetizador) e esforço Low … Omni (`asta/team.py`)."""
+"""Equipe de agentes de todas as seções: 1/4/8/12/16/20/24/28/32 agentes (mesa em paralelo + revisão entre pares + Sintetizador) e esforço Low … Omni (`asta/team.py`)."""
 import json
 import sys
 import threading
@@ -22,14 +22,14 @@ INFO = {"id": "x", "label": "Modelo X", "model": "m1", "demo": False, "auto": Fa
 
 class PureTests(unittest.TestCase):
     def test_the_counts_and_the_eight_levels_are_the_code_ones(self):
-        self.assertEqual(team.COUNTS, (1, 4, 8, 12, 16))
+        self.assertEqual(team.COUNTS, (1, 4, 8, 12, 16, 20, 24, 28, 32))
         self.assertEqual(team.LEVELS, ("low", "medium", "high", "extra", "mega", "max", "ultra", "omni"))
         self.assertIs(team.efforts.PROFILES, code_efforts.PROFILES)   # um só lugar para os níveis
         self.assertEqual(len(team.LENSES), team.MAX_AGENTS)
 
     def test_agents_snap_to_the_nearest_allowed_count(self):
-        got = {v: team.normalize_agents(v) for v in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 16, 99, 0, -3, "8", "x", None, 4.7)}
-        self.assertEqual(got, {1: 1, 2: 1, 3: 4, 4: 4, 5: 4, 6: 8, 7: 8, 8: 8, 10: 12, 11: 12, 12: 12, 14: 16, 16: 16, 99: 16, 0: 1, -3: 1, "8": 8, "x": 1, None: 1, 4.7: 4})
+        got = {v: team.normalize_agents(v) for v in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 16, 18, 22, 26, 30, 32, 99, 0, -3, "8", "x", None, 4.7)}
+        self.assertEqual(got, {1: 1, 2: 1, 3: 4, 4: 4, 5: 4, 6: 8, 7: 8, 8: 8, 10: 12, 11: 12, 12: 12, 14: 16, 16: 16, 18: 20, 22: 24, 26: 28, 30: 32, 32: 32, 99: 32, 0: 1, -3: 1, "8": 8, "x": 1, None: 1, 4.7: 4})
         self.assertEqual(team.normalize_effort("OMNI"), "omni")
         self.assertEqual((team.normalize_effort("zzz"), team.normalize_effort(None, "low")), ("high", "low"))
 
@@ -37,10 +37,13 @@ class PureTests(unittest.TestCase):
         t = team.from_config({"agents": 8, "effort": "mega"})
         self.assertEqual((t.agents, t.effort, t.multi, t.workers, t.thinking), (8, "mega", True, 8, "xhigh"))
         t = team.from_config({"agents": 8, "effort": "mega"}, {"team": {"agents": 16, "effort": "low"}})
-        self.assertEqual((t.agents, t.effort, t.workers), (16, "low", team.MAX_PARALLEL))
+        self.assertEqual((t.agents, t.effort, t.workers), (16, "low", 16))
+        self.assertEqual(team.make(32).workers, 32)   # com 32 agentes, todos ao mesmo tempo
         self.assertEqual(team.from_config({"agents": "off"}).agents, 1)   # o «agents» antigo do Chat («off»/«plan»/«review») não é um número
-        self.assertEqual(team.from_config({}).public(), {"agents": 1, "effort": "high", "thinking": "medium", "calls_per_step": 1})
+        self.assertEqual(team.from_config({}).public(), {"agents": 1, "effort": "high", "thinking": "medium", "peers": 0, "calls_per_step": 1})
         self.assertEqual(team.make(4, "omni").public()["calls_per_step"], 5)
+        self.assertEqual([team.make(n).public()["calls_per_step"] for n in (16, 20, 24, 28, 32)], [17, 26, 31, 36, 41])   # a partir de 20 há N/4 revisores entre pares
+        self.assertEqual([team.make(n).peers for n in (1, 4, 16, 20, 24, 28, 32)], [0, 0, 0, 5, 6, 7, 8])
 
     def test_request_team_only_keeps_valid_choices(self):
         self.assertEqual(team.request_team({"team": {"agents": 12, "effort": "Ultra"}}), {"agents": 12, "effort": "ultra"})
@@ -58,9 +61,9 @@ class PureTests(unittest.TestCase):
 
     def test_options_lists_everything_the_screens_need(self):
         o = team.options()
-        self.assertEqual(o["agents"], [1, 4, 8, 12, 16])
+        self.assertEqual(o["agents"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
         self.assertEqual([e["id"] for e in o["efforts"]], list(team.LEVELS))
-        self.assertEqual(o["calls_per_step"], {"1": 1, "4": 5, "8": 9, "12": 13, "16": 17})
+        self.assertEqual(o["calls_per_step"], {"1": 1, "4": 5, "8": 9, "12": 13, "16": 17, "20": 26, "24": 31, "28": 36, "32": 41})
 
     def test_apply_thinking_only_where_the_model_supports_it(self):
         class P:
@@ -79,7 +82,7 @@ class PureTests(unittest.TestCase):
 
 
 class EnsembleTests(unittest.TestCase):
-    def make_ask(self, fail_on=(), merge_fail=False, slow=None):
+    def make_ask(self, fail_on=(), merge_fail=False, slow=None, peer_fail=()):
         calls, lock = [], threading.Lock()
 
         def ask(ins, pl):
@@ -90,6 +93,9 @@ class EnsembleTests(unittest.TestCase):
                 if merge_fail:
                     return None
                 return {"merged": True, "from": [d["agent"] for d in pl["drafts"]], "lenses": [d["lens"] for d in pl["drafts"]]}
+            if ins.startswith("TEAM MODE — PEER REVIEW"):
+                j = int(ins.split("peer reviewer ")[1].split(" of")[0])
+                return None if j in peer_fail else {"peer": j, "read": len(pl["drafts"]), "from": [d["agent"] for d in pl["drafts"]]}
             who = int(ins.split("agent ")[1].split(" of")[0]) if ins.startswith("TEAM MODE — you are agent") else 0
             if who in fail_on:
                 return None
@@ -119,7 +125,47 @@ class EnsembleTests(unittest.TestCase):
         ask, calls = self.make_ask()
         out = team.ensemble_json(ask, team.make(16), "x", {})
         self.assertEqual(len(calls), 17)
-        self.assertEqual(sorted(set(out["lenses"])), sorted(k for k, _ in team.LENSES))
+        self.assertEqual(sorted(set(out["lenses"])), sorted(k for k, _ in team.LENSES[:16]))   # 16 agentes: as 16 primeiras lentes, sem revisão entre pares
+        self.assertFalse([c for c in calls if c[0].startswith("TEAM MODE — PEER REVIEW")])
+
+    def test_thirty_two_agents_use_thirty_two_distinct_lenses_and_peer_review(self):
+        ask, calls = self.make_ask()
+        out = team.ensemble_json(ask, team.make(32), "x", {})
+        drafts = [c for c in calls if "you are agent" in c[0]]
+        self.assertEqual(len(drafts), 32)
+        self.assertEqual(len({c[0].split("Your lens: ")[1].split(".")[0] for c in drafts}), 32)
+        self.assertEqual(len(team.LENSES), 32)
+        self.assertEqual(len(calls), 41)   # 32 rascunhos + 8 revisores + 1 síntese
+        self.assertEqual(out["from"], [f"peer-{j}" for j in range(1, 9)])   # a síntese lê as versões revistas
+
+    def test_big_teams_review_each_others_drafts_before_the_synthesis(self):
+        for n, peers in ((20, 5), (24, 6), (28, 7)):
+            ask, calls = self.make_ask()
+            out = team.ensemble_json(ask, team.make(n), "Do it. Output JSON: {}", {"a": 1})
+            reviewers = [c for c in calls if c[0].startswith("TEAM MODE — PEER REVIEW")]
+            self.assertEqual((len(calls), len(reviewers)), (n + peers + 1, peers))
+            self.assertTrue(all(len(c[1]["drafts"]) == n and c[1]["task_input"] == {"a": 1} and c[0].endswith("Output JSON: {}") for c in reviewers))   # cada revisor lê TODOS os rascunhos
+            self.assertEqual(len(out["from"]), peers)
+
+    def test_peer_review_falls_back_when_reviewers_fail(self):
+        ask, calls = self.make_ask(peer_fail=(1, 2, 3, 4, 5))
+        out = team.ensemble_json(ask, team.make(20), "x", {})
+        self.assertEqual(out["from"], list(range(1, 21)))   # nenhum revisor valeu: a síntese lê os 20 rascunhos
+        ask, calls = self.make_ask(peer_fail=(1, 2, 3, 4))
+        out = team.ensemble_json(ask, team.make(20), "x", {})
+        self.assertEqual(out["peer"], 5)   # só um revisor valeu: o resultado dele é o final (sem síntese de um só)
+        self.assertEqual(len(calls), 20 + 5)
+        ask, calls = self.make_ask(merge_fail=True)
+        out = team.ensemble_json(ask, team.make(24), "x", {})
+        self.assertEqual(out["peer"], 1)   # a síntese caiu: vale a primeira versão revisada
+
+    def test_peer_review_is_skipped_for_small_teams_and_when_cancelled(self):
+        ask, calls = self.make_ask()
+        team.ensemble_json(ask, team.make(16), "x", {})
+        self.assertFalse([c for c in calls if c[0].startswith("TEAM MODE — PEER REVIEW")])
+        ask, calls = self.make_ask()
+        team.ensemble_json(ask, team.make(20), "x", {}, cancelled=lambda: True)
+        self.assertEqual(calls, [])
 
     def test_a_failing_agent_does_not_stop_the_table(self):
         ask, calls = self.make_ask(fail_on=(2, 3))
@@ -263,7 +309,7 @@ class RunnerTests(TmpCase):
         r.configure_team({"effort": "mega"}, None, "anthropic")
         self.assertEqual(prov.thinking, "xhigh")
         r.emit({"type": "start", "steps": []})
-        self.assertEqual(events[0]["team"], {"agents": 1, "effort": "mega", "thinking": "xhigh", "calls_per_step": 1})
+        self.assertEqual(events[0]["team"], {"agents": 1, "effort": "mega", "thinking": "xhigh", "peers": 0, "calls_per_step": 1})
 
     def test_cancelling_during_a_table_stops_the_step(self):
         prov = ScriptedProvider()
@@ -292,9 +338,9 @@ class SettingsTests(TmpCase):
         st.save_settings({"generation": {"agents": 5, "effort": "ULTRA"}, "games": {"agents": 99, "effort": "nope"}, "chat": {"team_agents": 11, "effort": "x"}, "code": {"agents": 13}})
         s = st.get_settings()
         self.assertEqual((s["generation"]["agents"], s["generation"]["effort"]), (4, "ultra"))
-        self.assertEqual((s["games"]["agents"], s["games"]["effort"]), (16, "high"))
+        self.assertEqual((s["games"]["agents"], s["games"]["effort"]), (32, "high"))
         self.assertEqual((s["chat"]["team_agents"], s["chat"]["effort"]), (12, "low"))
-        self.assertEqual(s["code"]["agents"], 13)   # o Code aceita qualquer número de 1 a 16 (compatível com as sessões antigas)
+        self.assertEqual(s["code"]["agents"], 13)   # o Code aceita qualquer número de 1 a 32 (compatível com as sessões antigas)
 
     def test_imported_settings_carry_the_team_of_each_section_but_not_the_computer_switch(self):
         from asta import uiprefs
@@ -311,11 +357,12 @@ class SectionTests(TmpCase):
         c = computer_config({})
         self.assertEqual((c["agents"], c["effort"]), (1, "high"))
 
-    def test_code_accepts_up_to_sixteen_workers(self):
+    def test_code_accepts_up_to_thirty_two_workers(self):
         from asta.code import engine, normalize_config
 
-        self.assertEqual(engine.MAX_AGENTS, 16)
-        self.assertEqual(normalize_config({"agents": 99})["agents"], 16)
+        self.assertEqual(engine.MAX_AGENTS, 32)
+        self.assertEqual(normalize_config({"agents": 99})["agents"], 32)
+        self.assertEqual(normalize_config({"agents": 28})["agents"], 28)
         self.assertEqual(normalize_config({"agents": 12})["agents"], 12)
 
     def test_chat_sends_private_team_notes_to_the_final_writer_and_asks_for_the_effort(self):
@@ -421,7 +468,7 @@ class ApiTests(ServerCase):
     def test_team_options_endpoint(self):
         status, o = self.c.json("GET", "/api/team")
         self.assertEqual(status, 200)
-        self.assertEqual(o["agents"], [1, 4, 8, 12, 16])
+        self.assertEqual(o["agents"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
         self.assertEqual([e["id"] for e in o["efforts"]], list(team.LEVELS))
         self.assertTrue(all("hint" in e and "thinking" in e for e in o["efforts"]))
 
@@ -435,7 +482,7 @@ class ApiTests(ServerCase):
         status, r = self.c.json("GET", "/api/chat/providers")
         self.assertEqual(status, 200)
         self.assertEqual((r["team"]["agents"], r["team"]["effort"]), (1, "low"))
-        self.assertEqual(r["team"]["counts"], [1, 4, 8, 12, 16])
+        self.assertEqual(r["team"]["counts"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@
   • `plan_publish`   (Publish) — Publicador: textos de loja, notas de versão, ajustes de exportação.
 
 A IA escreve **dados** (JSON validado em `schema.py`), nunca código — exceto na aba Code, onde os arquivos são escritos de propósito e só rodam dentro do iframe isolado do jogo.
-Quantos agentes (1·4·8·12·16) e o esforço (Low…Omni) vêm de `asta/team.py`, como em todas as seções."""
+Quantos agentes (1·4·8·12·16·20·24·28·32) e o esforço (Low…Omni) vêm de `asta/team.py`, como em todas as seções."""
 from __future__ import annotations
 
 import base64

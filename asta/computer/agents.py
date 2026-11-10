@@ -62,7 +62,7 @@ class Brain:
 
     def ask_team(self, team: "teamlib.Team", agent: str, system: str, instruction: str, payload: Dict[str, Any], *, images: Optional[List[dict]] = None, max_tokens: int = 1800,
                  critique: bool = False) -> Optional[Dict[str, Any]]:
-        """`ask` com a equipe da tarefa: com 4/8/12/16 agentes, uma mesa em paralelo + o Sintetizador (`team.ensemble_json`); `critique` (Max para cima) acrescenta uma rodada de crítica."""
+        """`ask` com a equipe da tarefa: com 4 a 32 agentes, uma mesa em paralelo + o Sintetizador (`team.ensemble_json`); `critique` (Max para cima) acrescenta uma rodada de crítica."""
         def one(ins: str, pl: Dict[str, Any]) -> Optional[Dict[str, Any]]:
             return self.ask(agent, system, ins, pl, images=images, max_tokens=int(max_tokens * team.tokens_mult))
 

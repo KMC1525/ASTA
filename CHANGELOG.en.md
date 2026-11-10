@@ -7,6 +7,15 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.7] — 2026-11-10
+
+### Added — every mode: teams of 20, 24, 28 and 32 agents that help each other
+- **Four new team sizes in every mode.** The agent selector (beside *Run* and in *Configuration → the section's tab → Agent team*) now offers **1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32** in **Game Engine, 3D worlds, Avatars, 2D games, Studio, Rebuild, Canvas, Computer Use, Code, Work and Chat**. Any value outside the list (hand-edited settings, API) snaps to the nearest one; in **Code** up to **32 parallel workers** (the plan still gets at least one task per agent).
+- **They help each other.** From 20 agents the table has a new **peer-review** step: after the drafts, **N/4 agents (5 to 8)** each read **all** their teammates' drafts, take the best of each and hand in an improved version; the Synthesizer then merges those versions — so the final merge never has to read 32 drafts at once. If every reviewer fails the Synthesizer reads the drafts as before; if only one succeeds its result is the final one; if the synthesis fails the first reviewed version wins; and the deterministic fallback still guarantees an output.
+- **All at the same time.** A table now runs up to **32 calls in parallel** (it was 8). 16 new, distinct **lenses** (accuracy, surprise, accessibility, performance, narrative, contrast, convention, minimal risk, longevity, first impression, feedback, consistency check, audience, economy, depth, finish) give every one of the 32 agents its own angle.
+- **Honest cost** shown in the selector's hint: N drafts + N/4 reviews + 1 synthesis (32 agents ≈ **41 calls per step**; `calls_per_step` and `peers` in `GET /api/team`). Cloud providers may rate-limit that many simultaneous calls (ASTA retries); local models still answer one at a time.
+- Version 0.19.7; tests for the counts and snapping, 32 distinct lenses, the peer-review flow and its fallbacks (all reviewers failing, one succeeding, failed synthesis, cancelling), a 24-agent Game Engine run, and the selectors in the browser.
+
 ## [0.19.6] — 2026-11-10
 
 ### Fixed — Studio timeline: everything reachable at any window size

@@ -42,7 +42,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Chat geral (a tela «Chat»): tamanho da resposta, janela de contexto, tempo de pensamento e busca na web
     "chat": {"history_turns": 20, "temperature": 0.7, "max_tokens": 2000, "context_tokens": 16000, "thinking": "off", "instructions": "",
              "reply_style": "detailed",  # balanced | detailed (padrão: respostas completas e de qualidade) | epic (longas e profundas)
-             "effort": "low", "team_agents": 1,  # Low … Omni (os níveis do Code) e 1/4/8/12/16 agentes (notas privadas para a resposta): ver team.py
+             "effort": "low", "team_agents": 1,  # Low … Omni (os níveis do Code) e 1/4/8/12/16/20/24/28/32 agentes (notas privadas para a resposta): ver team.py
              "auto_continue": True, "continue_rounds": 3,  # resposta cortada pelo limite de tokens → continua sozinha de onde parou
              "agents": "off",  # off | plan (Planejador → Redator) | review (Planejador → Redator → Revisor → Redator): equipe de agentes para respostas mais completas
 
@@ -63,7 +63,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
         "day_cycle": True,
         "npc_autonomy": "off",  # off | low | high
         "include_attachments": True,
-        "agents": 1, "effort": "high",  # equipe: 1/4/8/12/16 agentes em paralelo por etapa · esforço Low … Omni (ver team.py)
+        "agents": 1, "effort": "high",  # equipe: 1/4/8/12/16/20/24/28/32 agentes em paralelo por etapa · esforço Low … Omni (ver team.py)
     },
     "characters": {
         "detail": "detailed",  # short | detailed
@@ -115,7 +115,7 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "computer": {"enabled": False, "mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
                  "max_parallel": 8, "max_steps": 40, "team": "full",  # team: full (Planejador → Operador → Revisor → Relator) | fast (só o Operador; para modelos locais lentos)
                  "revisions": 1, "ask_for": ["write", "delete", "run", "input", "screen"], "game_dirs": [], "app_wait": 2.0,
-                 "agents": 1, "effort": "high"},  # agents: 1/4/8/12/16 (mesa de agentes no Planejador e no Verificador) · effort: Low … Omni (ver team.py)
+                 "agents": 1, "effort": "high"},  # agents: 1/4 a 32 (mesa de agentes no Planejador e no Verificador) · effort: Low … Omni (ver team.py)
     # Code (vibe coding com equipes de agentes): ver code/manager.py (normalize_config). O token do GitHub é segredo (SECRET_PATHS): nunca vai ao navegador nem à exportação.
     "code": {"mode": "ask",  # ask = pergunta Sim/Não antes de agir · full = Full Access, executa tudo sem perguntar
              "effort": "high", "agents": 4, "max_sessions": 4, "ask_for": ["write", "delete", "run", "install", "git", "publish"], "run_timeout": 180, "max_download_mb": 200,
@@ -159,7 +159,7 @@ def conform(defaults: Any, value: Any) -> Any:
 
 
 def _normalize_teams(settings: dict) -> None:
-    """Equipe de cada seção (agentes 1/4/8/12/16 e esforço Low … Omni): valor fora da lista (edição manual, API) vira o valor aceito mais próximo. O Code mantém qualquer número de 1 a 16."""
+    """Equipe de cada seção (agentes 1/4 a 32 e esforço Low … Omni): valor fora da lista (edição manual, API) vira o valor aceito mais próximo. O Code mantém qualquer número de 1 a 32."""
     from . import team
 
     for key in team.SECTIONS:

@@ -356,6 +356,17 @@ class AgentTests(unittest.TestCase):
         self.assertEqual(self.m.meta(self.pid)["kind"], "2d")
         self.assertTrue(all(s["status"] == "fallback" for s in r2["report"]["agents"]))
 
+    def test_a_team_of_24_agents_drafts_reviews_and_synthesizes_each_creative_step(self):
+        plan = {"title": "Equipe Grande", "pitch": "x", "kind": "2d", "genre": "platformer", "theme": "forest", "length": "short", "language": "pt"}
+        p = FakeProvider({"Game Planner": plan, "Scene Designer": {"summary": "ok", "extras": [], "rules": {"win": "reach_goal"}}, "Writer": {"intro": "Oi", "dialogues": {}, "gdd_notes": ""}, "Reviewer": {"approved": True, "summary": "Pronto."}})
+        ai, job = self.ai(p, prompt="plataforma na floresta", mode="new", agents=24, effort="high")
+        res = ai.generate_game(self.pid)
+        self.assertEqual((res["report"]["team"]["agents"], res["report"]["team"]["peers"], res["report"]["team"]["calls_per_step"]), (24, 6, 31))
+        self.assertEqual(self.m.meta(self.pid)["name"], "Equipe Grande")
+        designer = [c for c in p.calls if "ROLE: Scene Designer" in c]
+        self.assertGreaterEqual(len(designer), 24 + 6 + 1)   # 24 rascunhos + 6 revisores entre pares + 1 síntese
+        self.assertTrue(res["report"]["ai"])
+
     def test_choices_beat_the_ai_and_edit_mode_applies_ops(self):
         self.m.apply_build(self.pid, templates.build("plataforma", "2d", "platformer", "forest", "short"))
         sc = self.m.get_scene(self.pid, "main")

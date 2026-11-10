@@ -1,4 +1,4 @@
-// Code — vibe coding de bases de código longas com equipes de agentes (até 16 por sessão, várias sessões em segundo plano), em pastas do computador e em repositórios do GitHub.
+// Code — vibe coding de bases de código longas com equipes de agentes (até 32 por sessão, várias sessões em segundo plano), em pastas do computador e em repositórios do GitHub.
 // Barra lateral: pastas e subpastas (nome, uma de 8 cores, recolher/expandir) com as sessões e a bolinha de estado de cada uma. Centro: a conversa e o que a equipe está fazendo. Direita: ambiente, plano, agentes e saídas.
 import { api } from '../api.js';
 import { t } from '../i18n.js';
@@ -9,7 +9,7 @@ import { AGENT, EFFORT_LABEL, FILE_STATUS, MODE, MODE_HINT, PLAN_STATUS, PUBLISH
 import { confirmDialog, fill, h, icon, modal, popover, seg, toast } from '../ui.js';
 import { createComposer } from './composer.js';
 
-// 1 · 4 · 8 · 12 · 16 agentes; uma sessão antiga com outro número (2, 3, 5…) continua mostrando o dela
+// 1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 agentes; uma sessão antiga com outro número (2, 3, 5…) continua mostrando o dela
 const countsWith = (n) => [...new Set([...AGENT_COUNTS, n])].sort((a, b) => a - b);
 
 const idFromHash = () => { const m = location.hash.match(/^#\/code\/([\w-]+)/); return m ? m[1] : ''; };
@@ -206,7 +206,7 @@ export default async function render(root, ctx) {
         h('div', null, h('label', { class: 'f' }, t('Modo')), seg([['ask', MODE().ask], ['full', MODE().full]], f.mode, (v) => { f.mode = v; modeHint.textContent = MODE_HINT()[v]; }))),
       h('div', { class: 'hint', id: 'cd-mode-hint' }, ''),
       h('div', { class: 'grid2', style: { marginTop: '12px' } }, h('div', null, h('label', { class: 'f' }, t('Esforço')), effortSel, hint),
-        h('div', null, h('label', { class: 'f' }, t('Agentes ao mesmo tempo')), agents, h('div', { class: 'hint' }, t('Até 16 agentes (1, 4, 8, 12 ou 16) trabalhando ao mesmo tempo.')))),
+        h('div', null, h('label', { class: 'f' }, t('Agentes ao mesmo tempo')), agents, h('div', { class: 'hint' }, t('Até 32 agentes (1, 4, 8, 12, 16, 20, 24, 28 ou 32) trabalhando ao mesmo tempo.')))),
       h('div', { class: 'grid2', style: { marginTop: '12px' } }, h('div', null, h('label', { class: 'f' }, t('Modelo de IA')), provSel), h('div', null, h('label', { class: 'f' }, t('Modelo (nome)')), modelIn)),
       h('label', { class: 'f', style: { marginTop: '12px' } }, t('Ao terminar')),
       h('label', { class: 'check' }, h('input', { type: 'checkbox', id: 'cd-docs', checked: f.docs, onchange: (e) => { f.docs = e.target.checked; } }), h('span', null, t('Atualizar README, changelogs e notas de versão'))),

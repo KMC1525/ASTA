@@ -1,10 +1,12 @@
-// Equipe de agentes de todas as seções: quantos agentes (1 · 4 · 8 · 12 · 16) e o esforço de raciocínio (Low … Omni, os mesmos níveis do Code). Ver asta/team.py.
+// Equipe de agentes de todas as seções: quantos agentes (1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32) e o esforço de raciocínio (Low … Omni, os mesmos níveis do Code). Ver asta/team.py.
 // `teamPicker` é o seletor compacto ao lado do botão de criar; `teamFields` são os dois campos das abas de Configuração.
 import { api } from './api.js';
 import { t } from './i18n.js';
 import { h, icon } from './ui.js';
 
-export const AGENT_COUNTS = [1, 4, 8, 12, 16];
+export const AGENT_COUNTS = [1, 4, 8, 12, 16, 20, 24, 28, 32];
+export const PEER_FROM = 20;   // a partir daqui os agentes também revisam os rascunhos uns dos outros (asta/team.py)
+export const peerCount = (n) => (n < PEER_FROM ? 0 : Math.min(8, Math.max(2, Math.floor(n / 4))));
 export const EFFORTS = ['low', 'medium', 'high', 'extra', 'mega', 'max', 'ultra', 'omni'];
 export const EFFORT_NAME = { low: 'Low', medium: 'Medium', high: 'High', extra: 'Extra', mega: 'Mega', max: 'Max', ultra: 'Ultra', omni: 'Omni' };
 
@@ -17,9 +19,11 @@ export async function teamOptions() {
 }
 const hintOf = (opts, id) => ((opts.efforts || []).find((e) => e.id === id) || {}).hint || '';
 export const agentsLabel = (n) => t('{n} agente(s)', { n });
-export const agentsHint = (n) => (n > 1
-  ? t('{n} agentes trabalham em paralelo em cada etapa e um Sintetizador junta o melhor de todos (≈ {c} chamadas à IA por etapa).', { n, c: n + 1 })
-  : t('Um agente por etapa (o fluxo de sempre: planejar → fazer → conferir).'));
+export const agentsHint = (n) => (n >= PEER_FROM
+  ? t('Equipe grande: {n} agentes rascunham em paralelo, {m} deles leem e melhoram os rascunhos dos colegas e um Sintetizador junta tudo (≈ {c} chamadas à IA por etapa).', { n, m: peerCount(n), c: n + peerCount(n) + 1 })
+  : n > 1
+    ? t('{n} agentes trabalham em paralelo em cada etapa e um Sintetizador junta o melhor de todos (≈ {c} chamadas à IA por etapa).', { n, c: n + 1 })
+    : t('Um agente por etapa (o fluxo de sempre: planejar → fazer → conferir).'));
 
 const norm = (v, list, d) => (list.includes(v) ? v : d);
 const nearest = (n) => AGENT_COUNTS.reduce((b, c) => (Math.abs(c - n) < Math.abs(b - n) || (Math.abs(c - n) === Math.abs(b - n) && c > b) ? c : b), AGENT_COUNTS[0]);
