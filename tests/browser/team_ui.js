@@ -47,7 +47,7 @@ run('team', async ({ open, api, check, base }) => {
   await tab('engine'); await openAcc('Mundos 3D|3D worlds');
   await page.locator('#gen-cfg-effort').selectOption('omni'); await page.locator('#gen-cfg-agents').selectOption('12');
   check('config:dica-do-custo', /13 chamadas/.test(await page.locator('#gen-fields').innerText()));
-  await page.locator('.page.cfg button.btn.primary', { hasText: 'Salvar' }).last().click(); await page.waitForTimeout(900);
+  await page.locator('.acc.open button.btn.primary', { hasText: 'Salvar' }).last().click(); await page.waitForTimeout(900);
   const gen = (await api('/api/settings')).generation;
   check('config:mundos-salvo', gen.effort === 'omni' && gen.agents === 12);
   await page.goto(base + '/#/main'); await page.waitForSelector('.composer'); await useTool(page, 'world'); await page.waitForSelector('#world-team-effort');
