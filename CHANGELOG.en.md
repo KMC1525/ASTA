@@ -7,6 +7,11 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.3] — 2026-11-10
+
+### Removed — Game Engine
+- **Scripts tab: the legacy *Characters* and *Worldbuilding* switch is gone.** Those two cards came from the old *Worlds* screen and did not belong to writing scripts; the tab is now only the Notepad Next-style editor (prompt, files and folders, tabs, panes). Characters and worldbuilding notes can be written as plain `.md` scripts in the same folders. Version 0.19.3.
+
 ## [0.19.2] — 2026-11-10
 
 ### Fixed — Game Engine
