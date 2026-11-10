@@ -418,6 +418,48 @@ class BrowserTests(unittest.TestCase):
     def test_47_studio_timeline_everything_reachable_at_any_window_size(self):
         self.run_script("studio_fit_ui.js")
 
+    def test_48_scriber_generation_and_editing_tabs_lorebooks_selection_spellcheck_docx(self):
+        self.run_script("scriber_ui.js")
+
+    def test_49_scriber_with_an_ai_provider_generates_expands_the_selection_and_uses_the_lorebook(self):
+        from asta.scriber import agents as sai
+        calls = {"editor": [], "writer": 0}
+
+        def writer(pl):
+            calls["writer"] += 1
+            return {"text": "\n\n".join(f"Parágrafo {calls['writer']}.{i} " + " ".join(["palavra"] * max(5, pl["part"]["words"] // 3)) + "." for i in range(3)), "summary": "resumo"}
+
+        def editor(pl):
+            calls["editor"].append(pl)
+            n = pl["size"]["target_words"]
+            return {"text": "Trecho novo começando aqui " + " ".join(["detalhe"] * max(1, n - 4)) + ".", "notes": ["Confira a data."]}
+
+        class Fake:
+            id, model, vision = "fake", "fake-1", False
+
+            def chat(self, messages, system="", **kw):
+                import json as _j
+                pl = _j.loads(messages[-1]["content"].split("INPUT_JSON:\n", 1)[1]) if "INPUT_JSON:" in str(messages[-1]["content"]) else {}
+                if "ROLE: Planner" in system:
+                    return _j.dumps({"title": "A Torre Final", "subtitle": "Um conto", "synopsis": "s", "style_guide": "passado", "characters": [], "sections": [{"title": "Um", "summary": "a", "words": 300}, {"title": "Dois", "summary": "b", "words": 300}]})
+                if "ROLE: Writer" in system:
+                    return _j.dumps(writer(pl))
+                if "ROLE: Editor" in system:
+                    return _j.dumps(editor(pl))
+                if "ROLE: Reviewer" in system:
+                    return _j.dumps({"approved": True, "summary": "Texto entregue como pedido.", "issues": []})
+                if "ROLE: Proofreader" in system:
+                    return _j.dumps({"fixes": [{"i": 0, "find": "Primeiro", "replace": "Primeiríssimo", "kind": "spelling", "reason": "teste"}]})
+                return "{}"
+
+        info = {"id": "fake", "model": "fake-1", "label": "IA de teste", "demo": False}
+        with mock.patch.object(sai, "resolve_provider", lambda settings, role, models_dir=None: (Fake(), info)):
+            self.run_script("scriber_ai_ui.js")
+        self.assertGreaterEqual(calls["writer"], 2)
+        self.assertTrue(calls["editor"])
+        self.assertIn("Ana é ruiva", calls["editor"][0]["lorebook"])        # o lorebook (palavra-chave «Ana») chegou à chamada
+        self.assertEqual(calls["editor"][0]["size"]["target_words"] % 1, 0)
+
 
 if __name__ == "__main__":
     unittest.main()

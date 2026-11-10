@@ -3,7 +3,7 @@ const { run, useTool } = require('./_common.js');
 run('smoke', async ({ open, check }) => {
   for (const [label, vp] of [['desktop', { width: 1300, height: 860 }], ['mobile', { width: 390, height: 844 }]]) {
     const page = await open(vp);
-    for (const r of ['main', 'worlds', 'worlds/characters', 'worlds/worldbuilding', 'avatars', 'avatars/edit/new', 'engine', 'games', 'canvas', 'studio', 'computer', 'code', 'rebuild', 'library', 'config']) {
+    for (const r of ['main', 'worlds', 'worlds/characters', 'worlds/worldbuilding', 'avatars', 'avatars/edit/new', 'engine', 'scriber', 'games', 'canvas', 'studio', 'computer', 'code', 'rebuild', 'library', 'config']) {
       await page.evaluate((h) => { location.hash = '#/' + h; }, r); await page.waitForTimeout(450);
       check(`${label}:${r}:sem-erro`, (await page.locator('.errbox').count()) === 0);
       check(`${label}:${r}:sem-rolagem-horizontal`, !(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 2)));

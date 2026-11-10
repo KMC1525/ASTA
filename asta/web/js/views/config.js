@@ -20,7 +20,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, engine: engineTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, engine: engineTab, scriber: scriberTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -28,8 +28,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', engine: 'engine', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', engine: 'Game Engine', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', engine: 'engine', scriber: 'scriber', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', engine: 'Game Engine', scriber: 'Scriber', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -502,7 +502,7 @@ async function appearance() {
 async function sections() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const HIDEABLE = [['engine', 'Game Engine'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['engine', 'Game Engine'], ['scriber', 'Scriber'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
   return h('div', null,
@@ -510,7 +510,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
       h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
     cfgCard(t('Tela inicial'),
-      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['engine', 'Game Engine'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['engine', 'Game Engine'], ['scriber', 'Scriber'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
     cfgCard(t('Teclado'),
       checkbox(t('Atalhos de teclado (Alt+1…9 e 0, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
       field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
@@ -519,7 +519,7 @@ async function sections() {
         h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })) }, icon('search', 13), t('Abrir a busca (Ctrl+K)')))),
     cfgCard(t('Configurações de cada seção'),
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
-      h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('engine', 'Game Engine', 'equipe de agentes, tipo padrão, busca na web, geradores rápidos do Chat'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
+      h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('engine', 'Game Engine', 'equipe de agentes, tipo padrão, busca na web, geradores rápidos do Chat'), jump('scriber', 'Scriber', 'tipo de escrita, idioma, páginas, equipe de agentes, expansão e corretor'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
         jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
         jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('code', 'Code', 'modo, esforço, agentes, GitHub, git e editor'), jump('work', 'Work', 'equipe de agentes, limites de arquivos, sessão e backups'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
 }
@@ -776,6 +776,29 @@ async function engineTab() {
       h('div', { class: 'cu-cfg-prompts' }, prompts.map((p) => h('details', null, h('summary', { class: 'mono small' }, p.name + '.md'), h('pre', null, p.text))))));
 }
 
+// ---------------------------------------------------------------------------------- scriber
+async function scriberTab() {
+  const sc = Object.assign({ agents: 1, effort: 'high', type: 'romance', language: 'pt-BR', content: '', web: false, pages: 40, words_per_page: 300, undo_keep: 25, expand_words: 150, dialogue_words: 60, spellcheck: true, autosave: true }, JSON.parse(JSON.stringify(state.settings.scriber || {})));
+  let prompts = [], status = null, cat = null;
+  try { prompts = (await api('/api/scriber/prompts')).prompts; status = await api('/api/scriber/status'); cat = await api('/api/scriber/catalog'); } catch (e) { /* servidor antigo */ }
+  const dicts = status ? Object.entries(status.dictionaries || {}).filter(([, on]) => on).map(([k]) => k) : [];
+  return h('div', null, secHead('scriber', ['scriber']),
+    cfgCard(t('Scriber'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Escrita criativa e profissional: romances (SFW e NSFW), jornalismo, análises, copywriting, livros acadêmicos e pesquisa científica. Os textos são pastas comuns em ~/.asta/scriber (blocos em JSON, lorebooks, histórico e os .docx gerados) e a IA escreve texto e dados validados, nunca código.')),
+      status ? h('p', { class: 'small', id: 'cfg-scriber-status' }, (status.text.ai ? '✦ ' + t('IA de texto: {n}', { n: status.text.label + (status.text.model ? ' · ' + status.text.model : '') }) : t('Sem IA de texto: o Scriber monta a estrutura e o editor, o corretor e o .docx funcionam.')) + ' · ' + (dicts.length ? t('Dicionário do sistema: {d}', { d: dicts.join(', ') }) : t('Sem dicionário do sistema (hunspell/aspell): o corretor do navegador e as regras continuam.'))) : null,
+      cat ? h('div', { class: 'grid2' }, field(t('Tipo de escrita padrão'), select(Object.entries(cat.types).map(([k, v]) => [k, t(v.label)]), sc.type, (v) => { sc.type = v; })), field(t('Idioma padrão'), select(Object.entries(cat.languages).map(([k, v]) => [k, t(v)]), sc.language, (v) => { sc.language = v; }))) : null,
+      h('div', { class: 'grid2' }, field(t('Páginas (geração automática)'), numInput(sc, 'pages', 1, 1000, 1)), field(t('Palavras por página'), numInput(sc, 'words_per_page', 50, 1000, 10))),
+      field(t('Conteúdo'), select([['', t('Seguir a configuração geral')], ['free', t('Livre (SFW e NSFW)')], ['sfw', t('Só SFW')]], sc.content, (v) => { sc.content = v; }), t('Os limites fixos não mudam: nada sexual com menores nem com pessoas reais.')),
+      h('div', { class: 'grid2' }, field(t('Expansão padrão de parágrafos (palavras)'), numInput(sc, 'expand_words', 10, 3000, 10)), field(t('Expansão padrão de diálogos (palavras)'), numInput(sc, 'dialogue_words', 10, 3000, 10))),
+      field(t('Pontos de retorno guardados por texto'), numInput(sc, 'undo_keep', 5, 100), t('O Scriber guarda um antes de gerar, importar ou restaurar; dá para voltar pelo menu do texto.')),
+      h('div', { class: 'row', style: { gap: '18px' } }, checkbox(t('Busca na web ligada por padrão nas ações da IA'), sc.web, (v) => { sc.web = v; }), checkbox(t('Corretor ortográfico do navegador ligado'), sc.spellcheck, (v) => { sc.spellcheck = v; }), checkbox(t('Salvar automaticamente enquanto escrevo'), sc.autosave, (v) => { sc.autosave = v; }))),
+    teamCard(sc, 'sc', t('Vale para a IA do Scriber: planejar, escrever seção por seção, revisar, e as ações sobre o trecho selecionado (Melhorar, Expandir, Reescrever…). Com 4 ou mais agentes, cada etapa criativa vira uma mesa em paralelo com um Sintetizador. Sem IA configurada, o Scriber monta só a estrutura e o resto do editor funciona.')),
+    saveRow(async () => { const { agents, effort, type, language, content, web, pages, words_per_page, undo_keep, expand_words, dialogue_words, spellcheck, autosave } = sc; await saveSettings({ scriber: { agents, effort, type, language, content, web, pages, words_per_page, undo_keep, expand_words, dialogue_words, spellcheck, autosave } }); await refreshState(); }),
+    cfgCard(t('System prompts internos'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Os textos que orientam cada agente do Scriber são arquivos .md abertos, no código do ASTA (asta/scriber/prompts). Aqui você só os lê.')),
+      h('div', { class: 'cu-cfg-prompts' }, prompts.map((p) => h('details', null, h('summary', { class: 'mono small' }, p.name + '.md'), h('pre', null, p.text))))));
+}
+
 // ---------------------------------------------------------------------------------- rebuild
 async function rebuildTab() {
   const rb = JSON.parse(JSON.stringify(state.settings.rebuild));
@@ -873,7 +896,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'engine', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'engine', 'scriber', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 

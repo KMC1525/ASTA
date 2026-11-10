@@ -33,7 +33,7 @@ run('team', async ({ open, api, check, base }) => {
   await page.goto(base + '/#/config'); await page.waitForSelector('.cfgtabs');
   const tab = async (id) => { await page.locator(`.cfgtabs button[data-tab="${id}"]`).click(); await page.waitForTimeout(450); };
   const openAcc = async (title) => { await page.locator('.acc .hd', { hasText: new RegExp(title) }).click(); await page.waitForTimeout(250); };
-  for (const [id, prefix] of [['chat', 'ch'], ['engine', 'ge'], ['engine', 'gen'], ['avatars', 'av'], ['engine', 'gm'], ['canvas', 'cv'], ['studio', 'st'], ['computer', 'cu'], ['rebuild', 'rb']]) {
+  for (const [id, prefix] of [['chat', 'ch'], ['engine', 'ge'], ['engine', 'gen'], ['avatars', 'av'], ['engine', 'gm'], ['scriber', 'sc'], ['canvas', 'cv'], ['studio', 'st'], ['computer', 'cu'], ['rebuild', 'rb']]) {
     await tab(id);
     if (prefix === 'gen') await openAcc('Mundos 3D|3D worlds');
     if (prefix === 'gm') await openAcc('Jogos 2D|2D games');
