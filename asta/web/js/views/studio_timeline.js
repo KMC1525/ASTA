@@ -361,22 +361,28 @@ export function mountTimeline(host, o) {
   const isOn = (id) => !!LAY.tools[id];
   const dockIds = (side) => TOOLS.filter((x) => x.dock === side && isOn(x.id)).map((x) => x.id);
   const isVisible = (id) => { const d = TOOLS.find((x) => x.id === id); return !!d && isOn(id) && (d.dock === 'left' || d.dock === 'right' ? LAY.tab[d.dock] === id : true); };
-  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(140, Math.min(LAY.bin, W * 0.45)); LAY.insp = Math.max(190, Math.min(LAY.insp, W * 0.45)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.tools.mixer !== false; LAY.mixw = LAY.mixw > 0 ? Math.max(140, Math.min(LAY.mixw, W * 0.6)) : 0;
-    ['l', 'r'].forEach((k) => { LAY.inset[k] = Math.max(0, Math.min(LAY.inset[k] || 0, W * 0.3)); }); ['t', 'b'].forEach((k) => { LAY.inset[k] = Math.max(0, Math.min(LAY.inset[k] || 0, H * 0.2)); }); };
+  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(140, Math.min(LAY.bin, W * 0.45)); LAY.insp = Math.max(190, Math.min(LAY.insp, W * 0.45)); const avail = H - (bar.offsetHeight || 40) - (zbar.offsetHeight || 34) - 6, I = LAY.inset;
+    ['l', 'r'].forEach((k) => { I[k] = Math.max(0, Math.min(I[k] || 0, W * 0.15)); }); ['t', 'b'].forEach((k) => { I[k] = Math.max(0, Math.min(I[k] || 0, avail * 0.15)); });
+    const padTop = LAY.flip ? I.b : I.t, padTl = LAY.flip ? I.t : I.b;   // a timeline sempre fica com pelo menos ~140 px de altura útil e as janelas de cima com ~100 px
+    LAY.top = Math.max(100 + padTop, Math.min(LAY.top, avail - 140 - padTl)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.tools.mixer !== false; LAY.mixw = LAY.mixw > 0 ? Math.max(140, Math.min(LAY.mixw, Math.max(140, W - 260))) : 0; };
   const SLOT = { left: leftDock, center, right: rightDock };
   let topSig = '';
   const applyLay = () => {
     clampLay(); root.style.setProperty('--bin', LAY.bin + 'px'); root.style.setProperty('--insp', LAY.insp + 'px'); root.style.setProperty('--toph', LAY.top + 'px'); root.style.setProperty('--rs', String(LAY.rs)); root.classList.toggle('no-mixer', !LAY.mix);
-    // janelas do alto: a ordem (esquerda, centro, direita) pode ser trocada; no celular vale sempre a ordem padrão
-    const narrow = !!(window.matchMedia && window.matchMedia('(max-width:980px)').matches), order = narrow ? DEF_ORDER : LAY.order;
+    // janelas do alto: a ordem (esquerda, centro, direita) pode ser trocada
+    const order = LAY.order;
     const vis = { left: dockIds('left').length > 0, center: isOn('monitor'), right: dockIds('right').length > 0 };
     Object.keys(SLOT).forEach((k) => SLOT[k].classList.toggle('hidden', !vis[k]));
     const seq = order.filter((k) => vis[k]), gs = [g1, g2], sizes = [];
+    // larguras efetivas: o monitor (centro) nunca some e os painéis encolhem juntos quando a janela fica estreita (a preferência guardada em LAY não muda)
+    const rootW = root.clientWidth || 1200, room = rootW - (LAY.inset.l || 0) - (LAY.inset.r || 0) - 6 * Math.max(0, seq.length - 1) - (vis.center ? 220 : 0);
+    const want = { left: vis.left ? LAY.bin : 0, right: vis.right ? LAY.insp : 0 }, sum = want.left + want.right, fit = sum > room && sum > 0 ? Math.max(0.2, Math.max(120, room) / sum) : 1;
+    const eff = { left: Math.max(90, Math.round(want.left * fit)), right: Math.max(90, Math.round(want.right * fit)) };
     gs.forEach((g) => { g.classList.add('hidden'); g._ks = null; });
     const kids = [];
     seq.forEach((k, i) => {
       kids.push(SLOT[k]);
-      sizes.push(k === 'center' ? 'minmax(0,1fr)' : (seq.length === 1 || (!vis.center && i === seq.length - 1)) ? 'minmax(0,1fr)' : (k === 'left' ? LAY.bin : LAY.insp) + 'px');
+      sizes.push(k === 'center' ? 'minmax(160px,1fr)' : (seq.length === 1 || (!vis.center && i === seq.length - 1)) ? 'minmax(0,1fr)' : (k === 'left' ? eff.left : eff.right) + 'px');
       if (i < seq.length - 1) {
         const g = gs[i], a2 = k, b2 = seq[i + 1]; g.classList.remove('hidden');
         g._ks = a2 !== 'center' ? { key: a2 === 'left' ? 'bin' : 'insp', sign: 1 } : { key: b2 === 'left' ? 'bin' : 'insp', sign: -1 };   // a janela de painel é a que cresce; a do centro (monitor) absorve o resto
@@ -393,7 +399,7 @@ export function mountTimeline(host, o) {
     bar.style.order = '0'; top.style.order = String(O.top); g3.style.order = String(O.g3); tlwrap.style.order = String(O.tl); zbar.style.order = String(O.zb);
     // mixer: de que lado da timeline e qual a largura
     gm.classList.toggle('hidden', !LAY.mix); mixer.style.order = LAY.mixLeft ? '0' : '2'; gm.style.order = '1'; scroller.style.order = LAY.mixLeft ? '2' : '0';
-    mixer.classList.toggle('left', !!LAY.mixLeft); mixer.style.width = LAY.mixw > 0 ? LAY.mixw + 'px' : ''; mixer.style.maxWidth = LAY.mixw > 0 ? 'none' : '';
+    mixer.classList.toggle('left', !!LAY.mixLeft); mixer.style.width = LAY.mixw > 0 ? LAY.mixw + 'px' : ''; mixer.style.maxWidth = LAY.mixw > 0 ? 'calc(100% - 240px)' : '';   // a timeline sempre mantém um pedaço visível
     // recuos nas quatro bordas do editor (cada janela encolhe a partir da borda)
     const I = LAY.inset, topEl = LAY.flip ? tlwrap : top, botEl = LAY.flip ? top : tlwrap;
     [top, tlwrap].forEach((el) => { el.style.paddingLeft = I.l ? I.l + 'px' : ''; el.style.paddingRight = I.r ? I.r + 'px' : ''; el.style.paddingTop = ''; el.style.paddingBottom = ''; });
@@ -937,6 +943,7 @@ export function mountTimeline(host, o) {
 
   buildBar(); paintBin(); renderAll(); paintStatus();
   new ResizeObserver(() => { if (root.isConnected) { paintRuler(); paintRows(); paintPh(); } }).observe(scroller);
+  let fitRaf = 0; new ResizeObserver(() => { if (fitRaf || !root.isConnected) return; fitRaf = requestAnimationFrame(() => { fitRaf = 0; if (root.isConnected) applyLay(); }); }).observe(root);   // janela redimensionada: as janelas do editor se reajustam
   return {
     save, S, destroy() { T.destroy(); if (!S.saved) save(); window.removeEventListener('beforeunload', onUnload); window.removeEventListener('pagehide', onUnload); document.body.classList.remove('stl-noscroll'); S.playing = false; cancelAnimationFrame(S.raf); cancelAnimationFrame(meterRaf); cancelAnimationFrame(renderRaf); if (AUD.ctx) { try { AUD.ctx.close(); } catch (e) { /* ok */ } } document.removeEventListener('keydown', onKey); pool.forEach((el) => { if (el.pause) el.pause(); }); },
     refreshAssets(list) { setAssets(list); paintBin(); renderAll(); },

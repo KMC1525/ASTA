@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.6] — 2026-11-10
+
+### Corrigido — Timeline do Studio: tudo ao alcance em qualquer tamanho de janela
+Arrastar a divisória do mixer (ou uma janela pequena) podia empurrar o **mixer para fora da borda direita do editor** — os faders ficavam cortados e a timeline encolhia até virar uma fatia. Um teste de geometria com 5 tamanhos de janela (de 1920×1080 a 390×844) e 3 layouts (padrão, tamanhos extremos, trocado) achou e corrigiu a família inteira:
+- **Mixer:** nunca ocupa mais do que o espaço que sobra (a timeline sempre mantém pelo menos 240 px) e as faixas rolam dentro dele, para os lados e para cima/baixo.
+- **Janelas de cima** (mídias, monitor, propriedades): o monitor mantém pelo menos 160 px e os painéis laterais encolhem juntos em janelas estreitas; a escolha guardada é mantida e volta quando a janela cresce (o editor se reajusta a cada redimensionamento).
+- **Altura da timeline:** janelas de cima enormes ou recuos nas bordas não espremem mais a timeline até sumir — ela sempre mantém cerca de 140 px de altura útil; os recuos ficam limitados a 15 % do editor.
+- **Janelas estreitas:** o painel da direita e o mixer eram **escondidos** abaixo de 980 px; agora nada é escondido — o editor tem uma largura mínima e rola de lado dentro da moldura.
+- **Controles do monitor:** os primeiros botões de reprodução ficavam cortados em monitores estreitos; agora quebram para uma segunda linha.
+- Versão 0.19.6; teste de navegador `test_47` (geometria em cada tamanho e layout, mais redimensionar a janela com o editor aberto).
+
 ## [0.19.5] — 2026-11-10
 
 ### Adicionado — Studio: layout da timeline personalizável
