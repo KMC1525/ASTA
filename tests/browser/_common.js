@@ -4,7 +4,7 @@ const { chromium } = require('playwright');
 exports.run = async function run(name, fn) {
   const port = process.env.ASTA_PORT;
   const base = `http://127.0.0.1:${port}`;
-  const browser = await chromium.launch();
+  const browser = await chromium.launch({ args: ['--mute-audio', '--use-fake-device-for-media-stream', '--use-fake-ui-for-media-stream'] });   // microfone falso: o Sound grava de verdade
   const result = { checks: {}, errors: [] };
   const check = (label, ok) => { result.checks[label] = !!ok; };
   const allowed = [];  // erros de console esperados por um teste (ex.: um 404 provocado de propósito)

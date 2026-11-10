@@ -6,7 +6,7 @@ import { openComposer } from './work_compose.js';
 import { go as appGo } from '../main.js';
 
 // para onde levar o pedido: cada destino abre a seção do ASTA com o texto do pedido já preenchido
-const HANDOFF = [['main', 'Chat', 'main', {}], ['world', 'Mundo 3D', 'worlds', { mode: 'world' }], ['game', 'Jogo 2D', 'games', { mode: 'game' }], ['avatar', 'Avatar', 'avatars', { mode: 'avatar' }], ['canvas', 'Canvas', 'canvas', { mode: 'canvas' }],
+const HANDOFF = [['main', 'Chat', 'main', {}], ['engine', 'Game Engine', 'engine', {}], ['world', 'Mundo 3D', 'worlds', { mode: 'world' }], ['game', 'Jogo 2D', 'games', { mode: 'game' }], ['avatar', 'Avatar', 'avatars', { mode: 'avatar' }], ['canvas', 'Canvas', 'canvas', { mode: 'canvas' }],
   ['studio', 'Studio', 'studio', {}], ['code', 'Code', 'code', {}], ['computer', 'Computer Use', 'computer', {}]];
 
 export default async function render(box, W) {

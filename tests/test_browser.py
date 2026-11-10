@@ -409,6 +409,9 @@ class BrowserTests(unittest.TestCase):
     def test_44_no_screen_writes_the_text_null(self):
         self.run_script("null_text_ui.js")
 
+    def test_45_game_engine_all_seven_tabs(self):
+        self.run_script("engine_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

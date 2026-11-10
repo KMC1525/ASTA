@@ -5,6 +5,7 @@ import { accordion, checkbox, field, fmtDate, gradient, h, icon, range, select, 
 import { mountCreator, resumeIfRunning } from './home.js';
 import renderCharacters, { figureSVG } from './characters.js';
 import renderWorldbuilding from './worldbuilding.js';
+import { legacyNotice } from './legacy_notice.js';
 
 const BIOMES = [['temperate', 'Temperado'], ['forest', 'Floresta'], ['desert', 'Deserto'], ['snow', 'Neve'], ['tropical', 'Tropical'], ['island', 'Ilha'], ['urban', 'Urbano'], ['wasteland', 'Pós-apocalipse'], ['swamp', 'Pântano'], ['mountain', 'Montanha']];
 const WEATHER = [['clear', 'Limpo'], ['cloudy', 'Nublado'], ['fog', 'Névoa'], ['rain', 'Chuva'], ['snow', 'Neve'], ['storm', 'Tempestade']];
@@ -21,7 +22,7 @@ export const worldsTab = () => { const m = location.hash.match(/^#\/worlds\/(cha
 export default async function render(root, ctx) {
   const tab = worldsTab(), body = h('div');
   const tabs = h('div', { class: 'tabs' }, WORLD_TABS.map(([id, label]) => h('button', { class: tab === id ? 'on' : '', onclick: () => { state.ctx = {}; location.hash = '#/worlds' + (id === 'worlds' ? '' : '/' + id); } }, t(label))));
-  root.replaceChildren(h('div', { class: 'page wtabs' }, tabs), body);
+  root.replaceChildren(legacyNotice(), h('div', { class: 'page wtabs' }, tabs), body);
   await ({ worlds: renderWorlds, characters: renderCharacters, worldbuilding: renderWorldbuilding }[tab])(body, ctx);
 }
 

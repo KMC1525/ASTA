@@ -54,11 +54,11 @@ run('customization', async ({ open, api, check, base, browser }) => {
 
   // ---- barra lateral e tela inicial (aba «Seções e atalhos»)
   await page.locator('.tabs button[data-tab="sections"]').click(); await page.waitForTimeout(400);
-  await page.locator('label.check', { hasText: '2D games' }).locator('input').uncheck(); await page.waitForTimeout(500);
-  check('cust:barra-sem-jogos', (await page.locator('#side nav a[href="#/games"]').count()) === 0 && (await page.locator('#side nav a[href="#/avatars"]').count()) === 1);
+  await page.locator('label.check', { hasText: 'Game Engine' }).locator('input').uncheck(); await page.waitForTimeout(500);
+  check('cust:barra-sem-jogos', (await page.locator('#side nav a[href="#/engine"]').count()) === 0 && (await page.locator('#side nav a[href="#/avatars"]').count()) === 1);
   check('cust:principal-e-config-nunca-somem', (await page.locator('#side nav a[href="#/main"]').count()) === 1 && (await page.locator('#side nav a[href="#/config"]').count()) === 1);
-  await page.locator('label.check', { hasText: '2D games' }).locator('input').check(); await page.waitForTimeout(400);
-  check('cust:barra-volta', (await page.locator('#side nav a[href="#/games"]').count()) === 1);
+  await page.locator('label.check', { hasText: 'Game Engine' }).locator('input').check(); await page.waitForTimeout(400);
+  check('cust:barra-volta', (await page.locator('#side nav a[href="#/engine"]').count()) === 1);
   await page.locator('select').filter({ has: page.locator('option', { hasText: 'The last screen I used' }) }).selectOption('library'); await page.waitForTimeout(400);
   const fresh = await browser.newPage({ viewport: { width: 1200, height: 800 } });
   await fresh.goto(base + '/'); await fresh.waitForTimeout(1200);
@@ -94,7 +94,7 @@ run('customization', async ({ open, api, check, base, browser }) => {
   await page.keyboard.press('Escape'); await page.waitForTimeout(200);
   await api('/api/settings', { method: 'PUT', body: { ui: { shortcuts: false } } }); await page.reload(); await page.waitForTimeout(1000);
   await page.keyboard.press('Alt+Digit2'); await page.waitForTimeout(300);
-  check('cust:atalhos-desligados', (await page.evaluate(() => location.hash)) !== '#/worlds');
+  check('cust:atalhos-desligados', (await page.evaluate(() => location.hash)) !== '#/engine');
   await page.keyboard.press('Control+k'); await page.waitForTimeout(300);
   check('cust:ctrl-k-sempre-funciona', (await page.locator('.palette').count()) === 1);
   await page.keyboard.press('Escape');

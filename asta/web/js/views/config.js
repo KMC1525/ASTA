@@ -4,7 +4,7 @@ import { go, refreshState, renderSide, saveSettings, state } from '../main.js';
 import { accentSwatches, themeCards } from '../appearance.js';
 import { CONFIG_GROUPS, CONFIG_TABS, ui } from '../prefs.js';
 import { GGUF_HINT, GGUF_KINDS, PREC_HINT, QUALITY_LABEL } from '../model_labels.js';
-import { checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
+import { accordion, checkbox, confirmDialog, download, field, fmtBytes, h, icon, range, select, seg, toast } from '../ui.js';
 import { RISK } from '../computer_ui.js';
 import { EFFORT_LABEL, PUBLISH, RISK as CODE_RISK } from '../code_ui.js';
 import { AGENT_COUNTS, teamFields } from '../team_ui.js';
@@ -15,12 +15,12 @@ const teamCard = (cfg, id, note, o = {}) => h('div', { class: 'card', id: id + '
   teamFields(cfg, Object.assign({ id }, o)));
 
 export default async function render(root, ctx) {
-  let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers');   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
+  let tab = ctx.tab === 'creative' ? 'avatars' : (ctx.tab || 'providers'); if (tab === 'generation' || tab === 'games') tab = 'engine';   // Mundos 3D e Jogos 2D agora são os «geradores rápidos» dentro da aba Game Engine   // «creative» (Avatars e jogos) foi dividida em «avatars» e «games»
   const body = h('div'), tabs = h('div', { class: 'tabs cfgtabs' });
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, generation: generation, avatars, games, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, engine: engineTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -28,8 +28,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', engine: 'engine', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', engine: 'Game Engine', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -502,7 +502,7 @@ async function appearance() {
 async function sections() {
   const save = async (patch, quiet) => { await saveSettings({ ui: patch }); if (!quiet) toast(t('Salvo'), 'ok'); };
   const U = () => ui();
-  const HIDEABLE = [['worlds', 'Mundos'], ['avatars', 'Avatars'], ['games', 'Jogos 2D'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
+  const HIDEABLE = [['engine', 'Game Engine'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', 'Biblioteca']];
   const hidden = new Set(U().sidebar_hidden);
   const jump = (tab, label, desc) => h('button', { class: 'cfg-jump', type: 'button', dataset: { go: tab }, onclick: () => go('config', { tab }) }, h('b', null, t(label)), h('span', null, t(desc)));
   return h('div', null,
@@ -510,7 +510,7 @@ async function sections() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Esconda as telas que você não usa. “Chat” e “Configuração” ficam sempre; o que está escondido continua acessível pela busca (Ctrl+K).')),
       h('div', { class: 'row', style: { gap: '18px', flexWrap: 'wrap' } }, HIDEABLE.map(([id, label]) => checkbox(t(label), !hidden.has(id), async (on) => { on ? hidden.delete(id) : hidden.add(id); await save({ sidebar_hidden: [...hidden] }, true); })))),
     cfgCard(t('Tela inicial'),
-      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['avatars', 'Avatars'], ['worlds', t('Mundos')], ['games', t('Jogos 2D')], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
+      field(t('Qual tela abre quando você entra no ASTA'), select([['main', 'Chat'], ['last', t('A última tela que eu usei')], ['engine', 'Game Engine'], ['avatars', 'Avatars'], ['canvas', 'Canvas'], ['studio', 'Studio'], ['computer', 'Computer Use'], ['code', 'Code'], ['work', 'Work'], ['rebuild', 'Rebuild'], ['library', t('Biblioteca')]], U().start_page, (v) => save({ start_page: v })))),
     cfgCard(t('Teclado'),
       checkbox(t('Atalhos de teclado (Alt+1…9 e 0, Alt+B, Alt+T, ?) — Ctrl+K (busca) sempre funciona'), U().shortcuts, (v) => save({ shortcuts: v }, true)),
       field(t('Enviar mensagens com'), seg([['enter', 'Enter'], ['ctrl_enter', 'Ctrl+Enter']], U().send_key, (v) => save({ send_key: v })),
@@ -519,8 +519,8 @@ async function sections() {
         h('button', { class: 'btn sm', onclick: () => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, bubbles: true })) }, icon('search', 13), t('Abrir a busca (Ctrl+K)')))),
     cfgCard(t('Configurações de cada seção'),
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Cada seção tem os próprios padrões, usados sempre que você cria algo nela.')),
-      h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('generation', 'Mundos 3D', 'perspectiva, conteúdo, realismo, NPCs'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
-        jump('games', 'Jogos 2D', 'tamanho, revisão, criatividade'), jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
+      h('div', { class: 'cfg-jumps' }, jump('chat', 'Chat', 'tamanho da resposta, contexto, pensamento, busca na web'), jump('engine', 'Game Engine', 'equipe de agentes, tipo padrão, busca na web, geradores rápidos do Chat'), jump('avatars', 'Avatars', 'persona, memória, conversa em grupo'),
+        jump('canvas', 'Canvas', 'modelo inicial de novos canvases'), jump('studio', 'Studio', 'duração, estilo, formato, exportação, edição automática'),
         jump('computer', 'Computer Use', 'ligar, modo Ask ou Full Access, limites e prompts'), jump('code', 'Code', 'modo, esforço, agentes, GitHub, git e editor'), jump('work', 'Work', 'equipe de agentes, limites de arquivos, sessão e backups'), jump('rebuild', 'Rebuild', 'revisão do texto por IA e limite de chamadas'), jump('performance', 'Desempenho', 'modo leve, modelos ociosos, Rust'))));
 }
 
@@ -751,6 +751,31 @@ async function workTab() {
       h('div', { class: 'cu-cfg-prompts' }, prompts.map((p) => h('details', null, h('summary', { class: 'mono small' }, p.name + '.md'), h('pre', null, p.text))))));
 }
 
+// ---------------------------------------------------------------------------------- game engine
+async function engineTab() {
+  const en = Object.assign({ agents: 1, effort: 'high', kind: '2d', content: '', web: false, undo_keep: 25 }, JSON.parse(JSON.stringify(state.settings.engine || {})));
+  let prompts = [], status = null;
+  try { prompts = (await api('/api/engine/prompts')).prompts; status = await api('/api/engine/status'); } catch (e) { /* servidor antigo */ }
+  const ex = (title, node, open) => accordion(title, node, !!open);
+  return h('div', null, secHead('engine', ['engine']),
+    cfgCard(t('Game Engine'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Jogos 2D, 2.5D, 3D, VR e AR com IA: descreva, ajuste a cena como no Godot, edite código, arte, som, roteiros e mapas e exporte. Os projetos são pastas comuns em ~/.asta/gameengine e a IA escreve dados validados (cenas, mapas, diálogos); código novo só entra pela aba Code e roda isolado dentro do jogo.')),
+      status ? h('p', { class: 'small', id: 'cfg-engine-status' }, (status.text.ai ? '✦ ' + t('IA de texto: {n}', { n: status.text.label + (status.text.model ? ' · ' + status.text.model : '') }) : t('Sem IA de texto: o Game Engine usa regras automáticas.')) + ' · ' + t('Imagem: {i} · Som: {s} · Voz: {v}', { i: status.media.image.label || status.media.image.provider, s: status.media.sound.label || status.media.sound.provider, v: status.media.voice.label || status.media.voice.provider }) + ' · ' + (status.tools.node ? t('Node.js encontrado (confere a sintaxe dos scripts)') : t('Node.js não encontrado'))) : null,
+      h('div', { class: 'grid2' },
+        field(t('Tipo de jogo padrão'), select([['2d', '2D'], ['2.5d', '2.5D'], ['3d', '3D'], ['vr', 'VR'], ['ar', 'AR']], en.kind, (v) => { en.kind = v; })),
+        field(t('Conteúdo'), select([['', t('Seguir a configuração geral')], ['free', t('Livre (SFW e NSFW)')], ['sfw', t('Só SFW')]], en.content, (v) => { en.content = v; }), t('Os limites fixos não mudam: nada sexual com menores nem com pessoas reais.'))),
+      h('div', { class: 'row', style: { gap: '18px' } }, checkbox(t('Busca na web ligada por padrão nos prompts'), en.web, (v) => { en.web = v; })),
+      field(t('Pontos de retorno guardados por projeto'), numInput(en, 'undo_keep', 5, 100), t('A IA salva um antes de cada mudança grande; dá para voltar pelo menu do projeto.'))),
+    teamCard(en, 'ge', t('Vale para a IA do Game Engine: gerar e editar o jogo (Planejador → Projetista → Redator → Revisor), código, arte, som, roteiros, mapas e publicação. Com 4 ou mais agentes, cada etapa criativa vira uma mesa em paralelo com um Sintetizador. Sem IA configurada, tudo roda com regras automáticas.')),
+    saveRow(async () => { const { agents, effort, kind, content, web, undo_keep } = en; await saveSettings({ engine: { agents, effort, kind, content, web, undo_keep } }); await refreshState(); }),
+    cfgCard(t('Geradores rápidos do Chat'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('O Chat ainda cria mundos 3D e jogos 2D de um prompt (e a Biblioteca guarda os que você já fez). Os ajustes desses geradores ficam aqui.')),
+      ex(t('Mundos 3D (gerador do Chat)'), await generation()), ex(t('Jogos 2D (gerador do Chat)'), await games())),
+    cfgCard(t('System prompts internos'),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Os textos que orientam cada agente do Game Engine são arquivos .md abertos, no código do ASTA (asta/gameengine/prompts). Aqui você só os lê.')),
+      h('div', { class: 'cu-cfg-prompts' }, prompts.map((p) => h('details', null, h('summary', { class: 'mono small' }, p.name + '.md'), h('pre', null, p.text))))));
+}
+
 // ---------------------------------------------------------------------------------- rebuild
 async function rebuildTab() {
   const rb = JSON.parse(JSON.stringify(state.settings.rebuild));
@@ -848,7 +873,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'engine', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 

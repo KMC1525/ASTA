@@ -2,11 +2,11 @@
 
 # ASTA
 
-**O primeiro super app open source: um só lugar para conversar com qualquer modelo de IA, pesquisar na web, criar mundos 3D cujos NPCs são agentes de IA, conversar com avatars, fazer jogos 2D e produzir imagens, vídeo, som e voz — tudo no seu computador.**
+**O primeiro super app open source: um só lugar para conversar com qualquer modelo de IA, pesquisar na web, criar jogos 2D, 2.5D, 3D, VR e AR com IA (um Game Engine inspirado no Godot), conversar com avatars e produzir imagens, vídeo, som e voz — tudo no seu computador.**
 
-Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um mundo 3D jogável, um companheiro para conversar, um jogo 2D completo ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
+Uma WebUI preta e minimalista, inspirada no Grok. Descreva o que quer (com texto, imagens, vídeos, áudios, documentos, planilhas…) e uma equipe de agentes de IA planeja, cria, revisa e entrega: um jogo completo e jogável (2D, 2.5D, 3D, VR ou AR), um companheiro para conversar ou um fluxo de nós que produz imagens, vídeos, sons e vozes.
 
-[Baixar](#baixe-os-instaladores) · [Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador) · [Code](#code--uma-equipe-de-ia-para-programar-bases-de-código-longas) · [Work](#work--trabalho-em-equipe-com-ia-arquivos-que-sincronizam-e-o-fluxograma-da-sua-empresa) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
+[Baixar](#baixe-os-instaladores) · [Instalação](#instalação) · [Primeiros passos](#primeiros-passos) · [Comandos](#comandos-do-terminal) · [Game Engine](#game-engine--jogos-2d-25d-3d-vr-e-ar-com-ia-inspirado-no-godot) · [Ferramentas de criação](#as-ferramentas-de-criação) · [Studio](#studio--vídeos-audiovisuais-com-ia-cena-a-cena) · [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador) · [Code](#code--uma-equipe-de-ia-para-programar-bases-de-código-longas) · [Work](#work--trabalho-em-equipe-com-ia-arquivos-que-sincronizam-e-o-fluxograma-da-sua-empresa) · [Provedores](#provedores-de-ia) · [Contribuir](CONTRIBUTING.pt-BR.md) · [Changelog](CHANGELOG.md) · [English](README.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `núcleo Rust` · `zero dependências obrigatórias`
 
@@ -22,9 +22,8 @@ Ele é uma central universal de criação com oito ferramentas, que você inicia
 
 | Modo | Você recebe |
 |---|---|
-| 🌍 **Mundos 3D** | Mundos 3D jogáveis e persistentes (1ª ou 3ª pessoa), habitados por NPCs que são agentes de IA embutidos. |
+| 🕹️ **Game Engine** | **Jogos 2D, 2.5D, 3D, VR e AR** de um prompt (com anexos, ZIPs, vídeos e busca na web) e um editor de sete abas — **Main** (árvore da cena, viewport, inspetor), **Code**, **Assets**, **Sound**, **Scripts**, **Map**, **Publish** — exportando para Windows, macOS, Linux, Android e iOS. |
 | 🙂 **Avatars** | Amigos, namorados(as), esposas/maridos, companheiros e mentores para conversar por **texto e voz** — um de cada vez ou **vários conversando entre si**. |
-| 🎮 **Jogos 2D** | Jogos 2D completos de qualquer tipo: visual novels, RPGs, plataformas, side scrollers e point & clicks. |
 | 🎬 **Studio** | **Vídeos audiovisuais com IA, cena a cena** — Shorts/Reels, curtas e longas de qualquer duração, únicos ou em série, nos estilos Realista, Cartoon, Anime ou personalizado, com **edição automática** (Gameplay, Documentário, Phonk…), **timeline estilo Kdenlive** com **Tools** ligáveis (efeitos, efeitos sonoros, captura de tela, legendas, transcrição, navegador de mídia), camadas livres (vídeo, imagem, áudio, texto, efeitos) e exportação até **4K / 120 fps**. |
 | ♻️ **Rebuild** | Reconstrói a *estrutura* de um jogo **Ren'Py** ou **RPG Maker (2000 → MZ)** existente em HTML/CSS/JS puros (só para uso pessoal). |
 | 💻 **Computer Use** | Uma equipe de IA **opcional** que faz **tarefas no seu computador**: escreve, pesquisa, usa programas instalados, organiza arquivos e abre jogos — modo Ask (Sim/Não) ou Full Access. |
@@ -45,10 +44,10 @@ Escolha o arquivo do seu sistema na [**Release mais recente**](https://github.co
 
 | Sistema | Arquivo | Como |
 |---|---|---|
-| **Windows 10/11** (64 bits) | `ASTA-0-18-0-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
-| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-18-0-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
-| **Linux** (x86_64; também `-arm64`) | `ASTA-0-18-0-Linux.appimage` | `chmod +x ASTA-0-18-0-Linux.appimage && ./ASTA-0-18-0-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-18-0-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
+| **Windows 10/11** (64 bits) | `ASTA-0-19-0-Win.exe` | Execute (instala só para você, sem administrador). Menu Iniciar → *ASTA*. O Python vai junto. |
+| **macOS 11+** (Apple Silicon e Intel) | `ASTA-0-19-0-macOS.pkg` | Botão direito → *Abrir* (não é assinado) e depois abra o *ASTA* em Aplicativos; a primeira abertura instala para o seu usuário numa janela do Terminal. |
+| **Linux** (x86_64; também `-arm64`) | `ASTA-0-19-0-Linux.appimage` | `chmod +x ASTA-0-19-0-Linux.appimage && ./ASTA-0-19-0-Linux.appimage` — um arquivo só, com o Python dentro (precisa do FUSE, ou rode com `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-19-0-Android.apk` | Permita «instalar apps desconhecidos» uma vez. **O ASTA roda dentro do celular — sem computador** ([detalhes](#celular-e-tablet)). |
 
 Cada Release traz também o **núcleo Rust pré-compilado** de cada plataforma (`asta-core-*`) e o `SHA256SUMS.txt` (confira com `sha256sum -c`). Os instaladores não têm assinatura de código (exige certificado pago): o Windows pode mostrar o SmartScreen («Mais informações → Executar assim mesmo»). Eles são gerados pelo [GitHub Actions](.github/workflows/release.yml) e **não foram executados em Windows/macOS/Android reais por quem fez esta alteração** (o que deu para conferir está no [changelog](CHANGELOG.md)). Os instaladores de terminal abaixo continuam disponíveis.
 
@@ -125,6 +124,7 @@ Opções do comando: `asta --port 9000 --no-browser --home /outra/pasta` · `ast
 | `asta libs` | instala/atualiza as bibliotecas opcionais (`docs`, `media`, `local`) |
 | `asta models list\|install` | os modelos locais pré-instalados |
 | `asta native setup` | garante o **núcleo Rust** ativo: baixa a biblioteca pré-compilada da Release (conferida por SHA-256, sem compilador) e só compila na máquina se isso falhar (também `install`, `update`, `build`, `status`) |
+| `asta engine` | **Game Engine**: lista seus projetos; `asta engine new "nome" --prompt "…"` cria um jogo jogável (sem IA), `asta engine export <id> web\|win\|macos\|linux\|android\|ios` gera um pacote |
 | `asta work` | mostra o estado do **Work**: esta máquina, o Tailscale, as redes de que você faz parte e as pessoas/máquinas/arquivos delas |
 | `asta doctor` | diagnóstico do ambiente (hardware, Python, Rust, ffmpeg, provedores, idioma do terminal) |
 | `asta version` · `asta --help` | versão · todas as opções |
@@ -144,7 +144,7 @@ O ASTA roda no seu computador; o celular ou tablet é uma **janela** para ele. O
 
 > O QR code à direita desta seção só abre este guia no seu celular. O **QR code de instalação/pareamento é o que o seu próprio computador mostra**, porque ele carrega o endereço do seu computador e um código secreto — um QR code num README público não tem como saber onde está o *seu* ASTA.
 
-**O app Android não precisa de computador.** Baixe o `ASTA-0-18-0-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
+**O app Android não precisa de computador.** Baixe o `ASTA-0-19-0-Android.apk` em [Releases → mais recente](https://github.com/KMC1525/ASTA/releases/latest) (ou escaneie o QR code abaixo; permita «instalar apps desconhecidos» uma vez) e abra: o app traz **o motor do ASTA dentro do celular** (Python via Chaquopy) e o abre sozinho — chat, busca na web, mundos 3D, avatars, jogos 2D, Canvas e Studio com a **mesma interface**, suas chaves de IA na nuvem e uma pasta de dados privada no aparelho. O app **consulta o repositório por versões novas e pergunta «Baixar agora / Depois»**. Para usar o ASTA de um computador (modelos locais pesados, mais memória), toque em *Conectar a um computador* na tela inicial (ou em *Configuração → Celular e tablet*), escaneie o QR code de pareamento dele ou digite o endereço — os dois modos convivem.
 
 <img src="docs/android-app-qr.svg" alt="QR code: app Android mais recente do ASTA" width="140">
 
@@ -180,9 +180,25 @@ O **Chat** é um assistente de uso geral, limpo: peça uma receita de bolo, estu
 - **Ajustes do Chat** (*Configuração → Chat*): turnos lembrados (até 1.000), criatividade, **instruções personalizadas**, nível de pensamento padrão e as opções da busca na web.
 - Sem provedor, vale o motor Demo e o Chat avisa com honestidade — ele não responde perguntas de verdade. Escolha um modelo para resolver.
 
+## Game Engine — jogos 2D, 2.5D, 3D, VR e AR com IA (inspirado no Godot)
+
+O **Game Engine** (v0.19) substitui as antigas seções *Mundos* e *Jogos 2D*. Descreva um jogo — com texto, imagens, vídeos, ZIPs, documentos e, se quiser, a **busca na web nativa** — e uma equipe de agentes monta um jogo completo e jogável; depois você ajusta tudo em um editor de sete abas. Os jogos podem ser **2D, 2.5D (isométrico ou com paralaxe), 3D, VR ou AR**. Cada projeto é uma pasta comum em `~/.asta/gameengine/<id>/` (`game/` é o jogo, `docs/` seus roteiros, `editor/` arquivos de trabalho, `history/` pontos de retorno).
+
+- **Main** — *o jogo em si e a visualização ao vivo.* **Caixa de prompt à esquerda** (quantos anexos quiser, ZIPs, vídeos…, busca na web, 1·4·8·12·16 agentes, Low→Omni) acima da **árvore da cena** (nós em pastas, arraste para reordenar, mostrar/ocultar); o **viewport** no meio (modo edição: clique seleciona, arrastar move, roda dá zoom, órbita em 3D; **▶ Jogar** roda o jogo no mesmo lugar); o **inspetor de propriedades à direita** (todas as propriedades do nó, **comportamentos** de uma lista fechada, etiquetas e — sem nada selecionado — regras da cena, música, sons por evento, idioma, vida). Tudo salva sozinho; um prompt num jogo existente o **edita** com operações validadas (adicionar/alterar/remover nós, tema, mais/menos inimigos…), e um ponto de retorno é salvo antes de cada mudança da IA.
+- **Code** — *no estilo do VS Code.* Prompt à esquerda, **pastas e subpastas** no meio (criar, renomear, mover arrastando, enviar arquivos e ZIPs), **editor de código** à direita (abas, números de linha, realce de sintaxe, recuo automático, `Ctrl+S`, busca). A IA planeja → escreve → confere a sintaxe (`node --check`, se houver Node); só escreve em `scripts/`, `data/`, `scenes/`, `maps/`. **Conexão opcional com o modo Code do ASTA:** ligada, os prompts vão para uma sessão do Code apontada para a pasta do jogo (testes, git, até 16 trabalhadores).
+- **Assets** — *no estilo do Krita.* Prompt à esquerda (**gerar com ou sem fundo**), **tela em camadas** no meio (pincel, borracha, balde, conta-gotas, **seleção por retângulo / mão livre / pintando** para **editar só um ponto escolhido com IA**, mover/girar/redimensionar a camada, zoom/deslocar, desfazer), **propriedades e camadas à direita com pastas e subpastas** (opacidade, modos de mistura, travar, mesclar, filtros de cor, remover fundo, cortar). *Aplicar ao jogo* grava o PNG final em `assets/images/`. Sem modelo de imagem, o ASTA desenha sprites vetoriais (herói, inimigo, moeda, árvore…).
+- **Sound** — *no estilo do Audacity.* Linha do tempo com várias faixas e formas de onda; selecionar, cortar/copiar/colar/excluir, dividir, cortar ao trecho, fades, ganho, normalizar, reverso, velocidade/tom, eco, filtros, **redução de ruído** (capture um perfil de ruído → subtração espectral; ou gate), **gravar sua própria voz/sons** e **gerar efeitos, músicas e vozes** com IA (sem modelo: o ASTA sintetiza efeitos e trilhas de verdade). *Aplicar ao jogo* mixa em WAV e pode ligar a um evento ou à música de fundo. **Conexões opcionais com o Studio e o Canvas** (enviar sons selecionados).
+- **Scripts** — *no estilo do Notepad Next.* Escreva roteiros, GDD, diálogos, lore e missões em `.md`/`.txt`; **várias abas, na horizontal ou na vertical**, painéis **lado a lado ou empilhados**, pastas e subpastas; **selecione um parágrafo ou uma fala** e a IA **melhora, expande, reescreve, encurta, corrige, vira diálogo ou traduz só aquele trecho**; *Enviar diálogos ao jogo* (`## id` + `Nome: fala` → `data/dialogues.json`). Os cartões de **Personagens** e **Worldbuilding** ficam aqui também.
+- **Map** — gerar e editar o mundo. Mapas 2D de blocos (pintar blocos, objetos, alturas no isométrico) e terreno 3D com biomas (pincel de subir/descer/suavizar/aplainar/ruído, objetos). **Selecione uma região ou um ponto** e gere de novo só aquela parte, ou ponha coisas ali (“adicione 3 casas aqui”); ou gere o **mapa inteiro de um prompt**. Todo mapa tem ponto de partida garantido e objetivo alcançável.
+- **Publish** — exporte para **Web (HTML5 + PWA), Windows, macOS, Linux, Android e iOS**. Todo pacote leva o **jogo jogável** (funciona offline, sem servidor) e um **projeto nativo pronto para compilar** — Electron (desktop) ou Capacitor (Android/iOS) — mais um **fluxo do GitHub Actions** que gera os instaladores/APK para você. O prompt escreve textos de loja, etiquetas e notas de versão.
+
+Por baixo, um jogo é **dados + um motor pequeno e revisado** (`asta/gameengine/runtime`): cenas são árvores de nós (no estilo do Godot) com comportamentos de uma lista fechada, os mapas guardam as fases (os objetos deles nascem sozinhos) e **a IA escreve JSON validado, nunca código que rode fora do jogo**. O fluxo multiagente é *Planejador → Projetista de cena → Redator → Revisor*, com conferências determinísticas (um jogador, um objetivo, itens alcançáveis) e um **gerador por regras**, então sai um jogo 2D/2.5D/3D/VR/AR jogável **mesmo sem IA configurada**. O código que você escreve na aba Code roda **só dentro de um iframe isolado** (sandbox sem mesma origem, CSP estrita, sem rede, sem acesso à API do ASTA). As telas antigas *Mundos* e *Jogos 2D* saíram do menu: o que você já criou continua na Biblioteca, e o Chat ainda tem os geradores rápidos de mundo 3D e jogo 2D (os ajustes deles ficam em *Configuração → Game Engine*).
+
+**Limites honestos.** VR/AR usam **WebXR** e a prévia no computador; **não foram testados em headset ou celular reais**. O ASTA **não compila nem assina** binários nativos: entrega o pacote jogável, o projeto pronto para compilar e o fluxo de CI (**não executado em um repositório real do GitHub nem em aparelhos reais Windows/macOS/Android/iOS**). A qualidade real da IA de imagem/áudio/texto depende do provedor que você configurar (testado só com provedores simulados).
+
 ## As ferramentas de criação
 
-### 🌍 Mundos 3D
+### 🌍 Mundos 3D (gerador rápido do Chat)
 
 Descreva um mundo; o ASTA entrega um **ZIP com um jogo 3D jogável** (HTML + CSS + JS + three.js) que abre direto de um arquivo.
 
@@ -227,7 +243,7 @@ Companheiros no espírito do Janitor e do SillyTavern, embutidos no ASTA.
 - **Crie a partir de uma foto ou arte**: ligue *Foto/arte como base*, anexe uma ou mais imagens e envie — só a imagem, ou somando um prompt de texto e outros anexos (documentos, conversas…). Escolha *um avatar por imagem* ou *uma pessoa com todas as imagens*. A imagem define o visual (cabelo, olhos, roupas, estilo da arte — descritos pelo seu modelo de visão, ou pelas cores dominantes offline) e vira o retrato; o texto só acrescenta nome, personalidade e história. O ASTA nunca identifica uma pessoa real pelo rosto: só usa um nome se você der um (ou se o nome do arquivo sugerir). **Fotos de pessoas reais — e imagens que não dá para identificar como arte — ficam sempre em SFW; NSFW só vale para arte de personagens fictícios**, e uma imagem que pareça mostrar um menor segue a regra dos menores acima.
 - **Importa e exporta** Character Card V2 (JSON e PNG), então seus cards funcionam em outras ferramentas.
 
-### 🎮 Jogos 2D
+### 🎮 Jogos 2D (gerador rápido do Chat)
 
 Descreva um jogo (ou anexe roteiros, imagens, documentos) e uma equipe de agentes escreve um **jogo completo e jogável como dados**, empacotado num ZIP que roda de um arquivo ou direto do ASTA — com o motor do gênero que você pediu:
 
@@ -403,9 +419,8 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 | Seção | Para quê |
 |---|---|
 | **Chat** | A tela principal: chat de uso geral com seletor de modelo, anexos e histórico — e, ao ligar uma ferramenta de criação, a caixa de prompt de mundos 3D, avatars, jogos 2D e Canvas com o acompanhamento ao vivo dos agentes. |
-| **Mundos** | Tudo sobre os mundos 3D em três abas: **Mundos** (personalizar os mundos gerados: bioma, clima, hora, ciclo dia/noite, NPCs, áudio, interface, qualidade — cada salvamento vira uma nova versão **sem gastar IA**), **Personagens** (cards dos NPCs e do jogador: nome, tags, system prompt, voz, aparência; importa/exporta JSON e cards de PNG, Character Card V2/V3) e **Worldbuilding** (regras gerais dos mundos — cenário, tom, convenções — também salvas como cards). |
+| **Game Engine** | Seus jogos e o editor de sete abas: **Main** (prompt + árvore da cena + viewport + inspetor), **Code**, **Assets**, **Sound**, **Scripts** (com os cartões de Personagens e Worldbuilding), **Map** e **Publish**. Substituiu as antigas telas *Mundos* e *Jogos 2D*; os projetos que já existem ficam na Biblioteca. |
 | **Avatars** | Seus cards de avatar e as conversas single e em grupo. |
-| **Jogos 2D** | Seus jogos: jogar, baixar, atualizar. |
 | **Canvas** | Seus canvases e o editor de nós: **barra de pesquisa de modelos** (Hugging Face) no topo, seletor de modelo e menções `@` nos nós e *Enviar ao Studio*. |
 | **Studio** | Seus projetos de vídeo (únicos ou em série): geração cena a cena, edição automática, o editor de timeline (com as **Tools** e as camadas livres) e a exportação até 4K / 120 fps. |
 | **Computer Use** | As tarefas que a equipe de IA faz no seu computador (até 8 ao mesmo tempo): acompanhamento ao vivo, perguntas Sim/Não do modo Ask e o histórico passo a passo, com Cancelar, Refazer e Desfazer. |
@@ -413,7 +428,7 @@ A orquestração do ASTA continua em Python (o máximo possível), sobre um **n�
 | **Work** | Trabalho em equipe: pessoas e cargos customizados, o quadro de fluxograma da empresa, setores com arquivos sincronizados, pedidos, atividades, avisos ao vivo, máquinas/redes (Tailscale, rede local, pasta de nuvem) e backups escolhidos. |
 | **Rebuild** | Reconstrua jogos Ren'Py / RPG Maker e veja os que você reconstruiu. |
 | **Biblioteca** | Tudo o que você criou como projetos atualizáveis, mais os **modelos de IA locais instalados**, com busca e tags automáticas + personalizadas. Use *Selecionar* para escolher vários itens e apagá-los de uma vez; os modelos podem ser apagados um a um ou em lote. |
-| **Configuração** | 20 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Mundos 3D, Avatars, Jogos 2D, Canvas, Studio, Computer Use, Work, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
+| **Configuração** | 19 abas em 4 grupos: **Geral** (aparência, seções e atalhos), **IA e modelos** (provedores, mídia, voz, modelos locais), **Seções** (padrões de Chat, Game Engine — com os geradores de mundo 3D e jogo 2D do Chat dentro —, Avatars, Canvas, Studio, Computer Use, Work, Rebuild — cada uma com *Restaurar padrões desta seção*) e **Sistema** (desempenho, dados e backup, sistema). |
 
 ### Deixe do seu jeito (Configuração → Aparência)
 
@@ -536,7 +551,7 @@ O ASTA **não adiciona filtros de conteúdo**: o modo padrão segue o seu prompt
 - Proteção contra *DNS rebinding* (checagem de `Host`) e requisições entre sites (checagem de `Origin`); uploads e arquivos servidos passam por validação de caminho; mídias enviadas são identificadas pelo conteúdo, não pelo nome.
 - **Computer Use** é opcional e desligado por padrão; tem limites fixos em qualquer modo (sem senhas, chaves, pasta de dados do ASTA, pastas do sistema, shells ou scripts), lixeira e **Desfazer** — veja [Computer Use](#computer-use--uma-equipe-de-ia-que-trabalha-no-seu-computador). Aparelhos pareados por QR code têm o mesmo acesso que você ao ASTA, inclusive a ele.
 - O **Code** só roda código escrito pela IA dentro da pasta do projeto da sessão, como listas de argumentos de ferramentas de desenvolvimento (sem shell), com ambiente limpo, limite de tempo e um modo Ask que mostra o comando inteiro; segredos e a pasta de dados do ASTA são inalcançáveis; o token do GitHub nunca chega ao navegador, às exportações nem a uma IA — veja [Code](#code--uma-equipe-de-ia-para-programar-bases-de-código-longas).
-- Mundos e jogos não executam código gerado por IA: o modelo escreve **dados** (JSON), e o motor é sempre o mesmo código auditável.
+- Mundos e jogos não executam código gerado por IA: o modelo escreve **dados** (JSON), e o motor é sempre o mesmo código auditável. A única exceção deliberada é a aba **Code** do Game Engine (como o modo Code do ASTA, escrever código é o propósito dela): esses scripts rodam **só dentro do iframe isolado do jogo** (`sandbox` sem `allow-same-origin`, CSP sem rede, sem cookies, sem acesso à API do ASTA), a IA só pode escrever em `scripts/`, `data/`, `scenes/` e `maps/`, e a sintaxe é conferida antes de salvar.
 
 ## Estrutura do repositório
 
@@ -547,6 +562,8 @@ asta/
   agents/        executor compartilhado + pipelines (mundos, avatars, jogos 2D), prompts, esquemas, geradores de regras
   runtime/       motor 3D: three.js, terreno, céu, clima, atores, áudio, IA dos NPCs
   runtime2d/     motores 2D: visual novel, RPG, plataforma, side scroller, point & click
+  gameengine/    Game Engine: esquema/catálogo, gerenciador de projetos (caminhos, histórico), gerador por regras, mapas, arte, áudio, exportador, agentes + prompts/*.md, runtime/ (motor 2D/2.5D/3D/VR/AR + modo de edição)
+  routes_engine.py     API do Game Engine (projetos, cenas, mapas, arquivos, jogar, jobs de IA, exportação)
   games2d/       spec dos jogos 2D: esquema, validação, empacotamento
   avatars.py  avatar_chat.py  routes_avatars.py    cards de avatar, diretor da conversa, API
   canvas/        esquema dos nós, armazenamento, motor, provedores de mídia, renderizador da linha do tempo, Demo procedural, menções `@`, lista de modelos instalados, enviar ao Studio
