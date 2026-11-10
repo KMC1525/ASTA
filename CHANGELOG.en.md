@@ -7,6 +7,14 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.5] — 2026-11-10
+
+### Added — Studio: customizable timeline layout
+- **Resize every window from all four sides.** The dividers between windows (media/monitor/properties, the top row and the timeline, and now the **timeline and the mixer**) resize both neighbours; the **outer edges** of the editor pull it in on that side (left, right, top, bottom). Double-click any edge to reset it. Sizes are remembered.
+- **Swap windows around.** Toolbar → **Layout**: left ⇄ center, center ⇄ right, left ⇄ right, **timeline ⇄ top windows**, and the **mixer to the other side** of the timeline. The dividers keep working in any arrangement (on small screens the default order is used).
+- **Layout presets in JSON.** *Layout → Layout presets*: save your arrangement with a name (**kept in this browser**), **export** it as `timeline-<name>.json` (kind, version, name, layout, snap/ripple) and **import** a `.json`. Imported files are untrusted input: the type and version are checked, numbers are clamped, the window order must be a valid permutation and only known windows are accepted; a bad file is refused with a notice and changes nothing.
+- Version 0.19.5; browser test `test_46` (resize, swap, save/export/apply/import/delete, invalid and hostile files, reload) and a pure-data module `studio_layout.js`.
+
 ## [0.19.4] — 2026-11-10
 
 ### Added — Game Engine: move objects while you build

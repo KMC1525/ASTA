@@ -412,6 +412,9 @@ class BrowserTests(unittest.TestCase):
     def test_45_game_engine_all_seven_tabs(self):
         self.run_script("engine_ui.js")
 
+    def test_46_studio_timeline_resize_four_sides_swap_windows_and_json_layout_presets(self):
+        self.run_script("studio_layout_ui.js")
+
 
 if __name__ == "__main__":
     unittest.main()

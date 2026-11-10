@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { fill, h, icon, popover, toast } from '../ui.js';
 import { DEFAULT_ON, FILTERS as FX_FILTERS, FILTER_CSS as FX_CSS, TOOLS, buildTools } from './studio_tools.js';
+import { DEF_ORDER, addPreset, fileName, loadPresets, makePreset, parsePreset, sanitizeLayout, savePresets, swapOrder } from './studio_layout.js';
 
 // Timeline de edição do Studio, inspirada no Kdenlive: bin de mídias, monitor do projeto, inspetor de propriedades, mixer de áudio e trilhas com cortar, juntar, silenciar, mover, aparar…
 const FPS = 24;
@@ -258,6 +259,56 @@ export function mountTimeline(host, o) {
     popover(anchor, h('div', { class: 'toolmenu stl-menu', role: 'menu', id: 'stl-tools-menu' }, TOOLS.map(row), h('div', { class: 'opt', role: 'menuitem', onclick: () => { LAY.tools = Object.fromEntries(TOOLS.map((x) => [x.id, DEFAULT_ON.includes(x.id)])); applyTools(); saveLay(); } }, icon('refresh', 15), h('div', null, t('Voltar ao padrão')))));
   }
 
+  // ---------------------------------------------------------------- layout: trocar janelas de lugar e presets em JSON
+  const TOOL_IDS = TOOLS.map((x) => x.id);
+  const commitLay = () => { applyLay(); saveLay(); renderAll(); if (isOn('monitor')) updatePreview(true); };
+  const dlJson = (obj, name) => { const a = h('a', { href: URL.createObjectURL(new Blob([JSON.stringify(obj, null, 2)], { type: 'application/json' })), download: name }); document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 500); };
+  const currentPreset = (name) => makePreset(name, LAY, { snap: S.snap, ripple: S.ripple });
+  function applyPreset(p) {
+    const lay = sanitizeLayout(p.layout, TOOL_IDS);
+    Object.keys(lay).forEach((k) => { if (k === 'tools') Object.assign(LAY.tools, lay.tools); else if (k === 'tab') Object.assign(LAY.tab, lay.tab); else if (k === 'inset') LAY.inset = Object.assign({ l: 0, r: 0, t: 0, b: 0 }, lay.inset); else LAY[k] = lay[k]; });
+    if (typeof p.timeline.snap === 'boolean') S.snap = p.timeline.snap;
+    if (typeof p.timeline.ripple === 'boolean') S.ripple = p.timeline.ripple;
+    LAY.mix = LAY.tools.mixer !== false; applyTools(); saveLay(); updatePreview(true);
+  }
+  function layoutMenu(anchor) {
+    const body = h('div', { class: 'stl-lay', id: 'stl-lay-menu', role: 'menu' });
+    const sw = (id, label, fn) => h('button', { class: 'btn sm', type: 'button', dataset: { swap: id }, onclick: () => { fn(); commitLay(); paint(); } }, icon('swap', 14), label);
+    const swapSlot = (a, b) => () => { LAY.order = swapOrder(LAY.order, a, b); };
+    const paint = () => {
+      const list = loadPresets(), nameInp = h('input', { type: 'text', id: 'stl-preset-name', maxlength: 60, placeholder: t('Nome do preset'), 'aria-label': t('Nome do preset') });
+      const save = () => {
+        const p = currentPreset(nameInp.value || t('Meu layout')), next = addPreset(loadPresets(), p);
+        if (!savePresets(next)) { toast(t('Não deu para guardar neste navegador.'), 'err'); return; }
+        toast(t('Preset «{n}» guardado neste navegador.', { n: p.name }), 'ok'); paint();
+      };
+      nameInp.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); save(); } });
+      const fileIn = h('input', { type: 'file', accept: 'application/json,.json', class: 'hidden', id: 'stl-preset-file' });
+      fileIn.addEventListener('change', async () => {
+        const f = fileIn.files && fileIn.files[0]; fileIn.value = ''; if (!f) return;
+        try { const p = parsePreset(await f.text(), TOOL_IDS); applyPreset(p); toast(t('Preset «{n}» aplicado.', { n: p.name }), 'ok'); paint(); } catch (e) { toast(t(e.message), 'err'); }
+      });
+      const rows = list.map((r) => h('div', { class: 'stl-preset', dataset: { id: r.id } }, h('span', { class: 'nm', title: r.name }, r.name),
+        h('button', { class: 'btn sm primary', type: 'button', dataset: { act: 'apply' }, onclick: () => { try { const p = parsePreset(r.preset, TOOL_IDS); applyPreset(p); toast(t('Preset «{n}» aplicado.', { n: p.name }), 'ok'); } catch (e) { toast(t(e.message), 'err'); } } }, t('Aplicar')),
+        h('button', { class: 'btn sm ghost icon', type: 'button', dataset: { act: 'export' }, title: t('Exportar este preset (.json)'), 'aria-label': t('Exportar este preset (.json)'), onclick: () => dlJson(r.preset, 'timeline-' + fileName(r.name) + '.json') }, icon('download', 14)),
+        h('button', { class: 'btn sm ghost icon', type: 'button', dataset: { act: 'delete' }, title: t('Apagar este preset'), 'aria-label': t('Apagar este preset'), onclick: () => { savePresets(loadPresets().filter((x) => x.id !== r.id)); paint(); } }, icon('trash', 14))));
+      fill(body,
+        h('h5', null, t('Trocar de lugar')),
+        h('div', { class: 'row' }, sw('left-center', t('Esquerda ⇄ centro'), swapSlot('left', 'center')), sw('center-right', t('Centro ⇄ direita'), swapSlot('center', 'right')), sw('left-right', t('Esquerda ⇄ direita'), swapSlot('left', 'right')),
+          sw('flip', t('Timeline ⇄ janelas de cima'), () => { LAY.flip = !LAY.flip; }), sw('mixer', t('Mixer para o outro lado'), () => { LAY.mixLeft = !LAY.mixLeft; })),
+        h('h5', null, t('Tamanho')),
+        h('p', { class: 'muted small', style: { margin: '0 6px 6px' } }, t('Arraste as bordas das janelas: as divisórias mudam o tamanho de duas janelas e as bordas de fora recuam o editor naquele lado. Dois cliques voltam ao padrão.')),
+        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', id: 'stl-lay-reset', onclick: () => { Object.assign(LAY, clone(DEF), { tools: LAY.tools, tab: LAY.tab }); LAY.order = DEF_ORDER.slice(); applyTools(); saveLay(); paint(); } }, icon('refresh', 14), t('Voltar ao layout padrão'))),
+        h('h5', null, t('Presets de layout')),
+        h('div', { class: 'row' }, nameInp, h('button', { class: 'btn sm primary', type: 'button', id: 'stl-preset-save', onclick: save }, icon('check', 14), t('Guardar aqui'))),
+        h('div', { id: 'stl-preset-list' }, rows.length ? rows : h('p', { class: 'muted small', style: { margin: '8px 6px' } }, t('Nenhum preset guardado ainda.'))),
+        h('div', { class: 'row', style: { marginTop: '8px' } },
+          h('button', { class: 'btn sm', type: 'button', id: 'stl-preset-export', onclick: () => dlJson(currentPreset(nameInp.value || t('Meu layout')), 'timeline-' + fileName(nameInp.value || 'layout') + '.json') }, icon('download', 14), t('Exportar o layout atual (.json)')),
+          h('button', { class: 'btn sm', type: 'button', id: 'stl-preset-import', onclick: () => fileIn.click() }, icon('upload', 14), t('Importar .json')), fileIn));
+    };
+    paint(); popover(anchor, body);
+  }
+
   // velocidade: o clipe usa o MESMO trecho da mídia, então a duração na timeline muda (2× = metade do tempo; 0,5× = o dobro), sem passar do fim da mídia
   function setSpeed(v) {
     if (!(v > 0)) return;
@@ -293,12 +344,16 @@ export function mountTimeline(host, o) {
   const posEl = h('span', { class: 'stl-pos', id: 'stl-pos' });
   const zbar = h('div', { class: 'stl-zbar' }, posEl, h('span', { class: 'grow' }), h('button', { class: 'stl-btn', type: 'button', title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)), zoomRange,
     h('button', { class: 'stl-btn', type: 'button', title: t('Mais zoom') + ' (+)', onclick: () => zoom(1.35) }, icon('zoomin', 15)), h('button', { class: 'stl-btn', type: 'button', title: t('Ajustar à tela'), onclick: () => fit() }, icon('fit', 15)));
-  const root = h('div', { class: 'stl' }, bar, top, g3, h('div', { class: 'stl-tlwrap' }, scroller, mixer), zbar);
+  const gm = gut('mixer', 'v', t('Arraste para mudar a largura do mixer (dois cliques: automático)'));
+  const tlwrap = h('div', { class: 'stl-tlwrap' }, scroller, gm, mixer);
+  const root = h('div', { class: 'stl' }, bar, top, g3, tlwrap, zbar);
   fill(host, root);
   // tamanhos e janelas (Tools) ligadas — guardados no navegador
-  const DEF = { bin: 230, insp: 290, top: 250, rs: 1.15, mix: true };
+  const DEF = { bin: 230, insp: 290, top: 250, rs: 1.15, mix: true, mixw: 0, order: DEF_ORDER.slice(), flip: false, mixLeft: false, inset: { l: 0, r: 0, t: 0, b: 0 } };
   let LAY = Object.assign({}, DEF);
-  try { Object.assign(LAY, JSON.parse(localStorage.getItem('asta.stl.layout') || '{}')); } catch (e) { /* ok */ }
+  try { Object.assign(LAY, sanitizeLayout(JSON.parse(localStorage.getItem('asta.stl.layout') || '{}'), TOOLS.map((x) => x.id)), { mix: undefined }); } catch (e) { /* ok */ }
+  if (LAY.mix === undefined) LAY.mix = true;
+  LAY.order = LAY.order.slice(); LAY.inset = Object.assign({ l: 0, r: 0, t: 0, b: 0 }, LAY.inset);
   if (!LAY.tools || typeof LAY.tools !== 'object') LAY.tools = Object.fromEntries(TOOLS.map((x) => [x.id, x.id === 'mixer' ? LAY.mix !== false : DEFAULT_ON.includes(x.id)]));   // layouts antigos só conheciam o mixer
   TOOLS.forEach((x) => { if (LAY.tools[x.id] === undefined) LAY.tools[x.id] = DEFAULT_ON.includes(x.id); });
   LAY.tab = LAY.tab && typeof LAY.tab === 'object' ? LAY.tab : {};
@@ -306,32 +361,74 @@ export function mountTimeline(host, o) {
   const isOn = (id) => !!LAY.tools[id];
   const dockIds = (side) => TOOLS.filter((x) => x.dock === side && isOn(x.id)).map((x) => x.id);
   const isVisible = (id) => { const d = TOOLS.find((x) => x.id === id); return !!d && isOn(id) && (d.dock === 'left' || d.dock === 'right' ? LAY.tab[d.dock] === id : true); };
-  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(140, Math.min(LAY.bin, W * 0.45)); LAY.insp = Math.max(190, Math.min(LAY.insp, W * 0.45)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.tools.mixer !== false; };
+  const clampLay = () => { const H = root.clientHeight || 700, W = root.clientWidth || 1200; LAY.bin = Math.max(140, Math.min(LAY.bin, W * 0.45)); LAY.insp = Math.max(190, Math.min(LAY.insp, W * 0.45)); LAY.top = Math.max(140, Math.min(LAY.top, H - 150)); LAY.rs = Math.max(0.6, Math.min(2.4, LAY.rs)); LAY.mix = LAY.tools.mixer !== false; LAY.mixw = LAY.mixw > 0 ? Math.max(140, Math.min(LAY.mixw, W * 0.6)) : 0;
+    ['l', 'r'].forEach((k) => { LAY.inset[k] = Math.max(0, Math.min(LAY.inset[k] || 0, W * 0.3)); }); ['t', 'b'].forEach((k) => { LAY.inset[k] = Math.max(0, Math.min(LAY.inset[k] || 0, H * 0.2)); }); };
+  const SLOT = { left: leftDock, center, right: rightDock };
+  let topSig = '';
   const applyLay = () => {
     clampLay(); root.style.setProperty('--bin', LAY.bin + 'px'); root.style.setProperty('--insp', LAY.insp + 'px'); root.style.setProperty('--toph', LAY.top + 'px'); root.style.setProperty('--rs', String(LAY.rs)); root.classList.toggle('no-mixer', !LAY.mix);
-    const L = dockIds('left').length > 0, R = dockIds('right').length > 0, C = isOn('monitor');
-    leftDock.classList.toggle('hidden', !L); rightDock.classList.toggle('hidden', !R); center.classList.toggle('hidden', !C);
-    g1.classList.toggle('hidden', !(L && C)); g2.classList.toggle('hidden', !(R && (C || L)));
-    const cols = [];
-    if (L) cols.push(!C && !R ? 'minmax(0,1fr)' : LAY.bin + 'px');
-    if (L && C) cols.push('6px');
-    if (C) cols.push('minmax(0,1fr)');
-    if (R && (C || L)) cols.push('6px');
-    if (R) cols.push(C ? LAY.insp + 'px' : 'minmax(0,1fr)');
-    top.style.gridTemplateColumns = cols.join(' ');
-    const none = !L && !R && !C; root.classList.toggle('no-top', none); g3.classList.toggle('hidden', none);   // sem janelas no alto, a timeline ocupa tudo
+    // janelas do alto: a ordem (esquerda, centro, direita) pode ser trocada; no celular vale sempre a ordem padrão
+    const narrow = !!(window.matchMedia && window.matchMedia('(max-width:980px)').matches), order = narrow ? DEF_ORDER : LAY.order;
+    const vis = { left: dockIds('left').length > 0, center: isOn('monitor'), right: dockIds('right').length > 0 };
+    Object.keys(SLOT).forEach((k) => SLOT[k].classList.toggle('hidden', !vis[k]));
+    const seq = order.filter((k) => vis[k]), gs = [g1, g2], sizes = [];
+    gs.forEach((g) => { g.classList.add('hidden'); g._ks = null; });
+    const kids = [];
+    seq.forEach((k, i) => {
+      kids.push(SLOT[k]);
+      sizes.push(k === 'center' ? 'minmax(0,1fr)' : (seq.length === 1 || (!vis.center && i === seq.length - 1)) ? 'minmax(0,1fr)' : (k === 'left' ? LAY.bin : LAY.insp) + 'px');
+      if (i < seq.length - 1) {
+        const g = gs[i], a2 = k, b2 = seq[i + 1]; g.classList.remove('hidden');
+        g._ks = a2 !== 'center' ? { key: a2 === 'left' ? 'bin' : 'insp', sign: 1 } : { key: b2 === 'left' ? 'bin' : 'insp', sign: -1 };   // a janela de painel é a que cresce; a do centro (monitor) absorve o resto
+        kids.push(g); sizes.push('6px');
+      }
+    });
+    Object.keys(SLOT).forEach((k) => { if (!seq.includes(k)) kids.push(SLOT[k]); }); gs.forEach((g) => { if (!kids.includes(g)) kids.push(g); });
+    edges.filter((e) => e._host === top).forEach((e) => kids.push(e));
+    const sig = kids.map((el) => el.id || el.dataset.dock || el.dataset.side || 'c').join('|'); if (sig !== topSig) { topSig = sig; top.replaceChildren(...kids); }
+    top.style.gridTemplateColumns = sizes.join(' ');
+    const none = !seq.length; root.classList.toggle('no-top', none); g3.classList.toggle('hidden', none);   // sem janelas no alto, a timeline ocupa tudo
+    // timeline em cima ou embaixo das janelas
+    root.classList.toggle('flip', !!LAY.flip); const O = LAY.flip ? { top: 4, g3: 3, tl: 1, zb: 2 } : { top: 1, g3: 2, tl: 3, zb: 4 };
+    bar.style.order = '0'; top.style.order = String(O.top); g3.style.order = String(O.g3); tlwrap.style.order = String(O.tl); zbar.style.order = String(O.zb);
+    // mixer: de que lado da timeline e qual a largura
+    gm.classList.toggle('hidden', !LAY.mix); mixer.style.order = LAY.mixLeft ? '0' : '2'; gm.style.order = '1'; scroller.style.order = LAY.mixLeft ? '2' : '0';
+    mixer.classList.toggle('left', !!LAY.mixLeft); mixer.style.width = LAY.mixw > 0 ? LAY.mixw + 'px' : ''; mixer.style.maxWidth = LAY.mixw > 0 ? 'none' : '';
+    // recuos nas quatro bordas do editor (cada janela encolhe a partir da borda)
+    const I = LAY.inset, topEl = LAY.flip ? tlwrap : top, botEl = LAY.flip ? top : tlwrap;
+    [top, tlwrap].forEach((el) => { el.style.paddingLeft = I.l ? I.l + 'px' : ''; el.style.paddingRight = I.r ? I.r + 'px' : ''; el.style.paddingTop = ''; el.style.paddingBottom = ''; });
+    topEl.style.paddingTop = I.t ? I.t + 'px' : ''; botEl.style.paddingBottom = I.b ? I.b + 'px' : '';
+    edges.forEach((e) => { const side = e.dataset.side; e.style[side === 'l' ? 'left' : side === 'r' ? 'right' : side === 't' ? 'top' : 'bottom'] = (I[side] || 0) + 'px'; e.classList.toggle('active', (I[side] || 0) > 0); });
+    edges.forEach((e) => { const hostEl = e.parentNode; if (e.dataset.side === 't') e.classList.toggle('hidden', hostEl !== topEl); if (e.dataset.side === 'b') e.classList.toggle('hidden', hostEl !== botEl); });
+    g1.title = g2.title = t('Arraste para mudar a largura da janela ao lado (dois cliques: padrão)');
+    g3.title = t('Arraste para mudar a altura das janelas de cima e da timeline (dois cliques: padrão)');
   };
   const saveLay = () => { try { localStorage.setItem('asta.stl.layout', JSON.stringify(LAY)); } catch (e) { /* ok */ } };
-  const dragGut = (g, key, sign) => {
-    g.addEventListener('dblclick', () => { LAY[key] = DEF[key]; applyLay(); saveLay(); renderAll(); });
+  const dragGut = (g, ks) => {
+    g.addEventListener('dblclick', () => { const { key } = ks(); LAY[key] = DEF[key]; applyLay(); saveLay(); renderAll(); });
     g.addEventListener('pointerdown', (e) => {
-      e.preventDefault(); const horiz = g.classList.contains('h'), p0 = horiz ? e.clientY : e.clientX, v0 = LAY[key]; g.setPointerCapture(e.pointerId); g.classList.add('on');
+      e.preventDefault(); const { key, sign } = ks(), horiz = g.classList.contains('h'), p0 = horiz ? e.clientY : e.clientX, v0 = LAY[key] || (key === 'mixw' ? mixer.offsetWidth : 0); g.setPointerCapture(e.pointerId); g.classList.add('on');
       const mv = (ev) => { LAY[key] = v0 + sign * ((horiz ? ev.clientY : ev.clientX) - p0); applyLay(); if (key !== 'top') { paintRuler(); } };
       const up = () => { g.removeEventListener('pointermove', mv); g.removeEventListener('pointerup', up); g.classList.remove('on'); saveLay(); renderAll(); };
       g.addEventListener('pointermove', mv); g.addEventListener('pointerup', up);
     });
   };
-  dragGut(g1, 'bin', 1); dragGut(g2, 'insp', -1); dragGut(g3, 'top', 1);
+  dragGut(g1, () => g1._ks || { key: 'bin', sign: 1 }); dragGut(g2, () => g2._ks || { key: 'insp', sign: -1 });
+  dragGut(g3, () => ({ key: 'top', sign: LAY.flip ? -1 : 1 }));
+  dragGut(gm, () => ({ key: 'mixw', sign: LAY.mixLeft ? 1 : -1 }));
+  // bordas externas: arrastar para dentro recua a janela daquele lado (cada janela encolhe a partir da borda; dois cliques voltam)
+  const edges = [];
+  [['l', top], ['r', top], ['t', top], ['b', top], ['l', tlwrap], ['r', tlwrap], ['t', tlwrap], ['b', tlwrap]].forEach(([side, hostEl]) => {
+    const e = h('div', { class: 'stl-edge ' + side, dataset: { side }, role: 'separator', tabindex: '-1', title: t('Arraste para recuar esta borda do editor (dois cliques: voltar)') }); e._host = hostEl; hostEl.append(e); edges.push(e);
+    const horiz = side === 't' || side === 'b', sign = side === 'l' || side === 't' ? 1 : -1;
+    e.addEventListener('dblclick', () => { LAY.inset[side] = 0; applyLay(); saveLay(); renderAll(); });
+    e.addEventListener('pointerdown', (ev) => {
+      ev.preventDefault(); const p0 = horiz ? ev.clientY : ev.clientX, v0 = LAY.inset[side] || 0; e.setPointerCapture(ev.pointerId); e.classList.add('on');
+      const mv = (m) => { LAY.inset[side] = v0 + sign * ((horiz ? m.clientY : m.clientX) - p0); applyLay(); paintRuler(); };
+      const up = () => { e.removeEventListener('pointermove', mv); e.removeEventListener('pointerup', up); e.classList.remove('on'); saveLay(); renderAll(); };
+      e.addEventListener('pointermove', mv); e.addEventListener('pointerup', up);
+    });
+  });
 
   // ---------------------------------------------------------------- Tools: as janelas do editor e as ferramentas extras
   const setProps = (obj) => { change(() => selClips().filter((c) => !locked(c)).forEach((c) => Object.assign(c, obj)), true); };
@@ -370,6 +467,7 @@ export function mountTimeline(host, o) {
         sep(), toggle('snap', 'magnet', t('Ímã: gruda nas bordas dos clipes'), '', () => S.snap, (v) => { S.snap = v; }), toggle('ripple', 'ripple', t('Mover em cadeia (ripple)'), '', () => S.ripple, (v) => { S.ripple = v; }),
         sep(), toolBtn('layer', 'layers', t('Nova camada: vídeo, imagem, áudio, texto ou efeitos'), '', (e) => layerMenu(e.currentTarget), h('span', { class: 'lbl' }, t('Camada'))),
         toolBtn('tools', 'columns', t('Tools: ligar e desligar as janelas do editor'), '', (e) => toolsMenu(e.currentTarget), h('span', { class: 'lbl' }, t('Tools'))),
+        toolBtn('layout', 'grid', t('Layout: trocar as janelas de lugar, tamanhos e presets em JSON'), '', (e) => layoutMenu(e.currentTarget), h('span', { class: 'lbl' }, t('Layout'))),
         h('span', { class: 'grow' }), toolBtn('rowdn', 'rowsmall', t('Trilhas mais baixas'), '', () => { LAY.rs -= 0.2; applyLay(); saveLay(); renderAll(); }), toolBtn('rowup', 'rowbig', t('Trilhas mais altas'), '', () => { LAY.rs += 0.2; applyLay(); saveLay(); renderAll(); }),
         toolBtn('mixer', 'audio', t('Mixer de áudio'), '', () => { setTool('mixer', !LAY.mix); }),
         toolBtn('full', 'expand', t('Tela cheia do editor') + ' (F)', 'F', () => toggleFull()), sep(), h('button', { class: 'stl-btn', type: 'button', tabindex: '-1', onmousedown: (e) => e.preventDefault(), title: t('Menos zoom') + ' (-)', onclick: () => zoom(1 / 1.35) }, icon('zoomout', 15)),
@@ -378,7 +476,7 @@ export function mountTimeline(host, o) {
       const tool = (id) => bar.querySelector('#stl-t-' + id); if (tool(S.tool)) tool(S.tool).classList.add('on');
       content.classList.toggle('razor', S.tool === 'razor');
       const on = (id, v) => { const b = bar.querySelector('#stl-' + id); if (b) b.classList.toggle('on', !!v); }; on('mixer', LAY.mix);
-      ['layer', 'tools'].forEach((id) => { const b = bar.querySelector('#stl-' + id); if (b) b.classList.add('wide'); });
+      ['layer', 'tools', 'layout'].forEach((id) => { const b = bar.querySelector('#stl-' + id); if (b) b.classList.add('wide'); });
     };
     paintBar();
   }
