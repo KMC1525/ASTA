@@ -214,6 +214,9 @@ def pick_color(prompt: str, default: str = "#4cc9f0") -> str:
 
 
 def sprite_svg(subject: str, color: str = "#4cc9f0") -> str:
+    subject = subject if isinstance(subject, str) else ""
+    if not isinstance(color, str) or not color:
+        color = default_color(SUBJECTS.get(subject, subject))
     fn = _DRAW.get(SUBJECTS.get(subject, subject)) or _DRAW["star"]
     return _svg(fn(color))
 
