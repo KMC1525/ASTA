@@ -151,8 +151,7 @@ run('engine', async ({ api, open, check, base, browser }) => {
   check('engine:scripts-painel-dividido-e-abas-verticais', (await page.locator('.ge-pane').count()) === 2 && (await page.locator('.ge-vtabs').count()) >= 1);
   await page.locator('#ge-lay-v').click(); await page.locator('#ge-tabs-top').click();
   check('engine:scripts-empilhado-e-abas-em-cima', (await page.locator('.ge-panes.v').count()) === 1 && (await page.locator('.ge-etabs').count()) >= 1);
-  await page.locator('.seg button', { hasText: 'Personagens' }).click(); await page.waitForTimeout(800);
-  check('engine:scripts-cartoes-de-personagens-e-worldbuilding', (await page.locator('#ge-cards').count()) === 1);
+  check('engine:scripts-sem-abas-legado-de-personagens-e-worldbuilding', (await page.locator('#ge-sview, #ge-cards').count()) === 0 && (await page.locator('#ge-sright .ge-vtool').count()) === 1);
   await page.locator('#ge-lay-one').click().catch(() => {});
 
   // ---- Map (2D)

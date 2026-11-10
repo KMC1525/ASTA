@@ -1,10 +1,10 @@
 // Game Engine → Scripts: inspirada no Notepad Next. Roteiros, GDD, diálogos, lore e missões em Markdown/texto, com várias abas (em cima ou na vertical), painéis lado a lado ou empilhados,
-// pastas e subpastas, e IA para melhorar/expandir/reescrever só o parágrafo ou a fala que você selecionar. Personagens e Worldbuilding (cartões) vivem aqui também.
+// pastas e subpastas, e IA para melhorar/expandir/reescrever só o parágrafo ou a fala que você selecionar.
 import { api } from '../api.js';
 import { t } from '../i18n.js';
 import { createEditor, langOf } from '../editor_core.js';
 import { btn, flatFiles, fmtSize, ibtn, promptPanel, runJob } from '../engine_ui.js';
-import { confirmDialog, h, icon, modal, popover, seg, toast } from '../ui.js';
+import { confirmDialog, h, icon, modal, popover, toast } from '../ui.js';
 
 const DOC_KINDS = [['roteiro', 'Roteiro'], ['gdd', 'Documento de design (GDD)'], ['dialogo', 'Diálogos'], ['lore', 'História do mundo (lore)'], ['quest', 'Missões'], ['personagem', 'Ficha de personagem'], ['livre', 'Livre']];
 const AI_ACTIONS = [['improve', 'Melhorar'], ['expand', 'Expandir'], ['rewrite', 'Reescrever'], ['shorten', 'Encurtar'], ['fix', 'Corrigir'], ['dialogue', 'Virar diálogo'], ['translate', 'Traduzir']];
@@ -12,7 +12,7 @@ const LAYOUT_KEY = 'asta.ge.scripts.layout';
 
 export default async function render(body, E) {
   let lay = { split: 'none', tabs: 'top' }; try { lay = Object.assign(lay, JSON.parse(localStorage.getItem(LAYOUT_KEY) || '{}')); } catch (e) { /* ok */ }
-  const S = { tree: [], panes: [{ tabs: [], active: '' }], act: 0, folded: new Set(), sel: '', view: 'docs' };
+  const S = { tree: [], panes: [{ tabs: [], active: '' }], act: 0, folded: new Set(), sel: '' };
   const saveLay = () => { try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(lay)); } catch (e) { /* ok */ } };
   const ext = (p) => String(p).split('.').pop().toLowerCase();
   const editors = new Map();   // paneIndex -> editor
@@ -143,27 +143,18 @@ export default async function render(body, E) {
   });
 
   // ---------------------------------------------------------------- montagem
-  const viewSeg = seg([['docs', t('Roteiros')], ['characters', t('Personagens')], ['worldbuilding', t('Worldbuilding')]], S.view, (v) => { S.view = v; paintView(); });
-  viewSeg.id = 'ge-sview';
   const mid = h('aside', { class: 'ge-mid', 'aria-label': t('Arquivos de roteiro') },
     h('div', { class: 'ge-ph' }, h('b', null, t('Roteiros'))),
     h('div', { class: 'ge-ftool' }, ibtn(t('Novo roteiro'), 'plus', () => newDoc(), '', { id: 'ge-snew' }), ibtn(t('Nova pasta'), 'folder', newFolder, '', { id: 'ge-sfolder' }), ibtn(t('Renomear / mover'), 'edit', renameSel), ibtn(t('Apagar'), 'trash', deleteSel, '', { id: 'ge-sdelete' }), ibtn(t('Atualizar'), 'refresh', () => loadTree())), explorer);
-  const layoutBar = h('div', { class: 'ge-vtool' }, viewSeg, h('span', { class: 'grow' }),
+  const layoutBar = h('div', { class: 'ge-vtool' }, h('span', { class: 'grow' }),
     ibtn(t('Painel único'), 'panel', () => { lay.split = 'none'; saveLay(); paintPanes(); paintLayoutBtns(); }, '', { id: 'ge-lay-one' }), ibtn(t('Dividir lado a lado'), 'split', () => { lay.split = 'h'; saveLay(); paintPanes(); paintLayoutBtns(); }, '', { id: 'ge-lay-h' }), ibtn(t('Dividir um sobre o outro'), 'splitv', () => { lay.split = 'v'; saveLay(); paintPanes(); paintLayoutBtns(); }, '', { id: 'ge-lay-v' }),
     h('span', { class: 'sep', style: { width: '1px', height: '20px', background: 'var(--line2)' } }), ibtn(t('Abas em cima'), 'rowsmall', () => { lay.tabs = 'top'; saveLay(); paintPanes(); paintLayoutBtns(); }, '', { id: 'ge-tabs-top' }), ibtn(t('Abas na vertical'), 'columns', () => { lay.tabs = 'left'; saveLay(); paintPanes(); paintLayoutBtns(); }, '', { id: 'ge-tabs-left' }));
   const paintLayoutBtns = () => { [['ge-lay-one', lay.split === 'none'], ['ge-lay-h', lay.split === 'h'], ['ge-lay-v', lay.split === 'v'], ['ge-tabs-top', lay.tabs === 'top'], ['ge-tabs-left', lay.tabs === 'left']].forEach(([id, on]) => { const b = document.getElementById(id); if (b) b.classList.toggle('on', on); }); };
-  const cards = h('div', { class: 'ge-cards', id: 'ge-cards' });
   const right = h('section', { class: 'ge-center', id: 'ge-sright' });
   const grid = h('div', { class: 'ge-grid ge-scripts' }, h('div', { class: 'ge-left' }, pp.el), mid, right);
-  async function paintView() {
-    const docs = S.view === 'docs'; mid.classList.toggle('hidden', !docs); grid.style.gridTemplateColumns = docs ? '' : '330px minmax(0,1fr)';
-    if (docs) { right.replaceChildren(layoutBar, panesEl); paintPanes(); paintLayoutBtns(); return; }
-    right.replaceChildren(layoutBar, cards); cards.replaceChildren(h('div', { class: 'spinner' }));
-    try { const mod = await (S.view === 'characters' ? import('./characters.js') : import('./worldbuilding.js')); const holder = h('div'); cards.replaceChildren(holder); await mod.default(holder, {}); }
-    catch (e) { cards.replaceChildren(h('div', { class: 'errbox' }, e.message)); }
-  }
+  function paintView() { right.replaceChildren(layoutBar, panesEl); paintPanes(); paintLayoutBtns(); }
   body.replaceChildren(grid);
   E.onCleanup(() => { allTabs().filter((x) => x.dirty).forEach((x) => { const ed = [...editors.values()].find((z) => z && z.get && x.content === z.get()); E.api.write(x.path, ed ? ed.get() : x.content, 'docs').catch(() => {}); }); });
-  await loadTree(); await paintView();
+  await loadTree(); paintView();
   const first = flatFiles(S.tree).find((f) => /gdd|roteiro/i.test(f.path)) || flatFiles(S.tree)[0]; if (first) openDoc(first.path);
 }

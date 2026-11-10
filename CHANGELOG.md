@@ -5,6 +5,11 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.3] — 2026-11-10
+
+### Removido — Game Engine
+- **Aba Scripts: o seletor legado *Personagens* e *Worldbuilding* saiu.** Esses dois cartões vinham da antiga tela *Mundos* e não faziam parte de escrever roteiros; agora a aba é só o editor no estilo Notepad Next (prompt, arquivos e pastas, abas, painéis). Personagens e anotações de worldbuilding podem ser escritos como roteiros `.md` nas mesmas pastas. Versão 0.19.3.
+
 ## [0.19.2] — 2026-11-10
 
 ### Corrigido — Game Engine
