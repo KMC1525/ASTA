@@ -350,6 +350,17 @@ class BrowserTests(unittest.TestCase):
         finally:
             mgr._resolve = None
 
+    def test_33b_work_people_board_files_requests_activities_and_network(self):
+        from asta.providers import build_provider
+
+        mgr = self.httpd.RequestHandlerClass.app.work
+        mgr._resolve = lambda settings: (build_provider(settings, "demo", self.store_dir / "models"), {"id": "demo", "label": "Demo", "model": "demo", "demo": True})   # sem IA: o Work usa as regras automáticas
+        try:
+            self.run_script("work_ui.js")
+        finally:
+            mgr._resolve = None
+            mgr.stop()
+
     def test_34_code_team_shows_agents_plan_actions_diff_files_and_undo(self):
         from tests.test_code_team import Scripted, act, fin, per_step, plan, step
 

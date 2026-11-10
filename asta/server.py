@@ -26,6 +26,7 @@ from .providers import ProviderError, build_provider, describe_presets, provider
 from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
 from .routes_code import CodeRoutes
+from .routes_work import WorkRoutes
 from .routes_computer import ComputerRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
@@ -223,6 +224,8 @@ class App:
         self.computer_routes.register()
         self.code_routes = CodeRoutes(self)   # cria `self.code` (pastas, sessões e execuções do Code)
         self.code_routes.register()
+        self.work_routes = WorkRoutes(self)   # cria `self.work` (redes do Work, sessões e sincronização)
+        self.work_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:
@@ -887,7 +890,7 @@ class Request:
         if self.method != "HEAD":
             self.h.wfile.write(data)
 
-    def file(self, path: Path, mime: str, download_name: str = "", cache: bool = False) -> None:
+    def file(self, path: Path, mime: str, download_name: str = "", cache: bool = False, headers: Optional[Dict[str, str]] = None) -> None:
         """Envia um arquivo, com suporte a `Range` (necessário p/ buscar em <video>/<audio>)."""
         size = path.stat().st_size
         extra = {"Accept-Ranges": "bytes"}
@@ -895,6 +898,7 @@ class Request:
             extra["Cache-Control"] = "private, max-age=3600"
         if download_name:
             extra["Content-Disposition"] = f'attachment; filename="{safe_filename(download_name)}"'
+        extra.update(headers or {})
         status, start, end = 200, 0, size - 1
         rng = (self.headers.get("Range") or "").strip()
         m = re.match(r"^bytes=(\d*)-(\d*)$", rng)
@@ -1042,6 +1046,13 @@ class Server(ThreadingHTTPServer):
     daemon_threads = True
     allow_reuse_address = True
     request_queue_size = 64
+    app: Optional["App"] = None
+
+    def server_close(self) -> None:
+        work = getattr(self.app, "work", None)
+        if work is not None:
+            work.stop()   # fecha o servidor de sincronização do Work e para o ciclo em segundo plano
+        super().server_close()
 
 
 def make_server(host: str, port: int, store: Optional[Store] = None) -> Tuple[Server, App]:
@@ -1053,4 +1064,5 @@ def make_server(host: str, port: int, store: Optional[Store] = None) -> Tuple[Se
 
     BoundHandler.app = app
     httpd = Server((host, port), BoundHandler)
+    httpd.app = app
     return httpd, app

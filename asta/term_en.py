@@ -1,5 +1,14 @@
 """Tradução para o inglês dos textos do terminal (a fonte é o português: veja `termi18n._`)."""
 EN = {
+    "mostra o estado do Work (redes, máquinas e Tailscale)": "shows the Work state (networks, machines and Tailscale)",
+    "Máquina: {n} ({i})": "Machine: {n} ({i})",
+    "Tailscale: não instalado (opcional — o Work também sincroniza pela rede local ou por uma pasta de nuvem).": "Tailscale: not installed (optional — Work also syncs over the local network or a cloud folder).",
+    "Tailscale: conectado · IP {ip} · {n} máquina(s) na tailnet": "Tailscale: connected · IP {ip} · {n} machine(s) on the tailnet",
+    "Tailscale: instalado, mas {s}": "Tailscale: installed, but {s}",
+    "desconectado": "disconnected",
+    "Nenhuma rede do Work ainda: crie ou entre em uma na seção Work.": "No Work network yet: create or join one in the Work section.",
+    "Rede «{n}» ({i}): {u} pessoa(s), {m} máquina(s), {f} arquivo(s)": "Network «{n}» ({i}): {u} person(s), {m} machine(s), {f} file(s)",
+    "Dados do Work: {p}": "Work data: {p}",
     "  Dados:   {p}": "  Data:    {p}",
     "Verificando as ferramentas do Python e o ASTA…": "Checking the Python tools and ASTA…",
     "CPU: {n} núcleos · RAM: {r} GB · GPU: {g}": "CPU: {n} cores · RAM: {r} GB · GPU: {g}",

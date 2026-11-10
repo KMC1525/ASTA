@@ -15,8 +15,8 @@ MOTIONS = ("auto", "reduce", "full")  # auto = respeita o sistema; reduce = sem 
 FONTS = ("system", "serif", "mono")
 CHAT_SIZES = ("small", "medium", "large")
 SEND_KEYS = ("enter", "ctrl_enter")  # enter: Enter envia (Shift+Enter quebra a linha) · ctrl_enter: Ctrl/⌘+Enter envia (Enter quebra a linha)
-START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "studio", "computer", "code", "library")
-HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "computer", "code", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
+START_PAGES = ("last", "main", "worlds", "avatars", "games", "canvas", "studio", "computer", "code", "work", "library")
+HIDEABLE = ("worlds", "avatars", "games", "canvas", "studio", "computer", "code", "work", "rebuild", "library")  # "Chat" e "Configuração" nunca somem da barra lateral
 LANGS = ("auto", "pt-BR", "en")
 
 DEFAULT_UI: Dict[str, Any] = {
@@ -78,8 +78,8 @@ def normalize_ui(data: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- exportar / importar configurações (sem segredos)
 
 EXPORT_SCHEMA = "asta.settings.v1"
-EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "performance", "active")
-RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
+EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "performance", "active")
+RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
 _PROVIDER_FIELDS = ("base_url", "model", "vision", "n_ctx")  # nunca `api_key`
 
 
@@ -90,6 +90,8 @@ def export_settings(settings: Dict[str, Any]) -> Dict[str, Any]:
         code = dict(out["code"])
         code["github"] = {k: v for k, v in (code.get("github") or {}).items() if k != "token"} if isinstance(code.get("github"), dict) else {}
         out["code"] = code
+    if isinstance(out.get("work"), dict):   # onde a máquina escuta na rede é decisão de quem está nela: não viaja no arquivo
+        out["work"] = {k: v for k, v in out["work"].items() if k != "peer"}
     out["providers"] = {pid: {k: v for k, v in (cfg or {}).items() if k in _PROVIDER_FIELDS and v not in (None, "")}
                         for pid, cfg in (settings.get("providers") or {}).items() if isinstance(cfg, dict)}
     voice = settings.get("voice") or {}
@@ -113,6 +115,8 @@ def import_patch(payload: Any) -> Dict[str, Any]:
         if isinstance(src["code"].get("finalize"), dict):
             c["finalize"] = {"docs": src["code"]["finalize"].get("docs") is True}
         patch["code"] = c
+    if isinstance(src.get("work"), dict):   # idem: um arquivo importado nunca abre a máquina para a rede nem liga a sincronização
+        patch["work"] = {k: v for k, v in src["work"].items() if k in ("agents", "effort", "interval", "max_file_mb", "backup_keep", "session_hours")}
     if src.get("language") in LANGS:
         patch["language"] = src["language"]
     if isinstance(src.get("ui"), dict):

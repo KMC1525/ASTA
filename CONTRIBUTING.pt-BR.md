@@ -40,6 +40,7 @@ Python 3.9 é o mínimo: não use `match`, `X | Y` em tempo de execução, etc. 
 | Avatars (cards, diretor da conversa, voz) | `avatars.py`, `avatar_chat.py`, `routes_avatars.py`, `agents/avatar_pipeline.py`, `web/js/views/avatar*.js` |
 | Jogos 2D (um gênero novo ou uma regra) | `games2d/schema.py` (spec e validação), `agents/rulebased_games.py` (gerador offline), `runtime2d/*.js` (motor); mantenha a gramática de condições igual em Python (`parse_cond`) e JS (`G2.cond`) |
 | Canvas: novo tipo de nó | `canvas/schema.py` (`NODE_TYPES`, parâmetros), `canvas/engine.py` (execução), `web/js/canvas_nodes.js` (controles) |
+| Work (pessoas, cargos/permissões, quadro, arquivos por setor, pedidos, atividades, avisos, sincronização entre máquinas, backups) | `work/` (`perms.py`, `schema.py`, `store.py`, `manager.py`, `sync.py`, `agents.py`, `prompts/*.md`), `routes_work.py`, `web/js/views/work*.js`, `web/js/work_ui.js`; testes: `tests/test_work.py`, `tests/browser/work_ui.js` |
 | Modelos pré-instalados (catálogo) | `asta/preinstalled.py` (`CATALOG`: repositório, arquivo, quantização, tamanho, arquivos auxiliares) + tradução do `hint` em `web/js/en.js` |
 | Canvas: novo provedor de mídia | classe em `canvas/media.py` + entrada em `MEDIA_PRESETS` + teste com servidor simulado em `tests/test_canvas.py` (veja `MediaMock`) |
 | Editor de vídeo do Canvas | `canvas/render.py` (ffmpeg) e `web/js/canvas_timeline.js` (linha do tempo e prévia) |

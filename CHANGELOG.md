@@ -5,6 +5,32 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.18.0] — 2026-11-10
+
+### Adicionado — Work: trabalho em equipe com IA, sincronização entre máquinas e usuários
+Uma seção nova, **Work** (menu lateral, depois do Code), para empresas e equipes — chefes e funcionários. Tudo em biblioteca padrão, em arquivos comuns (`~/.asta/work`), sem servidor do ASTA; nada sai do computador até a sincronização ser ligada.
+- **Organizações, pessoas e vários computadores.** Criar uma organização (quem cria vira administrador) ou entrar numa com um **código de convite** (uso único, vale 24 h). Pessoas com **nome de usuário, cargo, bio e função**; várias pessoas por computador, várias organizações por máquina, uma organização em vários computadores.
+- **Cargos customizados e permissões por função.** Cargos *Administrador*, *Gerente* e *Trabalhador* + os do usuário, cada um com **nível** e 17 permissões; **funções** acrescentam/retiram permissões; ajuste por pessoa. Ninguém concede o que não tem; sempre existe um administrador ativo.
+- **Quadro de fluxograma** (quadro branco com deslocar/zoom/arrastar): cartões de pessoas, cargos, notas e agentes de IA; **setores como pastas/caixas**; ligações *reporta a / repassa para / aprova*; *Preencher com as pessoas*, *Organizar* (camadas) e **Criar com IA** (Analista → Desenhista → Revisor, com revisão do usuário antes de aplicar e fallback por palavras-chave). O caminho de um pedido pelo fluxograma aparece no pedido.
+- **Perfis e pedidos** (escritos, com arquivos de qualquer formato, ou os dois): botão *Enviar pedido* no perfil (permissão `requests.send`); **Rascunhar com IA** (Planejador → Redator → Revisor, lendo o texto dos anexos), **Quem deve fazer? (IA)**; estados enviado → visto → aceito → em andamento → concluído/recusado/cancelado; conversa com anexos; **levar o pedido** ao Chat, Mundos 3D, Jogos 2D, Avatars, Canvas, Studio, Code ou Computer Use.
+- **Arquivos de qualquer formato por setor**, com versões, setores restritos por cargo/função/pessoa, envio por arrastar, “usar no ASTA” (vira anexo de todas as seções) e “trazer da Biblioteca” (projeto em `.zip`). HTML/SVG nunca são servidos inline; tamanho máximo configurável.
+- **Sincronização entre máquinas, sem servidor central:** último-que-editou-vence por documento; arquivos por hash; **HTTP assinado e cifrado** (servidor separado da WebUI, que continua só em 127.0.0.1) pelo **Tailscale** (lê `tailscale status`, escuta só no IP da tailnet), pela rede local ou por endereço; e **pasta de nuvem cifrada** (Drive, Dropbox, NAS). Cada máquina guarda “só o necessário” (arquivos de quem a usa, dos setores que enxergam e dos pedidos) ou “tudo”; o resto vem sob demanda. Máquinas que não escutam sincronizam por iniciativa própria.
+- **Senhas opcionais, guardadas onde o usuário escolher:** só nesta máquina, em outra máquina da rede (login conferido por ela) ou replicadas em todas; PBKDF2-SHA256; bloqueio temporário após erros repetidos.
+- **Backups em uma ou mais máquinas escolhidas**, por pessoa; cópias diárias dos documentos nas máquinas de backup; *Verificar* e *Restaurar daqui*; exportar tudo em ZIP.
+- **Avisos em tempo real** (sino, selo no menu, SSE, notificações do sistema opcionais) por pessoa/cargo/todos, e **comunicados** de gerentes.
+- **Registro de atividades** começou · continuando · finalizou, com sinal de vida a cada minuto, atividades “sem sinal” marcadas, registro automático de envios/pedidos, e **resumo com IA** (números calculados pelo programa; a IA só escreve o texto).
+- **Equipe de agentes** (1·4·8·12·16, Low→Omni) como nas outras seções; prompts `.md` abertos em `asta/work/prompts/` (lidos em *Configuração → Work*); nova aba **Work** em Configuração; comando `asta work`.
+- Interface em português e inglês; 20 abas na Configuração; 12 itens no menu lateral.
+
+### Alterado
+- `team.SECTIONS`, configurações (exportar/restaurar), seções ocultáveis e página inicial incluem o Work. Importar um arquivo de configurações **nunca** liga a escuta de rede do Work.
+- `Request.file` aceita cabeçalhos extras; fechar o servidor também para o Work.
+
+### Limites honestos (o que não foi testado)
+- **Não testado com um Tailscale real**: só com a saída simulada do `tailscale status --json`; a sincronização entre duas máquinas foi testada com dois processos de gerenciador em `127.0.0.1`. **Não testado em Windows, macOS ou Android reais.** A IA foi testada com provedores simulados; nenhuma API paga foi usada.
+- A cifra da rede (fluxo SHAKE-256 + HMAC-SHA256, cifrar-depois-autenticar) usa só a biblioteca padrão e **não foi auditada por terceiros**. Revogar uma máquina **não troca a chave da rede**. A entrada protege o acesso pelo app e pela rede, não cifra os arquivos no disco. Conflitos: vale a edição mais recente de cada documento (relógios das máquinas devem estar próximos).
+- Testes novos: `tests/test_work.py` (43 testes: permissões, senhas, store, sincronização HTTP e pasta de nuvem, backups, pedidos, atividades, quadro, IA com fallback, API e eventos) e `tests/browser/work_ui.js`.
+
 ## [0.17.44] — 2026-11-09
 
 ### Corrigido — segunda varredura de bugs (arquivos adulterados, JSON enorme e textos soltos na tela)
