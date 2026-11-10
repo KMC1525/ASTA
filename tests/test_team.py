@@ -1,4 +1,4 @@
-"""Equipe de agentes de todas as seções: 1/4/8/12/16/20/24/28/32 agentes (mesa em paralelo + revisão entre pares + Sintetizador) e esforço Low … Omni (`asta/team.py`)."""
+"""Equipe de agentes de todas as seções: 1/2/4/8/12/16/20/24/28/32 agentes (mesa em paralelo + revisão entre pares + Sintetizador) e esforço Low … Omni (`asta/team.py`)."""
 import json
 import sys
 import threading
@@ -22,14 +22,28 @@ INFO = {"id": "x", "label": "Modelo X", "model": "m1", "demo": False, "auto": Fa
 
 class PureTests(unittest.TestCase):
     def test_the_counts_and_the_eight_levels_are_the_code_ones(self):
-        self.assertEqual(team.COUNTS, (1, 4, 8, 12, 16, 20, 24, 28, 32))
+        self.assertEqual(team.COUNTS, (1, 2, 4, 8, 12, 16, 20, 24, 28, 32))
         self.assertEqual(team.LEVELS, ("low", "medium", "high", "extra", "mega", "max", "ultra", "omni"))
         self.assertIs(team.efforts.PROFILES, code_efforts.PROFILES)   # um só lugar para os níveis
         self.assertEqual(len(team.LENSES), team.MAX_AGENTS)
 
+    def test_two_agents_run_as_a_table_of_two_with_a_synthesizer(self):
+        t = team.make(2, "low")
+        self.assertEqual((t.agents, t.multi, t.workers, t.peers), (2, True, 2, 0))
+        self.assertEqual(team.calls_per_step(2), 3)       # 2 rascunhos em paralelo + 1 síntese
+        calls = []
+
+        def ask(ins, pl):
+            calls.append(ins)
+            return {"v": len(calls)}
+
+        out = team.ensemble_json(ask, t, "tarefa", {"x": 1})
+        self.assertIsNotNone(out)
+        self.assertEqual(len(calls), 3)
+
     def test_agents_snap_to_the_nearest_allowed_count(self):
         got = {v: team.normalize_agents(v) for v in (1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 14, 16, 18, 22, 26, 30, 32, 99, 0, -3, "8", "x", None, 4.7)}
-        self.assertEqual(got, {1: 1, 2: 1, 3: 4, 4: 4, 5: 4, 6: 8, 7: 8, 8: 8, 10: 12, 11: 12, 12: 12, 14: 16, 16: 16, 18: 20, 22: 24, 26: 28, 30: 32, 32: 32, 99: 32, 0: 1, -3: 1, "8": 8, "x": 1, None: 1, 4.7: 4})
+        self.assertEqual(got, {1: 1, 2: 2, 3: 4, 4: 4, 5: 4, 6: 8, 7: 8, 8: 8, 10: 12, 11: 12, 12: 12, 14: 16, 16: 16, 18: 20, 22: 24, 26: 28, 30: 32, 32: 32, 99: 32, 0: 1, -3: 1, "8": 8, "x": 1, None: 1, 4.7: 4})
         self.assertEqual(team.normalize_effort("OMNI"), "omni")
         self.assertEqual((team.normalize_effort("zzz"), team.normalize_effort(None, "low")), ("high", "low"))
 
@@ -61,9 +75,9 @@ class PureTests(unittest.TestCase):
 
     def test_options_lists_everything_the_screens_need(self):
         o = team.options()
-        self.assertEqual(o["agents"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
+        self.assertEqual(o["agents"], [1, 2, 4, 8, 12, 16, 20, 24, 28, 32])
         self.assertEqual([e["id"] for e in o["efforts"]], list(team.LEVELS))
-        self.assertEqual(o["calls_per_step"], {"1": 1, "4": 5, "8": 9, "12": 13, "16": 17, "20": 26, "24": 31, "28": 36, "32": 41})
+        self.assertEqual(o["calls_per_step"], {"1": 1, "2": 3, "4": 5, "8": 9, "12": 13, "16": 17, "20": 26, "24": 31, "28": 36, "32": 41})
 
     def test_apply_thinking_only_where_the_model_supports_it(self):
         class P:
@@ -468,7 +482,7 @@ class ApiTests(ServerCase):
     def test_team_options_endpoint(self):
         status, o = self.c.json("GET", "/api/team")
         self.assertEqual(status, 200)
-        self.assertEqual(o["agents"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
+        self.assertEqual(o["agents"], [1, 2, 4, 8, 12, 16, 20, 24, 28, 32])
         self.assertEqual([e["id"] for e in o["efforts"]], list(team.LEVELS))
         self.assertTrue(all("hint" in e and "thinking" in e for e in o["efforts"]))
 
@@ -482,7 +496,7 @@ class ApiTests(ServerCase):
         status, r = self.c.json("GET", "/api/chat/providers")
         self.assertEqual(status, 200)
         self.assertEqual((r["team"]["agents"], r["team"]["effort"]), (1, "low"))
-        self.assertEqual(r["team"]["counts"], [1, 4, 8, 12, 16, 20, 24, 28, 32])
+        self.assertEqual(r["team"]["counts"], [1, 2, 4, 8, 12, 16, 20, 24, 28, 32])
 
 
 if __name__ == "__main__":

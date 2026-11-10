@@ -44,7 +44,7 @@ def normalize_config(raw: Any) -> Dict[str, Any]:
         "max_steps": int(num(d.get("max_steps"), 40, 5, 200)),
         "team": "fast" if d.get("team") == "fast" else "full",
         "revisions": int(num(d.get("revisions"), 1, 0, 3)),
-        "agents": teamlib.normalize_agents(d.get("agents")),   # 1/4/8/12/16/20/24/28/32 agentes na mesa do Planejador e do Verificador
+        "agents": teamlib.normalize_agents(d.get("agents")),   # 1/2/4/8/12/16/20/24/28/32 agentes na mesa do Planejador e do Verificador
         "effort": teamlib.normalize_effort(d.get("effort")),   # Low … Omni: pensamento do modelo, passos, rodadas de correção e crítica do plano
         "ask_for": list(dict.fromkeys(ask)),
         "game_dirs": [str(x)[:500] for x in (d.get("game_dirs") if isinstance(d.get("game_dirs"), list) else []) if isinstance(x, str) and x.strip()][:20],

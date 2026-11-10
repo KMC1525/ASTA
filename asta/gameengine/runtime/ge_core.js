@@ -5,7 +5,7 @@
 (function () {
   'use strict';
   var GE = window.GE = window.GE || {};
-  GE.version = '0.20.0';
+  GE.version = '0.20.1';
   var D = function () { return window.GE_DATA || { project: {}, scenes: {}, maps: {}, assets: { images: {}, sounds: {} }, dialogues: {}, start: 'main' }; };
 
   // ------------------------------------------------------------------ utilidades

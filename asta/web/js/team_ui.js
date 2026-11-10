@@ -1,10 +1,10 @@
-// Equipe de agentes de todas as seções: quantos agentes (1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32) e o esforço de raciocínio (Low … Omni, os mesmos níveis do Code). Ver asta/team.py.
+// Equipe de agentes de todas as seções: quantos agentes (1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32) e o esforço de raciocínio (Low … Omni, os mesmos níveis do Code). Ver asta/team.py.
 // `teamPicker` é o seletor compacto ao lado do botão de criar; `teamFields` são os dois campos das abas de Configuração.
 import { api } from './api.js';
 import { t } from './i18n.js';
 import { h, icon } from './ui.js';
 
-export const AGENT_COUNTS = [1, 4, 8, 12, 16, 20, 24, 28, 32];
+export const AGENT_COUNTS = [1, 2, 4, 8, 12, 16, 20, 24, 28, 32];
 export const PEER_FROM = 20;   // a partir daqui os agentes também revisam os rascunhos uns dos outros (asta/team.py)
 export const peerCount = (n) => (n < PEER_FROM ? 0 : Math.min(8, Math.max(2, Math.floor(n / 4))));
 export const EFFORTS = ['low', 'medium', 'high', 'extra', 'mega', 'max', 'ultra', 'omni'];

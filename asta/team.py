@@ -1,4 +1,4 @@
-"""Equipe de agentes de TODAS as seções: quantos agentes (1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32) e qual esforço de raciocínio (Low · Medium · High · Extra · Mega · Max · Ultra · Omni).
+"""Equipe de agentes de TODAS as seções: quantos agentes (1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32) e qual esforço de raciocínio (Low · Medium · High · Extra · Mega · Max · Ultra · Omni).
 
 Os oito níveis são os do modo Code (`code/efforts.py`) e valem **igualmente** em Mundos 3D, Avatars, Jogos 2D, Studio, Rebuild, Canvas, Computer Use, Code e Chat:
 
@@ -25,7 +25,7 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 from . import efforts
 from .providers import thinking as think
 
-COUNTS: Tuple[int, ...] = (1, 4, 8, 12, 16, 20, 24, 28, 32)
+COUNTS: Tuple[int, ...] = (1, 2, 4, 8, 12, 16, 20, 24, 28, 32)
 DEFAULT_AGENTS = 1            # 1 = o comportamento de sempre (nada muda para quem não escolher)
 MAX_AGENTS = COUNTS[-1]
 LEVELS = efforts.LEVELS       # low … omni
@@ -81,7 +81,7 @@ PLAN_AGENTS = ("analyst", "planner", "analyze", "profiler")
 
 
 def normalize_agents(value: Any, default: int = DEFAULT_AGENTS) -> int:
-    """O valor aceito mais próximo de 1 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 (empate → o maior)."""
+    """O valor aceito mais próximo de 1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 (empate → o maior)."""
     try:
         n = int(float(value))
     except (TypeError, ValueError):

@@ -5,6 +5,17 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.20.1] — 2026-11-10
+
+### Adicionado — todos os modos: equipe de 2 agentes em paralelo
+- **Nova opção «2 agentes»** nos seletores de todos os modos (Game Engine, Scriber, Mundos 3D, Avatars, Jogos 2D, Studio, Rebuild, Canvas, Computer Use, Code, Work e Chat), tanto ao lado do botão de criar quanto em *Configuração → aba da seção → Equipe de agentes*. A lista agora é **1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32**.
+- Com 2 agentes, cada etapa criativa roda **2 rascunhos ao mesmo tempo** (cada um com uma lente diferente) e o Sintetizador junta o melhor dos dois: **3 chamadas por etapa** (`calls_per_step`, mostrado na dica do seletor). Sem revisão entre pares (ela continua a partir de 20). No Code, 2 trabalhadores em paralelo.
+- Valores antigos continuam valendo: um ajuste «2» editado à mão, que antes ia para 1, agora fica em 2; 3 continua indo para 4 (empate → o maior).
+- Versão 0.20.1; testes da contagem, do arredondamento, do custo (3 chamadas) e da mesa de 2 (2 rascunhos + síntese), e dos seletores no navegador.
+
+### Limites honestos
+- Duas chamadas simultâneas podem ser limitadas por provedores na nuvem (o ASTA tenta de novo); **modelos locais atendem uma por vez**, então 2 agentes locais não ficam mais rápidos — só passam a ter dois rascunhos.
+
 ## [0.20.0] — 2026-11-10
 
 ### Adicionado — Scriber: escrita criativa e profissional (novo modo)

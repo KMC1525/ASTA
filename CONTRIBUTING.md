@@ -46,7 +46,7 @@ Python 3.9 is the minimum: do not use `match`, runtime `X | Y`, etc. (use `from 
 | Pre-installed models (catalog) | `asta/preinstalled.py` (`CATALOG`: repository, file, quantization, size, auxiliary files) + translation of the `hint` in `web/js/en.js` |
 | Canvas: new media provider | class in `canvas/media.py` + entry in `MEDIA_PRESETS` + a test with a simulated server in `tests/test_canvas.py` (see `MediaMock`) |
 | Canvas video Editor | `canvas/render.py` (ffmpeg) and `web/js/canvas_timeline.js` (timeline and preview) |
-| Agent team (1/4/8/12/16/20/24/28/32 agents, effort Low → Omni) in every section | `team.py` (counts, levels, table of agents + Synthesizer, private notes), `efforts.py` (the 8 levels), `agents/runner.py` (`configure_team`, `_agent`), each engine's `configure_team`/`team_chat` call, `web/js/team_ui.js` (selectors), a «Equipe de agentes» card in `web/js/views/config.js`; tests: `tests/test_team.py`, `tests/browser/team_ui.js` |
+| Agent team (1/2/4/8/12/16/20/24/28/32 agents, effort Low → Omni) in every section | `team.py` (counts, levels, table of agents + Synthesizer, private notes), `efforts.py` (the 8 levels), `agents/runner.py` (`configure_team`, `_agent`), each engine's `configure_team`/`team_chat` call, `web/js/team_ui.js` (selectors), a «Equipe de agentes» card in `web/js/views/config.js`; tests: `tests/test_team.py`, `tests/browser/team_ui.js` |
 
 ## Tests and PRs
 
