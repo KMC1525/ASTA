@@ -98,7 +98,7 @@ async function renderProjects(root, ctx) {
       location.hash = '#/engine/' + p.id + '/main';
     } catch (e) { toast(e.message, 'err'); composer.setBusy(false); }
   }
-  const aiNote = status.text && status.text.ai ? null : h('div', { class: 'errbox ge-ainote', style: { whiteSpace: 'normal' } }, t('Nenhuma IA configurada: o Game Engine cria o jogo com regras automáticas (já jogável). Configure um provedor em Configuração → Provedores para pedidos livres e detalhados.'));
+  const aiNote = status.text && status.text.ai ? null : h('div', { class: 'ge-ainote', style: { whiteSpace: 'normal' } }, t('Nenhuma IA configurada: o Game Engine cria o jogo com regras automáticas (já jogável). Configure um provedor em Configuração → Provedores para pedidos livres e detalhados.'));
   const grid = h('div', { class: 'proj-grid ge-projects', id: 'ge-projects' });
   const paint = () => grid.replaceChildren(...projects.map((p) => card(p)));
   const card = (p) => h('div', { class: 'proj ge-pcard', dataset: { pid: p.id } },
