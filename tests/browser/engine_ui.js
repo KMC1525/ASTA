@@ -185,16 +185,19 @@ run('engine', async ({ api, open, check, base, browser }) => {
   const mp0 = (await api(`/api/engine/projects/${p2.id}/maps`)).maps[0].path;
   const mv = await page.locator('#ge-mcanvas').boundingBox();
   await page.locator('.ge-pal [data-tile="3"]').click();
-  await page.mouse.move(mv.x + mv.width / 2, mv.y + mv.height / 2); await page.mouse.down(); await page.mouse.move(mv.x + mv.width / 2 + 60, mv.y + mv.height / 2, { steps: 5 }); await page.mouse.up();
+  const view2 = async () => page.evaluate(() => { const c = document.getElementById('ge-mcanvas'), r = c.getBoundingClientRect(); return { x: r.x, y: r.y, z: parseFloat(c.dataset.vz), ox: parseFloat(c.dataset.vox), oy: parseFloat(c.dataset.voy) }; });
+  const mapA = await api(`/api/engine/projects/${p2.id}/map?path=${encodeURIComponent(mp0)}`), vA = await view2(), cellPx = (v, cx, cy) => [v.x + v.ox + (cx + 0.5) * mapA.tile * v.z, v.y + v.oy + (cy + 0.5) * mapA.tile * v.z];
+  const [ax, ay] = cellPx(vA, Math.floor(mapA.w / 2), Math.floor(mapA.h / 2)), [bx, by] = cellPx(vA, Math.floor(mapA.w / 2) + 3, Math.floor(mapA.h / 2));
+  await page.mouse.move(ax, ay); await page.mouse.down(); await page.mouse.move(bx, by, { steps: 5 }); await page.mouse.up();
   const readMap = async (ok) => { let m; for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); m = await api(`/api/engine/projects/${p2.id}/map?path=${encodeURIComponent(mp0)}`); if (ok(m)) break; } return m; };   // o salvamento automático demora um pouco
   const before = await readMap((m) => JSON.stringify(m.layers[0].data).includes('3'));
   check('engine:map-pintar-bloco-salva-o-mapa', JSON.stringify(before.layers[0].data).includes('3'));
   // mover um objeto do mapa arrastando
   const mobj = (before.objects || []).find((o) => o.type === 'goal');   // a meta é única (as moedas do gerador podem se sobrepor)
   if (mobj) {
-    const T = before.tile, zm = Math.max(0.1, Math.min(4, Math.min((mv.width - 30) / (before.w * T), (mv.height - 30) / (before.h * T)))), ox = (mv.width - before.w * T * zm) / 2, oy = (mv.height - before.h * T * zm) / 2;
-    const px = (cx) => mv.x + ox + (cx + 0.5) * T * zm, py = (cy) => mv.y + oy + (cy + 0.5) * T * zm, tx = Math.max(0, mobj.x - 3), ty = mobj.y;
-    await page.locator('[data-tool="move"]').click();
+    await page.locator('[data-tool="move"]').click(); await page.waitForTimeout(500);
+    const T = before.tile, vw = await page.evaluate(() => { const c = document.getElementById('ge-mcanvas'), r = c.getBoundingClientRect(); return { x: r.x, y: r.y, z: parseFloat(c.dataset.vz), ox: parseFloat(c.dataset.vox), oy: parseFloat(c.dataset.voy) }; });
+    const px = (cx) => vw.x + vw.ox + (cx + 0.5) * T * vw.z, py = (cy) => vw.y + vw.oy + (cy + 0.5) * T * vw.z, tx = Math.max(0, mobj.x - 3), ty = mobj.y;
     await page.mouse.move(px(mobj.x), py(mobj.y)); await page.mouse.down(); await page.mouse.move(px(tx), py(ty), { steps: 6 }); await page.mouse.up();
     const moved = await readMap((m) => m.objects.some((o) => o.type === mobj.type && o.x === tx && o.y === ty));
     const goalsNow = JSON.stringify(moved.objects.filter((o) => o.type === 'goal')); const okMove = moved.objects.some((o) => o.type === 'goal' && o.x === tx && o.y === ty) && !moved.objects.some((o) => o.type === 'goal' && o.x === mobj.x) && moved.objects.length === before.objects.length;

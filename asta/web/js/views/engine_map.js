@@ -68,6 +68,7 @@ export default async function render(body, E) {
   function draw() {
     if (!vctx || raf) return; raf = requestAnimationFrame(() => {
       raf = 0; const m = S.map; vctx.clearRect(0, 0, view.width, view.height); vctx.fillStyle = '#0a0a0a'; vctx.fillRect(0, 0, view.width, view.height); if (!m) return;
+      view.dataset.vz = String(V.zoom); view.dataset.vox = String(V.ox); view.dataset.voy = String(V.oy);   // enquadramento atual (os testes convertem célula em pixel com isso)
       const T = m.tile; vctx.save(); vctx.translate(V.ox, V.oy); vctx.scale(V.zoom, V.zoom);
       const th = (cat.theme_colors[m.theme] || cat.theme_colors.forest); vctx.fillStyle = th.bottom; vctx.fillRect(0, 0, m.w * T, m.h * T);
       const grid = m.layers[0].data;
