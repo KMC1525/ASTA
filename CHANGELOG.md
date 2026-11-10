@@ -5,6 +5,16 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.4] — 2026-11-10
+
+### Adicionado — Game Engine: mover objetos durante o desenvolvimento
+- **Main → inspetor: painel *Mover*.** Botões de seta (esquerda/direita/cima/baixo, mais *Subir/Descer* em 3D) movem o nó escolhido por um **passo à sua escolha** (2D: 1/8/32 px · 2.5D: 0,25/1/2 blocos · 3D: 0,25/1/5 m), salvo na hora. No viewport continua dando para arrastar, usar as setas do teclado e agora **PageUp/PageDown** para subir e descer um objeto 3D.
+- **Map → ferramenta *Mover objeto* (2D e 3D).** Arraste qualquer objeto (moeda, inimigo, meta, árvore…) para outra célula ou ponto; em 2D, as setas do teclado também movem o escolhido. Desfazer (`Ctrl+Z`) traz de volta.
+- Versão 0.19.4; testes de navegador do painel, do arrasto 2D e do mover 3D.
+
+### Corrigido — Game Engine
+- **O salvamento automático do Map podia engolir uma edição em andamento.** A resposta do servidor trocava o mapa enquanto você ainda pintava ou arrastava, e a última pincelada podia sumir. Agora a resposta só substitui o mapa se nada mudou nesse meio-tempo.
+
 ## [0.19.3] — 2026-11-10
 
 ### Removido — Game Engine

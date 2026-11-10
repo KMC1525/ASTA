@@ -21,8 +21,17 @@ export default async function render(body, E) {
     S.path = path; S.map = path ? await E.api.map(path) : null; S.region = null; S.undo = []; S.saved = true; paintAll();
     if (dim === '3d') { if (S.ready) sendMapScene(); } else { needFit = true; if (view && view.width > 60) { fit(); needFit = false; } draw(); }
   }
-  const saveSoon = debounce(async () => { try { S.map = await E.api.saveMap(S.path, S.map); S.saved = true; paintStatus(); } catch (e) { toast(e.message, 'err'); } }, 600);
-  function markDirty() { S.saved = false; paintStatus(); saveSoon(); }
+  let ver = 0;   // cada edição sobe a versão: a resposta do servidor só substitui o mapa se nada mudou enquanto salvava (senão a edição em andamento se perdia)
+  const saveSoon = debounce(async () => {
+    const v = ver, sent = S.map;
+    try {
+      const res = await E.api.saveMap(S.path, sent);
+      if (v !== ver || drag || S.map !== sent) return;   // houve edição no meio: o próximo salvamento já está agendado
+      const idx = S.selObj && sent.objects ? sent.objects.indexOf(S.selObj) : -1;
+      S.map = res; S.selObj = idx >= 0 && res.objects ? res.objects[idx] || null : null; S.saved = true; paintStatus(); if (dim === '2d') draw();
+    } catch (e) { toast(e.message, 'err'); }
+  }, 600);
+  function markDirty() { ver++; S.saved = false; paintStatus(); saveSoon(); }
   function paintStatus() { status.textContent = S.map ? `${S.map.name} · ${dim === '3d' ? S.map.res + '×' + S.map.res + ' · ' + S.map.size + ' m' : S.map.w + '×' + S.map.h} · ${t('{n} objetos', { n: (S.map.objects || []).length })} · ${S.saved ? t('salvo') : t('salvando…')}` : ''; }
   const pushUndo = () => { S.undo.push(clone(S.map)); if (S.undo.length > 20) S.undo.shift(); };
   async function undo() { const m = S.undo.pop(); if (!m) return; S.map = m; markDirty(); if (dim === '3d') sendMap(); else draw(); paintAll(false); }
@@ -35,13 +44,17 @@ export default async function render(body, E) {
     view.addEventListener('wheel', (e) => { e.preventDefault(); const r = view.getBoundingClientRect(), mx = e.clientX - r.left, my = e.clientY - r.top, f = e.deltaY < 0 ? 1.15 : 1 / 1.15, nz = Math.max(0.1, Math.min(8, V.zoom * f)); V.ox = mx - (mx - V.ox) * nz / V.zoom; V.oy = my - (my - V.oy) * nz / V.zoom; V.zoom = nz; draw(); }, { passive: false });
     view.addEventListener('pointerdown', (e) => { view.focus(); view.setPointerCapture(e.pointerId); const c = cell(e); if (e.button === 1 || e.button === 2 || spaceDown || S.tool === 'pan') { drag = { kind: 'pan', x: e.clientX, y: e.clientY, ox: V.ox, oy: V.oy }; return; } if (!S.map) return;
       if (S.tool === 'region') { drag = { kind: 'region', a: c, b: c }; S.region = { x0: c.x, y0: c.y, x1: c.x, y1: c.y }; draw(); return; }
+      if (S.tool === 'move') { const k = objAt(c); if (k >= 0) { pushUndo(); S.selObj = S.map.objects[k]; drag = { kind: 'move', o: S.selObj }; draw(); } else { S.selObj = null; draw(); } return; }
       pushUndo(); drag = { kind: 'edit', erase: e.altKey || e.button === 2 }; apply(c, e); draw(); });
-    view.addEventListener('pointermove', (e) => { if (!drag) return; if (drag.kind === 'pan') { V.ox = drag.ox + e.clientX - drag.x; V.oy = drag.oy + e.clientY - drag.y; draw(); return; } const c = cell(e); if (drag.kind === 'region') { drag.b = c; S.region = { x0: Math.min(drag.a.x, c.x), y0: Math.min(drag.a.y, c.y), x1: Math.max(drag.a.x, c.x), y1: Math.max(drag.a.y, c.y) }; draw(); paintRegion(); return; } if (drag.kind === 'edit' && (S.tool === 'paint' || S.tool === 'erase' || S.tool === 'height')) { apply(c, e); draw(); } });
-    const up = () => { if (!drag) return; const d = drag; drag = null; if (d.kind === 'edit') { markDirty(); paintStatus(); } if (d.kind === 'region') paintRegion(); };
+    view.addEventListener('pointermove', (e) => { if (!drag) return; if (drag.kind === 'pan') { V.ox = drag.ox + e.clientX - drag.x; V.oy = drag.oy + e.clientY - drag.y; draw(); return; } const c = cell(e); if (drag.kind === 'move') { const m = S.map; drag.o.x = Math.max(0, Math.min(m.w - 1, c.x)); drag.o.y = Math.max(0, Math.min(m.h - 1, c.y)); drag.moved = true; draw(); return; } if (drag.kind === 'region') { drag.b = c; S.region = { x0: Math.min(drag.a.x, c.x), y0: Math.min(drag.a.y, c.y), x1: Math.max(drag.a.x, c.x), y1: Math.max(drag.a.y, c.y) }; draw(); paintRegion(); return; } if (drag.kind === 'edit' && (S.tool === 'paint' || S.tool === 'erase' || S.tool === 'height')) { apply(c, e); draw(); } });
+    const up = () => { if (!drag) return; const d = drag; drag = null; if (d.kind === 'edit' || (d.kind === 'move' && d.moved)) { markDirty(); paintStatus(); } if (d.kind === 'region') paintRegion(); };
     view.addEventListener('pointerup', up); view.addEventListener('pointercancel', up);
-    const key = (e) => { if (!document.body.contains(view) || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '')) return; if (e.code === 'Space') { spaceDown = e.type === 'keydown'; if (spaceDown) e.preventDefault(); } if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); } };
+    const key = (e) => { if (!document.body.contains(view) || /^(INPUT|TEXTAREA|SELECT)$/.test((e.target || {}).tagName || '')) return; if (e.code === 'Space') { spaceDown = e.type === 'keydown'; if (spaceDown) e.preventDefault(); } if (e.type === 'keydown' && (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); undo(); }
+      const arrow = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] }[e.code];
+      if (e.type === 'keydown' && arrow && S.tool === 'move' && S.selObj && S.map) { e.preventDefault(); pushUndo(); const o = S.selObj; o.x = Math.max(0, Math.min(S.map.w - 1, o.x + arrow[0])); o.y = Math.max(0, Math.min(S.map.h - 1, o.y + arrow[1])); markDirty(); draw(); } };
     window.addEventListener('keydown', key); window.addEventListener('keyup', key); E.onCleanup(() => { window.removeEventListener('keydown', key); window.removeEventListener('keyup', key); });
   }
+  const objAt = (c) => { const os = (S.map && S.map.objects) || []; for (let i = os.length - 1; i >= 0; i--) if (Math.floor(os[i].x) === c.x && Math.floor(os[i].y) === c.y) return i; return -1; };
   const tilePx = () => (S.map ? S.map.tile : 32);
   function cell(e) { const r = view.getBoundingClientRect(), t0 = tilePx(), px = (e.clientX - r.left - V.ox) / V.zoom / t0, py = (e.clientY - r.top - V.oy) / V.zoom / t0; return { x: Math.floor(px), y: Math.floor(py), fx: px, fy: py }; }
   function fit() { if (!view || !S.map) return; V.zoom = Math.max(0.1, Math.min(4, Math.min((view.width - 30) / (S.map.w * S.map.tile), (view.height - 30) / (S.map.h * S.map.tile)))); V.ox = (view.width - S.map.w * S.map.tile * V.zoom) / 2; V.oy = (view.height - S.map.h * S.map.tile * V.zoom) / 2; }
@@ -62,6 +75,7 @@ export default async function render(body, E) {
       if (V.zoom > 0.4) { vctx.strokeStyle = 'rgba(255,255,255,.07)'; vctx.lineWidth = 1 / V.zoom; vctx.beginPath(); for (let x = 0; x <= m.w; x++) { vctx.moveTo(x * T, 0); vctx.lineTo(x * T, m.h * T); } for (let y = 0; y <= m.h; y++) { vctx.moveTo(0, y * T); vctx.lineTo(m.w * T, y * T); } vctx.stroke(); }
       vctx.font = Math.round(T * 0.78) + 'px system-ui,"Apple Color Emoji","Segoe UI Emoji"'; vctx.textAlign = 'center'; vctx.textBaseline = 'middle';
       (m.objects || []).forEach((o) => { vctx.fillText(OBJ_EMOJI[o.type] || '❓', (o.x + 0.5) * T, (o.y + 0.55) * T); });
+      if (S.selObj && S.tool === 'move' && (m.objects || []).includes(S.selObj)) { vctx.strokeStyle = '#ffd166'; vctx.lineWidth = 2 / V.zoom; vctx.strokeRect(S.selObj.x * T + 1, S.selObj.y * T + 1, T - 2, T - 2); }
       if (S.region) { const r = S.region; vctx.strokeStyle = '#7cb7ff'; vctx.fillStyle = 'rgba(124,183,255,.2)'; vctx.lineWidth = 2 / V.zoom; vctx.fillRect(r.x0 * T, r.y0 * T, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T); vctx.strokeRect(r.x0 * T, r.y0 * T, (r.x1 - r.x0 + 1) * T, (r.y1 - r.y0 + 1) * T); }
       vctx.restore();
     });
@@ -83,12 +97,19 @@ export default async function render(body, E) {
   }
   function sendMapScene(reframe) { if (!S.ready || !S.map) return; (frame.contentWindow || {}).postMessage && send({ geCmd: 'map', path: S.path, data: S.map }); send({ geCmd: 'scene', name: 'mapview', scene: mapScene(), mode: 'edit', reframe: !!reframe }); sendTool(); }
   function sendMap() { send({ geCmd: 'map', path: S.path, data: S.map, region: S.region && S.tool === 'region' ? S.region : null }); sendTool(); }
-  function sendTool() { send({ geCmd: 'tool', name: S.tool === 'region' || S.tool === 'place' || S.tool === 'delobj' || S.tool === 'raise' || S.tool === 'lower' || S.tool === 'smooth' || S.tool === 'flatten' || S.tool === 'noise' ? 'brush' : 'select', radius: S.radius }); if (S.region) send({ geCmd: 'marker', kind: 'region', x: S.region.x, z: S.region.z, radius: S.region.radius }); }
+  function sendTool() { send({ geCmd: 'tool', name: S.tool === 'region' || S.tool === 'place' || S.tool === 'move' || S.tool === 'delobj' || S.tool === 'raise' || S.tool === 'lower' || S.tool === 'smooth' || S.tool === 'flatten' || S.tool === 'noise' ? 'brush' : 'select', radius: S.radius }); if (S.region) send({ geCmd: 'marker', kind: 'region', x: S.region.x, z: S.region.z, radius: S.region.radius }); }
   const BRUSH_OPS = ['raise', 'lower', 'smooth', 'flatten', 'noise'];
   async function onBrush(m) {
     if (!S.map) return;
     if (S.tool === 'region') { if (m.phase === 'down') { S.region = { x: m.x, z: m.z, radius: S.radius }; send({ geCmd: 'marker', kind: 'region', x: m.x, z: m.z, radius: S.radius }); paintRegion(); } return; }
     if (S.tool === 'place' && m.phase === 'down') { pushUndo(); S.map.objects.push({ type: S.obj, x: m.x, z: m.z, ry: Math.floor(Math.random() * 360) }); markDirty(); sendMap(); return; }
+    if (S.tool === 'move') {
+      const os = S.map.objects || [];
+      if (m.phase === 'down') { let best = -1, bd = Math.max(4, S.radius / 2); os.forEach((o, i) => { const d = Math.hypot(o.x - m.x, o.z - m.z); if (d < bd) { bd = d; best = i; } }); S.moveIdx = best; if (best >= 0) { pushUndo(); S.selObj = os[best]; } return; }
+      const o = S.moveIdx >= 0 ? os[S.moveIdx] : null;
+      if (o && m.phase === 'move') { o.x = m.x; o.z = m.z; sendMap(); } else if (o && m.phase === 'up') { markDirty(); S.moveIdx = -1; sendMap(); }
+      return;
+    }
     if (S.tool === 'delobj' && m.phase === 'down') { pushUndo(); const k = S.map.objects.findIndex((o) => o.type !== 'player' && Math.hypot(o.x - m.x, o.z - m.z) < Math.max(3, S.radius / 2)); if (k >= 0) { S.map.objects.splice(k, 1); markDirty(); sendMap(); } return; }
     if (BRUSH_OPS.includes(S.tool)) {
       if (m.phase === 'down') pushUndo(); if (m.phase === 'up') { markDirty(); return; }
@@ -125,9 +146,9 @@ export default async function render(body, E) {
     try { toast(t('Gerando a região de novo…')); const res = await runJob(E, 'map-ai', { action: 'regen_region', path: S.path, region: S.region, prompt, theme: S.map.theme, save: true, team: pp.team.get() }); S.map = res.map; paintStatus(); if (dim === '3d') sendMap(); else draw(); toast(t('Região atualizada'), 'ok'); } catch (e) { toast(e.message, 'err'); }
   }
   function paintTools() {
-    const T2 = [['region', 'select', 'Região (selecionar pontos)'], ['paint', 'brush', 'Pintar bloco'], ['erase', 'eraser', 'Apagar bloco'], ['object', 'plus', 'Colocar objeto'], ['delobj', 'trash', 'Remover objeto'], ['pan', 'columns', 'Deslocar']];
+    const T2 = [['region', 'select', 'Região (selecionar pontos)'], ['paint', 'brush', 'Pintar bloco'], ['erase', 'eraser', 'Apagar bloco'], ['object', 'plus', 'Colocar objeto'], ['move', 'move', 'Mover objeto (arraste; setas movem o escolhido)'], ['delobj', 'trash', 'Remover objeto'], ['pan', 'columns', 'Deslocar']];
     if (S.map && S.map.heights) T2.splice(3, 0, ['height', 'mountain', 'Altura (Shift/Alt = baixar)']);
-    const T3 = [['region', 'select', 'Região (selecionar um ponto)'], ['raise', 'mountain', 'Subir o relevo'], ['lower', 'drop', 'Descer o relevo'], ['smooth', 'wand', 'Suavizar'], ['flatten', 'grid', 'Aplainar'], ['noise', 'bolt', 'Ruído'], ['place', 'plus', 'Colocar objeto'], ['delobj', 'trash', 'Remover objeto']];
+    const T3 = [['region', 'select', 'Região (selecionar um ponto)'], ['raise', 'mountain', 'Subir o relevo'], ['lower', 'drop', 'Descer o relevo'], ['smooth', 'wand', 'Suavizar'], ['flatten', 'grid', 'Aplainar'], ['noise', 'bolt', 'Ruído'], ['place', 'plus', 'Colocar objeto'], ['move', 'move', 'Mover objeto (arraste)'], ['delobj', 'trash', 'Remover objeto']];
     mtool.replaceChildren(...(dim === '3d' ? T3 : T2).map(([id, ic, label]) => h('button', { type: 'button', class: 'btn sm' + (S.tool === id ? ' on' : ''), dataset: { tool: id }, title: t(label), 'aria-label': t(label), 'aria-pressed': String(S.tool === id), onclick: () => { S.tool = id; paintTools(); paintProps(); if (dim === '3d') sendTool(); } }, icon(ic, 14))),
       h('span', { class: 'grow' }), ibtn(t('Desfazer'), 'undo', undo, '', { id: 'ge-mundo' }), dim === '2d' ? ibtn(t('Enquadrar'), 'fit', () => { fit(); draw(); }) : ibtn(t('Enquadrar'), 'fit', () => send({ geCmd: 'frame' })), status);
   }

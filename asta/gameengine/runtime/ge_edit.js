@@ -123,6 +123,7 @@
       var d = e.shiftKey ? 10 : 1, mv = null;
       if (e.code === 'ArrowLeft') mv = [-d, 0]; else if (e.code === 'ArrowRight') mv = [d, 0]; else if (e.code === 'ArrowUp') mv = [0, -d]; else if (e.code === 'ArrowDown') mv = [0, d];
       if (mv) { e.preventDefault(); if (GE.dim === '2d') { var u = GE.R.iso ? 0.25 * d : d; n.x += mv[0] ? Math.sign(mv[0]) * u : 0; n.y += mv[1] ? Math.sign(mv[1]) * u : 0; post({ ge: 'moved', id: n.id, props: { x: +n.x.toFixed(2), y: +n.y.toFixed(2) } }); } else { n.x += mv[0] * 0.25; n.z += mv[1] * 0.25; post({ ge: 'moved', id: n.id, props: { x: +n.x.toFixed(2), y: +n.y.toFixed(2), z: +n.z.toFixed(2) } }); } }
+      if (GE.dim === '3d' && (e.code === 'PageUp' || e.code === 'PageDown') && n.type !== 'Terrain3D') { e.preventDefault(); n.y = N(n.y, 0) + (e.code === 'PageUp' ? 0.25 : -0.25) * d; post({ ge: 'moved', id: n.id, props: { x: +N(n.x, 0).toFixed(2), y: +n.y.toFixed(2), z: +N(n.z, 0).toFixed(2) } }); }
       if (e.code === 'Delete' || e.code === 'Backspace') { e.preventDefault(); post({ ge: 'delete', id: n.id }); }
       if (e.code === 'KeyD' && (e.ctrlKey || e.metaKey)) { e.preventDefault(); post({ ge: 'duplicate', id: n.id }); }
     });

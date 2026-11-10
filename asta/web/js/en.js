@@ -3425,4 +3425,13 @@ export default {
   "Exportar para Windows, macOS, Linux, Android e iOS": "Export to Windows, macOS, Linux, Android and iOS",
   "Gênero do jogo": "Genre",
   "com.seunome.jogo": "com.yourname.game",
+  "Passo": "Step",
+  "Mover para a esquerda": "Move left",
+  "Mover para cima": "Move up",
+  "Mover para baixo": "Move down",
+  "Mover para a direita": "Move right",
+  "Subir": "Raise",
+  "Descer": "Lower",
+  "Mover objeto (arraste; setas movem o escolhido)": "Move object (drag; arrow keys move the chosen one)",
+  "Mover objeto (arraste)": "Move object (drag)",
 };

@@ -7,6 +7,16 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.4] — 2026-11-10
+
+### Added — Game Engine: move objects while you build
+- **Main → inspector: *Move* pad.** Arrow buttons (left/right/up/down, plus *Raise/Lower* in 3D) move the selected node by a **step you choose** (2D: 1/8/32 px · 2.5D: 0.25/1/2 tiles · 3D: 0.25/1/5 m), saved right away. In the viewport you can still drag, use the arrow keys, and now **PageUp/PageDown** to raise and lower a 3D object.
+- **Map → *Move object* tool (2D and 3D).** Drag any object (coin, enemy, goal, tree…) to another cell or spot; in 2D, the arrow keys also move the chosen one. Undo (`Ctrl+Z`) brings it back.
+- Version 0.19.4; browser tests for the pad, the 2D drag and the 3D move.
+
+### Fixed — Game Engine
+- **Map autosave could swallow an edit in progress.** The server's reply replaced the map while you were still painting or dragging, so the last stroke could vanish. The reply now only replaces the map when nothing changed meanwhile.
+
 ## [0.19.3] — 2026-11-10
 
 ### Removed — Game Engine
