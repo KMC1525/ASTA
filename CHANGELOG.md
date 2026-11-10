@@ -5,6 +5,14 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+## [0.19.5] — 2026-11-10
+
+### Adicionado — Studio: layout da timeline personalizável
+- **Redimensione cada janela pelos quatro lados.** As divisórias entre as janelas (mídias/monitor/propriedades, a faixa de cima e a timeline, e agora a **timeline e o mixer**) mudam o tamanho das duas vizinhas; as **bordas de fora** do editor recuam o editor naquele lado (esquerda, direita, topo, base). Dois cliques em qualquer borda voltam ao padrão. Os tamanhos ficam guardados.
+- **Troque as janelas de lugar.** Barra → **Layout**: esquerda ⇄ centro, centro ⇄ direita, esquerda ⇄ direita, **timeline ⇄ janelas de cima** e o **mixer para o outro lado** da timeline. As divisórias continuam funcionando em qualquer arranjo (em telas pequenas vale a ordem padrão).
+- **Presets de layout em JSON.** *Layout → Presets de layout*: guarde o seu arranjo com um nome (**fica neste navegador**), **exporte** como `timeline-<nome>.json` (tipo, versão, nome, layout, ímã/ripple) e **importe** um `.json`. Arquivo importado é entrada não confiável: o tipo e a versão são conferidos, os números são limitados, a ordem das janelas precisa ser uma permutação válida e só janelas conhecidas entram; um arquivo ruim é recusado com aviso e não muda nada.
+- Versão 0.19.5; teste de navegador `test_46` (redimensionar, trocar, guardar/exportar/aplicar/importar/apagar, arquivos inválidos e hostis, recarregar) e o módulo de dados puro `studio_layout.js`.
+
 ## [0.19.4] — 2026-11-10
 
 ### Adicionado — Game Engine: mover objetos durante o desenvolvimento
