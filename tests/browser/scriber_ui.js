@@ -13,7 +13,8 @@ run('scriber_ui', async ({ base, api, open, check }) => {
   // ---- lista de textos e atalhos para as duas abas
   await page.goto(base + '/#/scriber');
   await page.waitForSelector('#sc-new-gen');
-  check('home:ia-aviso', (await page.locator('#sc-ainote').count()) === 1);
+  const hasAi = (await api('/api/scriber/status')).text.ai;   // outros testes podem ter configurado um provedor neste servidor
+  check('home:ia-aviso', (await page.locator('#sc-ainote').count()) === (hasAi ? 0 : 1));
   check('home:tipos', (await page.locator('#sc-new-type option').count()) >= 12);
   check('home:abas-diretas', (await page.locator('#sc-direct a[data-tab=generate]').count()) === 1 && (await page.locator('#sc-direct a[data-tab=edit]').count()) === 1);
   check('nav:scriber-na-barra', (await page.locator('#side nav a[href="#/scriber"]').count()) === 1);
@@ -204,7 +205,7 @@ run('scriber_ui', async ({ base, api, open, check }) => {
   await page.click('.sc-tab[data-tab=generate]');
   await page.waitForSelector('#sc-gen-composer');
   check('geracao:aba-abre', (await page.locator('#sc-types .sc-typebtn').count()) >= 12);
-  check('geracao:modo-regras-visivel', (await page.locator('#sc-gen-ai.warn').count()) === 1);
+  check('geracao:selo-de-ia', (await page.locator(hasAi ? '#sc-gen-ai.ok' : '#sc-gen-ai.warn').count()) === 1);
   await page.click('#sc-types .sc-typebtn[data-type=scientific]');
   check('geracao:tipo-muda-formato', (await page.inputValue('#sc-fm-preset')) === 'academic' && (await page.inputValue('#sc-fm-font')) === 'Times New Roman');
   await page.fill('#sc-gen-pages', '3');

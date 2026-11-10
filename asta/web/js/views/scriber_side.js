@@ -201,9 +201,9 @@ export function createSidePanel(S, X) {
     const q = qIn.value.trim(); if (!q) return;
     results.replaceChildren(h('div', { class: 'muted small' }, t('Pesquisando…')));
     try {
-      const r = await api('/api/scriber/search', { method: 'POST', body: { query: q } });
+      const r = await api('/api/scriber/web/search', { method: 'POST', body: { query: q } });
       results.replaceChildren(...r.results.map((x) => h('div', { class: 'sc-result', dataset: { url: x.url } }, h('a', { href: x.url, target: '_blank', rel: 'noopener noreferrer' }, x.title), h('div', { class: 'small dim' }, x.host), h('div', { class: 'small' }, x.snippet),
-        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', dataset: { act: 'pin' }, onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = t('Lendo…'); try { const pg = await api('/api/scriber/search/read', { method: 'POST', body: { url: x.url } }); st.sources = st.sources.filter((s) => s.url !== x.url).concat([{ title: pg.title || x.title, url: x.url, note: '', text: pg.text, pinned: true }]); saveSources(); paintPins(); toast(t('Fonte fixada'), 'ok'); } catch (err) { toast(err.message, 'err'); } b.disabled = false; b.textContent = t('Ler e fixar'); } }, t('Ler e fixar')),
+        h('div', { class: 'row' }, h('button', { class: 'btn sm', type: 'button', dataset: { act: 'pin' }, onclick: async (e) => { const b = e.currentTarget; b.disabled = true; b.textContent = t('Lendo…'); try { const pg = await api('/api/scriber/web/read', { method: 'POST', body: { url: x.url } }); st.sources = st.sources.filter((s) => s.url !== x.url).concat([{ title: pg.title || x.title, url: x.url, note: '', text: pg.text, pinned: true }]); saveSources(); paintPins(); toast(t('Fonte fixada'), 'ok'); } catch (err) { toast(err.message, 'err'); } b.disabled = false; b.textContent = t('Ler e fixar'); } }, t('Ler e fixar')),
           h('button', { class: 'btn ghost sm', type: 'button', onclick: () => X.insertAtCaret(`(${x.title}. ${x.url})`) }, t('Inserir referência'))))));
       if (!r.results.length) results.replaceChildren(h('div', { class: 'muted small' }, t('Nada encontrado.')));
     } catch (e) { results.replaceChildren(h('div', { class: 'sc-pnote err' }, e.message)); }

@@ -6,7 +6,6 @@ import shutil
 import sys
 import tempfile
 import threading
-import time
 import unittest
 import zipfile
 import xml.dom.minidom
@@ -871,13 +870,13 @@ class ApiTests(unittest.TestCase):
         found = {"engine": "duckduckgo", "query": "q", "results": [{"title": "Fonte", "url": "https://a.com/x", "snippet": "trecho"}]}
         with mock.patch.object(websearch, "search", lambda q, s, n=None, ui_lang="auto": found), mock.patch.object(websearch, "fetch_page", lambda u, limit=0: {"title": "T", "text": "conteúdo da página"}), \
                 mock.patch.object(websearch, "safe_url", lambda u: u.startswith("https://a.com")):
-            st, r = self.c.json("POST", "/api/scriber/search", {"query": "algo"})
+            st, r = self.c.json("POST", "/api/scriber/web/search", {"query": "algo"})
             self.assertEqual((st, r["results"][0]["host"]), (200, "a.com"))
-            st, pg = self.c.json("POST", "/api/scriber/search/read", {"url": "https://a.com/x"})
+            st, pg = self.c.json("POST", "/api/scriber/web/read", {"url": "https://a.com/x"})
             self.assertEqual(pg["text"], "conteúdo da página")
-        self.assertEqual(self.c.json("POST", "/api/scriber/search", {"query": ""})[0], 400)
-        self.assertEqual(self.c.json("POST", "/api/scriber/search/read", {"url": "http://127.0.0.1:1/x"})[0], 400)        # nada de endereços locais
-        self.assertEqual(self.c.json("POST", "/api/scriber/search/read", {"url": "file:///etc/passwd"})[0], 400)
+        self.assertEqual(self.c.json("POST", "/api/scriber/web/search", {"query": ""})[0], 400)
+        self.assertEqual(self.c.json("POST", "/api/scriber/web/read", {"url": "http://127.0.0.1:1/x"})[0], 400)        # nada de endereços locais
+        self.assertEqual(self.c.json("POST", "/api/scriber/web/read", {"url": "file:///etc/passwd"})[0], 400)
 
     def test_foreign_host_is_refused(self):
         st, _h, _b = self.c.req("GET", "/api/scriber/projects", headers={"Host": "evil.example.com"})

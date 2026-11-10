@@ -82,8 +82,8 @@ class ScriberRoutes:
         a("POST", r"/api/scriber/proofread", w(self.r_proofread))
         a("POST", r"/api/scriber/typography", w(self.r_typography))
         # busca na web nativa
-        a("POST", r"/api/scriber/search", w(self.r_search))
-        a("POST", r"/api/scriber/search/read", w(self.r_search_read))
+        a("POST", r"/api/scriber/web/search", w(self.r_search))
+        a("POST", r"/api/scriber/web/read", w(self.r_search_read))
         # IA
         a("POST", rf"/api/scriber/projects/{PID}/generate", w(self.r_generate))
         a("POST", rf"/api/scriber/projects/{PID}/edit", w(self.r_edit))
