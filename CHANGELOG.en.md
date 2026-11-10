@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.6] — 2026-11-10
+
+### Fixed — Studio timeline: everything reachable at any window size
+Dragging the mixer divider (or a small window) could push the **mixer past the right edge of the editor** — the faders were cut off and the timeline shrank to a sliver. A geometry test over 5 window sizes (1920×1080 down to 390×844) and 3 layouts (default, extreme sizes, swapped) found and fixed the whole family:
+- **Mixer** can never take more than the room left (the timeline always keeps at least 240 px) and its strips scroll inside it, sideways and up/down.
+- **Top windows** (media, monitor, properties): the monitor keeps at least 160 px and the side panels shrink together on narrow windows; the choice you saved is kept and comes back when the window grows again (the editor re-fits on every window resize).
+- **Timeline height:** huge top windows or edge insets can no longer squeeze the timeline to nothing — it always keeps about 140 px of useful height; insets are limited to 15 % of the editor.
+- **Narrow windows:** the right panel and the mixer were **hidden** below 980 px; now nothing is hidden — the editor has a minimum width and scrolls sideways inside its frame.
+- **Monitor controls:** the first playback buttons were cut off on narrow monitors; they now wrap onto a second line.
+- Version 0.19.6; browser test `test_47` (geometry at every size and layout, plus resizing the window with the editor open).
+
 ## [0.19.5] — 2026-11-10
 
 ### Added — Studio: customizable timeline layout
