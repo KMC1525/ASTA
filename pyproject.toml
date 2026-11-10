@@ -5,13 +5,13 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "asta"
 dynamic = ["version"]
-description = "O primeiro super app open source: chat com qualquer modelo de IA, busca na web, mundos 3D com NPCs-agentes, avatars de chat e voz, jogos 2D e um Canvas de imagens, vídeos, sons e vozes."
+description = "O primeiro super app open source: chat com qualquer modelo de IA, busca na web, Game Engine (jogos 2D, 2.5D, 3D, VR e AR), avatars de chat e voz e um Canvas de imagens, vídeos, sons e vozes."
 readme = "README.md"
 requires-python = ">=3.9"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "KMC" }]
-keywords = ["ai", "agents", "worlds", "three.js", "roleplay", "avatars", "chatbot", "game", "2d-games", "visual-novel", "canvas", "image-generation", "video-editor", "webui"]
+keywords = ["ai", "agents", "game-engine", "gamedev", "webxr", "vr", "ar", "three.js", "roleplay", "avatars", "chatbot", "game", "2d-games", "visual-novel", "canvas", "image-generation", "video-editor", "webui"]
 classifiers = [
   "Programming Language :: Python :: 3",
   "Operating System :: OS Independent",
@@ -44,7 +44,7 @@ asta = "asta.cli:main"
 include = ["asta*"]
 
 [tool.setuptools.package-data]
-asta = ["web/**/*", "runtime/**/*", "runtime2d/**/*", "native/Cargo.toml", "native/Cargo.lock", "native/src/*.rs", "computer/prompts/*.md", "computer/prompts/*/*.md", "code/prompts/*.md", "code/prompts/*/*.md", "work/prompts/*.md"]
+asta = ["web/**/*", "runtime/**/*", "runtime2d/**/*", "native/Cargo.toml", "native/Cargo.lock", "native/src/*.rs", "computer/prompts/*.md", "computer/prompts/*/*.md", "code/prompts/*.md", "code/prompts/*/*.md", "work/prompts/*.md", "gameengine/runtime/*", "gameengine/prompts/*.md"]
 
 [tool.setuptools.dynamic]
 version = { attr = "asta.__version__" }

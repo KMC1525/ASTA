@@ -7,6 +7,34 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.19.0] — 2026-11-10
+
+### Added — Game Engine: 2D, 2.5D, 3D, VR and AR games with AI, Godot-inspired
+A new section, **Game Engine** (side menu, replacing *Worlds* and *2D games*), with seven tabs. Each project is a plain folder in `~/.asta/gameengine/<id>/` (`game/`, `docs/`, `editor/`, `history/`, `exports/`); the engine does not live in the folder: it is added when playing/exporting, so updating ASTA updates the engine of every game.
+- **Main.** Prompt box on the left (many attachments, ZIPs, videos…, **native web search**, 1·4·8·12·16 team and Low→Omni) under the **scene tree** (nodes in folders, drag to reorder, show/hide); a **viewport** with the game (edit mode: click selects, drag moves, zoom, 3D orbit, grid, **▶ Play/Stop**); an **inspector** on the right (node properties built from the catalog, **behaviors** from a closed list, tags; with nothing selected: scene rules, music, sounds per event, language, health). Autosave, several scenes, **history/undo** (a snapshot before every AI change). On an existing game the prompt **edits** through validated operations.
+- **Code.** VS Code-style: prompt, **folders and sub-folders** (create, rename, drag to move, upload files and ZIPs) and an editor with tabs, line numbers, highlighting (JS/JSON/CSS/HTML/MD), auto-indent, `Ctrl+S`, find. The AI plans → writes → checks the syntax (`node --check` when Node exists) and only writes in `scripts/`, `data/`, `scenes/`, `maps/`. **Optional link to Code mode** (the session points at the game folder; Code's guard now accepts `<data>/gameengine/<id>/game`).
+- **Assets.** Krita-style: a **layered canvas** with folders and sub-folders, brush, eraser, bucket, eyedropper, **rectangle, freehand and paint-to-select** (the AI edits **only the chosen spot**; the result becomes a new layer, nothing destructive), move/rotate/scale layers, blend modes, filters, **background removal**, trim, undo/redo. **Generate with or without background**; with no image model ASTA draws **vector sprites** (hero, enemy, coin, tree…). *Apply to the game* saves the PNG.
+- **Sound.** Audacity-style: waveform tracks, select/cut/copy/paste/delete/split, fades, gain, normalize, reverse, speed/pitch, echo, filters, **noise reduction** (profile + spectral subtraction) and a gate, **microphone recording**, **effect, music and voice generation** (no model: real procedural synthesis), WAV mixdown and mapping to game events/music. **Optional links to Studio and Canvas.**
+- **Scripts.** Notepad Next-style: scripts, GDD, dialogues, lore in `.md`/`.txt`, **horizontal or vertical tabs**, panes side by side or stacked, folders and sub-folders; **select a paragraph/line** and the AI **improves, expands, rewrites, shortens, fixes, turns into dialogue or translates just that passage**; *Send dialogues to the game*. Characters and Worldbuilding (the old Worlds cards) live here.
+- **Map.** 2D tile maps (paint, objects, heights for isometric) and 3D terrain with biomes (raise/lower/smooth/flatten/noise brush, objects); **select a region or a point** to edit or regenerate only there; **whole map from a prompt**. Every generated map has a reachable start and goal (verified by breadth-first search in tests).
+- **Publish.** Export to **Web (HTML5 + PWA), Windows, macOS, Linux, Android and iOS**: every package carries the **offline playable game** and a **ready-to-build native project** (Electron/Capacitor) with a **GitHub Actions workflow**; store text, tags and release notes by AI; project checks.
+- **Engine** (`asta/gameengine/runtime`, plain JavaScript, three.js bundled): 2D (tiles, physics, camera, parallax), **2.5D** (isometric with heights, and parallax), **3D** (heightmap terrain, sky, lights, characters, 1st/3rd person), **VR** (WebXR: teleport, grab/throw) and **AR** (WebXR with a floor reticle), with a desktop preview; 30 closed behaviors; user scripts register new behaviors with `GE.behavior`.
+- **AI everywhere — and no AI too.** A multi-agent flow *Planner → Scene designer → Writer → Reviewer* (and equivalents in each tab) with validated JSON output, 1·4·8·12·16 team and Low→Omni effort, open `.md` prompts in `asta/gameengine/prompts/` and a **deterministic fallback at every step**: with no provider configured you still get a playable 2D/2.5D/3D/VR/AR game (rule-based generator), synthesized sprites, effects and soundtrack, maps and documents.
+- UI in Portuguese and English; `asta engine` command (list, create, export); a **Game Engine** tab in Configuration (team, default type, web search, content, restore points).
+
+### Changed
+- **“Worlds” and “2D games” left the side menu** (12 → 11 items; Configuration 20 → 19 tabs). What you already created stays in the Library; the old screens still open at `#/worlds` and `#/games` (with a notice), and the Chat keeps the quick 3D-world and 2D-game generators; their settings now live inside *Configuration → Game Engine*.
+- `team.SECTIONS`, settings (export/restore), hideable sections, start page and `asta engine` include the Game Engine.
+
+### Security
+- Code written for the game by the user (or the AI in the Code tab) runs **only in an isolated iframe**: `sandbox` without `allow-same-origin` (opaque origin), a no-network CSP, no cookies and no access to ASTA's API (writes with a foreign `Origin` were already refused). The AI only writes in `scripts/`, `data/`, `scenes/`, `maps/` and the syntax is checked before saving; scenes and maps go through strict validation (types, properties, limits). Paths are confined (no `..`, symlinks or hidden names), file types are checked by content (PNG/JPEG/WAV/SVG) and ZIPs are extracted with zip-slip and zip-bomb protection.
+
+### Honest limits (what was not tested)
+- **VR and AR (WebXR) were not tested on a real headset or phone**: only the desktop preview; the “Enter VR/AR” button shows disabled where the browser has no WebXR (and inside the editor's iframe WebXR may be blocked — test with the exported package).
+- **Exports compile nothing**: ASTA delivers the playable game and the Electron/Capacitor project with the GitHub Actions workflow; **the workflow was not run on a real repository**, nor the packages on real Windows, macOS, Linux, Android or iOS. Publishing to stores needs signing/accounts ASTA does not handle.
+- AI (text, image, audio, voice) was tested with **simulated providers**; no paid API was used, so real quality depends on the configured model. Microphone recording was tested with Chromium's fake device. Tested only on Chromium on Linux.
+- New tests: `tests/test_engine.py` (29 tests: schema, the 11 generator combinations, maps, audio, art, manager, agents with fallback, exports, API) and `tests/browser/engine_ui.js` (the 7 tabs, the isolated game, English and mobile).
+
 ## [0.18.0] — 2026-11-10
 
 ### Added — Work: teamwork with AI, sync between machines and users

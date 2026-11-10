@@ -1,0 +1,28 @@
+/* ASTA Game Engine — interface do jogo (preto + detalhes brancos, como o resto do ASTA) */
+*{box-sizing:border-box}
+html,body{margin:0;height:100%;overflow:hidden;background:#000;color:#ececec;font:14px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,Helvetica,Arial,sans-serif;-webkit-font-smoothing:antialiased;touch-action:none;user-select:none}
+#ge-stage{position:fixed;inset:0;overflow:hidden}
+#ge-stage canvas{display:block;outline:none;width:100%;height:100%}
+.ge-hidden{display:none!important}
+#ge-hud{position:fixed;inset:0;pointer-events:none;z-index:5}
+.ge-ui{position:absolute;padding:10px 14px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.7);white-space:pre}
+.ge-ui.top-left{left:0;top:0}.ge-ui.top-right{right:0;top:0;text-align:right}.ge-ui.top-center{left:50%;top:0;transform:translateX(-50%)}
+.ge-ui.bottom-left{left:0;bottom:0}.ge-ui.bottom-right{right:0;bottom:0}.ge-ui.bottom-center{left:50%;bottom:0;transform:translateX(-50%)}.ge-ui.center{left:50%;top:50%;transform:translate(-50%,-50%)}
+.ge-bar{height:12px;background:rgba(0,0,0,.45);border:1px solid rgba(255,255,255,.35);border-radius:8px;overflow:hidden}.ge-bar i{display:block;height:100%;transition:width .15s}
+#ge-banner{position:absolute;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);text-align:center;pointer-events:auto;z-index:8}
+#ge-banner h2{font-size:clamp(28px,6vw,52px);margin:0 0 8px;letter-spacing:-.02em}#ge-banner p{margin:0;color:rgba(255,255,255,.7)}
+#ge-banner.ge-win h2{color:#80ed99}#ge-banner.ge-lose h2{color:#ff6b6b}
+#ge-dialog{position:absolute;left:50%;bottom:28px;transform:translateX(-50%);width:min(720px,calc(100% - 32px));background:rgba(8,10,18,.92);border:2px solid rgba(255,255,255,.7);border-radius:14px;padding:14px 18px;font-size:17px;pointer-events:auto;z-index:7}
+#ge-dialog b{display:block;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:#ffd166;margin-bottom:4px}#ge-dialog small{position:absolute;right:14px;bottom:8px;opacity:.6}
+#ge-toast{position:absolute;left:50%;top:70px;transform:translateX(-50%);background:rgba(0,0,0,.72);border:1px solid rgba(255,255,255,.3);border-radius:999px;padding:7px 16px;font-weight:600;z-index:7}
+.ge-btn{cursor:pointer;border:1px solid rgba(255,255,255,.25);background:rgba(10,10,10,.7);color:#fff;border-radius:999px;padding:9px 20px;font:inherit}
+.ge-btn:hover:not(:disabled){background:rgba(255,255,255,.12)}.ge-btn:disabled{opacity:.45;cursor:not-allowed}
+.ge-btn.primary{background:#fff;color:#000;border-color:#fff;font-weight:600;padding:12px 34px;font-size:16px}.ge-btn.primary:hover:not(:disabled){background:#e8e8e8}
+#ge-xr{position:fixed;right:14px;bottom:14px;z-index:9}
+#ge-start{position:fixed;inset:0;display:grid;place-items:center;background:radial-gradient(ellipse at 50% 40%,rgba(0,0,0,.45),rgba(0,0,0,.93));z-index:20;padding:20px}
+.ge-card{width:min(540px,100%);text-align:center}.ge-brand{letter-spacing:.5em;font-size:11px;color:rgba(255,255,255,.5);margin-bottom:18px;padding-left:.5em}
+.ge-card h1{font-size:clamp(26px,5vw,42px);font-weight:600;letter-spacing:-.02em;margin:0 0 10px}.ge-card p{margin:6px 0 20px;color:rgba(255,255,255,.65)}
+.ge-help{margin-top:22px;color:rgba(255,255,255,.5);font-size:12px}
+#ge-touch{position:fixed;left:0;right:0;bottom:0;z-index:12;pointer-events:none}
+.ge-tb{position:fixed;pointer-events:auto;touch-action:none;width:58px;height:58px;border-radius:50%;border:1px solid rgba(255,255,255,.35);background:rgba(255,255,255,.12);color:#fff;font-size:20px;display:grid;place-items:center;padding:0}
+.ge-tb.on{background:rgba(255,255,255,.4)}.ge-tb.l{left:16px;bottom:30px}.ge-tb.r{left:84px;bottom:30px}.ge-tb.u{left:50px;bottom:92px}.ge-tb.d{left:50px;bottom:-30px;display:none}.ge-tb.a{right:22px;bottom:34px;width:70px;height:70px}.ge-tb.b{right:104px;bottom:34px}

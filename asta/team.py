@@ -30,7 +30,7 @@ DEFAULT_EFFORT = efforts.DEFAULT   # high
 MAX_PARALLEL = 8              # chamadas simultâneas à IA dentro de uma mesa
 DRAFT_BUDGET_CHARS = 60000    # tamanho máximo dos rascunhos entregues ao Sintetizador
 NOTE_BUDGET_CHARS = 9000      # idem, para as notas das conversas
-SECTIONS = ("generation", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "chat")
+SECTIONS = ("generation", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "chat")
 
 #: multiplicador do tamanho da resposta por nível (nunca abaixo do configurado: um JSON cortado vale menos do que um pouco mais de tokens)
 TOKENS_MULT = {"low": 1.0, "medium": 1.0, "high": 1.0, "extra": 1.15, "mega": 1.3, "max": 1.5, "ultra": 1.75, "omni": 2.0}

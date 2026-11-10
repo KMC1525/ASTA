@@ -683,11 +683,47 @@ def _work(args: argparse.Namespace) -> int:
     return 0
 
 
+def _engine(args: argparse.Namespace) -> int:
+    """`asta engine`: lista os projetos do Game Engine, cria um jogo (regras, sem IA) ou exporta um pacote — sem abrir a WebUI."""
+    if getattr(args, "home", None):
+        os.environ["ASTA_HOME"] = args.home
+    from .gameengine import EngineError, EngineManager, exporter, templates
+    from .storage import Store
+
+    mgr = EngineManager(Store())
+    try:
+        if args.action == "new":
+            kind, genre, theme = templates.detect(args.prompt or args.name or "", args.kind or "", args.genre or "", args.theme or "")
+            meta = mgr.create(args.name or templates.make_title(args.prompt or "", genre, theme, "pt"), kind, genre, theme, args.prompt or "")
+            mgr.apply_build(meta["id"], templates.build(args.prompt or meta["name"], kind, genre, theme, "medium", 0, meta["name"], meta["language"]))
+            print(_("Projeto criado: {i} ({n}, {k} · {g})", i=meta["id"], n=meta["name"], k=kind.upper(), g=genre))
+            print(_("Abra o ASTA e vá em Game Engine, ou exporte com:  asta engine export {i} web", i=meta["id"]))
+        elif args.action == "export":
+            if not args.project or args.platform not in exporter.PLATFORMS:
+                print(_("Use:  asta engine export <projeto> <{p}>", p="|".join(exporter.PLATFORMS)))
+                return 2
+            res = exporter.export(mgr, args.project, args.platform, {})
+            print(_("Exportado: {f}", f=str(mgr.dir(args.project) / "exports" / res["file"])))
+            for n in res["notes"]:
+                print("  - " + n)
+        else:
+            projects = mgr.list()
+            if not projects:
+                print(_("Nenhum projeto do Game Engine ainda: crie um na seção Game Engine ou com  asta engine new \"nome\" --prompt \"…\""))
+            for p in projects:
+                print(f"{p['id']}  {p['kind'].upper():5} {p['genre']:11} {p['name']}")
+            print(_("Dados do Game Engine: {p}", p=mgr.root))
+    except EngineError as exc:
+        print(exc.message)
+        return 1
+    return 0
+
+
 def main(argv=None) -> int:
     from .util import fix_default_certs
 
     fix_default_certs()   # macOS + Python do python.org: sem isto toda chamada HTTPS (atualização, modelos, Rust) falhava por falta de certificados
-    parser = argparse.ArgumentParser(prog="asta", description=_("ASTA — o primeiro super app open source: chat com IA, busca na web, mundos 3D, avatars, jogos 2D, Canvas de mídia e Studio de vídeo"))
+    parser = argparse.ArgumentParser(prog="asta", description=_("ASTA — o primeiro super app open source: chat com IA, busca na web, Game Engine (2D, 2.5D, 3D, VR e AR), avatars, Canvas de mídia e Studio de vídeo"))
     sub = parser.add_subparsers(dest="cmd")
     run = sub.add_parser("run", help=_("inicia a WebUI (padrão)"))
     for p in (parser, run):
@@ -728,6 +764,16 @@ def main(argv=None) -> int:
     wk = sub.add_parser("work", help=_("mostra o estado do Work (redes, máquinas e Tailscale)"))
     wk.add_argument("action", choices=("status",), nargs="?", default="status")
     wk.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
+    en = sub.add_parser("engine", help=_("Game Engine: lista, cria (sem IA) ou exporta jogos 2D, 2.5D, 3D, VR e AR"))
+    en.add_argument("action", choices=("list", "new", "export"), nargs="?", default="list")
+    en.add_argument("project", nargs="?", default="", help=_("nome (em new) ou id do projeto (em export)"))
+    en.add_argument("platform", nargs="?", default="", help=_("web, win, macos, linux, android ou ios (em export)"))
+    en.add_argument("--name", default="", help=_("nome do jogo (em new)"))
+    en.add_argument("--prompt", default="", help=_("descrição do jogo (em new)"))
+    en.add_argument("--kind", default="", choices=("", "2d", "2.5d", "3d", "vr", "ar"), help=_("tipo do jogo (em new)"))
+    en.add_argument("--genre", default="", help=_("gênero (em new)"))
+    en.add_argument("--theme", default="", help=_("tema (em new)"))
+    en.add_argument("--home", help=_("pasta de dados (padrão ~/.asta)"))
     sub.add_parser("doctor", help=_("mostra diagnóstico do ambiente"))
     sub.add_parser("version", help=_("mostra a versão"))
     args = parser.parse_args(argv)
@@ -743,6 +789,10 @@ def main(argv=None) -> int:
         return _folder(args)
     if args.cmd == "work":
         return _work(args)
+    if args.cmd == "engine":
+        if args.action == "new" and not args.name:
+            args.name = args.project
+        return _engine(args)
     if args.cmd == "doctor":
         return _doctor(args)
     if args.cmd == "version":

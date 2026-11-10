@@ -112,7 +112,8 @@ def check_root(path: str, create: bool = False) -> Path:
     if why:
         raise Blocked(f"É uma {why}: escolha outra pasta.")
     managed = managed_workspaces()
-    if any(_inside(p, h) for h in cg._asta_homes()) and not _inside(p, managed):
+    engine = [h / "gameengine" for h in cg._asta_homes()]   # os jogos do Game Engine vivem em <dados>/gameengine/<id>/game (sem chaves): o modo Code pode trabalhar neles
+    if any(_inside(p, h) for h in cg._asta_homes()) and not _inside(p, managed) and not any(_inside(p, e) and p != e for e in engine):
         raise Blocked("É a pasta de dados do ASTA (chaves de API e configurações): o Code não trabalha nela.")
     if cg._sensitive(p):
         raise Blocked("Esta pasta guarda segredos (senhas, chaves ou perfis de navegador).")

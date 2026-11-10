@@ -2,11 +2,11 @@
 
 # ASTA
 
-**The first open-source super app: one place to chat with any AI model, search the web, create 3D worlds whose NPCs are AI agents, talk to avatars, build 2D games and produce images, video, sound and voice — all on your computer.**
+**The first open-source super app: one place to chat with any AI model, search the web, build 2D, 2.5D, 3D, VR and AR games with AI (a Godot-inspired Game Engine), talk to avatars and produce images, video, sound and voice — all on your computer.**
 
-A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a playable 3D world, a companion to chat with, a complete 2D game, or a node flow that produces images, videos, sounds and voices.
+A minimalist black WebUI inspired by Grok. Describe what you want (with text, images, videos, audio, documents, spreadsheets…) and a team of AI agents plans, creates, reviews and delivers it: a complete playable game (2D, 2.5D, 3D, VR or AR), a companion to chat with, or a node flow that produces images, videos, sounds and voices.
 
-[Download](#download-the-installers) · [Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer) · [Code](#code--an-ai-coding-team-for-long-codebases) · [Work](#work--teamwork-with-ai-files-that-sync-and-a-flowchart-of-your-company) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
+[Download](#download-the-installers) · [Install](#install) · [Getting started](#getting-started) · [Commands](#terminal-commands) · [Game Engine](#game-engine--2d-25d-3d-vr-and-ar-games-with-ai-inspired-by-godot) · [Creation tools](#the-creation-tools) · [Studio](#studio--ai-audiovisual-videos-scene-by-scene) · [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer) · [Code](#code--an-ai-coding-team-for-long-codebases) · [Work](#work--teamwork-with-ai-files-that-sync-and-a-flowchart-of-your-company) · [Providers](#ai-providers) · [Contributing](CONTRIBUTING.md) · [Changelog](CHANGELOG.md) · [Português](README.pt-BR.md)
 
 `MIT` · `Windows` · `macOS` · `Linux` · `Android` · `Python 3.9+` · `Rust core` · `no required dependencies`
 
@@ -22,9 +22,8 @@ It is a universal creation hub with eight tools, started from the same prompt bo
 
 | Mode | You get |
 |---|---|
-| 🌍 **3D worlds** | Playable, persistent 3D worlds (first or third person) inhabited by NPCs that are embedded AI agents. |
+| 🕹️ **Game Engine** | **2D, 2.5D, 3D, VR and AR games** from a prompt (with attachments, ZIPs, videos and web search) and a seven-tab editor — **Main** (scene tree, viewport, inspector), **Code**, **Assets**, **Sound**, **Scripts**, **Map**, **Publish** — exporting to Windows, macOS, Linux, Android and iOS. |
 | 🙂 **Avatars** | Friends, girlfriends/boyfriends, wives/husbands, companions and mentors to chat with by **text and voice** — one at a time or **several talking to each other**. |
-| 🎮 **2D games** | Complete 2D games of any kind: visual novels, RPGs, platformers, side scrollers, point & click adventures. |
 | 🎬 **Studio** | **AI audiovisual videos, scene by scene** — Shorts/Reels, short films and features of any length, single or series, in Realistic, Cartoon, Anime or custom style, with **automatic editing** (Gameplay, Documentary, Phonk…), a **Kdenlive-style timeline** with switchable **Tools** (effects, sound effects, screen capture, captions, transcription, media browser), free layers (video, image, audio, text, effects) and export up to **4K / 120 fps**. |
 | ♻️ **Rebuild** | Rebuilds an existing **Ren'Py** or **RPG Maker (2000 → MZ)** game's *structure* in plain HTML/CSS/JS (personal use only). |
 | 💻 **Computer Use** | An **optional** AI team that does **tasks on your computer**: types, searches, uses installed programs, organizes files and opens games — Ask (Yes/No) or Full Access mode. |
@@ -45,10 +44,10 @@ Pick the file for your system on the [**latest Release**](https://github.com/KMC
 
 | System | File | How |
 |---|---|---|
-| **Windows 10/11** (64-bit) | `ASTA-0-18-0-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
-| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-18-0-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
-| **Linux** (x86_64; `-arm64` too) | `ASTA-0-18-0-Linux.appimage` | `chmod +x ASTA-0-18-0-Linux.appimage && ./ASTA-0-18-0-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
-| **Android 7+** | `ASTA-0-18-0-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
+| **Windows 10/11** (64-bit) | `ASTA-0-19-0-Win.exe` | Run it (per-user install, no administrator). Start menu → *ASTA*. Python is bundled. |
+| **macOS 11+** (Apple Silicon and Intel) | `ASTA-0-19-0-macOS.pkg` | Right-click → *Open* (not signed), then open *ASTA* from Applications; the first launch installs it for your user in a Terminal window. |
+| **Linux** (x86_64; `-arm64` too) | `ASTA-0-19-0-Linux.appimage` | `chmod +x ASTA-0-19-0-Linux.appimage && ./ASTA-0-19-0-Linux.appimage` — one file with Python inside (needs FUSE, or run with `--appimage-extract-and-run`). |
+| **Android 7+** | `ASTA-0-19-0-Android.apk` | Allow "install unknown apps" once. **ASTA runs inside the phone — no computer needed** ([details](#mobile-and-tablet)). |
 
 Every release also carries the **pre-built Rust core** of each platform (`asta-core-*`) and `SHA256SUMS.txt` (verify with `sha256sum -c`). The installers are not code-signed (that needs a paid certificate): Windows may show SmartScreen ("More info → Run anyway"). They are built by [GitHub Actions](.github/workflows/release.yml) and were **not run on real Windows/macOS/Android devices by the author of this change** (what could be checked is listed in the [changelog](CHANGELOG.en.md)). The terminal installers below remain available.
 
@@ -125,6 +124,7 @@ Command options: `asta --port 9000 --no-browser --home /other/folder` · `asta u
 | `asta libs` | installs/updates the optional libraries (`docs`, `media`, `local`) |
 | `asta models list\|install` | the pre-installed local models |
 | `asta native setup` | makes sure the **Rust core** is active: downloads the pre-built library from the Release (SHA-256 verified, no compiler) and only compiles locally if that fails (also `install`, `update`, `build`, `status`) |
+| `asta engine` | **Game Engine**: lists your projects; `asta engine new "name" --prompt "…"` creates a playable game (no AI), `asta engine export <id> web\|win\|macos\|linux\|android\|ios` builds a package |
 | `asta work` | shows the **Work** state: this machine, Tailscale, the networks you belong to and their people/machines/files |
 | `asta doctor` | environment diagnostics (hardware, Python, Rust, ffmpeg, providers, terminal language) |
 | `asta version` · `asta --help` | version · all options |
@@ -144,7 +144,7 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 
 > The QR code at the right of this section only opens this guide on your phone. The **install/pairing QR code is the one your own computer shows**, because it carries your computer's address and a secret pairing code — a QR code in a public README can't know where *your* ASTA is.
 
-**The Android app needs no computer.** Download `ASTA-0-18-0-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
+**The Android app needs no computer.** Download `ASTA-0-19-0-Android.apk` from [Releases → latest](https://github.com/KMC1525/ASTA/releases/latest) (or scan the QR code below; allow "install unknown apps" once) and open it: the app carries **the ASTA engine inside the phone** (Python via Chaquopy) and opens it by itself — chat, web search, 3D worlds, avatars, 2D games, Canvas and Studio with the **same interface**, your cloud AI keys and a private data folder on the device. The app **checks the repository for new versions and asks "Download now / Later"**. To use an ASTA on a computer instead (heavy local models, more memory), tap *Connect to a computer* on the start screen (or *Configuration → Mobile and tablet*), scan its pairing QR code or type its address — both modes coexist.
 
 <img src="docs/android-app-qr.svg" alt="QR code: latest ASTA Android app" width="140">
 
@@ -180,9 +180,25 @@ ASTA runs on your computer; your phone or tablet is a **window** into it. The mo
 - **Chat settings** (*Configuration → Chat*): remembered turns (up to 1,000), creativity, **custom instructions**, default thinking level and the web-search options.
 - Without a provider the Demo engine is used and Chat says so honestly — it cannot really answer questions. Pick a model to fix it.
 
+## Game Engine — 2D, 2.5D, 3D, VR and AR games with AI (inspired by Godot)
+
+**Game Engine** (v0.19) replaces the old *Worlds* and *2D games* sections. Describe a game — with text, images, videos, ZIPs, documents, and the **native web search** if you want — and an agent team builds a complete, playable one; then you fine-tune everything in a seven-tab editor. Games can be **2D, 2.5D (isometric or parallax), 3D, VR or AR**. Every project is a plain folder in `~/.asta/gameengine/<id>/` (`game/` is the game, `docs/` your scripts, `editor/` working files, `history/` restore points).
+
+- **Main** — *the game itself and the live view.* **Prompt box on the left** (any number of attachments, ZIPs, videos…, web search, 1·4·8·12·16 agents, Low→Omni) above the **scene tree** (nodes in folders, drag to reorder, show/hide); the **viewport** in the middle (edit mode: click to select, drag to move, wheel to zoom, orbit in 3D; **▶ Play** runs the game in the same place); the **properties inspector on the right** (every property of the selected node, **behaviors** from a closed list, tags, and — with nothing selected — scene rules, music, sounds per event, language, health). Everything autosaves; a prompt on an existing game **edits** it with validated operations (add/update/remove nodes, theme, more/fewer enemies…), and a restore point is saved before each AI change.
+- **Code** — *VS Code-like.* Prompt on the left, **folders and sub-folders** in the middle (create, rename, move by dragging, upload files and ZIPs), **code editor** on the right (tabs, line numbers, syntax highlighting, auto-indent, `Ctrl+S`, find). The AI plans → writes → checks the syntax (`node --check` when Node exists); it only writes inside `scripts/`, `data/`, `scenes/`, `maps/`. **Optional link to ASTA's Code mode:** turn it on and the prompts go to a Code session pointed at the game folder (tests, git, up to 16 workers).
+- **Assets** — *Krita-like.* Prompt on the left (**generate with or without background**), **layered canvas** in the middle (brush, eraser, bucket, eyedropper, **rectangle / freehand / paint-to-select** to **edit only a chosen spot with AI**, move/rotate/scale a layer, zoom/pan, undo), **properties and layers on the right with folders and sub-folders** (opacity, blend modes, lock, merge, color filters, background removal, trim). *Apply to the game* saves the final PNG in `assets/images/`. Without an image model, ASTA draws vector sprites (hero, enemy, coin, tree…).
+- **Sound** — *Audacity-like.* Multi-track timeline with waveforms; select, cut/copy/paste/delete, split, trim, fades, gain, normalize, reverse, speed/pitch, echo, filters, **noise reduction** (capture a noise profile → spectral subtraction; or gate), **record your own voice/sounds**, and **generate SFX, music and voice** with AI (no model: ASTA synthesizes real effects and loops). *Apply to the game* mixes down to WAV and can map it to an event or the background music. **Optional links to Studio and Canvas** (send selected sounds).
+- **Scripts** — *Notepad Next-like.* Write scripts, GDD, dialogues, lore and quests in `.md`/`.txt`; **many tabs, horizontal or vertical**, panes **side by side or stacked**, folders and sub-folders; **select a paragraph or a dialogue line** and let the AI **improve, expand, rewrite, shorten, fix, turn into dialogue or translate just that passage**; *Send dialogues to the game* (`## id` + `Name: line` → `data/dialogues.json`). **Characters** and **Worldbuilding** cards live here too.
+- **Map** — generate and edit the world. 2D tile maps (paint tiles, objects, heights for isometric), 3D terrain with biomes (raise/lower/smooth/flatten/noise brush, objects). **Select a region or a point** and regenerate only that part, or put things there (“add 3 houses here”); or generate the **whole map from a prompt**. Every map has a guaranteed start point and a reachable goal.
+- **Publish** — export to **Web (HTML5 + PWA), Windows, macOS, Linux, Android and iOS**. Every package carries the **playable game** (works offline, no server) plus a **ready-to-build native project** — Electron (desktop) or Capacitor (Android/iOS) — and a **GitHub Actions workflow** that builds the installers/APK for you. The prompt writes store text, tags and release notes.
+
+Under the hood a game is **data + a small reviewed engine** (`asta/gameengine/runtime`): scenes are trees of nodes (Godot-style) with behaviors from a closed list, maps hold the levels (their objects spawn automatically), and **the AI writes validated JSON, never code that runs outside the game**. The multi-agent flow is *Planner → Scene designer → Writer → Reviewer* with deterministic checks (a player, a goal, reachable items) and a **rule-based generator**, so a playable 2D/2.5D/3D/VR/AR game comes out **even with no AI configured**. Code you write in the Code tab runs **only inside an isolated iframe** (sandbox without same-origin, strict CSP, no network, no access to ASTA's API). The old *Worlds* and *2D games* screens are gone from the menu: what you already made stays in the Library, and the Chat still has the quick 3D-world and 2D-game generators (their settings are inside *Configuration → Game Engine*).
+
+**Honest limits.** VR/AR use **WebXR** and the desktop preview; **not tested on a real headset or phone**. ASTA **does not compile or sign** native binaries: it delivers the playable package plus the ready-to-build project and the CI workflow (**not run on a real GitHub repository or on real Windows/macOS/Android/iOS devices**). Real image/audio/text AI quality depends on the provider you configure (tested only with simulated providers).
+
 ## The creation tools
 
-### 🌍 3D worlds
+### 🌍 3D worlds (Chat quick generator)
 
 Describe a world; ASTA delivers a **ZIP with a playable 3D game** (HTML + CSS + JS + three.js) that opens straight from a file.
 
@@ -227,7 +243,7 @@ Companions in the spirit of Janitor and SillyTavern, built into ASTA.
 - **Create from a photo or art**: turn on *Photo/art as base*, attach one or more images and send — with the image alone, or adding a text prompt and other attachments (documents, chat logs…). Pick *one avatar per image* or *one person built from all the images*. The image defines the look (hair, eyes, clothes, art style — described by your vision model, or by its dominant colors offline) and becomes the portrait; the text only adds name, personality and backstory. ASTA never identifies a real person from a face: it uses a name only if you give one (or the file name suggests it). **Photos of real people — and images that can't be identified as art — always stay SFW; NSFW only applies to art of fictional characters**, and an image that appears to show a minor follows the minors rule above.
 - **Import and export** Character Card V2 (JSON and PNG), so your cards work in other tools too.
 
-### 🎮 2D games
+### 🎮 2D games (Chat quick generator)
 
 Describe a game (or attach scripts, images, documents) and a team of agents writes a **complete, playable game as data**, packaged as a ZIP that runs from a file or straight from ASTA — with the engine for the genre you asked for:
 
@@ -403,9 +419,8 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 | Section | What it is for |
 |---|---|
 | **Chat** | The main screen: general-purpose chat with a model picker, attachments and history — and, when you turn a creation tool on, the prompt box for 3D worlds, avatars, 2D games and Canvas with the live view of the agents. |
-| **Worlds** | Everything about 3D worlds in three tabs: **Worlds** (customize generated worlds: biome, weather, time, day/night cycle, NPCs, audio, interface, quality — each save is a new version **without spending AI**), **Characters** (cards for NPCs and the player: name, tags, system prompt, voice, appearance; import/export JSON and PNG cards, Character Card V2/V3) and **Worldbuilding** (general rules for worlds — setting, tone, conventions — also stored as cards). |
+| **Game Engine** | Your games and their seven-tab editor: **Main** (prompt + scene tree + viewport + inspector), **Code**, **Assets**, **Sound**, **Scripts** (with the Characters and Worldbuilding cards), **Map** and **Publish**. The old *Worlds* and *2D games* screens were replaced by it; existing projects stay in the Library. |
 | **Avatars** | Your avatar cards, plus single and group conversations. |
-| **2D games** | Your games: play, download, update. |
 | **Canvas** | Your canvases and the node editor: a **model search bar** (Hugging Face) on top, a model picker and `@` mentions on the nodes, and *Send to Studio*. |
 | **Studio** | Your video projects (single or series): generate scene by scene, automatic editing, the timeline editor (with its **Tools** and free layers) and export up to 4K / 120 fps. |
 | **Computer Use** | The tasks the AI team does on your computer (up to 8 at once): live follow-up, the Yes/No questions of Ask mode and the step-by-step history, with Cancel, Redo and Undo. |
@@ -413,7 +428,7 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 | **Work** | Teamwork: people and custom positions, the company flowchart whiteboard, sectors with synced files, requests, activities, live notices, machines/networks (Tailscale, LAN, cloud folder) and chosen backups. |
 | **Rebuild** | Rebuild Ren'Py / RPG Maker games and see the ones you rebuilt. |
 | **Library** | Everything you created as updatable projects, plus the **local AI models you installed**, with search and automatic + custom tags. Press *Select* to pick several items and delete them at once; models can be deleted one at a time or in bulk. |
-| **Configuration** | 20 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, 3D worlds, Avatars, 2D games, Canvas, Studio, Computer Use, Work, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
+| **Configuration** | 19 tabs in 4 groups: **General** (appearance, sections and shortcuts), **AI and models** (providers, media, voice, local models), **Sections** (defaults for Chat, Game Engine — with the Chat's 3D-world and 2D-game generators inside —, Avatars, Canvas, Studio, Computer Use, Work, Rebuild — each with *Reset this section's defaults*) and **System** (performance, data and backup, system). |
 
 ### Make it yours (Configuration → Appearance)
 
@@ -429,7 +444,7 @@ ASTA's orchestration stays in Python (as much as possible), on top of a **mandat
 
 ## Agent team in every section — 1 to 16 agents and eight effort levels
 
-Every mode of ASTA — **3D worlds, Avatars, 2D games, Studio, Rebuild, Canvas, Computer Use, Code, Work and Chat** — has the same two controls, in the box where you create (beside *Run*) and as defaults in *Configuration → the section's tab → Agent team*:
+Every mode of ASTA — **Game Engine, 3D worlds, Avatars, 2D games, Studio, Rebuild, Canvas, Computer Use, Code, Work and Chat** — has the same two controls, in the box where you create (beside *Run*) and as defaults in *Configuration → the section's tab → Agent team*:
 
 - **Effort (reasoning):** the **eight levels of Code mode — Low · Medium · High · Extra · Mega · Max · Ultra · Omni** — everywhere. Where the provider/model has *thinking time* (Claude, OpenAI o-series/GPT-5, Gemini 2.5+, gpt-oss…) the level is requested from the model; everywhere (cloud and local) the engine itself also scales the answer size, the **review/fix rounds** and, from **Max** up, a **critique of the plan** before it starts. *High* is the neutral point and keeps the behavior ASTA always had (new default of every section except Chat and avatar conversations, which default to *Low* to answer fast).
 - **Agents: 1 · 4 · 8 · 12 · 16.** With **1**, each step runs as always (plan → do → check, one agent per step). With **4, 8, 12 or 16**, each creative step becomes a **table of N agents working in parallel** (up to 8 calls at once): every agent drafts the same task through a different lens (fidelity to the request, originality, coherence, richness, robustness, structure…) and a **Synthesizer** merges the best of all drafts into one result in the same validated JSON. If an agent fails the table goes on; if the synthesis fails the first valid draft is used; if none is valid, the deterministic fallback delivers — something is always delivered. In **Code** the number is the count of **parallel workers** (the plan gets at least one task per agent); in **Chat** and **avatar conversations** the agents write **private notes** that the final writer uses; in **Canvas** they do the same for the AI text nodes; in **Computer Use** the Planner and the Verifier become a table (the Operator still acts one step at a time — screen, keyboard and mouse are one).
@@ -535,7 +550,7 @@ ASTA **adds no content filters**: the default mode follows your prompt and your 
 - Protection against *DNS rebinding* (`Host` check) and cross-site requests (`Origin` check); uploads and served files go through path validation; uploaded media is identified by content, not by name.
 - **Computer Use** is optional and off by default; it has fixed limits in any mode (no passwords, keys, ASTA data folder, system folders, shells or scripts), a trash and **Undo** — see [Computer Use](#computer-use--an-ai-team-that-works-on-your-computer). Devices paired by QR code have the same access to ASTA as you do, Computer Use included.
 - **Code** runs AI-written code only inside the session's project folder, as argument lists of development tools (no shell), with a clean environment, a timeout and an Ask mode that shows the whole command; secrets and ASTA's data folder are unreachable; the GitHub token never reaches the browser, exports or an AI — see [Code](#code--an-ai-coding-team-for-long-codebases).
-- Worlds and games do not run AI-generated code: the model writes **data** (JSON), and the engine is the same auditable code every time.
+- Worlds and games do not run AI-generated code: the model writes **data** (JSON), and the engine is the same auditable code every time. The one deliberate exception is the Game Engine's **Code** tab (like ASTA's Code mode, writing code is its purpose): those scripts run **only inside the game's isolated iframe** (`sandbox` without `allow-same-origin`, CSP with no network, no cookies, no access to ASTA's API), the AI may only write inside `scripts/`, `data/`, `scenes/` and `maps/`, and the syntax is checked before saving.
 
 ## Repository layout
 
@@ -546,6 +561,8 @@ asta/
   agents/        shared runner + pipelines (worlds, avatars, 2D games), prompts, schemas, rule-based generators
   runtime/       3D engine: three.js, terrain, sky, weather, actors, audio, NPC AI
   runtime2d/     2D engines: visual novel, RPG, platformer, side scroller, point & click
+  gameengine/    Game Engine: schema/catalog, project manager (paths, history), rule-based generator, maps, art, audio, exporter, agents + prompts/*.md, runtime/ (2D/2.5D/3D/VR/AR engine + editor mode)
+  routes_engine.py     Game Engine API (projects, scenes, maps, files, play, AI jobs, export)
   games2d/       2D game spec: schema, validation, packaging
   avatars.py  avatar_chat.py  routes_avatars.py    avatar cards, chat director, API
   assistant_chat.py  routes_chat.py  websearch.py  general-purpose Chat (history, streaming, tool suggestion, web search)

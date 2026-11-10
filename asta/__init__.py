@@ -1,4 +1,4 @@
 """ASTA — central open source de criação de conteúdo criativo com IA:
-mundos 3D com NPCs-agentes, avatars de chat/voz, jogos 2D e Canvas de mídia."""
+Game Engine (jogos 2D, 2.5D, 3D, VR e AR), avatars de chat/voz e Canvas de mídia."""
 
-__version__ = "0.18.0"
+__version__ = "0.19.0"

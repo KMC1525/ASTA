@@ -124,6 +124,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     # Work (v0.18): equipe, pessoas e sincronização entre máquinas. Ver work/manager.py (normalize_config). Os segredos da rede ficam em ~/.asta/work/<rede>/secret.json, nunca aqui.
     "work": {"peer": {"listen": "off", "port": 8790},  # off = não escuta · auto = só no IP do Tailscale · lan = rede local · ou um IP. Desligado por padrão.
              "auto_sync": True, "interval": 15, "max_file_mb": 4096, "session_hours": 12, "backup_keep": 14, "agents": 1, "effort": "high"},
+    # Game Engine (v0.19): jogos 2D/2.5D/3D/VR/AR com IA. Ver gameengine/agents.py (normalize_config). Projetos em ~/.asta/gameengine/<id>/.
+    "engine": {"agents": 1, "effort": "high", "kind": "2d", "content": "", "web": False, "undo_keep": 25},
     "canvas": {"template": "text_image", "agents": 1, "effort": "high"},  # equipe dos nós de texto (IA) do Canvas
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},

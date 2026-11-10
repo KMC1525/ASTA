@@ -32,8 +32,11 @@ run('team', async ({ open, api, check, base }) => {
   // ---- Configuração: um cartão de equipe em cada seção; salvar grava de verdade
   await page.goto(base + '/#/config'); await page.waitForSelector('.cfgtabs');
   const tab = async (id) => { await page.locator(`.cfgtabs button[data-tab="${id}"]`).click(); await page.waitForTimeout(450); };
-  for (const [id, prefix] of [['chat', 'ch'], ['generation', 'gen'], ['avatars', 'av'], ['games', 'gm'], ['canvas', 'cv'], ['studio', 'st'], ['computer', 'cu'], ['rebuild', 'rb']]) {
+  const openAcc = async (title) => { await page.locator('.acc .hd', { hasText: new RegExp(title) }).click(); await page.waitForTimeout(250); };
+  for (const [id, prefix] of [['chat', 'ch'], ['engine', 'ge'], ['engine', 'gen'], ['avatars', 'av'], ['engine', 'gm'], ['canvas', 'cv'], ['studio', 'st'], ['computer', 'cu'], ['rebuild', 'rb']]) {
     await tab(id);
+    if (prefix === 'gen') await openAcc('Mundos 3D|3D worlds');
+    if (prefix === 'gm') await openAcc('Jogos 2D|2D games');
     check(`config:${id}-tem-equipe`, (await opts(`#${prefix}-cfg-effort`)).join(',') === EFFORTS && (await opts(`#${prefix}-cfg-agents`)).join(',') === AGENTS);
   }
   await tab('avatars');
@@ -41,7 +44,7 @@ run('team', async ({ open, api, check, base }) => {
   await tab('code');
   check('config:code-agentes-1-4-8-12-16', (await opts('#cd-agents-cfg')).join(',') === AGENTS);
 
-  await tab('generation');
+  await tab('engine'); await openAcc('Mundos 3D|3D worlds');
   await page.locator('#gen-cfg-effort').selectOption('omni'); await page.locator('#gen-cfg-agents').selectOption('12');
   check('config:dica-do-custo', /13 chamadas/.test(await page.locator('#gen-fields').innerText()));
   await page.locator('.page.cfg button.btn.primary', { hasText: 'Salvar' }).last().click(); await page.waitForTimeout(900);
@@ -52,7 +55,7 @@ run('team', async ({ open, api, check, base }) => {
 
   // ---- inglês: os textos novos estão traduzidos
   await api('/api/settings', { method: 'PUT', body: { language: 'en' } });
-  await page.goto(base + '/#/config'); await page.reload(); await page.waitForSelector('.cfgtabs'); await tab('games');
+  await page.goto(base + '/#/config'); await page.reload(); await page.waitForSelector('.cfgtabs'); await tab('engine'); await openAcc('Jogos 2D|2D games');
   const txt = await page.locator('#gm-card').innerText();
   check('ingles:cartao-traduzido', /agent team/i.test(txt) && /Agents in parallel/.test(txt) && !/Equipe de agentes|paralelo|Padrão|lê o código/.test(txt));
   await api('/api/settings', { method: 'PUT', body: { language: 'pt-BR' } });

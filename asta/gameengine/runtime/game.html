@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="{{LANG}}">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,user-scalable=no">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
+<title>{{TITLE}}</title>
+{{HEAD}}
+<link rel="stylesheet" href="{{BASE}}engine/ge.css">
+</head>
+<body>
+<div id="ge-stage"></div>
+<div id="ge-hud"></div>
+<div id="ge-touch" class="ge-hidden"></div>
+<button id="ge-xr" class="ge-btn ge-hidden" type="button"></button>
+<div id="ge-start">
+  <div class="ge-card">
+    <div class="ge-brand">{{BRAND}}</div>
+    <h1>{{TITLE}}</h1>
+    <p>{{DESC}}</p>
+    <button id="ge-play" class="ge-btn primary" type="button" disabled>…</button>
+    <div class="ge-help">{{HELP}}</div>
+  </div>
+</div>
+<noscript><div style="padding:24px;color:#fff">Este jogo precisa de JavaScript.</div></noscript>
+{{SCRIPTS}}
+<script>window.addEventListener('load', function () { try { GE.boot({ autostart: {{AUTOSTART}} }); } catch (e) { document.getElementById('ge-play').textContent = 'Erro: ' + e.message; console.error(e); } });</script>
+</body>
+</html>

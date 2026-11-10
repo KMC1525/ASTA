@@ -133,6 +133,7 @@ export default async function render(root, ctx) {
       item('world', t('Mundo 3D'), 'worlds', t('Um mundo jogável com NPCs')), item('avatar', t('Avatar'), 'avatars', t('Personagens para conversar')),
       item('game', t('Jogo 2D'), 'games', t('Um jogo completo e jogável')), item('canvas', t('Canvas'), 'canvas', t('Imagem, vídeo, som e voz em nós')),
       item('rebuild', t('Rebuild'), 'refresh', t("Reconstrói um jogo Ren'Py ou RPG Maker")),
+      h('div', { class: 'opt toolopt', dataset: { tool: 'engine' }, role: 'menuitem', onclick: () => { pop.close(); go('engine', {}); } }, icon('engine', 16), h('div', null, h('div', null, 'Game Engine'), h('div', { class: 'dim small' }, t('Jogos 2D, 2.5D, 3D, VR e AR com editor completo')))),
       st.tool ? h('div', { class: 'opt', onclick: () => { pop.close(); setTool(''); } }, icon('x', 16), t('Só conversar')) : null));
   }
 

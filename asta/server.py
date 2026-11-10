@@ -27,6 +27,7 @@ from .routes_avatars import AvatarRoutes
 from .routes_chat import ChatRoutes
 from .routes_code import CodeRoutes
 from .routes_work import WorkRoutes
+from .routes_engine import EngineRoutes
 from .routes_computer import ComputerRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
@@ -226,6 +227,8 @@ class App:
         self.code_routes.register()
         self.work_routes = WorkRoutes(self)   # cria `self.work` (redes do Work, sessões e sincronização)
         self.work_routes.register()
+        self.engine_routes = EngineRoutes(self)   # cria `self.engine` (projetos do Game Engine)
+        self.engine_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:
