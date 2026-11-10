@@ -9,7 +9,7 @@ import { RISK } from '../computer_ui.js';
 import { EFFORT_LABEL, PUBLISH, RISK as CODE_RISK } from '../code_ui.js';
 import { AGENT_COUNTS, teamFields } from '../team_ui.js';
 
-// o cartão «Equipe de agentes» de uma seção: esforço (Low … Omni) e 1/4/8/12/16/20/24/28/32 agentes em paralelo (asta/team.py)
+// o cartão «Equipe de agentes» de uma seção: esforço (Low … Omni) e 1/2/4/8/12/16/20/24/28/32 agentes em paralelo (asta/team.py)
 const teamCard = (cfg, id, note, o = {}) => h('div', { class: 'card', id: id + '-card', style: { marginBottom: '16px' } }, h('h3', null, o.title || t('Equipe de agentes')),
   h('p', { class: 'muted small', style: { marginTop: 0 } }, note || t('Os mesmos 8 níveis de esforço do Code (Low a Omni) e até 32 agentes trabalhando em paralelo em cada etapa, com um Sintetizador que junta o melhor de todos (a partir de 20, os agentes também revisam os rascunhos uns dos outros). Mais agentes e mais esforço = respostas melhores, mas mais tempo e mais chamadas à IA.')),
   teamFields(cfg, Object.assign({ id }, o)));

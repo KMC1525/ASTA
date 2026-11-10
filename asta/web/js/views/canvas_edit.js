@@ -63,7 +63,7 @@ export default async function render(root, ctx, cid) {
   // ---------------------------------------------------------------------------------------------- estrutura
   const nameInput = h('input', { class: 'nm', value: cv.name, title: t('Nome do canvas'), onchange: async () => { try { await api(`/api/canvases/${cid}/meta`, { method: 'POST', body: { name: nameInput.value } }); S.cv.name = nameInput.value; } catch (e) { toast(e.message, 'err'); } } });
   const runBtn = h('button', { class: 'btn primary', title: t('Executa o que está desatualizado (o resto vem do cache)'), onclick: () => run(null, false) }, icon('play', 14), t('Executar tudo'));
-  const team = teamPicker(state.settings && state.settings.canvas, null, { id: 'cv-team' });   // equipe dos nós de texto com IA (esforço Low … Omni e 1/4/8/12/16/20/24/28/32 agentes)
+  const team = teamPicker(state.settings && state.settings.canvas, null, { id: 'cv-team' });   // equipe dos nós de texto com IA (esforço Low … Omni e 1/2/4/8/12/16/20/24/28/32 agentes)
   const cancelBtn = h('button', { class: 'btn danger hidden', onclick: async () => { if (S.job) await api('/api/jobs/' + S.job + '/cancel', { method: 'POST' }).catch(() => {}); } }, icon('stop', 14), t('Cancelar'));
   const assetsBtn = h('button', { class: 'btn', onclick: () => { S.assetsOpen = !S.assetsOpen; localStorage.setItem('asta.cv.assets', S.assetsOpen ? '1' : '0'); paintAssets(); } }, icon('image', 14), h('span', null, t('Arquivos')));
   // barra de pesquisa de modelos (Hugging Face) no topo: procura, escolhe a quantização, baixa e usa no nó selecionado

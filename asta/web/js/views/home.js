@@ -75,7 +75,7 @@ async function worldTool(root, project, carry, composer) {
     }) : h('div', { class: 'col', style: { padding: '10px' } }, h('span', { class: 'muted small' }, t('Você ainda não criou personagens.')), h('a', { href: '#/worlds/characters', class: 'small' }, t('Criar personagem'))));
     popover(charBtn, body);
   });
-  const team = teamPicker(state.settings.generation, null, { id: 'world-team' });   // esforço (Low … Omni) e 1/4/8/12/16/20/24/28/32 agentes: vêm marcados como em Configuração
+  const team = teamPicker(state.settings.generation, null, { id: 'world-team' });   // esforço (Low … Omni) e 1/2/4/8/12/16/20/24/28/32 agentes: vêm marcados como em Configuração
   const cfg = {
     placeholder: project ? t('Descreva o que mudar neste mundo…') : t('Descreva o mundo que você quer criar…'),
     extraReady: () => !!(m.wb || m.chars.length), tools: [h('span', { class: 'tool' }, icon('worldbuilding', 15), wbSel), charBtn, perspSeg, team.el],

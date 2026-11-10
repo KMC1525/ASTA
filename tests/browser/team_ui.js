@@ -5,7 +5,7 @@ run('team', async ({ open, api, check, base }) => {
   await api('/api/settings', { method: 'PUT', body: { language: 'pt-BR', generation: { agents: 1, effort: 'high' }, avatars: { agents: 1, effort: 'high' }, games: { agents: 1, effort: 'high' }, chat: { team_agents: 1, effort: 'low' } } });
   const page = await open({ width: 1400, height: 950 });
   const opts = (sel) => page.locator(`${sel} option`).evaluateAll((os) => os.map((o) => o.value));
-  const EFFORTS = 'low,medium,high,extra,mega,max,ultra,omni', AGENTS = '1,4,8,12,16,20,24,28,32';
+  const EFFORTS = 'low,medium,high,extra,mega,max,ultra,omni', AGENTS = '1,2,4,8,12,16,20,24,28,32';
 
   // ---- Chat: seletor ao lado do modelo, valores salvos em Configuração → Chat
   await page.waitForSelector('#chat-team-effort', { timeout: 20000 });

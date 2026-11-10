@@ -102,7 +102,7 @@ class CanvasEngine:
             raise Cancelled()
 
     def team_chat(self, provider: Any, pid: str, messages: List[Dict[str, Any]], system: str, temperature: float, max_tokens: int) -> str:
-        """Uma chamada de texto da IA com a equipe do Canvas (`settings.canvas`: 1/4/8/12/16/20/24/28/32 agentes e esforço Low … Omni): o esforço pede o pensamento ao modelo e dá mais espaço à resposta;
+        """Uma chamada de texto da IA com a equipe do Canvas (`settings.canvas`: 1/2/4/8/12/16/20/24/28/32 agentes e esforço Low … Omni): o esforço pede o pensamento ao modelo e dá mais espaço à resposta;
         com 4+ agentes, cada um escreve notas privadas (em paralelo) que o redator final usa. Com 1 agente e esforço High é a chamada de sempre."""
         team = teamlib.from_config(self.settings.get("canvas"), self.team_req)
         teamlib.apply_thinking(provider, team, pid)

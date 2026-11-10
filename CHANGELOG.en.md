@@ -7,6 +7,17 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 ## [Unreleased]
 
+## [0.20.1] — 2026-11-10
+
+### Added — every mode: a team of 2 agents in parallel
+- **New “2 agents” option** in the selectors of every mode (Game Engine, Scriber, 3D worlds, Avatars, 2D games, Studio, Rebuild, Canvas, Computer Use, Code, Work and Chat), both beside the create button and in *Configuration → the section's tab → Agent team*. The list is now **1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32**.
+- With 2 agents, each creative step runs **2 drafts at the same time** (each through a different lens) and the Synthesizer merges the best of both: **3 calls per step** (`calls_per_step`, shown in the selector's tooltip). No peer review (it still starts at 20). In Code, 2 parallel workers.
+- Old values keep working: a hand-edited “2” setting that used to snap to 1 now stays 2; 3 still goes to 4 (tie → the larger).
+- Version 0.20.1; tests for the counts, the rounding, the cost (3 calls) and the table of 2 (2 drafts + synthesis), and for the selectors in the browser.
+
+### Honest limits
+- Two simultaneous calls may be rate-limited by cloud providers (ASTA retries); **local models serve one at a time**, so 2 local agents are not faster — they just yield two drafts.
+
 ## [0.20.0] — 2026-11-10
 
 ### Added — Scriber: creative and professional writing (new mode)

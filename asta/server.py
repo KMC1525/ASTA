@@ -243,7 +243,7 @@ class App:
         })
 
     def r_team(self, req: "Request") -> None:
-        """As opções de equipe de TODAS as seções: 1/4/8/12/16/20/24/28/32 agentes e os oito níveis de esforço (Low … Omni)."""
+        """As opções de equipe de TODAS as seções: 1/2/4/8/12/16/20/24/28/32 agentes e os oito níveis de esforço (Low … Omni)."""
         req.json(team.options())
 
     def r_settings_get(self, req: "Request") -> None:

@@ -121,7 +121,7 @@ async function renderList(root, ctx, meta) {
   // ---- novo projeto
   const kindSeg = chips([['single', t('Único'), t('começa e termina num vídeo')], ['series', t('Série'), t('vários episódios que continuam a história')]], m.kind, (v) => { m.kind = v; }, 'kinds');
   const nameIn = h('input', { id: 'st-name', placeholder: t('Nome do projeto (opcional)'), oninput: (e) => { m.name = e.target.value; } });
-  const team = teamPicker(D, null, { id: 'st-new-team' });   // esforço (Low … Omni) e 1/4/8/12/16/20/24/28/32 agentes
+  const team = teamPicker(D, null, { id: 'st-new-team' });   // esforço (Low … Omni) e 1/2/4/8/12/16/20/24/28/32 agentes
   const composer = createComposer({ placeholder: t('Descreva o vídeo: tema, história, personagens, tom… (ou anexe roteiros, imagens e documentos)'), sendLabel: t('Gerar'), sendTitle: t('Planeja e gera o vídeo cena a cena'), tools: [
     h('button', { class: 'tool', type: 'button', id: 'st-only', title: t('Cria o projeto sem gerar nada ainda'), onclick: () => start(false) }, icon('plus', 15), t('Só criar o projeto')), team.el],
   onSend: () => start(true) });
