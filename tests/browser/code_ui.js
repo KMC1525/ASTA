@@ -72,7 +72,7 @@ run('code', async ({ api, open, check, base }) => {
     check('code:painel-ambiente', (await page.locator('.cd-panel').innerText()).includes(path.basename(proj)));
 
     // ---- controles da sessão
-    check('code:controles-modo-esforco-agentes-modelo', (await page.locator('#cd-mode').count()) === 1 && (await page.locator('#cd-effort-sel option').count()) === 8 && (await page.locator('#cd-agents-sel option').count()) === 5 && (await page.locator('#cd-model-btn').count()) === 1 && (await page.locator('#cd-finalize').count()) === 1);
+    check('code:controles-modo-esforco-agentes-modelo', (await page.locator('#cd-mode').count()) === 1 && (await page.locator('#cd-effort-sel option').count()) === 8 && (await page.locator('#cd-agents-sel option').count()) === 9 && (await page.locator('#cd-model-btn').count()) === 1 && (await page.locator('#cd-finalize').count()) === 1);
     await page.locator('#cd-effort-sel').selectOption('omni'); await page.waitForTimeout(400);
     await page.locator('#cd-agents-sel').selectOption('8'); await page.waitForTimeout(400);
     const sess = (await api('/api/code/sessions')).sessions.find((s) => s.title === 'Sessão A');

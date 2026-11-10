@@ -7,7 +7,7 @@ run('canvas_flow', async ({ api, open, check }) => {
   await page.evaluate((id) => { localStorage.removeItem('asta.cv.dock'); location.hash = '#/canvas/edit/' + id; }, cv.id);
   await page.waitForSelector('#cv-dock', { timeout: 15000 });
   const box = async () => page.locator('#cv-dock').boundingBox();
-  check('dock:aberta-por-padrao-com-as-configs-da-equipe', (await page.locator('#cv-dock-text').isVisible()) && (await page.locator('#cv-team-effort option').count()) === 8 && (await page.locator('#cv-team-agents option').count()) === 5);
+  check('dock:aberta-por-padrao-com-as-configs-da-equipe', (await page.locator('#cv-dock-text').isVisible()) && (await page.locator('#cv-team-effort option').count()) === 8 && (await page.locator('#cv-team-agents option').count()) === 9);
   check('dock:fica-embaixo-e-pequena', (await box()).y > 600 && (await box()).height < 220 && (await box()).width < 620);
   check('dock:equipe-saiu-da-barra-de-cima', (await page.locator('.cv-top #cv-team-effort, .cv-pg > :first-child #cv-team-effort').count()) === 0);
   const full = (await box()).height;
