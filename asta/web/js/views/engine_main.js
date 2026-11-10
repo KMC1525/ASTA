@@ -162,6 +162,19 @@ export default async function render(body, E) {
     const groups = { transform: [], props: [] };
     spec.props.forEach((p) => { (['x', 'y', 'z', 'rotation', 'rx', 'ry', 'rz', 'sx', 'sy', 'sz'].includes(p.k) ? groups.transform : groups.props).push(p); });
     const row = (p) => propRow(t(PROP_LABEL[p.k] || p.k), control(p, n, (val) => applyProp(n, p.k, val)), p.hint ? t(p.hint) : '');
+    const nudgePad = () => {   // mover com botões: um passo por clique (também funciona com as setas do teclado no viewport; PageUp/PageDown sobem e descem em 3D)
+      const has = (k) => spec.props.some((p) => p.k === k); if (!has('x')) return null;
+      const steps = dim === '3d' ? [0.25, 1, 5] : (kind === '2.5d' ? [0.25, 1, 2] : [1, 8, 32]);
+      const step = steps.includes(S.nudge) ? S.nudge : steps[1], r2 = (v) => Math.round(v * 100) / 100, cur = (k) => Number(n[k]) || 0;
+      const go = (dx, dv, dy) => { const step = steps.includes(S.nudge) ? S.nudge : steps[1]; if (dx) applyProp(n, 'x', r2(cur('x') + dx * step)); if (dv) applyProp(n, dim === '3d' ? 'z' : 'y', r2(cur(dim === '3d' ? 'z' : 'y') + dv * step)); if (dy) applyProp(n, 'y', r2(cur('y') + dy * step)); paintInspector(); };
+      const b = (label, text, fn, id) => h('button', { type: 'button', class: 'btn sm ge-nudge-b', title: label, 'aria-label': label, id, onclick: fn }, text);
+      const stepSel = h('select', { id: 'ge-nudge-step', 'aria-label': t('Passo') }, steps.map((v) => h('option', { value: v, selected: v === step }, String(v))));
+      stepSel.addEventListener('change', () => { S.nudge = parseFloat(stepSel.value); });
+      return h('div', { class: 'ge-igrp ge-nudge', id: 'ge-nudge' }, h('h4', null, t('Mover')),
+        h('div', { class: 'ge-nudge-pad' }, b(t('Mover para a esquerda'), '←', () => go(-1, 0, 0), 'ge-nudge-l'), b(t('Mover para cima'), '↑', () => go(0, -1, 0), 'ge-nudge-u'), b(t('Mover para baixo'), '↓', () => go(0, 1, 0), 'ge-nudge-d'), b(t('Mover para a direita'), '→', () => go(1, 0, 0), 'ge-nudge-r'),
+          dim === '3d' && has('y') ? [b(t('Subir'), '⤒', () => go(0, 0, 1), 'ge-nudge-up'), b(t('Descer'), '⤓', () => go(0, 0, -1), 'ge-nudge-down')] : null),
+        h('label', { class: 'ge-prop' }, h('span', { class: 'l' }, t('Passo')), stepSel));
+    };
     const tagsInp = h('input', { value: (n.tags || []).join(', '), placeholder: t('ex.: player, enemy'), id: 'ge-i-tags' });
     tagsInp.addEventListener('change', () => { const v = tagsInp.value.split(',').map((x) => x.trim()).filter(Boolean).slice(0, 8); if (v.length) n.tags = v; else delete n.tags; markDirty(); sendScene(); });
     const beh = h('div', { class: 'ge-behs' }, (n.behaviors || []).map((b, i) => {
@@ -175,6 +188,7 @@ export default async function render(body, E) {
       h('div', { class: 'ge-ih' }, h('span', { class: 'ti' }, icon(spec.icon || 'node', 16)), nameInp, h('span', { class: 'chip dim' }, t(spec.label))),
       h('div', { class: 'ge-iact' }, btn(t('Duplicar'), 'copy', () => duplicateNode(n.id), '', { disabled: isRoot }), btn(t('Apagar'), 'trash', async () => { if (await confirmDialog(t('Apagar «{n}» e o que está dentro dele?', { n: n.name }))) deleteNode(n.id); }, 'danger', { disabled: isRoot, id: 'ge-i-del' }), btn(t('Enquadrar'), 'fit', () => send({ geCmd: 'focus', id: n.id }))),
       groups.transform.length ? h('div', { class: 'ge-igrp' }, h('h4', null, t('Transformação')), groups.transform.map(row)) : null,
+      nudgePad(),
       groups.props.length ? h('div', { class: 'ge-igrp' }, h('h4', null, t('Propriedades')), groups.props.map(row)) : null,
       h('div', { class: 'ge-igrp' }, h('h4', null, t('Comportamentos')), beh, addBeh), h('div', { class: 'ge-igrp' }, h('h4', null, t('Etiquetas')), tagsInp),
       (n.type === 'TileMap' || n.type === 'Terrain3D') ? h('div', { class: 'ge-igrp' }, h('p', { class: 'muted small' }, t('Os objetos do mapa (moedas, inimigos, jogador…) são editados na aba Map.')), btn(t('Abrir o mapa'), 'mountain', () => E.go('map'))) : null);

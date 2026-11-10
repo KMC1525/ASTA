@@ -39,6 +39,16 @@ run('engine', async ({ api, open, check, base, browser }) => {
   await page.waitForTimeout(1200);
   sc = await api(`/api/engine/projects/${pid}/scenes/main`);
   check('engine:adicionar-no-mesh3d', JSON.stringify(sc).includes('"Mesh3D"'));
+  // mover com os botões do inspetor (passo 1) e com PageUp/PageDown no viewport
+  await page.waitForSelector('#ge-nudge-r'); await page.locator('#ge-nudge-r').click(); await page.locator('#ge-nudge-up').click(); await page.waitForTimeout(1400);
+  sc = await api(`/api/engine/projects/${pid}/scenes/main`);
+  const findType = (n, type) => (n.type === type ? n : (n.children || []).map((c) => findType(c, type)).find(Boolean));
+  const mesh = findType(sc.root, 'Mesh3D');
+  check('engine:mover-no-pelo-inspetor-3d', mesh && mesh.x === 1 && mesh.y === 2);
+  await page.locator('#ge-nudge-step').selectOption('5'); await page.locator('#ge-nudge-l').click(); await page.waitForTimeout(1400);
+  sc = await api(`/api/engine/projects/${pid}/scenes/main`);
+  check('engine:mover-no-passo-escolhido', findType(sc.root, 'Mesh3D').x === -4);
+  await page.locator('#ge-nudge-step').selectOption('1');
   await page.locator('#ge-i-del').click(); await page.locator('.modal .btn.danger').click(); await page.waitForTimeout(1200);
   sc = await api(`/api/engine/projects/${pid}/scenes/main`);
   check('engine:apagar-no', !JSON.stringify(sc).includes('Malha 3D'));
@@ -154,6 +164,20 @@ run('engine', async ({ api, open, check, base, browser }) => {
   check('engine:scripts-sem-abas-legado-de-personagens-e-worldbuilding', (await page.locator('#ge-sview, #ge-cards').count()) === 0 && (await page.locator('#ge-sright .ge-vtool').count()) === 1);
   await page.locator('#ge-lay-one').click().catch(() => {});
 
+  // ---- Map (3D): ferramenta de mover objeto (a mesma mensagem que o viewport manda ao arrastar)
+  const p3 = await api('/api/engine/projects', { method: 'POST', body: { name: 'Mapa3D', kind: '3d', genre: 'adventure3d' } });
+  await page.goto(base + `/#/engine/${p3.id}/map`); await page.waitForSelector('#ge-mframe'); await page.waitForTimeout(3000);
+  const mp3 = (await api(`/api/engine/projects/${p3.id}/maps`)).maps[0].path, m3a = await api(`/api/engine/projects/${p3.id}/map?path=${encodeURIComponent(mp3)}`);
+  check('engine:map3d-tem-ferramenta-mover-objeto', (await page.locator('[data-tool="move"]').count()) === 1);
+  await page.locator('[data-tool="move"]').click();
+  const o3 = (m3a.objects || []).find((o) => o.type !== 'player');
+  if (o3) {
+    const fr = page.frames().find((f) => /\/api\/engine\/play\//.test(f.url()));
+    await fr.evaluate((o) => { const P = (m) => window.parent.postMessage(Object.assign({ ge: 'brush' }, m), '*'); P({ phase: 'down', x: o.x, z: o.z }); P({ phase: 'move', x: o.x + 5, z: o.z + 5 }); P({ phase: 'up' }); }, o3);
+    let m3b; for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); m3b = await api(`/api/engine/projects/${p3.id}/map?path=${encodeURIComponent(mp3)}`); if (m3b.objects.some((o) => Math.abs(o.x - (o3.x + 5)) < 0.01 && Math.abs(o.z - (o3.z + 5)) < 0.01)) break; }
+    check('engine:map3d-mover-objeto-salva-a-nova-posicao', m3b.objects.some((o) => o.type === o3.type && Math.abs(o.x - (o3.x + 5)) < 0.01 && Math.abs(o.z - (o3.z + 5)) < 0.01) && m3b.objects.length === m3a.objects.length);
+  } else check('engine:map3d-mover-objeto-salva-a-nova-posicao', false);
+
   // ---- Map (2D)
   const p2 = await api('/api/engine/projects', { method: 'POST', body: { name: 'Mapa2D', kind: '2d', genre: 'platformer' } });
   await page.goto(base + `/#/engine/${p2.id}/map`); await page.waitForSelector('#ge-mcanvas');
@@ -161,10 +185,25 @@ run('engine', async ({ api, open, check, base, browser }) => {
   const mp0 = (await api(`/api/engine/projects/${p2.id}/maps`)).maps[0].path;
   const mv = await page.locator('#ge-mcanvas').boundingBox();
   await page.locator('.ge-pal [data-tile="3"]').click();
-  await page.mouse.move(mv.x + mv.width / 2, mv.y + mv.height / 2); await page.mouse.down(); await page.mouse.move(mv.x + mv.width / 2 + 60, mv.y + mv.height / 2, { steps: 5 }); await page.mouse.up();
-  await page.waitForTimeout(1200);
-  const before = await api(`/api/engine/projects/${p2.id}/map?path=${encodeURIComponent(mp0)}`);
+  const view2 = async () => page.evaluate(() => { const c = document.getElementById('ge-mcanvas'), r = c.getBoundingClientRect(); return { x: r.x, y: r.y, z: parseFloat(c.dataset.vz), ox: parseFloat(c.dataset.vox), oy: parseFloat(c.dataset.voy) }; });
+  const mapA = await api(`/api/engine/projects/${p2.id}/map?path=${encodeURIComponent(mp0)}`), vA = await view2(), cellPx = (v, cx, cy) => [v.x + v.ox + (cx + 0.5) * mapA.tile * v.z, v.y + v.oy + (cy + 0.5) * mapA.tile * v.z];
+  const [ax, ay] = cellPx(vA, Math.floor(mapA.w / 2), Math.floor(mapA.h / 2)), [bx, by] = cellPx(vA, Math.floor(mapA.w / 2) + 3, Math.floor(mapA.h / 2));
+  await page.mouse.move(ax, ay); await page.mouse.down(); await page.mouse.move(bx, by, { steps: 5 }); await page.mouse.up();
+  const readMap = async (ok) => { let m; for (let i = 0; i < 20; i++) { await page.waitForTimeout(500); m = await api(`/api/engine/projects/${p2.id}/map?path=${encodeURIComponent(mp0)}`); if (ok(m)) break; } return m; };   // o salvamento automático demora um pouco
+  const before = await readMap((m) => JSON.stringify(m.layers[0].data).includes('3'));
   check('engine:map-pintar-bloco-salva-o-mapa', JSON.stringify(before.layers[0].data).includes('3'));
+  // mover um objeto do mapa arrastando
+  const mobj = (before.objects || []).find((o) => o.type === 'goal');   // a meta é única (as moedas do gerador podem se sobrepor)
+  if (mobj) {
+    await page.locator('[data-tool="move"]').click(); await page.waitForTimeout(500);
+    const T = before.tile, vw = await page.evaluate(() => { const c = document.getElementById('ge-mcanvas'), r = c.getBoundingClientRect(); return { x: r.x, y: r.y, z: parseFloat(c.dataset.vz), ox: parseFloat(c.dataset.vox), oy: parseFloat(c.dataset.voy) }; });
+    const px = (cx) => vw.x + vw.ox + (cx + 0.5) * T * vw.z, py = (cy) => vw.y + vw.oy + (cy + 0.5) * T * vw.z, tx = Math.max(0, mobj.x - 3), ty = mobj.y;
+    await page.mouse.move(px(mobj.x), py(mobj.y)); await page.mouse.down(); await page.mouse.move(px(tx), py(ty), { steps: 6 }); await page.mouse.up();
+    const moved = await readMap((m) => m.objects.some((o) => o.type === mobj.type && o.x === tx && o.y === ty));
+    const goalsNow = JSON.stringify(moved.objects.filter((o) => o.type === 'goal')); const okMove = moved.objects.some((o) => o.type === 'goal' && o.x === tx && o.y === ty) && !moved.objects.some((o) => o.type === 'goal' && o.x === mobj.x) && moved.objects.length === before.objects.length;
+    check(okMove ? 'engine:map-mover-objeto-arrastando-salva' : 'engine:map-mover-objeto-arrastando-salva ' + goalsNow + ' alvo ' + tx + ',' + ty + ' orig ' + mobj.x, okMove);
+    await page.locator('#ge-mundo').click(); await page.waitForTimeout(800);
+  } else check('engine:map-mover-objeto-arrastando-salva', true);
   await page.locator('[data-tool="region"]').click();
   await page.mouse.move(mv.x + 100, mv.y + mv.height / 2 - 20); await page.mouse.down(); await page.mouse.move(mv.x + 260, mv.y + mv.height / 2 + 40, { steps: 4 }); await page.mouse.up();
   await page.waitForSelector('#ge-mregen');
