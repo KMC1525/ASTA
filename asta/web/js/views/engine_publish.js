@@ -59,7 +59,7 @@ export default async function render(body, E) {
   const full = h('input', { type: 'checkbox', checked: S.fullscreen, id: 'ge-p-full' }); full.addEventListener('change', () => { S.fullscreen = full.checked; saveSettings(); });
   const iconBox = h('div', { class: 'ge-iact' }, h('span', { class: 'small muted' }, t('O ícone é gerado com a inicial do jogo. Para um próprio, salve um PNG como assets/icon.png (aba Assets → Aplicar ao jogo, com o nome «icon» — depois mova para assets/).')));
   const form = h('div', { class: 'ge-insp', id: 'ge-pform' },
-    h('div', { class: 'ge-igrp' }, h('h4', null, t('Aplicativo')), propRow(t('Versão'), txt('version', { attrs: { placeholder: '1.0.0' } })), propRow(t('Identificador'), txt('package', { attrs: { placeholder: 'com.seunome.jogo' } }), t('com.empresa.jogo — usado no Android, iOS e desktop')), propRow(t('Autor'), txt('author')), propRow(t('Orientação'), orient), propRow(t('Tela cheia'), full), iconBox),
+    h('div', { class: 'ge-igrp' }, h('h4', null, t('Aplicativo')), propRow(t('Versão'), txt('version', { attrs: { placeholder: '1.0.0' } })), propRow(t('Identificador'), txt('package', { attrs: { placeholder: t('com.seunome.jogo') } }), t('com.empresa.jogo — usado no Android, iOS e desktop')), propRow(t('Autor'), txt('author')), propRow(t('Orientação'), orient), propRow(t('Tela cheia'), full), iconBox),
     h('div', { class: 'ge-igrp' }, h('h4', null, t('Página do jogo')), propRow(t('Resumo'), txt('short')), propRow(t('Descrição'), txt('description', { area: true, rows: 6 })), propRow(t('Etiquetas'), txt('tags')), propRow(t('Notas da versão'), txt('release_notes', { area: true, rows: 4 }))));
 
   const pp = promptPanel(E, {

@@ -90,7 +90,7 @@ async function renderProjects(root, ctx) {
   const [{ projects }, cat, status] = await Promise.all([api('/api/engine/projects'), catalog(), api('/api/engine/status').catch(() => ({ text: {} }))]);
   const opt = { kind: '2d', genre: '', theme: '', length: 'medium', web: !!((state.settings || {}).engine || {}).web };
   const kindSeg = h('div', { class: 'ge-kinds', role: 'radiogroup', 'aria-label': t('Tipo de jogo') });
-  const genreSel = h('select', { id: 'ge-new-genre', 'aria-label': t('Gênero') }), themeSel = h('select', { id: 'ge-new-theme', 'aria-label': t('Tema') }), lenSel = h('select', { id: 'ge-new-length', 'aria-label': t('Duração') }, Object.keys(SIZE_LABEL).map((k) => h('option', { value: k, selected: k === 'medium' }, t(SIZE_LABEL[k]))));
+  const genreSel = h('select', { id: 'ge-new-genre', 'aria-label': t('Gênero do jogo') }), themeSel = h('select', { id: 'ge-new-theme', 'aria-label': t('Tema') }), lenSel = h('select', { id: 'ge-new-length', 'aria-label': t('Duração') }, Object.keys(SIZE_LABEL).map((k) => h('option', { value: k, selected: k === 'medium' }, t(SIZE_LABEL[k]))));
   const paintKinds = () => {
     kindSeg.replaceChildren(...KINDS.map(([id, label]) => h('button', { type: 'button', role: 'radio', 'aria-checked': String(opt.kind === id), class: 'ge-kindbtn' + (opt.kind === id ? ' on' : ''), dataset: { kind: id }, title: t(cat.kinds[id].hint), onclick: () => { opt.kind = id; opt.genre = ''; paintKinds(); } }, h('b', null, label), h('span', null, t(cat.kinds[id].hint)))));
     genreSel.replaceChildren(h('option', { value: '' }, t('Gênero: automático')), ...Object.entries(cat.genres).filter(([, g]) => g.kinds.includes(opt.kind)).map(([id]) => h('option', { value: id }, t(GENRE_LABEL[id] || id))));

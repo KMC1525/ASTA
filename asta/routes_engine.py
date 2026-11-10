@@ -115,7 +115,7 @@ class EngineRoutes:
     # ------------------------------------------------------------------ projetos
     def r_create(self, req: Any) -> None:
         b = self._body(req)
-        kind = b.get("kind") if b.get("kind") in S.KINDS else "2d"
+        kind = b.get("kind") if isinstance(b.get("kind"), str) and b.get("kind") in S.KINDS else "2d"
         meta = self.m.create(text(b.get("name"), "", 60), kind, text(b.get("genre"), "", 30), text(b.get("theme"), "forest", 20), text(b.get("description"), "", 400), text(b.get("language"), "pt", 5))
         if b.get("starter") is not False:   # nasce com um jogo mínimo já jogável (as regras do gerador, sem IA)
             from .gameengine import templates as tpl

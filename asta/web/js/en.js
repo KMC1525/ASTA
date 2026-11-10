@@ -408,7 +408,7 @@ export default {
   '{n} avatar(es)': '{n} avatar(s)',
   'Quantidade: auto': 'Count: auto',
   'Descreva o avatar (ou vários) — ou anexe imagens, textos, documentos…': 'Describe the avatar (or several) — or attach images, texts, documents…',
-  'Gênero: automático': 'Gender: automatic',
+  'Gênero: automático': 'Genre: automatic',
   'Descreva o que mudar neste jogo…': 'Describe what to change in this game…',
   'Descreva o jogo que você quer criar…': 'Describe the game you want to create…',
   'Descreva o que você quer produzir (opcional) — vira o primeiro prompt do fluxo…': 'Describe what you want to produce (optional) — it becomes the flow’s first prompt…',
@@ -3423,4 +3423,6 @@ export default {
   "Escrever roteiros e diálogos, com ajuda da IA": "Write scripts and dialogues, with AI help",
   "Gerar e editar mapas e mundos 2D e 3D": "Generate and edit 2D and 3D maps and worlds",
   "Exportar para Windows, macOS, Linux, Android e iOS": "Export to Windows, macOS, Linux, Android and iOS",
+  "Gênero do jogo": "Genre",
+  "com.seunome.jogo": "com.yourname.game",
 };
