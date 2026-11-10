@@ -56,7 +56,7 @@ class CodeApiTests(ServerCase):
         self.assertEqual(s, 200)
         self.assertEqual([e["id"] for e in st["efforts"]], ["low", "medium", "high", "extra", "mega", "max", "ultra", "omni"])
         self.assertEqual(len(st["colors"]), 8)
-        self.assertEqual((st["limit_agents"], st["limit_sessions"]), (16, 8))
+        self.assertEqual((st["limit_agents"], st["limit_sessions"]), (32, 8))
         self.assertEqual(st["publish_modes"], ["none", "commit", "branch", "pr", "main"])
         self.assertIn("python", [x["id"] for x in st["languages"]])
         self.assertIn("publish_changes", st["tools"])

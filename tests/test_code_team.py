@@ -220,7 +220,7 @@ class TeamTests(TeamCase):
         m.send(s["id"], "x")
         self.wait(m, s["id"])
         self.assertEqual(peak[0], 2)
-        self.assertFalse(m.update_session(s["id"], {"agents": 99})["agents"] > 16)
+        self.assertFalse(m.update_session(s["id"], {"agents": 99})["agents"] > 32)
 
     def test_steps_that_touch_the_same_files_never_run_together(self):
         active, bad, lock = [0], [False], threading.Lock()
@@ -1231,7 +1231,7 @@ class SessionApiTests(TeamCase):
         self.assertEqual(u["provider"], {"id": "openai", "model": "gpt-x"})
         self.assertEqual(u["finalize"], {"docs": True, "publish": "pr"})
         u = m.update_session(s["id"], {"effort": "zzz", "agents": 99, "mode": "root", "finalize": {"publish": "rm -rf"}})
-        self.assertEqual((u["effort"], u["agents"], u["mode"], u["finalize"]["publish"]), ("high", 16, "full", "none"))
+        self.assertEqual((u["effort"], u["agents"], u["mode"], u["finalize"]["publish"]), ("high", 32, "full", "none"))
         with self.assertRaises(CodeError):
             m.update_session(s["id"], {"title": " "})
         with self.assertRaises(CodeError):
@@ -1259,7 +1259,7 @@ class SessionApiTests(TeamCase):
         from asta.code import normalize_config
 
         c = normalize_config({"mode": "root", "effort": "xx", "agents": 99, "max_sessions": 0, "ask_for": ["read", "write", "bogus"], "finalize": {"publish": "nuke"}, "github": {"token": "t"}})
-        self.assertEqual((c["mode"], c["effort"], c["agents"], c["max_sessions"]), ("ask", "high", 16, 1))
+        self.assertEqual((c["mode"], c["effort"], c["agents"], c["max_sessions"]), ("ask", "high", 32, 1))
         self.assertEqual(c["ask_for"], ["write"])
         self.assertEqual(c["finalize"]["publish"], "none")
         self.assertEqual(normalize_config(None)["ask_for"], list(T.DEFAULT_ASK))
