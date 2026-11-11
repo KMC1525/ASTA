@@ -5,7 +5,7 @@ run('config_sections', async ({ open, api, check }) => {
   const page = await open({ width: 1400, height: 950 });
   const go = async (tab) => { await page.locator(`.cfgtabs button[data-tab="${tab}"]`).click(); await page.waitForTimeout(500); };
   await page.evaluate(() => { location.hash = '#/config'; }); await page.waitForSelector('.cfgtabs', { timeout: 15000 });
-  check('abas:quatro-grupos', (await page.locator('.cfgtabs .tg').count()) === 4 && (await page.locator('.cfgtabs button').count()) === 20);
+  check('abas:quatro-grupos', (await page.locator('.cfgtabs .tg').count()) === 4 && (await page.locator('.cfgtabs button').count()) === 23);
   for (const id of ['appearance', 'sections', 'providers', 'media', 'voice', 'local', 'chat', 'engine', 'scriber', 'avatars', 'canvas', 'studio', 'rebuild', 'performance', 'data', 'mobile', 'system']) {
     await page.locator(`.cfgtabs button[data-tab="${id}"]`).click(); await page.waitForTimeout(450);
     const txt = await page.locator('.page.cfg').innerText();

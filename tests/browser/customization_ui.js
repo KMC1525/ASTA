@@ -86,7 +86,9 @@ run('customization', async ({ open, api, check, base, browser }) => {
   await page.keyboard.press('Alt+Digit3'); await page.waitForTimeout(400);
   check('cust:atalho-alt-3', (await page.evaluate(() => location.hash)) === '#/scriber');
   await page.keyboard.press('Alt+Digit4'); await page.waitForTimeout(400);
-  check('cust:atalho-alt-4', (await page.evaluate(() => location.hash)) === '#/avatars');
+  check('cust:atalho-alt-4', (await page.evaluate(() => location.hash)) === '#/data');   // o Data entrou na barra: Alt+4 agora é o Data
+  await page.keyboard.press('Alt+Digit5'); await page.waitForTimeout(400);
+  check('cust:atalho-alt-5', (await page.evaluate(() => location.hash)) === '#/avatars');
   await page.keyboard.press('Alt+KeyT'); await page.waitForTimeout(500);
   check('cust:atalho-alt-t-alterna-tema', (await attr('data-theme')) === 'light');
   await page.keyboard.press('Alt+KeyT'); await page.waitForTimeout(500);
