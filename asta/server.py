@@ -29,6 +29,7 @@ from .routes_code import CodeRoutes
 from .routes_work import WorkRoutes
 from .routes_engine import EngineRoutes
 from .routes_scriber import ScriberRoutes
+from .routes_data import DataRoutes
 from .routes_computer import ComputerRoutes
 from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
@@ -238,6 +239,8 @@ class App:
         self.engine_routes.register()
         self.scriber_routes = ScriberRoutes(self)   # cria `self.scriber` (projetos de escrita do Scriber)
         self.scriber_routes.register()
+        self.data_routes = DataRoutes(self)   # cria `self.data` (databases e datasets multimodais)
+        self.data_routes.register()
 
     # ----- estado / configurações
     def r_state(self, req: "Request") -> None:

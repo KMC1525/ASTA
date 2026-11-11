@@ -128,6 +128,8 @@ DEFAULT_SETTINGS: Dict[str, Any] = {
     "engine": {"agents": 1, "effort": "high", "kind": "2d", "content": "", "web": False, "undo_keep": 25},
     # Scriber (v0.20): escrita criativa e profissional (geração automática + edição). Ver scriber/agents.py (normalize_config). Projetos em ~/.asta/scriber/<id>/.
     "scriber": {"agents": 1, "effort": "high", "type": "romance", "language": "pt-BR", "content": "", "web": False, "pages": 40, "words_per_page": 300, "undo_keep": 25, "expand_words": 150, "dialogue_words": 60, "spellcheck": True, "autosave": True},
+    # Data: databases e datasets multimodais com IA (geração, edição, sintéticos, scraping open-source, upgrade, export). Projetos em ~/.asta/data/.
+    "data": {"agents": 1, "effort": "high", "default_kind": "dataset", "synthetic_count": 20, "synthetic_mode": "single", "web": False},
     "canvas": {"template": "text_image", "agents": 1, "effort": "high"},  # equipe dos nós de texto (IA) do Canvas
     "performance": {"mode": "auto", "idle_unload_min": 10},  # auto | light | balanced | max — veja perf.py
     "server": {"max_upload_mb": 200},

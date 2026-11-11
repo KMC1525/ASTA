@@ -20,7 +20,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, profile: profileTab, memory: memoryTab, engine: engineTab, scriber: scriberTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, profile: profileTab, memory: memoryTab, engine: engineTab, scriber: scriberTab, datamode: dataModeTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -28,8 +28,8 @@ export default async function render(root, ctx) {
 
 // peças comuns das abas de seção: cartão, cabeçalho (link para a seção + restaurar padrões) e botão Salvar
 const cfgCard = (title, ...kids) => h('div', { class: 'card', style: { marginBottom: '16px' } }, title ? h('h3', null, title) : null, ...kids);
-const SEC_ROUTE = { chat: 'main', engine: 'engine', scriber: 'scriber', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
-const SEC_LABEL = { chat: 'Chat', engine: 'Game Engine', scriber: 'Scriber', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
+const SEC_ROUTE = { chat: 'main', engine: 'engine', scriber: 'scriber', datamode: 'data', generation: 'worlds', avatars: 'avatars', games: 'games', canvas: 'canvas', studio: 'studio', computer: 'computer', code: 'code', work: 'work', rebuild: 'rebuild' };
+const SEC_LABEL = { chat: 'Chat', engine: 'Game Engine', scriber: 'Scriber', datamode: 'Data', generation: 'Mundos 3D', avatars: 'Avatars', games: 'Jogos 2D', canvas: 'Canvas', studio: 'Studio', computer: 'Computer Use', code: 'Code', work: 'Work', rebuild: 'Rebuild' };
 function secHead(tab, resets) {
   const reset = resets && resets.length ? h('button', { class: 'btn sm danger', type: 'button', id: 'cfg-reset', onclick: async () => {
     if (!(await confirmDialog(t('Voltar os padrões desta seção ao original? Chaves de API, projetos e conversas não mudam.'), true, t('Restaurar')))) return;
@@ -896,7 +896,7 @@ async function data() {
       h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Volta aparência e os padrões de TODAS as seções ao original. Suas chaves de API, avatares, mundos, jogos, vídeos e conversas não mudam.')),
       h('button', { class: 'btn sm danger', id: 'cfg-reset-all', onclick: async () => {
         if (!(await confirmDialog(t('Restaurar a aparência e os padrões de todas as seções? Suas chaves, avatares e projetos não mudam.'), true, t('Restaurar')))) return;
-        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'engine', 'scriber', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
+        try { for (const sec of ['ui', 'generation', 'characters', 'avatars', 'games', 'canvas', 'studio', 'computer', 'code', 'work', 'engine', 'scriber', 'data', 'rebuild', 'performance']) await api('/api/settings/reset', { method: 'POST', body: { section: sec } }); await refreshState(); location.reload(); } catch (e) { toast(e.message, 'err'); }
       } }, icon('refresh', 13), t('Restaurar tudo ao padrão'))));
 }
 
@@ -1310,3 +1310,24 @@ async function memoryTab() {
             } }, icon('check', 14), t('Salvar dia'))))));
 }
 
+
+// ---------------------------------------------------------------------------------- data mode (databases e datasets)
+async function dataModeTab() {
+  const d = JSON.parse(JSON.stringify((state.settings && state.settings.data) || { agents: 1, effort: 'high', default_kind: 'dataset', synthetic_count: 20, synthetic_mode: 'single', web: false }));
+  const kindSel = select([['dataset', t('Dataset')], ['database', t('Database')]], d.default_kind || 'dataset', (v) => { d.default_kind = v; }, { id: 'dm-kind' });
+  const modeSel = select([['single', t('Um tipo de dado')], ['multi', t('Vários tipos/modalidades')]], d.synthetic_mode || 'single', (v) => { d.synthetic_mode = v; }, { id: 'dm-synth-mode' });
+  return h('div', null,
+    secHead('datamode', ['data']),
+    h('div', { class: 'card', style: { marginBottom: '16px' } },
+      h('h3', null, t('Padrões do Data')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Crie, gere, gerencie, edite, visualize, organize e mescle databases e datasets multimodais com IA. Gere dados sintéticos, faça scraping open source e exporte em vários formatos preservando a estrutura.')),
+      h('div', { class: 'grid2' },
+        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Tipo padrão')), kindSel),
+        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo padrão de dados sintéticos')), modeSel)),
+      h('label', { class: 'check', style: { marginTop: '8px' } }, checkbox(d.web, (v) => { d.web = v; }, { id: 'dm-web' }), h('span', null, t('Permitir busca/leitura na web por padrão nas ações que usam web')))),
+    teamCard(d, 'dm', t('Equipe de agentes e esforço usados na geração sintética, extração por scraping e melhoria (upgrade) com IA.'), { defaultEffort: 'high' }),
+    h('div', { class: 'card', style: { marginBottom: '16px' } },
+      h('h3', null, t('Web scraping (uso responsável)')),
+      h('p', { class: 'muted small', style: { margin: 0 } }, t('A aba Web scraping é somente para uso open source. Não usar para uso comercial. Respeite os termos, robots.txt e direitos dos sites/fontes.'))),
+    saveRow(async () => { await api('/api/settings', { method: 'PUT', body: { data: d } }); await refreshState(); }));
+}
