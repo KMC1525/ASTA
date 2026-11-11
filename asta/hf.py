@@ -74,16 +74,33 @@ def _headers(token: str) -> Dict[str, str]:
     return {"Authorization": f"Bearer {token}"} if token else {}
 
 
+def _author_queries(query: str) -> List[Dict[str, str]]:
+    """Consultas extras por autor/perfil (ex.: "unsloth", "empero-ai") para achar todos os modelos de um perfil do Hugging Face."""
+    q = (query or "").strip()
+    if not q or "/" in q or " " in q:
+        return []
+    # nome simples de autor/org: tenta também filtrar por author (e busca vazia dentro do autor)
+    return [{"author": q, "search": ""}, {"author": q, "search": q}]
+
+
 def search(query: str, token: str = "", limit: int = 20, kind: str = "text") -> List[Dict[str, Any]]:
-    """Busca repositórios GGUF do tipo pedido (texto, imagem, vídeo, som, voz, outros), do mais baixado para o menos."""
+    """Busca repositórios GGUF do tipo pedido (texto, imagem, vídeo, som, voz, outros), do mais baixado para o menos. Aceita buscar por perfil/autor (ex.: "unsloth")."""
     found: Dict[str, Dict[str, Any]] = {}
+    queries = [{"search": query}]
+    queries += _author_queries(query)
     for tag in GGUF_KINDS[check_kind(kind)]["tags"]:
-        params = {"search": query, "filter": "gguf", "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(limit)}
-        data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
-        for m in data if isinstance(data, list) else []:
-            if isinstance(m, dict) and (m.get("id") or m.get("modelId")):
-                mid = m.get("id") or m.get("modelId")
-                found.setdefault(mid, {"id": mid, "downloads": m.get("downloads", 0), "likes": m.get("likes", 0), "kind": kind})
+        for extra in queries:
+            params = {**extra, "filter": "gguf", "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(max(limit, 30))}
+            try:
+                data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
+            except ProviderError:
+                continue
+            for m in data if isinstance(data, list) else []:
+                if isinstance(m, dict) and (m.get("id") or m.get("modelId")):
+                    mid = m.get("id") or m.get("modelId")
+                    row = found.setdefault(mid, {"id": mid, "downloads": m.get("downloads", 0) or 0, "likes": m.get("likes", 0) or 0, "kind": kind})
+                    row["downloads"] = max(int(row.get("downloads") or 0), int(m.get("downloads") or 0))
+                    row["likes"] = max(int(row.get("likes") or 0), int(m.get("likes") or 0))
     return sorted(found.values(), key=lambda m: -m["downloads"])[:limit]
 
 
@@ -95,17 +112,26 @@ ORIGINAL_TAGS: Dict[str, List[str]] = {
 
 
 def search_original(query: str, token: str = "", cap: str = "image", limit: int = 20) -> List[Dict[str, Any]]:
-    """Busca modelos (qualquer formato) de uma capacidade do Canvas — imagem, vídeo, som, voz, transcrição ou texto —, do mais baixado para o menos."""
+    """Busca modelos (qualquer formato) de uma capacidade do Canvas — imagem, vídeo, som, voz, transcrição ou texto —, do mais baixado para o menos. Aceita buscar por perfil/autor."""
     if cap not in ORIGINAL_TAGS:
         raise ProviderError("Capacidade inválida.")
     found: Dict[str, Dict[str, Any]] = {}
+    queries = [{"search": query}]
+    queries += _author_queries(query)
     for tag in ORIGINAL_TAGS[cap]:
-        params = {"search": query, "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(limit)}
-        data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
-        for m in data if isinstance(data, list) else []:
-            mid = m.get("id") or m.get("modelId") if isinstance(m, dict) else None
-            if isinstance(mid, str) and REPO_RE.match(mid):
-                found.setdefault(mid, {"id": mid, "downloads": int(m.get("downloads") or 0), "likes": int(m.get("likes") or 0), "cap": cap, "format": "original", "gguf": "gguf" in [str(t).lower() for t in (m.get("tags") or [])]})
+        for extra in queries:
+            params = {**extra, "pipeline_tag": tag, "sort": "downloads", "direction": "-1", "limit": str(max(limit, 30))}
+            try:
+                data = http.get_json(f"{HF}/api/models?{urllib.parse.urlencode(params)}", _headers(token), timeout=20)
+            except ProviderError:
+                continue
+            for m in data if isinstance(data, list) else []:
+                mid = m.get("id") or m.get("modelId") if isinstance(m, dict) else None
+                if isinstance(mid, str) and REPO_RE.match(mid):
+                    row = found.setdefault(mid, {"id": mid, "downloads": int(m.get("downloads") or 0), "likes": int(m.get("likes") or 0), "cap": cap, "format": "original", "gguf": "gguf" in [str(t).lower() for t in (m.get("tags") or [])]})
+                    row["downloads"] = max(int(row.get("downloads") or 0), int(m.get("downloads") or 0))
+                    row["likes"] = max(int(row.get("likes") or 0), int(m.get("likes") or 0))
+                    row["gguf"] = row["gguf"] or ("gguf" in [str(t).lower() for t in (m.get("tags") or [])])
     return sorted(found.values(), key=lambda m: -m["downloads"])[:limit]
 
 

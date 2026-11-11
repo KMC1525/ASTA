@@ -94,14 +94,36 @@ pub extern "C" fn asta_plan_llm(
     let p = (phys.max(1)) as f64;
     let l = (logical.max(phys.max(1))) as f64;
     let threads = if all_gpu { p.min(4.0) } else if p >= 8.0 { p - 1.0 } else { p };
-    let threads_batch = if all_gpu { threads } else if l > p && l >= 8.0 { l - 1.0 } else { threads };
-    let n_batch = if mode == 0 { 128.0 } else if all_gpu || mode == 2 { 512.0 } else { 256.0 };
-    let n_ubatch = if mode == 0 { 128.0 } else { 512.0f64.min(n_batch) };
-    let flash = mode != 2 || has_gpu || kv_q8;
+    let threads_batch = if all_gpu { threads.max(4.0).min(p) } else if l > p && l >= 8.0 { l - 1.0 } else { threads };
+    // lotes maiores aceleram a ingestão do prompt em GPU (NVIDIA 20/30/40/50) quando há folga de VRAM/RAM
+    let gpu_headroom = usable_vram - ngl * layer_bytes - kvpt * ctx * (if kv_q4 { 0.28 } else if kv_q8 { 0.53 } else { 1.0 }) * frac_gpu;
+    let roomy_gpu = has_gpu && frac_gpu >= 0.5 && gpu_headroom > 1024.0 * MIB;
+    let n_batch = if mode == 0 {
+        if roomy_gpu { 256.0 } else { 128.0 }
+    } else if mode == 2 && roomy_gpu {
+        1024.0
+    } else if all_gpu || mode == 2 || roomy_gpu {
+        512.0
+    } else {
+        256.0
+    };
+    let n_ubatch = if mode == 0 { 256.0f64.min(n_batch) } else if roomy_gpu { 512.0 } else { 512.0f64.min(n_batch) };
+    // atenção flash ajuda em GPUs modernas (Turing/Ampere/Ada/Blackwell) e também com KV quantizado
+    let flash = has_gpu || kv_q8 || kv_q4 || mode != 0;
     let mlock = mode == 2 && !has_gpu && ram > w * 2.0 + kvpt * ctx;
     let prefetch = w < ram * 0.70;
     let ram_after = ram - cpu_weights - kvpt * ctx * (1.0 - frac_gpu);
-    let cache_bytes = if mode == 0 { 256.0 * MIB } else if ram_after > 4096.0 * MIB { (ram_after * 0.10).min(1024.0 * MIB) } else { 0.0 };
+    let cache_bytes = if mode == 0 {
+        if ram_after > 1024.0 * MIB { 256.0 * MIB } else { 128.0 * MIB }
+    } else if ram_after > 8192.0 * MIB {
+        (ram_after * 0.12).min(2048.0 * MIB)
+    } else if ram_after > 4096.0 * MIB {
+        (ram_after * 0.10).min(1024.0 * MIB)
+    } else if ram_after > 1536.0 * MIB {
+        128.0 * MIB
+    } else {
+        0.0
+    };
 
     let s = Obj::new()
         .i("n_ctx", ctx as i64).i("ctx_max", ctx_max as i64).i("n_gpu_layers", if all_gpu { -1 } else { ngl as i64 }).i("gpu_layers_fit", ngl as i64)

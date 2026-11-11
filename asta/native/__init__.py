@@ -817,14 +817,34 @@ def plan_llm(weights: int, layers: int, kv_per_token: int, ctx_train: int, ctx_w
     p = float(max(phys, 1))
     lg = float(max(logical, max(phys, 1)))
     threads = min(p, 4.0) if all_gpu else (p - 1.0 if p >= 8.0 else p)
-    threads_batch = threads if all_gpu else (lg - 1.0 if lg > p and lg >= 8.0 else threads)
-    n_batch = 128.0 if mode == 0 else 512.0 if (all_gpu or mode == 2) else 256.0
-    n_ubatch = 128.0 if mode == 0 else min(512.0, n_batch)
-    flash = mode != 2 or has_gpu or kv_q8
+    threads_batch = max(min(threads, p), 4.0 if all_gpu else threads) if all_gpu else (lg - 1.0 if lg > p and lg >= 8.0 else threads)
+    # lotes maiores aceleram a ingestão do prompt em GPU (NVIDIA 20/30/40/50) quando há folga de VRAM/RAM
+    gpu_headroom = usable_vram - ngl * layer_bytes - kvpt * ctx * (0.28 if kv_q4 else 0.53 if kv_q8 else 1.0) * frac_gpu
+    roomy_gpu = has_gpu and frac_gpu >= 0.5 and gpu_headroom > 1024.0 * MIB
+    if mode == 0:
+        n_batch = 256.0 if roomy_gpu else 128.0
+    elif mode == 2 and roomy_gpu:
+        n_batch = 1024.0
+    elif all_gpu or mode == 2 or roomy_gpu:
+        n_batch = 512.0
+    else:
+        n_batch = 256.0
+    n_ubatch = min(256.0, n_batch) if mode == 0 else (512.0 if roomy_gpu else min(512.0, n_batch))
+    # atenção flash ajuda em GPUs modernas (Turing/Ampere/Ada/Blackwell) e também com KV quantizado
+    flash = has_gpu or kv_q8 or kv_q4 or mode != 0
     mlock = mode == 2 and not has_gpu and ram > w * 2.0 + kvpt * ctx
     prefetch = w < ram * 0.70
     ram_after = ram - cpu_weights - kvpt * ctx * (1.0 - frac_gpu)
-    cache_bytes = 256.0 * MIB if mode == 0 else min(ram_after * 0.10, 1024.0 * MIB) if ram_after > 4096.0 * MIB else 0.0
+    if mode == 0:
+        cache_bytes = 256.0 * MIB if ram_after > 1024.0 * MIB else 128.0 * MIB
+    elif ram_after > 8192.0 * MIB:
+        cache_bytes = min(ram_after * 0.12, 2048.0 * MIB)
+    elif ram_after > 4096.0 * MIB:
+        cache_bytes = min(ram_after * 0.10, 1024.0 * MIB)
+    elif ram_after > 1536.0 * MIB:
+        cache_bytes = 128.0 * MIB
+    else:
+        cache_bytes = 0.0
     return {"n_ctx": int(ctx), "ctx_max": int(ctx_max), "n_gpu_layers": -1 if all_gpu else int(ngl), "gpu_layers_fit": int(ngl), "n_threads": int(threads), "n_threads_batch": int(threads_batch),
             "n_batch": int(n_batch), "n_ubatch": int(n_ubatch), "kv_q8": kv_q8, "kv_q4": kv_q4, "flash": flash, "mlock": mlock, "prefetch": prefetch, "cache_bytes": int(cache_bytes), "notes": notes}
 

@@ -507,6 +507,23 @@ class TeamTests(TeamCase):
         d = m.get(s["id"])
         self.assertEqual([x["role"] for x in d["messages"]], ["user", "assistant", "user", "assistant"])
 
+    def test_session_context_pack_is_persisted_and_sent_to_planner(self):
+        seen = []
+        llm = Scripted(planner=lambda p, s: (seen.append(p), plan(step("s1", "x")))[1], worker=per_step(s1=[act("write_file", path="a.py", content="print(1)\n"), fin("criei o arquivo", files=["a.py"])]))
+        m = self.manager(llm, mode="full", effort="low")
+        s = self.session(m)
+        m.send(s["id"], "crie a.py")
+        self.wait(m, s["id"])
+        d = m.get(s["id"])
+        self.assertIn("context_pack", d)
+        self.assertIn("crie a.py", d["context_pack"])
+        self.assertIn("Execuções recentes", d["context_pack"])
+        m.send(s["id"], "continue")
+        self.wait(m, s["id"])
+        self.assertGreaterEqual(len(seen), 2)
+        self.assertIn("context_pack", seen[1])
+        self.assertIn("crie a.py", seen[1]["context_pack"])
+
     def test_docs_and_publisher_steps_are_added_when_the_user_asked_to_finalize(self):
         llm = Scripted(planner=lambda p, s: plan(step("s1", "mudar")), worker=per_step(s1=[fin("ok")]))
         m = self.manager(llm, mode="full", effort="low")

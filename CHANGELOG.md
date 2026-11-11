@@ -11,6 +11,20 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 ### Melhorado — Chat
 - **Arquivos compactados (ZIP, RAR, 7z, TAR) como anexos:** ao anexar um pacote no Chat, o ASTA extrai e lê o conteúdo de dentro (textos, documentos, imagens, áudio e vídeo) com segurança para responder. ZIP e TAR não precisam de nada; RAR e 7z usam uma ferramenta do sistema (`unrar`, `unar`, `7z`/`7zz`/`7za` ou `bsdtar`) quando disponível.
 
+### Corrigido / Melhorado — Code
+- **Contexto entre execuções:** cada sessão do Code passa a guardar um **resumo empacotado** do que já foi pedido e feito (objetivo, resultado, arquivos e verificações das execuções recentes) e a enviá-lo ao Planejador e aos agentes nas próximas execuções, para continuar o trabalho com menos perda de contexto em sessões longas (modelos na nuvem e locais). Se um modelo estourar o limite de contexto, a sessão termina com uma mensagem mais clara e com a dica de continuar com um pedido mais curto (o resumo já fica salvo).
+- **Imagens coladas na caixa de texto:** colar uma imagem da área de transferência (captura de tela ou imagem copiada da web/PC) na caixa de pedido do Code agora a anexa como arquivo, como acontece no compositor do Chat.
+- **Bases de código grandes:** o navegador de arquivos do projeto passa a aceitar pastas com muito mais itens (com aviso quando a lista é cortada), o caminho de navegação continua por pastas/subpastas e arquivos `.md`/`.markdown` são mostrados renderizados ao abrir no visualizador.
+- **Busca de modelos do Hugging Face no Code:** a ferramenta `hf_search` do Code agora também procura por **perfis/autores** (útil para perfis como `empero-ai`, `unsloth`, `darrellbest`, `Vortecks` e `LiquidAI`) e reúne resultados GGUF e formatos originais (texto, imagem, vídeo, som, voz e transcrição), em vez de só uma busca simples por nome.
+
+### Melhorado — núcleo nativo e modelos locais
+- **Planejamento do modelo local (Rust + espelho em Python, mesma ABI):** o planejador de LLM do núcleo usa lotes de prompt maiores quando há folga de GPU/RAM, ativa com mais agressividade a atenção em flash nos casos em que ajuda (GPU, cache KV quantizado ou uso prolongado) e ajusta o orçamento do cache de prompt para sessões longas, mantendo o mesmo comportamento de API.
+
+### Limites honestos (não verificado)
+- Não foi testado em **hardware NVIDIA real** das séries 20/30/40/50 nem em execuções locais contínuas de muitas horas/dias; os ganhos de desempenho nessas condições não foram medidos.
+- Não foi reproduzido e validado de ponta a ponta, com modelos e repositórios reais, cada caso relatado de uso do **LM Studio** para criar/editar código direto em repositórios do GitHub, nem todas as combinações de orquestração multiagente em cenários reais.
+- A busca de perfis do Hugging Face depende dos resultados da API do Hugging Face no momento da consulta; a disponibilidade exata de “todos os modelos” de um perfil pode variar. Os instaladores e artefatos de release não foram executados em dispositivos reais pelo autor desta mudança.
+
 ## [0.20.1] — 2026-11-10
 
 ### Adicionado — todos os modos: equipe de 2 agentes em paralelo

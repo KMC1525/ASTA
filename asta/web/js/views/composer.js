@@ -60,7 +60,20 @@ export function createComposer(opts) {
   fileInput.addEventListener('change', () => { addFiles(fileInput.files); fileInput.value = ''; });
   ta.addEventListener('input', () => { ta.style.height = 'auto'; ta.style.height = Math.min(240, ta.scrollHeight) + 'px'; refresh(); });
   ta.addEventListener('keydown', (e) => { if (isSendKey(e) && !busy) { e.preventDefault(); send(); } });
-  ta.addEventListener('paste', (e) => { const fs = [...(e.clipboardData ? e.clipboardData.files : [])]; if (fs.length) { e.preventDefault(); addFiles(fs); } });
+  ta.addEventListener('paste', (e) => {
+    const dt = e.clipboardData; if (!dt) return;
+    const fs = [...(dt.files || [])];
+    // Imagens copiadas da web ou print da tela costumam vir em `items` (bitmap), não em `files`
+    if (!fs.length && dt.items) {
+      [...dt.items].forEach((it, i) => {
+        if (it.kind === 'file' && /^image\//i.test(it.type || '')) {
+          const f = it.getAsFile();
+          if (f) { try { Object.defineProperty(f, 'name', { value: f.name && f.name !== 'image.png' ? f.name : `clipboard-${Date.now()}-${i + 1}.${(f.type.split('/')[1] || 'png').replace('jpeg', 'jpg')}` }); } catch (_) { /* nome só de leitura em alguns navegadores */ } fs.push(f); }
+        }
+      });
+    }
+    if (fs.length) { e.preventDefault(); addFiles(fs); }
+  });
   sendBtn.addEventListener('click', send);
 
   const el = h('div', { class: 'composer' }, attachRow, ta, toolsBox);

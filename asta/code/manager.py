@@ -639,6 +639,51 @@ class CodeManager:
                 self.active.add(sid)
                 threading.Thread(target=r.go, daemon=True, name=f"code-{sid}").start()
 
+    @staticmethod
+    def _pack_context(doc: Dict[str, Any], limit: int = 12000) -> str:
+        """Empacota o contexto das execuções anteriores da sessão (o que foi pedido, o que foi feito, arquivos, decisões e pendências) para continuar sem perder o fio quando o modelo tem pouco contexto."""
+        runs = doc.get("runs") or []
+        if not runs:
+            return str(doc.get("context_pack") or "")[:limit]
+        old = str(doc.get("context_pack") or "").strip()
+        keep = runs[-12:]
+        older_n = max(0, len(runs) - len(keep))
+        lines: List[str] = []
+        if old and older_n:
+            lines.append("Resumo anterior da sessão:\n" + old[:3500])
+        elif old and not older_n:
+            # mantém um resumo anterior curto se existir, mas o histórico recente já cobre
+            lines.append("Resumo anterior da sessão:\n" + old[:1200])
+        if older_n and not old:
+            lines.append(f"(mais {older_n} execução(ões) anteriores omitidas)")
+        lines.append("Execuções recentes:")
+        for r in keep:
+            st = str(r.get("status") or "")
+            head = f"- [{st}] {str(r.get('goal', '')).strip()[:220]}"
+            lines.append(head)
+            summ = str(r.get("summary") or "").strip().replace("\n", " ")
+            if summ:
+                lines.append("  resultado: " + summ[:450])
+            files = [f.get("path") for f in (r.get("files") or []) if isinstance(f, dict) and f.get("path")]
+            if files:
+                lines.append("  arquivos: " + ", ".join(files[:12]) + ("…" if len(files) > 12 else ""))
+            checks = r.get("checks") or []
+            if checks:
+                bits = []
+                for c in checks[:6]:
+                    if isinstance(c, dict):
+                        bits.append(f"{c.get('label', '?')}={'ok' if c.get('ok') else 'falhou'}")
+                if bits:
+                    lines.append("  verificações: " + ", ".join(bits))
+        # estado atual conhecido
+        ws = doc.get("workspace") or {}
+        if ws.get("path"):
+            lines.append(f"Projeto: {ws.get('label') or ws.get('path')}")
+        text = "\n".join(lines).strip()
+        if len(text) > limit:
+            text = text[: limit - 20].rstrip() + "\n…"
+        return text
+
     def finished(self, runner: Runner) -> None:
         doc, run = runner.doc, runner.run
         sid = doc["id"]
@@ -651,6 +696,7 @@ class CodeManager:
             doc.setdefault("runs", []).append({"id": run["id"], "goal": run.get("goal", ""), "status": status, "summary": str(run.get("summary", ""))[:1500], "started": run.get("started"), "finished": run.get("finished"),
                                                "files": (run.get("files") or [])[:30], "checks": [{k: c.get(k) for k in ("label", "ok")} for c in run.get("checks", [])]})
             doc["runs"] = doc["runs"][-30:]
+            doc["context_pack"] = self._pack_context(doc)
             rd = self.session_dir(sid) / "runs"
             try:
                 rd.mkdir(parents=True, exist_ok=True)
@@ -738,7 +784,7 @@ class CodeManager:
             raise CodeError(409, "O projeto desta sessão não está disponível.")
         return Workspace(Path(ws["path"]), self.session_dir(sid), copy.deepcopy(doc.get("journal", [])), extra_read=[self.session_dir(sid) / "inputs"])
 
-    def browse(self, sid: str, path: str = ".") -> Dict[str, Any]:
+    def browse(self, sid: str, path: str = ".", limit: int = 1000) -> Dict[str, Any]:
         w = self._ws(sid)
         try:
             p = w.check(path or ".", "read")
@@ -746,6 +792,7 @@ class CodeManager:
             raise CodeError(403, str(exc)) from None
         if not p.is_dir():
             raise CodeError(400, "Não é uma pasta.")
+        limit = max(50, min(int(limit or 1000), 5000))
         items = []
         try:
             for e in sorted(p.iterdir(), key=lambda x: (not x.is_dir(), x.name.lower())):
@@ -758,7 +805,7 @@ class CodeManager:
                 items.append({"name": e.name, "dir": e.is_dir(), "size": size, "path": w.rel(e)})
         except OSError:
             pass
-        return {"path": w.rel(p), "items": items[:500], "truncated": len(items) > 500}
+        return {"path": w.rel(p), "items": items[:limit], "total": len(items), "truncated": len(items) > limit}
 
     def read_file(self, sid: str, path: str) -> Dict[str, Any]:
         w = self._ws(sid)

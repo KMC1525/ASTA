@@ -276,9 +276,17 @@ class Runner:
             r["status"], r["error"] = "failed", str(exc)
             r["summary"] = str(exc)
         except Exception as exc:  # noqa: BLE001
-            traceback.print_exc()
-            r["status"], r["error"] = "failed", str(exc) or exc.__class__.__name__
-            r["summary"] = ("Erro inesperado: " if self.lang == "pt" else "Unexpected error: ") + (str(exc) or exc.__class__.__name__)
+            msg = str(exc) or exc.__class__.__name__
+            is_ctx = exc.__class__.__name__ == "ContextTooLong" or ("context" in msg.lower() and ("length" in msg.lower() or "janela" in msg.lower() or "token" in msg.lower()))
+            if not is_ctx:
+                traceback.print_exc()
+            r["status"], r["error"] = "failed", msg
+            if is_ctx:
+                r["summary"] = ("O contexto ficou grande demais para este modelo: " if self.lang == "pt" else "The context became too large for this model: ") + msg + (
+                    "\n\nDica: diminua o pedido/anexos, use um modelo com janela maior ou continue em uma nova mensagem mais curta (o resumo da sessão já foi guardado)." if self.lang == "pt" else
+                    "\n\nTip: shorten the request/attachments, use a model with a larger context window, or continue with a shorter follow-up message (the session summary is already saved).")
+            else:
+                r["summary"] = ("Erro inesperado: " if self.lang == "pt" else "Unexpected error: ") + msg
         finally:
             with self.lock:
                 r["pendings"], r["now"] = [], ""
@@ -309,7 +317,7 @@ class Runner:
             r["plan"] = plan
             self._agent("planner", "done", "regras (sem IA)")
             return
-        payload = {"goal": goal, "attachments": self.digest, "inputs": self._inputs_list(), "project": self._compact_project(), "conversation": self._conversation(), "environment": self.env,
+        payload = {"goal": goal, "attachments": self.digest, "inputs": self._inputs_list(), "project": self._compact_project(), "conversation": self._conversation(), "context_pack": str(d.get("context_pack") or "")[:8000], "environment": self.env,
                    "tools_available": self.names, "tools_unavailable": self.missing, "mode": d["mode"], "finalize": r.get("finalize"), "effort": self.prof["id"], "max_parallel_workers": self.n_agents, "vision": self.vision}
         sys = self._system("planner")
         obj = self.brain.ask("planner", sys, A.PLAN_INSTR, payload, images=self.input_images or None, max_tokens=2200)
@@ -593,6 +601,9 @@ class Runner:
             payload["attachments"] = self.digest
             payload["attachment_files"] = self._inputs_list()
             payload["conversation"] = self._conversation()
+            packed = str(self.doc.get("context_pack") or "").strip()
+            if packed:
+                payload["context_pack"] = packed[:8000]
         if max_turns - turn <= 3:
             payload["note"] = "You are almost out of actions for this step: wrap up now and finish with an honest summary."
         if last_chance:

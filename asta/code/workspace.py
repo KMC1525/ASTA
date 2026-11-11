@@ -126,7 +126,7 @@ class Workspace:
         p = self.check(path, "read")
         if not p.is_dir():
             raise WorkspaceError(f"«{path}» não é uma pasta.")
-        depth, limit = max(1, min(int(depth or 1), 6)), max(10, min(int(limit or 200), 1000))
+        depth, limit = max(1, min(int(depth or 1), 8)), max(10, min(int(limit or 200), 2000))
         lines: List[str] = []
 
         def walk(d: Path, level: int, prefix: str) -> None:

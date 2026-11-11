@@ -727,6 +727,7 @@ export default {
   'Ensine algo a {n}… (ex.: meu aniversário é em março)': 'Teach {n} something… (e.g. my birthday is in March)',
   'Esquecer esta': 'Forget this one',
   'Mostrando as últimas {n} mensagens desta conversa.': 'Showing the last {n} messages of this conversation.',
+  'Mostrando {n} de {t} itens (pasta muito grande).': 'Showing {n} of {t} items (very large folder).',
   'Demo (sem IA)': 'Demo (no AI)',
   'Chat usando {n}': 'Chat now using {n}',
   'o modelo carregado': 'the loaded model',

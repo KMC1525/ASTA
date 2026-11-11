@@ -401,8 +401,48 @@ def _hf_repo(spec: str) -> str:
 
 def t_hf_search(ctx: Context, a: Dict[str, Any]) -> Result:
     kind = a.get("kind", "model")
-    q = re.sub(r"[^\w .:/+-]", " ", a["query"])[:120]
-    url = f"{HF_ENDPOINT}/api/{kind}s?search={urllib.parse.quote(q)}&limit={int(max(1, min(int(a.get('limit', 10) or 10), 30)))}&sort=downloads&direction=-1"
+    q = str(a.get("query") or "").strip()[:120]
+    limit = int(max(1, min(int(a.get("limit", 10) or 10), 30)))
+    if kind == "model":
+        old_hf = hfmod.HF
+        hfmod.HF = HF_ENDPOINT
+        try:
+            try:
+                # GGUF e perfis/autores (ex.: empero-ai, unsloth, darrellbest, Vortecks, LiquidAI): tenta texto e também formatos originais.
+                rows = hfmod.search(q, ctx.hf_token, limit=limit, kind="text")
+                by = {r["id"]: {**r, "format": "gguf"} for r in rows if isinstance(r, dict) and r.get("id")}
+                for cap in ("text", "image", "video", "sound", "voice", "stt"):
+                    try:
+                        for r in hfmod.search_original(q, ctx.hf_token, cap=cap, limit=max(limit, 20)):
+                            mid = r.get("id")
+                            if not isinstance(mid, str):
+                                continue
+                            row = by.setdefault(mid, {"id": mid, "downloads": 0, "likes": 0, "format": r.get("format", "original")})
+                            row["downloads"] = max(int(row.get("downloads") or 0), int(r.get("downloads") or 0))
+                            row["likes"] = max(int(row.get("likes") or 0), int(r.get("likes") or 0))
+                            row["cap"] = row.get("cap") or cap
+                            row["gguf"] = row.get("gguf") or r.get("gguf")
+                    except ProviderError:
+                        continue
+                rows = sorted(by.values(), key=lambda m: -int(m.get("downloads") or 0))[:limit]
+            except ProviderError:
+                rows = []
+            if rows:
+                out = []
+                for r in rows:
+                    tags = []
+                    if r.get("cap"):
+                        tags.append(str(r["cap"]))
+                    if r.get("gguf"):
+                        tags.append("gguf")
+                    if r.get("format") == "original" and "gguf" not in tags:
+                        tags.append("original")
+                    out.append(f"{r.get('id')}  ↓{r.get('downloads', 0)}  ♥{r.get('likes', 0)}  {' '.join(tags)}".strip())
+                return Result(output="\n".join(out))
+        finally:
+            hfmod.HF = old_hf
+    qsafe = re.sub(r"[^\w .:/+-]", " ", q)[:120]
+    url = f"{HF_ENDPOINT}/api/{kind}s?search={urllib.parse.quote(qsafe)}&limit={limit}&sort=downloads&direction=-1"
     try:
         rows = http.get_json(url, _hf_headers(ctx), timeout=20)
     except ProviderError as exc:
@@ -858,7 +898,7 @@ def _t(name: str, risk: str, doc: str, args: Dict[str, Tuple[str, bool, str]], f
 
 
 TOOLS: Dict[str, Tool] = {t.name: t for t in [
-    _t("list_dir", READ, "List a folder of the project as a tree (depth 1-6).", {"path": ("str", False, "folder, default '.'"), "depth": ("int", False, "1-6"), "limit": ("int", False, "max items"), "hidden": ("bool", False, "show dotfiles")}, t_list_dir),
+    _t("list_dir", READ, "List a folder of the project as a tree (depth 1-8).", {"path": ("str", False, "folder, default '.'"), "depth": ("int", False, "1-8"), "limit": ("int", False, "max items"), "hidden": ("bool", False, "show dotfiles")}, t_list_dir),
     _t("read_file", READ, "Read a text file with line numbers. Use start/end to read a range of a long file.", {"path": ("str", True, "file"), "start": ("int", False, "first line"), "end": ("int", False, "last line"), "max_chars": ("int", False, "default 16000")}, t_read_file),
     _t("search_code", READ, "Regex search through the project's text files (like grep -rn). Returns path:line: text.", {"pattern": ("str", True, "regular expression"), "path": ("str", False, "folder or file"), "glob": ("str", False, "e.g. *.py,*.js"), "ignore_case": ("bool", False, ""), "limit": ("int", False, "max hits"), "context": ("int", False, "lines of context 0-3")}, t_search_code),
     _t("find_files", READ, "Find files by name wildcard (e.g. *.test.js, README*).", {"pattern": ("str", False, "wildcard"), "path": ("str", False, "folder"), "limit": ("int", False, "max results")}, t_find_files),

@@ -13,6 +13,20 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Improved — Chat
 - **Compressed files (ZIP, RAR, 7z, TAR) as attachments:** when you attach an archive in the Chat, ASTA extracts and reads the contents inside (text, documents, images, audio and video) safely to answer you. ZIP and TAR need nothing; RAR and 7z use a system tool (`unrar`, `unar`, `7z`/`7zz`/`7za` or `bsdtar`) when available.
 
+### Fixed / Improved — Code
+- **Context across runs:** each Code session now keeps a **packed summary** of what was already requested and done (goal, result, files and checks from recent runs) and sends it to the Planner and workers in later runs, so long sessions can continue with less context loss (cloud and local models). If a model exceeds its context limit, the session ends with a clearer message and guidance to continue with a shorter follow-up (the summary is already saved).
+- **Images pasted into the prompt box:** pasting an image from the clipboard (a screenshot or an image copied from the web/PC) into the Code prompt box now attaches it as a file, like in the Chat composer.
+- **Large codebases:** the project file browser now handles folders with many more items (with a notice when the list is cut off), navigation still works through folders/subfolders, and `.md`/`.markdown` files are rendered when opened in the viewer.
+- **Hugging Face model search in Code:** Code's `hf_search` tool now also searches by **profiles/authors** (useful for profiles such as `empero-ai`, `unsloth`, `darrellbest`, `Vortecks` and `LiquidAI`) and merges GGUF and original-format results (text, image, video, sound, voice and transcription), instead of a simple name-only search.
+
+### Improved — native core and local models
+- **Local model planning (Rust + Python mirror, same ABI):** the native LLM planner uses larger prompt batches when GPU/RAM headroom allows, enables flash attention more aggressively in cases where it helps (GPU, quantized KV cache or long-running use) and adjusts prompt-cache budgeting for long sessions, keeping the same API behavior.
+
+### Honest limits (unverified)
+- **Not tested on real NVIDIA 20/30/40/50 series hardware** nor in continuous multi-hour/day local runs; performance gains in those conditions were not measured.
+- Every reported case of using **LM Studio** to create/edit code directly in a user's GitHub repositories, and every real-world multi-agent orchestration combination, was **not reproduced and validated end to end** with real models and repositories.
+- Hugging Face profile search depends on Hugging Face API results at query time; the exact availability of “all models” from a profile may vary. Installers and release artifacts were **not run on real devices** by the author of this change.
+
 ## [0.20.1] — 2026-11-10
 
 ### Added — every mode: a team of 2 agents in parallel

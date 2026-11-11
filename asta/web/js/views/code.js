@@ -431,18 +431,33 @@ export default async function render(root, ctx) {
   }
   async function filesDialog() {
     let cur = '.';
-    const crumbs = h('div', { class: 'cd-crumbs mono small' }), list = h('div', { class: 'cd-flist' }), view = h('pre', { class: 'cd-fview' }, t('Escolha um arquivo.'));
+    const crumbs = h('div', { class: 'cd-crumbs mono small' }), list = h('div', { class: 'cd-flist' }), view = h('div', { class: 'cd-fview-wrap' }, h('pre', { class: 'cd-fview' }, t('Escolha um arquivo.')));
+    function showFile(r, path) {
+      if (r.binary) { view.replaceChildren(h('pre', { class: 'cd-fview' }, t('Arquivo binário ({n} bytes).', { n: r.size }))); return; }
+      const text = String(r.text || '') + (r.truncated ? '\n…' : '');
+      const md = /\.(md|markdown)$/i.test(path || r.path || '');
+      if (md) {
+        const body = h('div', { class: 'md cd-fmd' });
+        renderMarkdown(body, text);
+        view.replaceChildren(body);
+      } else {
+        view.replaceChildren(h('pre', { class: 'cd-fview' }, text));
+      }
+    }
     async function go(path) {
       cur = path;
       try {
-        const r = await api('/api/code/sessions/' + st.sel + '/browse?path=' + encodeURIComponent(path));
+        const r = await api('/api/code/sessions/' + st.sel + '/browse?path=' + encodeURIComponent(path) + '&limit=2000');
         crumbs.textContent = '/' + (r.path === '.' ? '' : r.path);
-        list.replaceChildren(...(r.path !== '.' ? [h('button', { class: 'cd-fi2', type: 'button', onclick: () => go(r.path.split('/').slice(0, -1).join('/') || '.') }, icon('arrow', 13), '..')] : []),
-          ...r.items.map((it) => h('button', { class: 'cd-fi2', type: 'button', dataset: { path: it.path }, onclick: () => (it.dir ? go(it.path) : openF(it.path)) }, icon(it.dir ? 'foldero' : 'file', 13), h('span', null, it.name))));
+        const nodes = [...(r.path !== '.' ? [h('button', { class: 'cd-fi2', type: 'button', onclick: () => go(r.path.split('/').slice(0, -1).join('/') || '.') }, icon('arrow', 13), '..')] : []),
+          ...r.items.map((it) => h('button', { class: 'cd-fi2', type: 'button', dataset: { path: it.path }, onclick: () => (it.dir ? go(it.path) : openF(it.path)) }, icon(it.dir ? 'foldero' : 'file', 13), h('span', null, it.name)))];
+        if (r.truncated) nodes.push(h('div', { class: 'dim small', style: { padding: '6px 8px' } }, t('Mostrando {n} de {t} itens (pasta muito grande).', { n: r.items.length, t: r.total || r.items.length })));
+        list.replaceChildren(...nodes);
       } catch (e) { list.textContent = e.message; }
     }
     async function openF(path) {
-      try { const r = await api('/api/code/sessions/' + st.sel + '/file?path=' + encodeURIComponent(path)); view.textContent = r.binary ? t('Arquivo binário ({n} bytes).', { n: r.size }) : r.text + (r.truncated ? '\n…' : ''); } catch (e) { view.textContent = e.message; }
+      view.replaceChildren(h('pre', { class: 'cd-fview' }, t('Carregando…')));
+      try { const r = await api('/api/code/sessions/' + st.sel + '/file?path=' + encodeURIComponent(path)); showFile(r, path); } catch (e) { view.replaceChildren(h('pre', { class: 'cd-fview' }, e.message)); }
     }
     await go('.');
     await modal(t('Arquivos do projeto'), h('div', { class: 'cd-fbrowser' }, crumbs, h('div', { class: 'cd-fcols' }, list, view)), [{ label: t('Fechar'), value: null, cls: 'primary' }]);

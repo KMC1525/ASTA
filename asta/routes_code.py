@@ -184,7 +184,13 @@ class CodeRoutes:
 
     def r_browse(self, req, sid: str) -> None:
         try:
-            req.json(self.m.browse(sid, req.query.get("path", ["."])[0]))
+            q = req.query
+            limit = q.get("limit", ["1000"])[0]
+            try:
+                limit = int(limit)
+            except (TypeError, ValueError):
+                limit = 1000
+            req.json(self.m.browse(sid, q.get("path", ["."])[0], limit))
         except CodeError as exc:
             raise _http(exc) from None
 
