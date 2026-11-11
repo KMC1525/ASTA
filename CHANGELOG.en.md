@@ -5,6 +5,44 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > English translation of [`CHANGELOG.md`](CHANGELOG.md) (the Portuguese original is the reference). Mentions of Portuguese UI strings keep the original text in quotes.
 
+## [0.22.0] — 2026-11-11
+
+### Added — Data mode: multimodal databases and datasets with AI
+- **New "Data" mode** to **create, generate, manage, edit, view, organize and merge** databases and datasets with the help of AI agents. Each item lives in an open folder on the user's computer (`~/.asta/data/<kind>/<id>/`: `meta.json`, `schema.json`, `records.json`, `exports/`, `history/`).
+- **Seven tabs:** **Main**, **Databases**, **Datasets**, **Synthetic data**, **Web scraping**, **Upgrade** and **Export** (`#/data/main`, `#/data/databases`, `#/data/datasets`, `#/data/synthetic_data`, `#/data/web_scraping`, `#/data/upgrade`, `#/data/export`).
+- **Databases and Datasets:** create items with a name, description and tags; edit records and schema as JSON; **view** them in a table with a **filter** and **sorting by any column**; **duplicate** them; and **merge** two items (the target keeps its data and receives the source's records, with the schemas united by field name). Every change is snapshotted (the last 30 can be restored).
+- **Synthetic data (at scale):** generation from **multimodal prompts** (text plus attached files and images) with up to **5,000 records**, in **single data type** or **several types/modalities at once**. The AI works in batches (the request is split), so large counts really are produced at scale; the schema the AI proposes is kept with the item. **Without an AI**, an honest deterministic generator fills the same schema with the requested types (text, number, integer, boolean, date, URL, category, JSON, image, audio, video, file).
+- **Web scraping (at scale):** up to **500 links** per request (one per line), with a multimodal extraction prompt; pages are read in parallel and the records are extracted by the AI. The mode **reads each site's `robots.txt` and does not download what the site forbids**, and refuses private and local addresses.
+- **Open-source (non-commercial) use notice:** the scraping tab shows the notice that the use is **open-source and non-commercial only** (respecting terms of use, `robots.txt`, laws and the rights of the sources) and **asks for confirmation** before the first scrape — the API also requires the acknowledgement.
+- **Upgrade:** **import** an existing database/dataset (`.json`, `.jsonl`/`.ndjson`, `.csv`, `.tsv`, `.xml`) as a new item **or inside an item that already exists** (records are added up and the columns join the schema) and **improve** it with AI: enrich the existing records (keeping their ids), **add more data** and **generate synthetic data inside the item**, with one data type or several at once. Imported columns are added to the item's schema instead of being lost.
+- **Export:** export in **many formats while preserving the structure** — **JSON** (with the schema), **JSONL/NDJSON**, **CSV**, **TSV**, **XML**, **HTML**, **Markdown** and **SQLite** (`.db`, with meta and schema) — for one item or **all of them at once**, with file downloads.
+- **Agent team and effort** (1 · 4 · … · 32 agents and eight levels) in every AI action of the mode, as in every ASTA section. Defaults in *Configuration → Data*.
+- Endpoints: `GET /api/data/catalog`, `GET /api/data/status`, `GET/POST /api/data/items`, `GET/PUT/DELETE /api/data/items/<kind>/<id>`, `POST .../duplicate`, `POST .../records`, `POST .../merge`, `GET .../history`, `POST .../history/restore`, `POST .../import`, `POST .../export`, `GET .../exports`, `GET .../exports/<file>`, `POST /api/data/upgrade/import`, `POST .../synthetic`, `POST .../scrape`, `POST .../upgrade`.
+
+### Fixed — Data mode
+- **The AI was not actually being called in the Data mode:** the provider call used a non-existent method (`generate`), so every synthetic generation, extraction and upgrade fell back to the deterministic generator, with no AI at all. It now uses the same `call_json` as the other sections (with `json_mode`, repair attempts and the agent table).
+- **Attachments from multimodal prompts never reached the AI:** reading the attachments used a non-existent function and failed silently. Attachments are now read (`attachments.analyze`), turned into a text digest, and the images are sent to the AI (vision) when the provider accepts them.
+- **Imported columns disappeared:** when appending a file to an existing item, the item's schema did not receive the file's fields. The schema is now the union of both.
+- **Import and export formats:** `.ndjson` and `.xml` (import and export), plus HTML and Markdown on export.
+
+### Fixed — the whole WebUI did not load
+- **Syntax error in `asta/web/js/views/config.js`:** a closing parenthesis was missing at the end of the Memory tab, and the file was not a valid JavaScript module at all. Since the Configuration is loaded by the app, **this broke the entire WebUI** (no screen opened). The file now passes the syntax check of every module (`tests.test_runtime`).
+
+### Fixed — two endpoints returned error 500
+- **Memory (`POST /api/memory/item`):** the server passed the timestamp (`ts`) to `Store.remember()`, which did not accept the argument — the request broke with a `TypeError` and the note was never saved. The parameter now exists and is passed on to the memory record.
+- **Profile (`GET /api/profile/export`):** the export asked for extra headers (`Content-Disposition`) that the server's byte sender did not know how to reply with — the request broke with a `TypeError` and the download did not exist. The byte sender now accepts extra headers, as the file sender already did.
+
+### Changed
+- Version 0.22.0 (`asta/__init__.py`). READMEs and changelogs updated (pt/en) with the Data mode section.
+
+### Honest limits (unverified)
+- **Scraping was not exercised against real sites** in this change: `robots.txt` and page reading were tested with a simulated network and fake providers, not with a real site in production. The open-source use notice remains the user's responsibility.
+- **The browser tests** (Node + Playwright + Chromium) were **not run** in this environment; a browser test for the Data mode was written (`tests/browser/data_ui.js`, registered in `tests/test_browser.py`), which runs in CI and has **not been executed here**. `python -m unittest tests.test_data` (42 tests), `python -m unittest tests.test_memory_profile`, `node tests/js/i18n_check.mjs` and the full suite (`python -m unittest discover -s tests -t .`, 1,335 tests) were run and pass, with **4 failures that already failed before this change** (canvas/GGUF, links/media, the Scriber prompt and a hub network check) and no new failure.
+- **The Data mode's real AI call was not exercised against a real provider** here (the tests use a fake provider): data quality depends on the model.
+- **The Rust core was not changed** (the Data mode is pure Python) and the Rust tests (`cargo test`) were not run here.
+- **No verification on real hardware, real macOS/Windows or mobile devices**; the installers were neither built nor tested on real machines.
+- **No push, merge or release publication was done** by the author of this change (requires explicit authorization).
+
 ## [0.21.1] — 2026-11-11
 
 ### Improved — internal prompts (AI across every mode)

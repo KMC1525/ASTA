@@ -19,3 +19,12 @@
 .dt-actions { display: flex; gap: 6px; flex-wrap: wrap; }
 .dt-kv { display: grid; grid-template-columns: 140px 1fr; gap: 4px 8px; font-size: 13px; }
 .dt-section { border: 1px solid var(--line, #333); border-radius: 12px; padding: 12px; background: var(--panel, #141414); }
+.dt-tags { display: flex; gap: 4px; flex-wrap: wrap; }
+.dt-th { background: none; border: 0; color: inherit; font: inherit; font-weight: 600; cursor: pointer; padding: 0; display: inline-flex; align-items: center; gap: 2px; }
+.dt-th:hover { color: var(--accent, #6cf); }
+.dt-bar { height: 4px; border-radius: 3px; background: var(--panel-2, #1e1e1e); overflow: hidden; max-width: 360px; }
+.dt-bar > i { display: block; height: 100%; width: 0; background: var(--accent, #6cf); transition: width .25s ease; }
+.dt-composer { margin-top: 2px; }
+.dt-composer .composer { border: 1px solid var(--line, #333); border-radius: 10px; padding: 6px; }
+.dt-composer textarea { width: 100%; min-height: 76px; background: transparent; border: 0; color: inherit; font: inherit; resize: vertical; }
+.dt-composer textarea:focus { outline: none; }

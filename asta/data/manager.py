@@ -287,9 +287,25 @@ class DataManager:
             raise DataError("Arquivo muito grande para importar.", 413)
         fmt = self._detect_format(name)
         records, schema = self._parse_import(fmt, raw)
+        current = self.get(kind, item_id)
         if mode == "append":
-            return self.append_records(kind, item_id, records, "import")
-        return self.save_records(kind, item_id, records, schema or self.get(kind, item_id).get("schema"), "import")
+            # os campos do arquivo importado entram no schema do item (união), senão as colunas novas sumiriam
+            merged_schema = self._merge_schema(current.get("schema"), schema)
+            base = current.get("records") if isinstance(current.get("records"), list) else []
+            return self.save_records(kind, item_id, base + (records or []), merged_schema, "import")
+        return self.save_records(kind, item_id, records, schema or current.get("schema"), "import")
+
+    @staticmethod
+    def _merge_schema(current: Any, extra: Any) -> Dict[str, Any]:
+        """Une dois schemas pelo nome do campo (o atual ganha; o importado só acrescenta)."""
+        base = current if isinstance(current, dict) else {"fields": []}
+        have = {f.get("name") for f in (base.get("fields") or []) if isinstance(f, dict)}
+        fields = [f for f in (base.get("fields") or []) if isinstance(f, dict)]
+        for f in (extra or {}).get("fields", []) if isinstance(extra, dict) else []:
+            if isinstance(f, dict) and f.get("name") and f["name"] not in have:
+                have.add(f["name"])
+                fields.append(f)
+        return clean_schema({"fields": fields})
 
     def _detect_format(self, name: str) -> str:
         n = (name or "").lower()
@@ -334,7 +350,58 @@ class DataManager:
             recs = [dict(row) for row in reader]
             fields = [{"name": h, "type": "text", "description": "", "required": False} for h in (reader.fieldnames or [])]
             return recs, {"fields": fields} if fields else None
+        if fmt == "xml":
+            recs, fields = self._parse_xml(text_data)
+            return recs, {"fields": fields} if fields else None
         raise DataError("Formato de importação não suportado.")
+
+    def _parse_xml(self, text_data: str) -> Tuple[List[Any], List[Dict[str, Any]]]:
+        """XML genérico: cada elemento repetido vira um registro; os atributos e os filhos viram campos."""
+        try:
+            import xml.etree.ElementTree as ET
+
+            root = ET.fromstring(text_data or "<root/>")
+        except Exception:
+            raise DataError("XML inválido.") from None
+
+        def tag_of(el: Any) -> str:
+            return el.tag.split("}")[-1] if isinstance(el.tag, str) else "item"
+
+        # a lista de registros são os filhos repetidos do primeiro nível que têm o mesmo nome
+        groups: Dict[str, List[Any]] = {}
+        for child in list(root):
+            groups.setdefault(tag_of(child), []).append(child)
+        rows: List[Any] = []
+        names = list(groups.keys())
+        key = max(names, key=lambda n: len(groups[n])) if names else ""
+        items = groups.get(key, [])
+        if not items:
+            items = [root]
+        for el in items:
+            row: Dict[str, Any] = {}
+            for attr, val in list(el.attrib.items())[:200]:
+                row[str(attr)[:80]] = self._clean_value(val)
+            for child in list(el)[:200]:
+                name = tag_of(child)[:80]
+                value = (child.text or "").strip()
+                if list(child):
+                    value = {tag_of(g): (g.text or "").strip() for g in list(child)[:200]}
+                if name in row:
+                    if not isinstance(row[name], list):
+                        row[name] = [row[name]]
+                    row[name].append(value)
+                else:
+                    row[name] = value
+            rows.append(row)
+        fields: List[Dict[str, Any]] = []
+        seen = set()
+        for row in rows[:50]:
+            if isinstance(row, dict):
+                for name in row.keys():
+                    if name not in seen:
+                        seen.add(name)
+                        fields.append({"name": name, "type": "text", "description": "", "required": False})
+        return rows, fields
 
     def list_exports(self, kind: str, item_id: str) -> List[Dict[str, Any]]:
         self.meta(kind, item_id)
@@ -348,6 +415,8 @@ class DataManager:
 
     def export(self, kind: str, item_id: str, fmt: str) -> Dict[str, Any]:
         fmt = str(fmt or "json").lower().strip()
+        if fmt == "ndjson":
+            fmt = "jsonl"
         if fmt not in EXPORT_FORMATS:
             raise DataError("Formato de exportação inválido.")
         with self.lock:
@@ -376,8 +445,83 @@ class DataManager:
                         w.writerow({c: self._cell(row.get(c)) for c in cols})
             elif fmt == "sqlite":
                 self._export_sqlite(out_path, kind, meta, schema, records)
+            elif fmt == "xml":
+                self._export_xml(out_path, kind, meta, schema, records)
+            elif fmt == "html":
+                self._export_html(out_path, meta, schema, records)
+            elif fmt == "md":
+                self._export_markdown(out_path, meta, schema, records)
             self._touch(kind, item_id)
             return {"name": out_path.name, "path": str(out_path), "format": fmt, "records": len(records)}
+
+    # ------------------------------------------------------------------ exportadores de texto
+    def _rows(self, schema: Dict[str, Any], records: List[Any]) -> List[Dict[str, Any]]:
+        """Os registros como linhas (dicts) — um registro que não é objeto vira «value»."""
+        return [r if isinstance(r, dict) else {"value": r} for r in records]
+
+    def _export_xml(self, path: Path, kind: str, meta: Dict[str, Any], schema: Dict[str, Any], records: List[Any]) -> None:
+        import xml.etree.ElementTree as ET
+
+        root = ET.Element(kind, {"name": str(meta.get("name", "")), "records": str(len(records))})
+        fields = ET.SubElement(root, "fields")
+        for f in (schema.get("fields") or []):
+            if isinstance(f, dict) and f.get("name"):
+                ET.SubElement(fields, "field", {"name": str(f["name"]), "type": str(f.get("type") or "text")})
+        items = ET.SubElement(root, "records")
+        for row in self._rows(schema, records):
+            el = ET.SubElement(items, "record")
+            for key, val in list(row.items())[:200]:
+                name = str(key)
+                child = ET.SubElement(el, name.replace(" ", "_"))
+                if isinstance(val, (dict, list)):
+                    child.text = json.dumps(val, ensure_ascii=False)
+                    child.set("type", "json")
+                else:
+                    child.text = "" if val is None else str(val)
+                    if isinstance(val, bool):
+                        child.set("type", "boolean")
+                    elif isinstance(val, int):
+                        child.set("type", "integer")
+                    elif isinstance(val, float):
+                        child.set("type", "number")
+        ET.ElementTree(root).write(path, encoding="utf-8", xml_declaration=True)
+
+    def _export_html(self, path: Path, meta: Dict[str, Any], schema: Dict[str, Any], records: List[Any]) -> None:
+        cols = self._columns(schema, records)
+        head = "".join(f"<th>{self._esc(c)}</th>" for c in cols)
+        body = []
+        for row in self._rows(schema, records):
+            cells = "".join(f"<td>{self._esc(self._cell(row.get(c)))}</td>" for c in cols)
+            body.append(f"<tr>{cells}</tr>")
+        html = (
+            "<!doctype html>\n<html lang=\"pt-BR\">\n<head>\n<meta charset=\"utf-8\">\n"
+            f"<title>{self._esc(meta.get('name') or 'ASTA Data')}</title>\n"
+            "<style>body{font-family:system-ui,sans-serif;margin:24px;background:#0f1115;color:#e8e8e8}"
+            "table{border-collapse:collapse;width:100%;font-size:13px}th,td{border:1px solid #2a2f3a;padding:6px 8px;text-align:left;vertical-align:top}"
+            "th{background:#1a1f28}caption{text-align:left;font-weight:600;padding-bottom:8px}</style>\n</head>\n<body>\n"
+            f"<table>\n<caption>{self._esc(meta.get('name') or '')} — {len(records)} registro(s)</caption>\n"
+            f"<thead><tr>{head}</tr></thead>\n<tbody>\n" + "\n".join(body) + "\n</tbody>\n</table>\n</body>\n</html>\n"
+        )
+        path.write_text(html, encoding="utf-8")
+
+    def _export_markdown(self, path: Path, meta: Dict[str, Any], schema: Dict[str, Any], records: List[Any]) -> None:
+        cols = self._columns(schema, records)
+        lines = [f"# {meta.get('name') or 'ASTA Data'}", "", f"Registros: {len(records)}", "",
+                 "| " + " | ".join(self._md(c) for c in cols) + " |",
+                 "| " + " | ".join("---" for _ in cols) + " |"]
+        for row in self._rows(schema, records):
+            lines.append("| " + " | ".join(self._md(self._cell(row.get(c))) for c in cols) + " |")
+        path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    @staticmethod
+    def _esc(v: Any) -> str:
+        s = "" if v is None else str(v)
+        return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;").replace('"', "&quot;")
+
+    @staticmethod
+    def _md(v: Any) -> str:
+        s = "" if v is None else str(v)
+        return s.replace("|", "\\|").replace("\r", " ").replace("\n", " ")
 
     def _columns(self, schema: Dict[str, Any], records: List[Any]) -> List[str]:
         cols = [f["name"] for f in (schema.get("fields") or []) if isinstance(f, dict) and f.get("name")]

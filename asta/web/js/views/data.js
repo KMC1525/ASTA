@@ -4,18 +4,27 @@ import { api, events } from '../api.js';
 import { t } from '../i18n.js';
 import { go, state } from '../main.js';
 import { teamPicker } from '../team_ui.js';
-import { confirmDialog, fmtBytes, h, icon, modal, select, toast } from '../ui.js';
+import { confirmDialog, h, icon, modal, select, toast } from '../ui.js';
+import { createComposer } from './composer.js';
 
 const TABS = [
   ['main', 'Main', 'home'],
   ['databases', 'Databases', 'storage'],
   ['datasets', 'Datasets', 'folder'],
-  ['synthetic', 'Synthetic data', 'sparkle'],
-  ['scraping', 'Web scraping', 'globe'],
+  ['synthetic_data', 'Synthetic data', 'sparkle'],
+  ['web_scraping', 'Web scraping', 'globe'],
   ['upgrade', 'Upgrade', 'refresh'],
   ['export', 'Export', 'download'],
 ];
 const TAB_IDS = TABS.map((x) => x[0]);
+
+const EXPORT_FORMATS = [
+  ['json', 'JSON'], ['jsonl', 'JSONL / NDJSON'], ['ndjson', 'NDJSON'], ['csv', 'CSV'], ['tsv', 'TSV'],
+  ['xml', 'XML'], ['html', 'HTML'], ['md', 'Markdown'], ['sqlite', 'SQLite (.db)'],
+];
+const SYNTH_MODES = [['single', t('Um tipo de dado')], ['multi', t('Vários tipos/modalidades')]];
+const MAX_SYNTH = 5000;
+const MAX_URLS = 500;
 
 function parse() {
   const m = location.hash.match(/^#\/data(?:\/([\w-]+))?/);
@@ -39,6 +48,7 @@ function renderItemCard(it, onChanged) {
     h('div', { class: 'nm' }, it.name || it.id),
     h('div', { class: 'dt-meta' }, (it.kind === 'database' ? t('Database') : t('Dataset')) + ' · ' + (it.records || 0) + ' ' + t('registros') + ' · ' + (it.fields || 0) + ' ' + t('campos')),
     it.description ? h('div', { class: 'small muted' }, it.description) : null,
+    (it.tags && it.tags.length) ? h('div', { class: 'dt-tags' }, ...it.tags.map((x) => h('span', { class: 'chip' }, x))) : null,
     h('div', { class: 'dt-actions' },
       h('button', { class: 'btn sm', type: 'button', onclick: open }, icon('edit', 13), t('Abrir')),
       h('button', { class: 'btn sm ghost', type: 'button', onclick: async () => {
@@ -50,8 +60,9 @@ function renderItemCard(it, onChanged) {
       } }, icon('trash', 13), t('Apagar'))));
 }
 
-function recordsTable(records, schema) {
-  const recs = Array.isArray(records) ? records.slice(0, 200) : [];
+// ------------------------------------------------------------------ tabela de registros (visualizar/organizar)
+function recordsTable(records, schema, opt = {}) {
+  const recs = Array.isArray(records) ? records : [];
   const cols = [];
   const seen = new Set();
   const sfields = (schema && schema.fields) || [];
@@ -60,27 +71,61 @@ function recordsTable(records, schema) {
     if (r && typeof r === 'object' && !Array.isArray(r)) for (const k of Object.keys(r)) { if (!seen.has(k)) { seen.add(k); cols.push(k); } }
   }
   if (!cols.length) cols.push('value');
-  const head = h('tr', null, ...cols.map((c) => h('th', null, c)));
-  const body = recs.map((r) => h('tr', null, ...cols.map((c) => {
+  const sortKey = opt.sortKey || '';
+  const dir = opt.sortDir === 'desc' ? -1 : 1;
+  const cell = (r, c) => {
     let v = r && typeof r === 'object' && !Array.isArray(r) ? r[c] : (c === 'value' ? r : '');
-    if (v && typeof v === 'object') try { v = JSON.stringify(v); } catch (e) { v = String(v); }
-    return h('td', null, h('div', { class: 'dt-rec' }, v == null ? '' : String(v)));
-  })));
+    if (v && typeof v === 'object') { try { v = JSON.stringify(v); } catch (e) { v = String(v); } }
+    return v == null ? '' : String(v);
+  };
+  const shown = [...recs].sort((a, b) => {
+    if (!sortKey) return 0;
+    const x = cell(a, sortKey), y = cell(b, sortKey);
+    const nx = Number(x), ny = Number(y);
+    if (x !== '' && y !== '' && !isNaN(nx) && !isNaN(ny)) return (nx - ny) * dir;
+    return x.localeCompare(y, undefined, { numeric: true }) * dir;
+  }).slice(0, opt.limit || 200);
+  const head = h('tr', null, ...cols.map((c) => h('th', null,
+    h('button', { class: 'dt-th', type: 'button', title: t('Ordenar por {c}', { c }), onclick: () => opt.onSort && opt.onSort(c) },
+      c, sortKey === c ? h('span', { class: 'muted' }, dir === 1 ? ' ▲' : ' ▼') : null))));
+  const body = shown.map((r) => h('tr', null, ...cols.map((c) => h('td', null, h('div', { class: 'dt-rec' }, cell(r, c))))));
   return h('div', { class: 'dt-table-wrap' }, h('table', { class: 'dt-table' }, h('thead', null, head), h('tbody', null, ...body)));
 }
 
+// ------------------------------------------------------------------ diálogo do item (ver/editar/organizar)
 async function openItemDialog(kind, id, onChanged) {
   let data;
   try { data = await api(`/api/data/items/${kind}/${id}`); } catch (e) { toast(e.message, 'err'); return; }
+  const filter = h('input', { placeholder: t('Filtrar registros…'), style: { flex: '1', minWidth: '160px' } });
+  let sortKey = '';
+  let sortDir = 'asc';
+  const tableBox = h('div');
   const info = h('div', { class: 'dt-kv' },
     h('div', { class: 'muted' }, t('Tipo')), h('div', null, kind === 'database' ? t('Database') : t('Dataset')),
     h('div', { class: 'muted' }, t('Registros')), h('div', null, String((data.records || []).length)),
     h('div', { class: 'muted' }, t('Campos')), h('div', null, String(((data.schema || {}).fields || []).length)));
   const recs = h('textarea', { style: { width: '100%', minHeight: '220px', fontFamily: 'monospace', fontSize: '12px' } }, JSON.stringify(data.records || [], null, 2));
   const schemaBox = h('textarea', { style: { width: '100%', minHeight: '120px', fontFamily: 'monospace', fontSize: '12px' } }, JSON.stringify(data.schema || { fields: [] }, null, 2));
+
+  const paint = () => {
+    const all = data.records || [];
+    const q = (filter.value || '').trim().toLowerCase();
+    const rows = q ? all.filter((r) => JSON.stringify(r).toLowerCase().includes(q)) : all;
+    tableBox.replaceChildren(
+      h('div', { class: 'row', style: { gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' } },
+        filter,
+        h('span', { class: 'muted small' }, t('{n} de {m} registro(s)', { n: rows.length, m: all.length }))),
+      recordsTable(rows, data.schema || {}, {
+        sortKey, sortDir,
+        onSort: (c) => { if (sortKey === c) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = c; sortDir = 'asc'; } paint(); },
+      }));
+  };
+  filter.addEventListener('input', paint);
+  paint();
+
   const body = h('div', { class: 'col', style: { gap: '10px', minWidth: 'min(900px,90vw)' } },
     h('h3', { style: { margin: 0 } }, (data.meta && data.meta.name) || id), info,
-    h('b', null, t('Visualização (amostra)')), recordsTable(data.records || [], data.schema || {}),
+    h('b', null, t('Visualização (amostra)')), tableBox,
     h('b', null, t('Registros (JSON)')), recs,
     h('b', null, t('Schema (JSON)')), schemaBox);
   const res = await modal(t('Database/Dataset'), body, [
@@ -136,13 +181,33 @@ async function mergeDialog(onChanged) {
 
 function jobWatcher(jobId, onDone) {
   const box = h('div', { class: 'muted small' }, t('Executando...'));
+  const bar = h('div', { class: 'dt-bar' }, h('i'));
+  const wrap = h('div', { class: 'col', style: { gap: '6px' } }, box, bar);
   events(`/api/jobs/${jobId}/events`, {
     stage: (ev) => { box.textContent = ev.message || ev.stage || t('Executando...'); },
-    done: (ev) => { box.textContent = t('Concluído.'); toast(t('Concluído'), 'ok'); onDone && onDone(ev); },
+    progress: (ev) => {
+      if (ev.message) box.textContent = ev.message;
+      if (ev.total) bar.firstChild.style.width = Math.round((ev.done / ev.total) * 100) + '%';
+    },
+    done: (ev) => { box.textContent = t('Concluído.'); bar.firstChild.style.width = '100%'; toast(t('Concluído'), 'ok'); onDone && onDone(ev); },
     error: (ev) => { box.textContent = ev.error || t('Erro'); toast(ev.error || t('Erro'), 'err'); onDone && onDone(ev); },
     end: () => {},
   });
-  return box;
+  return wrap;
+}
+
+// ------------------------------------------------------------------ composição do prompt (multimodal: anexos)
+function promptComposer(placeholder, rows = 5) {
+  const cmp = createComposer({
+    placeholder,
+    sendLabel: t('Enviar'),
+    sendTitle: t('Enviar'),
+    allowEmpty: false,
+    onSend: () => {},
+  });
+  cmp.ta.rows = rows;   // o compositor fixa 2 linhas; aqui o prompt merece mais espaço
+  cmp.el.classList.add('dt-composer');
+  return cmp;
 }
 
 export default async function render(root, ctx) {
@@ -162,8 +227,8 @@ export default async function render(root, ctx) {
     if (tab === 'main') return paintMain();
     if (tab === 'databases') return paintKind('database');
     if (tab === 'datasets') return paintKind('dataset');
-    if (tab === 'synthetic') return paintSynthetic();
-    if (tab === 'scraping') return paintScraping();
+    if (tab === 'synthetic_data') return paintSynthetic();
+    if (tab === 'web_scraping') return paintScraping();
     if (tab === 'upgrade') return paintUpgrade();
     if (tab === 'export') return paintExport();
   }
@@ -201,27 +266,33 @@ export default async function render(root, ctx) {
 
   function paintSynthetic() {
     const sel = itemSelect(items, 'dt-synth-item');
-    const prompt = h('textarea', { placeholder: t('Descreva os dados sintéticos que deseja gerar (use prompts multimodais; você pode citar anexos e modalidades).'), rows: 6, style: { width: '100%' } });
-    const count = h('input', { type: 'number', min: 1, max: 500, value: cfg.synthetic_count || 20 });
-    const modeSel = select([['single', t('Um tipo de dado')], ['multi', t('Vários tipos/modalidades')]], cfg.synthetic_mode || 'single', () => {}, { id: 'dt-synth-mode' });
+    const cmp = promptComposer(t('Descreva os dados sintéticos que deseja gerar (use prompts multimodais; anexe arquivos/imagens e cite modalidades).'), 6);
+    const count = h('input', { type: 'number', min: 1, max: MAX_SYNTH, value: cfg.synthetic_count || 20 });
+    const modeSel = select(SYNTH_MODES, cfg.synthetic_mode || 'single', () => {}, { id: 'dt-synth-mode' });
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-synth-team', defaultEffort: 'high' });
     const status = h('div');
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset.'), 'err');
+      if (!cmp.text().trim()) return toast(t('Escreva o prompt de geração.'), 'err');
       const [k, id] = sel.value.split(':');
       const tm = picker.get ? picker.get() : teamCfg;
+      const n = Math.max(1, Math.min(parseInt(count.value || '20', 10) || 20, MAX_SYNTH));
       try {
-        const r = await api(`/api/data/items/${k}/${id}/synthetic`, { method: 'POST', body: { prompt: prompt.value, count: parseInt(count.value || '20', 10), mode: modeSel.value, team: tm } });
+        const r = await api(`/api/data/items/${k}/${id}/synthetic`, {
+          method: 'POST',
+          body: { prompt: cmp.text(), count: n, mode: modeSel.value, team: tm, attachment_ids: cmp.fileIds() },
+        });
         status.replaceChildren(jobWatcher(r.job_id, refresh));
       } catch (e) { toast(e.message, 'err'); }
     };
+    cmp.configure({ onSend: run });
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Synthetic data')),
         h('p', { class: 'muted small', style: { margin: 0 } }, t('Gere dados sintéticos em massa com prompts multimodais e agentes de IA para databases e datasets (um tipo ou vários tipos/modalidades).')),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino (database/dataset)')), sel),
-        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt')), prompt),
+        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt')), cmp.el),
         h('div', { class: 'grid2' },
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade')), count),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
@@ -233,28 +304,38 @@ export default async function render(root, ctx) {
   function paintScraping() {
     const sel = itemSelect(items, 'dt-scrape-item');
     const urls = h('textarea', { placeholder: t('Um link por linha (sites ou qualquer tipo de link http/https).'), rows: 6, style: { width: '100%' } });
-    const prompt = h('textarea', { placeholder: t('O que extrair/estruturar a partir das páginas (prompt multimodal de extração).'), rows: 4, style: { width: '100%' } });
+    const cmp = promptComposer(t('O que extrair/estruturar a partir das páginas (prompt multimodal de extração).'), 4);
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-scrape-team', defaultEffort: 'high' });
     const status = h('div');
+    const ack = h('input', { type: 'checkbox', id: 'dt-scrape-ack' });
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset.'), 'err');
-      const list = urls.value.split(/\n+/).map((s) => s.trim()).filter(Boolean);
+      if (!ack.checked) return toast(t('Confirme o aviso de uso open source para continuar.'), 'err');
+      const list = urls.value.split(/\n+/).map((s) => s.trim()).filter(Boolean).slice(0, MAX_URLS);
       if (!list.length) return toast(t('Informe ao menos um link.'), 'err');
       const [k, id] = sel.value.split(':');
       const tm = picker.get ? picker.get() : teamCfg;
       try {
-        const r = await api(`/api/data/items/${k}/${id}/scrape`, { method: 'POST', body: { urls: list, prompt: prompt.value, team: tm } });
+        const r = await api(`/api/data/items/${k}/${id}/scrape`, {
+          method: 'POST',
+          body: { urls: list, prompt: cmp.text(), team: tm, ack: true, attachment_ids: cmp.fileIds() },
+        });
         status.replaceChildren(jobWatcher(r.job_id, refresh));
       } catch (e) { toast(e.message, 'err'); }
     };
+    cmp.configure({ onSend: run });
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Web scraping')),
-        h('div', { class: 'dt-warn' }, h('b', null, t('Aviso: somente uso open source. Não usar para uso comercial.')), h('div', { class: 'small', style: { marginTop: '4px' } }, t('Respeite os termos de uso, robots.txt, leis aplicáveis e os direitos dos sites/fontes. Use apenas para fins open source e não comerciais.'))),
+        h('div', { class: 'dt-warn' },
+          h('b', null, t('Aviso: somente uso open source. Não usar para uso comercial.')),
+          h('div', { class: 'small', style: { marginTop: '4px' } }, t('Respeite os termos de uso, robots.txt, leis aplicáveis e os direitos dos sites/fontes. Use apenas para fins open source e não comerciais.')),
+          h('label', { class: 'row small', style: { marginTop: '8px', gap: '6px', cursor: 'pointer' } },
+            ack, h('span', null, t('Li o aviso e vou usar apenas para fins open source e não comerciais.')))),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino (database/dataset)')), sel),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Links (um por linha)')), urls),
-        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt de extração')), prompt),
+        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt de extração')), cmp.el),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
         h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('globe', 14), t('Fazer scraping e extrair'))),
         status));
@@ -262,11 +343,11 @@ export default async function render(root, ctx) {
 
   function paintUpgrade() {
     const sel = itemSelect(items, 'dt-up-item');
-    const fileIn = h('input', { type: 'file', accept: '.json,.jsonl,.csv,.tsv,.ndjson' });
+    const fileIn = h('input', { type: 'file', accept: '.json,.jsonl,.ndjson,.csv,.tsv,.xml' });
     const kindSel = select([['dataset', t('Dataset')], ['database', t('Database')]], cfg.default_kind || 'dataset', () => {}, { id: 'dt-up-kind' });
-    const prompt = h('textarea', { placeholder: t('Como melhorar/enriquecer? (opcional). Você pode pedir novos campos, limpeza, normalização ou mais dados.'), rows: 4, style: { width: '100%' } });
-    const count = h('input', { type: 'number', min: 0, max: 500, value: 0 });
-    const modeSel = select([['single', t('Um tipo de dado')], ['multi', t('Vários tipos/modalidades')]], cfg.synthetic_mode || 'single', () => {}, { id: 'dt-up-mode' });
+    const cmp = promptComposer(t('Como melhorar/enriquecer? (opcional). Você pode pedir novos campos, limpeza, normalização ou mais dados.'), 4);
+    const count = h('input', { type: 'number', min: 0, max: MAX_SYNTH, value: 0 });
+    const modeSel = select(SYNTH_MODES, cfg.synthetic_mode || 'single', () => {}, { id: 'dt-up-mode' });
     const actionSel = select([['enrich', t('Melhorar/enriquecer registros existentes')], ['generate', t('Gerar e adicionar mais dados sintéticos')]], 'enrich', () => {}, { id: 'dt-up-action' });
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-up-team', defaultEffort: 'high' });
@@ -282,29 +363,49 @@ export default async function render(root, ctx) {
         toast(t('Importado'), 'ok'); await refresh();
       } catch (e) { toast(e.message, 'err'); }
     };
+    // importa dentro de um item que já existe (soma os registros e acrescenta as colunas ao schema)
+    const importInto = async () => {
+      const f = fileIn.files && fileIn.files[0];
+      if (!f) return toast(t('Selecione um arquivo para importar.'), 'err');
+      if (!sel.value) return toast(t('Selecione um database/dataset para melhorar.'), 'err');
+      const [k, id] = sel.value.split(':');
+      try {
+        const raw = await f.arrayBuffer();
+        const r = await fetch(`/api/data/items/${k}/${id}/import?mode=append&name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name) }, body: raw });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || t('Falha ao importar'));
+        toast(t('Importado'), 'ok'); await refresh();
+      } catch (e) { toast(e.message, 'err'); }
+    };
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset para melhorar.'), 'err');
       const [k, id] = sel.value.split(':');
       const tm = picker.get ? picker.get() : teamCfg;
       try {
-        const r = await api(`/api/data/items/${k}/${id}/upgrade`, { method: 'POST', body: { prompt: prompt.value, count: parseInt(count.value || '0', 10), mode: modeSel.value, action: actionSel.value, team: tm } });
+        const r = await api(`/api/data/items/${k}/${id}/upgrade`, {
+          method: 'POST',
+          body: { prompt: cmp.text(), count: parseInt(count.value || '0', 10), mode: modeSel.value, action: actionSel.value, team: tm, attachment_ids: cmp.fileIds() },
+        });
         status.replaceChildren(jobWatcher(r.job_id, refresh));
       } catch (e) { toast(e.message, 'err'); }
     };
+    cmp.configure({ onSend: run });
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Upgrade')),
         h('p', { class: 'muted small', style: { margin: 0 } }, t('Importe e melhore databases/datasets existentes: adicione mais dados, gere dados sintéticos e enriqueça (um tipo ou vários tipos/modalidades ao mesmo tempo).')),
+        h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino (database/dataset)')), sel),
         h('div', { class: 'dt-section col', style: { gap: '8px' } },
           h('b', null, t('Importar database/dataset existente')),
           h('div', { class: 'grid2' }, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Tipo')), kindSel), h('div', { class: 'field' }, h('label', { class: 'f' }, t('Arquivo')), fileIn)),
-          h('div', { class: 'dt-actions' }, h('button', { class: 'btn', type: 'button', onclick: importNew }, icon('upload', 14), t('Importar como novo item')))),
+          h('div', { class: 'dt-actions' },
+            h('button', { class: 'btn', type: 'button', onclick: importNew }, icon('upload', 14), t('Importar como novo item')),
+            h('button', { class: 'btn', type: 'button', onclick: importInto }, icon('layers', 14), t('Importar dentro do item')))),
         h('div', { class: 'dt-section col', style: { gap: '8px' } },
           h('b', null, t('Melhorar com IA')),
-          h('div', { class: 'field' }, h('label', { class: 'f' }, t('Item')), sel),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Ação')), actionSel),
           h('div', { class: 'grid2' }, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade (para gerar mais)')), count), h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
-          h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt/instruções')), prompt),
+          h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt/instruções')), cmp.el),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
           h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('sparkle', 14), t('Aplicar upgrade com IA'))),
           status)));
@@ -312,7 +413,7 @@ export default async function render(root, ctx) {
 
   function paintExport() {
     const sel = itemSelect(items, 'dt-exp-item');
-    const fmtSel = select([['json', 'JSON'], ['jsonl', 'JSONL / NDJSON'], ['csv', 'CSV'], ['tsv', 'TSV'], ['sqlite', 'SQLite (.db)']], 'json', () => {}, { id: 'dt-exp-fmt' });
+    const fmtSel = select(EXPORT_FORMATS, 'json', () => {}, { id: 'dt-exp-fmt' });
     const status = h('div');
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset.'), 'err');
@@ -326,14 +427,31 @@ export default async function render(root, ctx) {
         await refresh();
       } catch (e) { toast(e.message, 'err'); }
     };
+    const runAll = async () => {
+      if (!items.length) return toast(t('Nenhum item disponível'), 'err');
+      const done = [];
+      for (const it of items) {
+        try {
+          const r = await api(`/api/data/items/${it.kind}/${it.id}/export`, { method: 'POST', body: { format: fmtSel.value } });
+          done.push({ kind: it.kind, id: it.id, name: r.name, records: r.records });
+        } catch (e) { /* um item que falhou não para os outros */ }
+      }
+      toast(t('{n} arquivo(s) exportado(s)', { n: done.length }), 'ok');
+      status.replaceChildren(h('div', { class: 'col', style: { gap: '4px' } }, ...done.map((d) => h('div', { class: 'row', style: { gap: '8px', alignItems: 'center' } },
+        h('span', { class: 'small' }, d.name + ' (' + d.records + ')'),
+        h('a', { class: 'btn sm', href: `/api/data/items/${d.kind}/${d.id}/exports/${encodeURIComponent(d.name)}`, download: d.name }, icon('download', 13), t('Baixar'))))));
+      await refresh();
+    };
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Export')),
-        h('p', { class: 'muted small', style: { margin: 0 } }, t('Exporte databases e datasets em vários formatos preservando a estrutura (JSON, JSONL, CSV, TSV, SQLite).')),
+        h('p', { class: 'muted small', style: { margin: 0 } }, t('Exporte databases e datasets em vários formatos preservando a estrutura (JSON, JSONL/NDJSON, CSV, TSV, XML, HTML, Markdown, SQLite).')),
         h('div', { class: 'grid2' },
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Item')), sel),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Formato')), fmtSel)),
-        h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('download', 14), t('Exportar'))),
+        h('div', { class: 'dt-actions' },
+          h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('download', 14), t('Exportar')),
+          h('button', { class: 'btn', type: 'button', onclick: runAll }, icon('layers', 14), t('Exportar todos'))),
         status));
   }
 
