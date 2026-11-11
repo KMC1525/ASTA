@@ -3,7 +3,21 @@
 Todas as mudanças relevantes do ASTA são registradas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
-## [Não lançado]
+## [0.21.0] — 2026-11-11
+
+### Adicionado — Perfil do usuário
+- **Perfil do usuário em Configuração → Perfil:** foto de perfil, nome, bio, gênero, pronomes, gostos pessoais, interesses, estudos, profissão, local, idioma, site e campos extras livres. Os dados ficam em arquivos abertos (`profile.json` e a foto em `profile/`) dentro da pasta do ASTA, no seu computador.
+- **Importar e exportar perfil:** exporta um pacote JSON com o perfil e os **presets gerais do fluxo de trabalho** (configurações de interface e seções, sem chaves de API nem tokens), para levar tudo a outro computador; a importação aplica o perfil e, quando presente, esses presets. Endpoints: `GET/PUT /api/profile`, `GET/PUT/DELETE /api/profile/portrait`, `GET /api/profile/export`, `POST /api/profile/import`.
+
+### Adicionado — Memória unificada universal
+- **Memória unificada de longo prazo de tudo o que é feito no ASTA:** eventos do Chat, Avatars, tarefas em segundo plano (jobs) e alterações de perfil/configurações passam a ser registrados automaticamente. Cada memória é um item em JSON aberto e editável.
+- **Organização por ano, mês, semana e dia:** `~/.asta/memory/AAAA/MM/semana-SS/AAAA-MM-DD.json` (um arquivo por dia), fácil de abrir e editar nas pastas do ASTA.
+- **WebUI em Configuração → Memória:** lista de dias, busca, visualização e edição do JSON do dia, e criação de notas. Endpoints: `GET /api/memory/days`, `GET /api/memory/day`, `PUT /api/memory/day`, `GET /api/memory/search`, `GET /api/memory/sections`, `POST/PUT/DELETE /api/memory/item`.
+
+### Melhorado — Busca na web nativa 2.0
+- **Leitura em paralelo:** a busca com leitura de páginas (`/api/web/context`) e a leitura de vários links colados no Chat passam a buscar páginas, imagens e vídeos em paralelo (com limite de simultaneidade), acelerando a análise de um ou vários sites ao mesmo tempo.
+- **Melhor análise de páginas e galerias:** extração ampliada de imagens e metadados (atributos preguiçosos como `data-src`, `srcset`, links de imagem, JSON-LD e URLs de imagem embutidas), útil em páginas no estilo galeria (como Pinterest, Instagram e Pawchive). Mais imagens por página são consideradas e baixadas em paralelo para modelos com visão.
+- **Imagens e vídeos:** leitura de vários links e análise de mais de um vídeo em paralelo quando o pedido envolve vídeo; mais imagens/quadros podem ser anexados ao contexto (dentro dos limites de segurança e tamanho já existentes).
 
 ### Corrigido — Chat
 - **Leitura de links colados na caixa de texto:** quando a leitura dos links falhava de forma inesperada, o aviso «Lendo…» podia ficar preso na tela e a falha não era explicada. Agora o Chat mostra o motivo, limpa o aviso e segue respondendo só com o texto da mensagem (os links que a leitura consegue abrir continuam indo para o contexto e para as imagens, como antes).
@@ -20,7 +34,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 ### Melhorado — núcleo nativo e modelos locais
 - **Planejamento do modelo local (Rust + espelho em Python, mesma ABI):** o planejador de LLM do núcleo usa lotes de prompt maiores quando há folga de GPU/RAM, ativa com mais agressividade a atenção em flash nos casos em que ajuda (GPU, cache KV quantizado ou uso prolongado) e ajusta o orçamento do cache de prompt para sessões longas, mantendo o mesmo comportamento de API.
 
+### Alterado
+- Versão 0.21.0; READMEs e changelogs atualizados (pt/en).
+
 ### Limites honestos (não verificado)
+- A memória unificada registra automaticamente os eventos principais integrados nesta versão (Chat, Avatars, conclusão de tarefas em segundo plano e alterações de perfil/configurações); **nem toda ação interna de todas as seções** tem um gancho dedicado de registro ainda, e a visualização/edição na WebUI depende do navegador. O conteúdo gravado fica na pasta local do ASTA (`~/.asta/memory`) e deve ser tratado como dado do usuário.
+- A análise de sites de galeria (Pinterest, Instagram, Pawchive etc.) depende do HTML/metadados públicos acessíveis no momento: conteúdos protegidos por login, carregados dinamicamente só por JavaScript no navegador ou bloqueados pelo site podem não ser lidos por completo. A análise de vídeo depende de download/ffmpeg/`yt-dlp` e das ferramentas disponíveis; **não foi testada contra cada site real**.
 - Não foi testado em **hardware NVIDIA real** das séries 20/30/40/50 nem em execuções locais contínuas de muitas horas/dias; os ganhos de desempenho nessas condições não foram medidos.
 - Não foi reproduzido e validado de ponta a ponta, com modelos e repositórios reais, cada caso relatado de uso do **LM Studio** para criar/editar código direto em repositórios do GitHub, nem todas as combinações de orquestração multiagente em cenários reais.
 - A busca de perfis do Hugging Face depende dos resultados da API do Hugging Face no momento da consulta; a disponibilidade exata de “todos os modelos” de um perfil pode variar. Os instaladores e artefatos de release não foram executados em dispositivos reais pelo autor desta mudança.

@@ -20,7 +20,7 @@ export default async function render(root, ctx) {
   const TABS = CONFIG_TABS;
   const paintTabs = () => tabs.replaceChildren(...CONFIG_GROUPS.flatMap(([gid, gl]) => [h('span', { class: 'tg' }, t(gl)),
     ...TABS.filter((x) => x[2] === gid).map(([id, l]) => h('button', { class: tab === id ? 'on' : '', dataset: { tab: id }, onclick: () => { tab = id; paintTabs(); paintBody(); } }, t(l)))]));
-  const FNS = { providers, media, chat, engine: engineTab, scriber: scriberTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
+  const FNS = { providers, media, chat, profile: profileTab, memory: memoryTab, engine: engineTab, scriber: scriberTab, avatars, canvas: canvasTab, studio: studioTab, computer: computerTab, code: codeTab, work: workTab, rebuild: rebuildTab, voice, local, appearance, sections, performance, data, mobile: mobileTab, system };
   const paintBody = async () => { body.replaceChildren(h('div', { class: 'spinner' })); body.replaceChildren(await (FNS[tab] || providers)()); };
   root.replaceChildren(h('div', { class: 'page narrow cfg' }, h('div', { class: 'page-h' }, h('div', null, h('h1', null, t('Configuração')), h('p', null, t('Aparência e atalhos, IA e modelos, os padrões de cada seção e o sistema: configure uma vez e use em tudo.')))), tabs, body));
   paintTabs(); await paintBody();
@@ -1168,3 +1168,145 @@ async function games() {
     teamCard(g, 'gm'),
     saveRow(() => saveSettings({ games: g })));
 }
+
+
+// ---------------------------------------------------------------------------------- perfil do usuário
+async function profileTab() {
+  let prof = await api('/api/profile');
+  const draft = JSON.parse(JSON.stringify(prof || {}));
+  const portraitBox = h('div', { class: 'row', style: { gap: '12px', alignItems: 'center', marginBottom: '12px', flexWrap: 'wrap' } });
+  function paintPortrait() {
+    const has = !!draft.portrait;
+    portraitBox.replaceChildren(
+      h('div', { style: { width: '88px', height: '88px', borderRadius: '16px', overflow: 'hidden', background: 'var(--surface-2, #222)', display: 'flex', alignItems: 'center', justifyContent: 'center', border: '1px solid var(--border, #333)' } },
+        has ? h('img', { src: '/api/profile/portrait?ts=' + Date.now(), style: { width: '100%', height: '100%', objectFit: 'cover' } }) : icon('user', 28)),
+      h('div', { class: 'col', style: { gap: '6px' } },
+        h('input', { type: 'file', accept: 'image/png,image/jpeg,image/webp,image/gif', onchange: async (e) => {
+          const f = e.target.files && e.target.files[0]; if (!f) return;
+          try {
+            const r = await fetch('/api/profile/portrait', { method: 'PUT', headers: { 'Content-Type': f.type || 'application/octet-stream' }, body: await f.arrayBuffer() });
+            const j = await r.json(); if (!r.ok) throw new Error(j.error || r.statusText); draft.portrait = j.portrait || '1'; prof = j; paintPortrait(); toast(t('Foto atualizada'), 'ok');
+          } catch (err) { toast(err.message, 'err'); }
+          e.target.value = '';
+        } }),
+        has ? h('button', { class: 'btn sm danger', type: 'button', onclick: async () => { try { prof = await api('/api/profile/portrait', { method: 'DELETE' }); draft.portrait = ''; paintPortrait(); toast(t('Foto removida')); } catch (e) { toast(e.message, 'err'); } } }, t('Remover foto')) : null));
+  }
+  paintPortrait();
+  const extraBox = h('div', { class: 'col', style: { gap: '8px' } });
+  function paintExtra() {
+    draft.extra = draft.extra && typeof draft.extra === 'object' ? draft.extra : {};
+    const entries = Object.entries(draft.extra);
+    extraBox.replaceChildren(...entries.map(([k, v], i) => h('div', { class: 'row nw', style: { gap: '8px' } },
+      h('input', { value: k, placeholder: t('Campo'), style: { maxWidth: '180px' }, oninput: (e) => { const nk = e.target.value; const obj = {}; for (const [kk, vv] of Object.entries(draft.extra)) obj[kk === k ? nk : kk] = vv; draft.extra = obj; } }),
+      h('input', { value: v, placeholder: t('Valor'), class: 'grow', oninput: (e) => { draft.extra[k] = e.target.value; } }),
+      h('button', { class: 'btn sm ghost icon', type: 'button', title: t('Remover'), onclick: () => { delete draft.extra[k]; paintExtra(); } }, icon('trash', 14)))),
+      h('button', { class: 'btn sm', type: 'button', onclick: () => { draft.extra[t('Novo campo')] = ''; paintExtra(); } }, icon('plus', 13), t('Adicionar campo')));
+  }
+  paintExtra();
+  const imp = h('input', { type: 'file', accept: '.json,application/json', style: { display: 'none' }, onchange: async (e) => {
+    const f = e.target.files && e.target.files[0]; if (!f) return;
+    try {
+      const payload = JSON.parse(await f.text());
+      const r = await api('/api/profile/import', { method: 'POST', body: payload });
+      prof = r.profile || prof; Object.assign(draft, JSON.parse(JSON.stringify(prof))); paintPortrait(); paintExtra();
+      toast(t('Perfil importado') + (r.imported_settings && r.imported_settings.length ? ' (' + t('presets aplicados') + ')' : ''), 'ok');
+    } catch (err) { toast(err.message || t('Arquivo inválido'), 'err'); }
+    e.target.value = '';
+  } });
+  const save = async () => {
+    prof = await api('/api/profile', { method: 'PUT', body: draft });
+    Object.assign(draft, JSON.parse(JSON.stringify(prof)));
+  };
+  return h('div', null,
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Perfil do usuário')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Informações sobre você para personalizar seu fluxo de trabalho no ASTA. Ficam salvas em arquivos abertos (JSON) na pasta do ASTA, no seu computador.')),
+      portraitBox,
+      h('div', { class: 'grid2' },
+        field(t('Nome'), h('input', { value: draft.name || '', oninput: (e) => { draft.name = e.target.value; } })),
+        field(t('Gênero'), h('input', { value: draft.gender || '', oninput: (e) => { draft.gender = e.target.value; } })),
+        field(t('Pronomes'), h('input', { value: draft.pronouns || '', oninput: (e) => { draft.pronouns = e.target.value; } })),
+        field(t('Profissão'), h('input', { value: draft.profession || '', oninput: (e) => { draft.profession = e.target.value; } })),
+        field(t('Estudos'), h('input', { value: draft.studies || '', oninput: (e) => { draft.studies = e.target.value; } })),
+        field(t('Local'), h('input', { value: draft.location || '', oninput: (e) => { draft.location = e.target.value; } })),
+        field(t('Idioma'), h('input', { value: draft.language || '', oninput: (e) => { draft.language = e.target.value; } })),
+        field(t('Site'), h('input', { value: draft.website || '', oninput: (e) => { draft.website = e.target.value; } }))),
+      field(t('Gostos pessoais'), h('textarea', { rows: 2, oninput: (e) => { draft.tastes = e.target.value; } }, draft.tastes || '')),
+      field(t('Interesses'), h('textarea', { rows: 2, oninput: (e) => { draft.interests = e.target.value; } }, draft.interests || '')),
+      field(t('Bio'), h('textarea', { rows: 4, oninput: (e) => { draft.bio = e.target.value; } }, draft.bio || '')),
+      h('div', { style: { marginTop: '10px' } }, h('div', { class: 'small muted', style: { marginBottom: '6px' } }, t('Outros campos')), extraBox),
+      saveRow(save)),
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Importar e exportar perfil')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Exporte seu perfil com os presets gerais do fluxo de trabalho (configurações, sem chaves de API nem tokens) para levar tudo a outro computador.')),
+      h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } },
+        h('a', { class: 'btn', href: '/api/profile/export', download: 'asta-perfil.json' }, icon('download', 14), t('Exportar perfil')),
+        h('button', { class: 'btn', type: 'button', onclick: () => imp.click() }, icon('upload', 14), t('Importar perfil')), imp)));
+}
+
+// ---------------------------------------------------------------------------------- memória unificada universal
+async function memoryTab() {
+  let days = await api('/api/memory/days');
+  let current = days[0] ? days[0].date : '';
+  let doc = current ? await api('/api/memory/day?date=' + encodeURIComponent(current)) : { date: '', items: [] };
+  const listEl = h('div', { class: 'col', style: { gap: '4px', maxHeight: '420px', overflow: 'auto', minWidth: '220px' } });
+  const editor = h('textarea', { rows: 22, style: { width: '100%', fontFamily: 'var(--mono, monospace)', fontSize: '12px' } });
+  const info = h('div', { class: 'small muted' });
+  function paintList() {
+    listEl.replaceChildren(...(days.length ? days.map((d) => h('button', { class: 'btn sm' + (d.date === current ? ' primary' : ''), type: 'button', style: { justifyContent: 'space-between' }, onclick: () => loadDay(d.date) },
+      h('span', null, d.date), h('span', { class: 'chip' }, String(d.count)))) : [h('div', { class: 'muted small' }, t('Ainda não há memórias.'))]));
+  }
+  function paintEditor() {
+    editor.value = JSON.stringify(doc, null, 2);
+    info.textContent = doc && doc.path ? t('Arquivo:') + ' memory/' + doc.path : (current ? current : '');
+  }
+  async function loadDay(date) {
+    current = date;
+    try { doc = await api('/api/memory/day?date=' + encodeURIComponent(date)); } catch (e) { toast(e.message, 'err'); doc = { date, items: [] }; }
+    paintList(); paintEditor();
+  }
+  async function reloadDays() {
+    days = await api('/api/memory/days');
+    if (!current && days[0]) current = days[0].date;
+    if (current) await loadDay(current); else { doc = { date: '', items: [] }; paintList(); paintEditor(); }
+  }
+  const q = h('input', { placeholder: t('Buscar nas memórias…') });
+  const results = h('div', { class: 'col', style: { gap: '6px', marginTop: '8px' } });
+  const search = async () => {
+    const term = q.value.trim(); if (!term) { results.replaceChildren(); return; }
+    try {
+      const r = await api('/api/memory/search?q=' + encodeURIComponent(term) + '&limit=80');
+      results.replaceChildren(...(r.length ? r.map((it) => h('div', { class: 'card', style: { padding: '8px' } },
+        h('div', { class: 'row', style: { justifyContent: 'space-between' } }, h('b', { class: 'small' }, it.title || it.action || it.section || 'memória'), h('span', { class: 'dim small' }, (it.date || '') + ' · ' + (it.section || ''))),
+        h('div', { class: 'small' }, it.summary || ''),
+        h('button', { class: 'btn sm', type: 'button', onclick: () => loadDay(it.date) }, t('Abrir dia')))) : [h('div', { class: 'muted small' }, t('Nada encontrado.'))]));
+    } catch (e) { toast(e.message, 'err'); }
+  };
+  paintList(); paintEditor();
+  return h('div', null,
+    h('div', { class: 'card', style: { marginBottom: '16px' } }, h('h3', null, t('Memória unificada universal')),
+      h('p', { class: 'muted small', style: { marginTop: 0 } }, t('Tudo o que é feito dentro do ASTA fica registrado em arquivos JSON abertos, organizados por ano, mês, semana e dia, na pasta memory/ do ASTA. Você pode ver e editar por aqui ou direto nas pastas.')),
+      h('div', { class: 'row nw', style: { gap: '8px', marginBottom: '8px' } }, q, h('button', { class: 'btn sm', type: 'button', onclick: search }, icon('search', 14), t('Buscar'))),
+      results),
+    h('div', { class: 'card', style: { marginBottom: '16px' } },
+      h('div', { class: 'row', style: { gap: '16px', alignItems: 'flex-start', flexWrap: 'wrap' } },
+        h('div', { class: 'col', style: { gap: '8px' } }, h('b', null, t('Dias')), listEl,
+          h('button', { class: 'btn sm', type: 'button', onclick: reloadDays }, icon('refresh', 13), t('Atualizar'))),
+        h('div', { class: 'grow col', style: { gap: '8px', minWidth: '320px' } },
+          h('div', { class: 'row', style: { justifyContent: 'space-between', gap: '8px', flexWrap: 'wrap' } }, h('b', null, t('Editar dia (JSON)')), info),
+          editor,
+          h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap', justifyContent: 'flex-end' } },
+            h('button', { class: 'btn sm', type: 'button', onclick: async () => {
+              const title = prompt(t('Título da nota:') || 'Título');
+              if (!title) return;
+              try { await api('/api/memory/item', { method: 'POST', body: { section: 'nota', action: 'nota', title, summary: '', detail: {} } }); await reloadDays(); toast(t('Nota adicionada'), 'ok'); } catch (e) { toast(e.message, 'err'); }
+            } }, icon('plus', 13), t('Adicionar nota')),
+            h('button', { class: 'btn primary', type: 'button', onclick: async () => {
+              try {
+                const parsed = JSON.parse(editor.value || '{}');
+                const date = (parsed && parsed.date) || current;
+                if (!date) return toast(t('Selecione um dia ou informe a data no JSON.'), 'err');
+                doc = await api('/api/memory/day?date=' + encodeURIComponent(date), { method: 'PUT', body: parsed });
+                current = doc.date || date; await reloadDays(); toast(t('Memória salva'), 'ok');
+              } catch (e) { toast(e.message || t('JSON inválido'), 'err'); }
+            } }, icon('check', 14), t('Salvar dia'))))));
+}
+

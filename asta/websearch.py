@@ -20,6 +20,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from html.parser import HTMLParser
 from typing import Any, Dict, List, Optional
 
@@ -29,8 +30,8 @@ from .util import ssl_context
 
 MAX_RESULTS = 10
 PAGE_BYTES = 400_000
-PAGE_CHARS = 2500
-CONTEXT_CHARS = 9000
+PAGE_CHARS = 3500
+CONTEXT_CHARS = 12000
 _UA = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64; rv:128.0) Gecko/20100101 Firefox/128.0 ASTA", "Accept": "text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8", "Accept-Language": "pt-BR,pt;q=0.9,en;q=0.8"}
 
 
@@ -299,16 +300,30 @@ def fetch_page(url: str, limit: int = PAGE_CHARS) -> Dict[str, str]:
 
 
 def gather(query: str, settings: Dict[str, Any], ui_lang: str = "auto") -> Dict[str, Any]:
-    """Busca + leitura das primeiras páginas. {engine, query, sources:[{n,title,url,host,snippet,text}], text}: `text` é o bloco para o contexto do modelo."""
+    """Busca + leitura das primeiras páginas (em paralelo). {engine, query, sources, text}."""
     cfg = web_config(settings)
     found = search(query, settings, ui_lang=ui_lang)
     sources: List[Dict[str, Any]] = []
     for i, r in enumerate(found["results"], 1):
         host = (urllib.parse.urlsplit(r["url"]).hostname or "").removeprefix("www.")
         sources.append({"n": i, "title": r["title"] or host, "url": r["url"], "host": host, "snippet": r["snippet"], "text": ""})
-    for s in sources[:cfg["read_pages"]]:
-        page = fetch_page(s["url"])
-        s["text"] = page.get("text", "")
+    todo = sources[:cfg["read_pages"]]
+    if todo:
+        def read(s):
+            return s["n"], fetch_page(s["url"])
+        with ThreadPoolExecutor(max_workers=min(6, len(todo))) as ex:
+            futs = {ex.submit(read, s): s for s in todo}
+            for fut in as_completed(futs):
+                try:
+                    n, page = fut.result()
+                except Exception:
+                    continue
+                for s in sources:
+                    if s["n"] == n:
+                        s["text"] = (page or {}).get("text", "")
+                        if not s.get("title") and page and page.get("title"):
+                            s["title"] = page["title"]
+                        break
     return {"engine": found["engine"], "query": found["query"], "sources": sources, "text": context_block(sources)}
 
 
@@ -339,9 +354,9 @@ def heuristic_query(text: str) -> str:
 
 
 # --------------------------------------------------------------------------- links colados no Chat (páginas com imagens e vídeos)
-LINK_MAX = 4              # links lidos por mensagem
-LINK_CHARS = 12000        # texto de cada página
-LINK_IMAGES = 4           # imagens de cada página mostradas ao modelo (com visão)
+LINK_MAX = 6              # links lidos por mensagem
+LINK_CHARS = 16000        # texto de cada página
+LINK_IMAGES = 6           # imagens de cada página mostradas ao modelo (com visão)
 IMAGE_BYTES = 4_000_000
 _URL_RE = re.compile(r"https?://[^\s<>\"'`)\]]+", re.I)
 _VIDEO_HOSTS = ("youtube.com", "youtu.be", "youtube-nocookie.com", "vimeo.com", "dailymotion.com", "twitch.tv", "tiktok.com", "streamable.com", "loom.com")
@@ -361,7 +376,9 @@ def extract_urls(text: str, limit: int = LINK_MAX) -> List[str]:
 
 
 class _Media(HTMLParser):
-    """Imagens, vídeos e metadados (og:*, twitter:*) de uma página."""
+    """Imagens, vídeos e metadados (og:*, twitter:*) de uma página (galerias inclusas)."""
+
+    _LAZY = ("src", "data-src", "data-original", "data-lazy-src", "data-pin-media", "data-image", "data-hi-res", "data-full", "data-zoom-image")
 
     def __init__(self, base: str) -> None:
         super().__init__(convert_charrefs=True)
@@ -369,6 +386,7 @@ class _Media(HTMLParser):
         self.images: List[Dict[str, str]] = []
         self.videos: List[Dict[str, str]] = []
         self.meta: Dict[str, str] = {}
+        self.meta_all: Dict[str, List[str]] = {}
         self._video_open = False
         self._skip = 0
 
@@ -383,39 +401,57 @@ class _Media(HTMLParser):
 
     def _img(self, u: str, alt: str = "") -> None:
         u = self._abs(u)
-        if u.startswith(("http://", "https://")) and all(i["url"] != u for i in self.images) and len(self.images) < 40:
+        if u.startswith(("http://", "https://")) and all(i["url"] != u for i in self.images) and len(self.images) < 80:
             self.images.append({"url": u, "alt": re.sub(r"\s+", " ", alt or "").strip()[:160]})
 
     def _vid(self, u: str, title: str = "") -> None:
         u = self._abs(u)
-        if u.startswith(("http://", "https://")) and all(v["url"] != u for v in self.videos) and len(self.videos) < 12:
+        if u.startswith(("http://", "https://")) and all(v["url"] != u for v in self.videos) and len(self.videos) < 20:
             self.videos.append({"url": u, "title": re.sub(r"\s+", " ", title or "").strip()[:160]})
+
+    def _srcset(self, value: str) -> List[str]:
+        out = []
+        for part in (value or "").split(","):
+            u = part.strip().split(" ")[0] if part.strip() else ""
+            if u:
+                out.append(u)
+        return out
 
     def handle_starttag(self, tag, attrs):
         a = {k: (v or "") for k, v in attrs}
         if tag in ("script", "style", "noscript", "template"):
             self._skip += 1
         if tag == "meta":
-            key = (a.get("property") or a.get("name") or "").lower()
-            if key and a.get("content") and key not in self.meta:
-                self.meta[key] = a["content"]
+            key = (a.get("property") or a.get("name") or a.get("itemprop") or "").lower()
+            val = a.get("content") or ""
+            if key and val:
+                if key not in self.meta:
+                    self.meta[key] = val
+                self.meta_all.setdefault(key, []).append(val)
+        elif tag == "link":
+            rel = (a.get("rel") or "").lower()
+            if "image" in rel and a.get("href"):
+                self._img(a["href"], a.get("title", "") or "imagem")
         elif tag == "img":
-            src = a.get("src") or a.get("data-src") or a.get("data-original") or ""
-            if not src and a.get("srcset"):
-                src = a["srcset"].split(",")[0].split()[0]
+            for k in self._LAZY:
+                if a.get(k):
+                    self._img(a[k], a.get("alt", ""))
+            for k in ("srcset", "data-srcset"):
+                for u in self._srcset(a.get(k, "")):
+                    self._img(u, a.get("alt", ""))
             w, h = a.get("width", ""), a.get("height", "")
-            if w.isdigit() and h.isdigit() and int(w) < 80 and int(h) < 80:   # ícones e pixels de rastreio
-                return
-            if re.search(r"(sprite|pixel|tracking|spacer|logo|icon|avatar)", src, re.I) and not a.get("alt"):
-                return
-            self._img(src, a.get("alt", ""))
+            if w.isdigit() and h.isdigit() and int(w) < 60 and int(h) < 60:
+                pass
+        elif tag == "source":
+            if self._video_open:
+                self._vid(a.get("src", ""))
+            for u in self._srcset(a.get("srcset", "")):
+                self._img(u, a.get("alt", "") or "imagem")
         elif tag == "video":
             self._video_open = True
             self._vid(a.get("src", ""), a.get("title", "") or a.get("aria-label", ""))
             if a.get("poster"):
                 self._img(a["poster"], "capa do vídeo")
-        elif tag == "source" and self._video_open:
-            self._vid(a.get("src", ""))
         elif tag == "iframe":
             src = self._abs(a.get("src") or a.get("data-src") or "")
             host = (urllib.parse.urlsplit(src).hostname or "").lower() if src else ""
@@ -424,6 +460,8 @@ class _Media(HTMLParser):
         elif tag == "a":
             href = self._abs(a.get("href", ""))
             host = (urllib.parse.urlsplit(href).hostname or "").lower() if href else ""
+            if href and re.search(r"\.(jpg|jpeg|png|webp|gif|avif)(\?|$)", href, re.I):
+                self._img(href, a.get("title", "") or a.get("aria-label", ""))
             if href and (re.search(r"\.(mp4|webm|mov|m4v|mkv)(\?|$)", href, re.I) or any(host == h or host.endswith("." + h) for h in _VIDEO_HOSTS)):
                 self._vid(href)
 
@@ -435,23 +473,43 @@ class _Media(HTMLParser):
 
 
 def page_media(src: str, base: str) -> Dict[str, Any]:
-    """{images:[{url,alt}], videos:[{url,title}], meta:{...}} de um HTML (a imagem de destaque `og:image` vem primeiro)."""
+    """{images:[{url,alt}], videos:[{url,title}], meta:{...}} de um HTML (inclui galerias e metadados)."""
     p = _Media(base)
     try:
         p.feed(src)
         p.close()
     except Exception:  # noqa: BLE001
         pass
-    lead = [p._abs(p.meta.get(k, "")) for k in ("og:image", "og:image:url", "twitter:image", "twitter:image:src")]
-    images = [{"url": u, "alt": p.meta.get("og:image:alt", "") or "imagem de destaque"} for u in lead if u.startswith(("http://", "https://"))][:1]
+    lead_keys = ("og:image", "og:image:url", "og:image:secure_url", "twitter:image", "twitter:image:src", "image")
+    lead = []
+    for k in lead_keys:
+        for v in (p.meta_all.get(k) or ([p.meta.get(k)] if p.meta.get(k) else [])):
+            u = p._abs(v)
+            if u.startswith(("http://", "https://")) and u not in lead:
+                lead.append(u)
+    # JSON-LD e URLs de imagem embutidas (útil em galerias como Pinterest/Instagram/pawchive)
+    for m in re.finditer(r'"(?:contentUrl|image|thumbnailUrl|url)"\s*:\s*"(https?://[^"\s]+)"', src or ""):
+        u = p._abs(m.group(1))
+        if u.startswith(("http://", "https://")) and re.search(r"\.(jpg|jpeg|png|webp|gif|avif)|/pin/|/media|/image|pbs\.twimg|cdninstagram|pinimg|pawchive", u, re.I):
+            if u not in lead and len(lead) < 30:
+                lead.append(u)
+    for m in re.finditer(r"https?://[^\s\"'<>]+?\.(?:jpg|jpeg|png|webp|gif|avif)(?:\?[^\s\"'<>]*)?", src or "", re.I):
+        u = p._abs(m.group(0))
+        if u.startswith(("http://", "https://")) and len(lead) < 40 and u not in lead and not re.search(r"(sprite|pixel|tracking|1x1|icon|logo)", u, re.I):
+            lead.append(u)
+    images = []
+    for u in lead[:3]:
+        images.append({"url": u, "alt": p.meta.get("og:image:alt", "") or "imagem de destaque"})
     images += [i for i in p.images if all(i["url"] != j["url"] for j in images)]
     videos: List[Dict[str, str]] = []
     for k in ("og:video:url", "og:video:secure_url", "og:video", "twitter:player:stream", "twitter:player"):
-        u = p._abs(p.meta.get(k, ""))
-        if u.startswith(("http://", "https://")) and all(u != v["url"] for v in videos):
-            videos.append({"url": u, "title": p.meta.get("og:title", "")})
+        for v in (p.meta_all.get(k) or ([p.meta.get(k)] if p.meta.get(k) else [])):
+            u = p._abs(v)
+            if u.startswith(("http://", "https://")) and all(u != x["url"] for x in videos):
+                videos.append({"url": u, "title": p.meta.get("og:title", "")})
     videos += [v for v in p.videos if all(v["url"] != w["url"] for w in videos)]
-    return {"images": images, "videos": videos[:8], "meta": p.meta}
+    return {"images": images[:60], "videos": videos[:12], "meta": p.meta}
+
 
 
 def fetch_image(url: str) -> Optional[Dict[str, str]]:
@@ -482,14 +540,14 @@ _VIDEO_EXT = re.compile(r"\.(mp4|webm|mov|m4v|mkv|avi)(\?|$)", re.I)
 
 
 def link_intent(prompt: str) -> Dict[str, Any]:
-    """O que o usuário pede sobre o conteúdo dos links: olhar as imagens e/ou os vídeos (muda quantas imagens são vistas e se os vídeos são baixados e analisados)."""
+    """O que o usuário pede sobre o conteúdo dos links: olhar as imagens e/ou os vídeos."""
     txt = _URL_RE.sub(" ", prompt or "")
     imgs, vids = bool(_IMG_WORDS.search(txt)), bool(_VID_WORDS.search(txt))
     return {"images": imgs, "videos": vids, "max_images": 10 if imgs else LINK_IMAGES}
 
 
 def download_media(url: str, dest_dir: Path, max_bytes: int = VIDEO_BYTES) -> Optional[Path]:
-    """Baixa um arquivo de vídeo público para `dest_dir` (recusa o que passa de `max_bytes`); None se não deu."""
+    """Baixa um arquivo de vídeo público para `dest_dir`; None se não deu."""
     if not safe_url(url):
         return None
     try:
@@ -521,7 +579,7 @@ def download_media(url: str, dest_dir: Path, max_bytes: int = VIDEO_BYTES) -> Op
 
 
 def _platform_download(url: str, dest_dir: Path) -> Optional[Path]:
-    """YouTube, Vimeo etc.: só com o `yt-dlp` instalado (formato pequeno, até VIDEO_BYTES). Sem ele, o vídeo fica só descrito."""
+    """YouTube, Vimeo etc.: só com o `yt-dlp` instalado. Sem ele, o vídeo fica só descrito."""
     import shutil
     import subprocess
     exe = shutil.which("yt-dlp")
@@ -537,7 +595,7 @@ def _platform_download(url: str, dest_dir: Path) -> Optional[Path]:
 
 
 def analyze_video(url: str, transcribe: Optional[Any] = None, max_chars: int = 8000) -> Dict[str, Any]:
-    """Baixa e analisa um vídeo: {text (transcrição), frames:[{media_type,data}], notes}. Precisa do ffmpeg para quadros e transcrição."""
+    """Baixa e analisa um vídeo: {text (transcrição), frames:[{media_type,data}], notes}."""
     import tempfile
     from . import attachments as att
     res: Dict[str, Any] = {"text": "", "frames": [], "notes": []}
@@ -554,9 +612,27 @@ def analyze_video(url: str, transcribe: Optional[Any] = None, max_chars: int = 8
     return res
 
 
+def _fetch_images_parallel(urls: List[str], limit: int) -> List[Dict[str, str]]:
+    want = [u for u in urls[: max(limit * 2, 12)] if isinstance(u, str)]
+    out: List[Dict[str, str]] = []
+    if not want or limit <= 0:
+        return out
+    with ThreadPoolExecutor(max_workers=min(6, len(want))) as ex:
+        futs = [ex.submit(fetch_image, u) for u in want]
+        for fut in as_completed(futs):
+            try:
+                pic = fut.result()
+            except Exception:
+                pic = None
+            if pic:
+                out.append(pic)
+                if len(out) >= limit:
+                    break
+    return out
+
+
 def read_link(url: str, want_images: bool = True, max_images: int = LINK_IMAGES) -> Dict[str, Any]:
-    """Lê um link colado pelo usuário: {url, title, kind, text, images:[{url,alt}], videos:[{url,title}], pics:[{media_type,data}], error}.
-    `kind`: page | image | video | file. Imagem direta vira imagem para o modelo; vídeo direto/plataforma vira descrição (título, capa) — o ASTA não assiste vídeos."""
+    """Lê um link colado pelo usuário: texto, imagens e vídeos da página (imagens baixadas em paralelo)."""
     out: Dict[str, Any] = {"url": url, "title": "", "kind": "page", "text": "", "images": [], "videos": [], "pics": [], "error": ""}
     if not safe_url(url):
         out["error"] = "endereço não público ou inválido"
@@ -599,38 +675,43 @@ def read_link(url: str, want_images: bool = True, max_images: int = LINK_IMAGES)
     out["title"] = page["title"] or meta.get("og:title", "")
     desc = meta.get("og:description") or meta.get("description") or ""
     out["text"] = (desc + "\n" + page["text"]).strip() if desc and desc not in page["text"] else page["text"]
-    out["images"], out["videos"] = media["images"][:max(12, max_images)], media["videos"]
+    out["images"], out["videos"] = media["images"][:max(24, max_images * 2)], media["videos"]
     host = (urllib.parse.urlsplit(final).hostname or "").lower()
     if any(host == h or host.endswith("." + h) for h in _VIDEO_HOSTS) and not out["videos"]:
         out["videos"].append({"url": final, "title": out["title"]})
     if out["videos"] and not page["text"]:
         out["kind"] = "video"
-    if want_images:
-        for im in out["images"]:
-            if len(out["pics"]) >= max_images:
-                break
-            pic = fetch_image(im["url"])
-            if pic:
-                out["pics"].append(pic)
+    if want_images and out["images"]:
+        out["pics"] = _fetch_images_parallel([im["url"] for im in out["images"]], max_images)
     return out
 
 
 def links_context(urls: List[str], want_images: bool = True, budget: int = 30000, prompt: str = "", transcribe: Optional[Any] = None) -> Dict[str, Any]:
-    """Lê vários links conforme o pedido do usuário (`prompt`): {text (bloco para o contexto), items (para a interface), images (para o modelo com visão)}.
-    Pediu imagens → mais imagens da página; pediu vídeo (ou o link é um vídeo) → baixa, tira quadros e transcreve o áudio."""
+    """Lê vários links (em paralelo) conforme o pedido: {text, items, images}."""
     want = link_intent(prompt)
-    parts: List[str] = []
-    items: List[Dict[str, Any]] = []
-    images: List[Dict[str, str]] = []
-    per = max(3000, budget // max(1, len(urls)))
-    for i, u in enumerate(urls[:LINK_MAX], 1):
+    url_list = [u for u in (urls or [])[:LINK_MAX] if isinstance(u, str)]
+
+    def one(iu):
+        i, u = iu
         r = read_link(u, want_images, want["max_images"])
         host = (urllib.parse.urlsplit(u).hostname or "").removeprefix("www.")
         analyzed = 0
         vid_blocks: List[str] = []
         if r["videos"] and (want["videos"] or r["kind"] == "video"):
-            for v in r["videos"][:VIDEO_MAX]:
-                a = analyze_video(v["url"], transcribe)
+            vids = r["videos"][:VIDEO_MAX]
+            if len(vids) > 1:
+                with ThreadPoolExecutor(max_workers=min(2, len(vids))) as vex:
+                    vfuts = {vex.submit(analyze_video, v["url"], transcribe): v for v in vids}
+                    vres = {}
+                    for fut in as_completed(vfuts):
+                        try:
+                            vres[id(vfuts[fut])] = fut.result()
+                        except Exception:
+                            vres[id(vfuts[fut])] = {"text": "", "frames": [], "notes": ["falha ao analisar o vídeo"]}
+                analyses = [vres.get(id(v), {"text": "", "frames": [], "notes": []}) for v in vids]
+            else:
+                analyses = [analyze_video(vids[0]["url"], transcribe)] if vids else []
+            for v, a in zip(vids, analyses):
                 if a["text"] or a["frames"]:
                     analyzed += 1
                     r["pics"] += a["frames"]
@@ -638,23 +719,48 @@ def links_context(urls: List[str], want_images: bool = True, budget: int = 30000
                                       + (f"\n{a['text']}" if a["text"] else "") + (f"\n({len(a['frames'])} quadros do vídeo seguem junto desta mensagem)" if a["frames"] else ""))
                 else:
                     vid_blocks.append(f"Vídeo {v['url']}" + (f" — {v['title']}" if v["title"] else "") + f" (não analisado: {'; '.join(a['notes']) or 'sem quadros nem áudio'})")
-        items.append({"n": i, "url": u[:500], "host": host[:80], "title": (r["title"] or host)[:140], "kind": r["kind"], "read": bool(r["text"] or r["pics"] or r["videos"]),
-                      "images": len(r["images"]), "videos": len(r["videos"]), "analyzed_videos": analyzed, "error": r["error"]})
+        item = {"n": i, "url": u[:500], "host": host[:80], "title": (r["title"] or host)[:140], "kind": r["kind"], "read": bool(r["text"] or r["pics"] or r["videos"]),
+                "images": len(r["images"]), "videos": len(r["videos"]), "analyzed_videos": analyzed, "error": r["error"]}
         lines = [f"[Link {i}] {r['title'] or host}", u]
         if r["error"]:
             lines.append(f"(não consegui abrir: {r['error']})")
         if r["kind"] == "image":
             lines.append("(o link é uma imagem" + ("; ela segue junto desta mensagem)" if r["pics"] else ")"))
         if r["text"]:
-            lines.append(r["text"][:per])
+            lines.append(r["text"][: max(3000, budget // max(1, len(url_list)))])
         if r["images"] and r["kind"] != "image":
-            lines.append("Imagens da página:" + "".join(f"\n  - {im['url']}" + (f" — {im['alt']}" if im["alt"] else "") for im in r["images"][:12]))
+            lines.append("Imagens da página:" + "".join(f"\n  - {im['url']}" + (f" — {im['alt']}" if im["alt"] else "") for im in r["images"][:16]))
             if r["pics"]:
                 lines.append(f"({len(r['pics'])} imagens/quadros seguem junto desta mensagem para você ver)")
         if vid_blocks:
             lines.append("Vídeos da página:\n" + "\n".join(vid_blocks))
         elif r["videos"]:
-            lines.append("Vídeos da página (não analisados — o usuário não pediu; se precisar, diga que dá para analisar se ele pedir):" + "".join(f"\n  - {v['url']}" + (f" — {v['title']}" if v["title"] else "") for v in r["videos"][:6]))
-        parts.append("\n".join(lines))
-        images += r["pics"]
-    return {"text": "\n\n".join(parts)[:budget], "items": items, "images": images[:12]}
+            lines.append("Vídeos da página (não analisados — o usuário não pediu; se precisar, diga que dá para analisar se ele pedir):" + "".join(f"\n  - {v['url']}" + (f" — {v['title']}" if v["title"] else "") for v in r["videos"][:8]))
+        return i, "\n".join(lines), item, r["pics"]
+
+    results = {}
+    if len(url_list) > 1:
+        with ThreadPoolExecutor(max_workers=min(4, len(url_list))) as ex:
+            futs = [ex.submit(one, (i, u)) for i, u in enumerate(url_list, 1)]
+            for fut in as_completed(futs):
+                try:
+                    i, block, item, pics = fut.result()
+                except Exception:
+                    continue
+                results[i] = (block, item, pics)
+    else:
+        for i, u in enumerate(url_list, 1):
+            try:
+                results[i] = one((i, u))[1:]
+            except Exception:
+                results[i] = (f"[Link {i}] {u}\n(não consegui ler)", {"n": i, "url": u[:500], "host": "", "title": u[:140], "kind": "page", "read": False, "images": 0, "videos": 0, "analyzed_videos": 0, "error": "erro"}, [])
+
+    parts: List[str] = []
+    items: List[Dict[str, Any]] = []
+    images: List[Dict[str, str]] = []
+    for i in range(1, len(url_list) + 1):
+        block, item, pics = results.get(i, ("", {"n": i, "url": "", "host": "", "title": "", "kind": "page", "read": False, "images": 0, "videos": 0, "analyzed_videos": 0, "error": ""}, []))
+        parts.append(block)
+        items.append(item)
+        images += pics
+    return {"text": "\n\n".join(parts)[:budget], "items": items, "images": images[:16]}

@@ -14,7 +14,7 @@ export const sendHint = () => (ui().send_key === 'ctrl_enter' ? 'Ctrl+Enter' : '
 
 // Abas da Configuração (a paleta de comandos também leva a cada uma)
 export const CONFIG_GROUPS = [['general', 'Geral'], ['ai', 'IA e modelos'], ['sections', 'Seções'], ['system', 'Sistema']];
-export const CONFIG_TABS = [['appearance', 'Aparência', 'general'], ['sections', 'Seções e atalhos', 'general'],
+export const CONFIG_TABS = [['appearance', 'Aparência', 'general'], ['profile', 'Perfil', 'general'], ['memory', 'Memória', 'general'], ['sections', 'Seções e atalhos', 'general'],
   ['providers', 'Provedores', 'ai'], ['media', 'Mídia', 'ai'], ['voice', 'Voz', 'ai'], ['local', 'Modelos locais', 'ai'],
   ['chat', 'Chat', 'sections'], ['engine', 'Game Engine', 'sections'], ['scriber', 'Scriber', 'sections'], ['avatars', 'Avatars', 'sections'], ['canvas', 'Canvas', 'sections'], ['studio', 'Studio', 'sections'], ['computer', 'Computer Use', 'sections'], ['code', 'Code', 'sections'], ['work', 'Work', 'sections'], ['rebuild', 'Rebuild', 'sections'],
   ['performance', 'Desempenho', 'system'], ['data', 'Dados e backup', 'system'], ['mobile', 'Celular e tablet', 'system'], ['system', 'Sistema', 'system']];

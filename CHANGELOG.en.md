@@ -5,7 +5,21 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > English translation of [`CHANGELOG.md`](CHANGELOG.md) (the Portuguese original is the reference). Mentions of Portuguese UI strings keep the original text in quotes.
 
-## [Unreleased]
+## [0.21.0] — 2026-11-11
+
+### Added — User profile
+- **User profile in Configuration → Profile:** profile photo, name, bio, gender, pronouns, personal tastes, interests, education, profession, location, language, website and free extra fields. Data is stored as open files (`profile.json` and the photo in `profile/`) inside ASTA's folder on your computer.
+- **Import and export profile:** exports a JSON bundle with the profile and **general workflow presets** (interface and section settings, without API keys or tokens) to move everything to another computer; importing applies the profile and, when present, those presets. Endpoints: `GET/PUT /api/profile`, `GET/PUT/DELETE /api/profile/portrait`, `GET /api/profile/export`, `POST /api/profile/import`.
+
+### Added — Unified universal memory
+- **Unified long-term memory of everything done in ASTA:** events from Chat, Avatars, background jobs and profile/settings changes are now recorded automatically. Each memory is an open, editable JSON item.
+- **Organized by year, month, week and day:** `~/.asta/memory/YYYY/MM/week-WW/YYYY-MM-DD.json` (one file per day), easy to open and edit in ASTA's folders.
+- **WebUI in Configuration → Memory:** day list, search, view and edit the day's JSON, and create notes. Endpoints: `GET /api/memory/days`, `GET /api/memory/day`, `PUT /api/memory/day`, `GET /api/memory/search`, `GET /api/memory/sections`, `POST/PUT/DELETE /api/memory/item`.
+
+### Improved — Native web search 2.0
+- **Parallel reading:** search with page reading (`/api/web/context`) and reading multiple links pasted in Chat now fetch pages, images and videos in parallel (with bounded concurrency), speeding up analysis of one or several sites at once.
+- **Better page and gallery analysis:** expanded extraction of images and metadata (lazy attributes such as `data-src`, `srcset`, image links, JSON-LD and embedded image URLs), useful for gallery-style pages (such as Pinterest, Instagram and Pawchive). More images per page are considered and downloaded in parallel for vision-capable models.
+- **Images and videos:** multiple links and more than one video can be analyzed in parallel when the request involves video; more images/frames can be attached to the context (within existing safety and size limits).
 
 ### Fixed — Chat
 - **Reading links pasted in the text box:** when reading the links failed unexpectedly, the “Reading…” notice could stay stuck on screen and the failure was not explained. The Chat now shows the reason, clears the notice and keeps answering using only the message text (links that can be read still go into the context and into the images, as before).
@@ -22,7 +36,12 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 ### Improved — native core and local models
 - **Local model planning (Rust + Python mirror, same ABI):** the native LLM planner uses larger prompt batches when GPU/RAM headroom allows, enables flash attention more aggressively in cases where it helps (GPU, quantized KV cache or long-running use) and adjusts prompt-cache budgeting for long sessions, keeping the same API behavior.
 
+### Changed
+- Version 0.21.0; READMEs and changelogs updated (pt/en).
+
 ### Honest limits (unverified)
+- The unified memory automatically records the main events integrated in this release (Chat, Avatars, background job completion and profile/settings changes); **not every internal action in every section** has a dedicated recording hook yet, and viewing/editing in the WebUI depends on the browser. Recorded content stays in ASTA's local folder (`~/.asta/memory`) and should be treated as user data.
+- Gallery-site analysis (Pinterest, Instagram, Pawchive, etc.) depends on publicly accessible HTML/metadata at the time: content behind login, loaded dynamically only by in-browser JavaScript, or blocked by the site may not be fully read. Video analysis depends on download/ffmpeg/`yt-dlp` and available tools; it was **not tested against each real site**.
 - **Not tested on real NVIDIA 20/30/40/50 series hardware** nor in continuous multi-hour/day local runs; performance gains in those conditions were not measured.
 - Every reported case of using **LM Studio** to create/edit code directly in a user's GitHub repositories, and every real-world multi-agent orchestration combination, was **not reproduced and validated end to end** with real models and repositories.
 - Hugging Face profile search depends on Hugging Face API results at query time; the exact availability of “all models” from a profile may vary. Installers and release artifacts were **not run on real devices** by the author of this change.

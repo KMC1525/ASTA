@@ -156,6 +156,10 @@ class ChatEngine:
         chat["messages"].append(msg)
         chat["autonomous_turns"] = 0
         self._save(chat)
+        try:
+            self.store.remember("avatars", "mensagem_usuario", ", ".join(a.get("name", "") for a in avatars[:3]) or "Avatar", (msg.get("text") or "")[:500], {"chat_id": chat["id"], "avatar_ids": chat.get("avatar_ids", [])})
+        except Exception:
+            pass
         emit({"type": "user", "message": msg})
         self._respond(chat, avatars, settings, uname, user_text, emit, cancelled)
 
@@ -380,6 +384,10 @@ class ChatEngine:
                    "mood": parsed["mood"], "ts": now_iso()}
         chat["messages"].append(message)
         self._save(chat)
+        try:
+            self.store.remember("avatars", "resposta_avatar", speaker.get("name", "Avatar"), parsed["say"][:500], {"chat_id": chat["id"], "avatar_id": speaker["id"]})
+        except Exception:
+            pass
         if parsed["remember"]:
             self.store.add_memories(speaker["id"], parsed["remember"], int(num(settings["avatars"].get("memory_limit"), 40, 5, 500)))
         emit({"type": "message", "message": message, "remembered": parsed["remember"]})

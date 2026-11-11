@@ -304,6 +304,10 @@ class AssistantChat:
             if first:
                 chat["title"] = title_from(body or (analyzed[0]["name"] if analyzed else "Novo chat"))
             self._save(chat)
+            try:
+                self.store.remember("chat", "mensagem_usuario", chat.get("title") or "Chat", (msg.get("text") or "")[:500], {"chat_id": chat["id"], "message_id": msg["id"], "attachments": [a.get("name") for a in (msg.get("attachments") or [])], "web": bool(web)})
+            except Exception:
+                pass
             emit({"type": "user", "message": {k: msg[k] for k in ("id", "role", "text", "ts", "attachments")}})
             if first:
                 emit({"type": "title", "title": chat["title"]})
@@ -534,6 +538,10 @@ class AssistantChat:
             msg["search"] = query
         chat["messages"].append(msg)
         self._save(chat)
+        try:
+            self.store.remember("chat", "resposta", chat.get("title") or "Chat", final[:500], {"chat_id": chat["id"], "message_id": msg["id"], "model": msg.get("model", ""), "sources": [s.get("url") for s in (sources or [])[:5]]})
+        except Exception:
+            pass
         emit({"type": "message", "message": msg})
         tool = detect_tool(suggest_from) if suggest_from else None
         if tool:

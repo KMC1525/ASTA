@@ -57,9 +57,10 @@ class Job:
 
 
 class JobManager:
-    def __init__(self) -> None:
+    def __init__(self, store=None) -> None:
         self.jobs: Dict[str, Job] = {}
         self.lock = threading.Lock()
+        self.store = store
 
     def start(self, kind: str, fn: Callable[[Job], Optional[dict]]) -> Job:
         job = Job(kind)
@@ -68,6 +69,23 @@ class JobManager:
                 self.jobs.pop(jid, None)
             self.jobs[job.id] = job
 
+        def _remember(status: str, result: Optional[dict], err: str = "") -> None:
+            if not self.store:
+                return
+            try:
+                detail = {"job_id": job.id, "kind": kind, "status": status}
+                if err:
+                    detail["error"] = err[:300]
+                if isinstance(result, dict):
+                    for k in ("id", "project_id", "world_id", "game_id", "canvas_id", "studio_id", "text_id", "name", "title", "path"):
+                        if k in result and result[k] not in (None, ""):
+                            detail[k] = result[k]
+                title = f"{kind}: {status}"
+                summary = err[:400] if err else ("concluído" if status == "done" else status)
+                self.store.remember("jobs", kind, title, summary, detail, [status])
+            except Exception:
+                pass
+
         def run() -> None:
             from . import scheduler
 
@@ -75,23 +93,29 @@ class JobManager:
             try:
                 res = fn(job)
                 job.finish("done", res)
+                _remember("done", res)
             except Cancelled:
                 job.emit({"type": "cancelled"})
                 job.finish("cancelled")
+                _remember("cancelled", None)
             except ProviderError as exc:
                 if str(exc) == "cancelado":
                     job.emit({"type": "cancelled"})
                     job.finish("cancelled")
+                    _remember("cancelled", None)
                 else:
                     job.emit({"type": "error", "message": str(exc), "kind": "provider"})
                     job.finish("error")
+                    _remember("error", None, str(exc))
             except ValueError as exc:  # entrada inválida: mensagem para o usuário, sem traceback
                 job.emit({"type": "error", "message": str(exc), "kind": "validation"})
                 job.finish("error")
+                _remember("error", None, str(exc))
             except Exception as exc:  # noqa: BLE001
                 traceback.print_exc()
                 job.emit({"type": "error", "message": str(exc) or exc.__class__.__name__, "kind": "internal"})
                 job.finish("error")
+                _remember("error", None, str(exc))
 
         threading.Thread(target=run, daemon=True, name=f"job-{job.id}").start()
         return job

@@ -271,6 +271,9 @@ class Store:
         self.avatar_chats = CardStore(self.home / "avatar_chats", normalize_chat, "ch_")
         self.avatar_portraits_dir = self.home / "avatars" / "portraits"
         self.avatar_memory_dir = self.home / "avatar_memory"
+        self.profile_dir = self.home / "profile"
+        self.profile_path = self.home / "profile.json"
+        self.memory_dir = self.home / "memory"
         self.canvases = CanvasStore(self.home / "canvases")
         from .studio.store import StudioStore
 
@@ -278,7 +281,7 @@ class Store:
         self.projects_dir = self.home / "projects"
         self.uploads_dir = self.home / "uploads"
         self.models_dir = self.home / "models"
-        for d in (self.projects_dir, self.uploads_dir, self.models_dir, self.avatar_portraits_dir, self.avatar_memory_dir):
+        for d in (self.projects_dir, self.uploads_dir, self.models_dir, self.avatar_portraits_dir, self.avatar_memory_dir, self.profile_dir, self.memory_dir):
             d.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
         from . import perf
@@ -567,6 +570,86 @@ class Store:
             chat["messages"] = [m for m in chat.get("messages", []) if m.get("avatar_id") != avatar_id]
             self.avatar_chats.save(chat, chat["id"])
         return True
+
+
+    # ------------------------------------------------------------------ perfil do usuário
+    def get_profile(self) -> dict:
+        from . import profile as p
+        return p.load(self.profile_path)
+
+    def save_profile(self, data: dict) -> dict:
+        from . import profile as p
+        return p.save(self.profile_path, data)
+
+    def profile_portrait_path(self) -> Optional[Path]:
+        prof = self.get_profile()
+        name = prof.get("portrait") or ""
+        if not name or "/" in name or "\\" in name or ".." in name:
+            return None
+        p = self.profile_dir / name
+        return p if p.is_file() else None
+
+    def save_profile_portrait(self, data: bytes, ext: str) -> Optional[str]:
+        from . import profile as p
+        prof = self.get_profile()
+        ext = ext.lower().lstrip(".")
+        if ext not in ("png", "jpg", "jpeg", "webp", "gif") or not data:
+            return None
+        old = prof.get("portrait") or ""
+        name = f"portrait-{new_id()}.{'jpg' if ext == 'jpeg' else ext}"
+        (self.profile_dir / name).write_bytes(data)
+        prof["portrait"] = name
+        p.save(self.profile_path, prof, keep_portrait=name)
+        if old and old != name and "/" not in old and ".." not in old:
+            (self.profile_dir / old).unlink(missing_ok=True)
+        return name
+
+    def clear_profile_portrait(self) -> bool:
+        from . import profile as p
+        prof = self.get_profile()
+        old = prof.get("portrait") or ""
+        if old and "/" not in old and ".." not in old:
+            (self.profile_dir / old).unlink(missing_ok=True)
+        prof["portrait"] = ""
+        p.save(self.profile_path, prof, keep_portrait="")
+        return True
+
+    # ------------------------------------------------------------------ memória unificada universal
+    def remember(self, section: str, action: str, title: str = "", summary: str = "", detail: Any = None, tags: Optional[List[str]] = None) -> Optional[dict]:
+        """Registra um evento na memória unificada (JSON por ano/mês/semana/dia). Nunca levanta erro para não atrapalhar a ação principal."""
+        try:
+            from . import memory
+            return memory.record(self.memory_dir, section, action, title, summary, detail, tags)
+        except Exception:
+            return None
+
+    def memory_days(self, limit: int = 400) -> list:
+        from . import memory
+        return memory.list_days(self.memory_dir, limit)
+
+    def memory_day(self, date: str) -> Optional[dict]:
+        from . import memory
+        return memory.read_day(self.memory_dir, date)
+
+    def memory_write_day(self, date: str, doc: Any) -> dict:
+        from . import memory
+        return memory.write_day(self.memory_dir, date, doc)
+
+    def memory_update_item(self, date: str, item_id: str, patch: Any) -> dict:
+        from . import memory
+        return memory.update_item(self.memory_dir, date, item_id, patch)
+
+    def memory_delete_item(self, date: str, item_id: str) -> bool:
+        from . import memory
+        return memory.delete_item(self.memory_dir, date, item_id)
+
+    def memory_search(self, query: str = "", section: str = "", limit: int = 200) -> list:
+        from . import memory
+        return memory.search(self.memory_dir, query, section, limit)
+
+    def memory_sections(self) -> list:
+        from . import memory
+        return memory.sections(self.memory_dir)
 
     # ------------------------------------------------------------------ uploads
     def save_upload_stream(self, name: str, mime: str, stream, length: int, chunk: int = 1 << 20) -> dict:

@@ -34,6 +34,8 @@ from .routes_canvas import CanvasRoutes
 from .routes_studio import StudioRoutes
 from .routes_mobile import MobileRoutes
 from .routes_auth import AuthRoutes
+from .routes_profile import ProfileRoutes
+from .routes_memory import MemoryRoutes
 from .mobile import Mobile, PAIR_REQUIRED_HTML, is_loopback, _FORWARD_HEADERS
 from .remote import Remote
 from .routes_games import GameRoutes
@@ -86,7 +88,7 @@ def _native_status() -> dict:
 class App:
     def __init__(self, store: Store, bind_host: str = "127.0.0.1"):
         self.store = store
-        self.jobs = JobManager()
+        self.jobs = JobManager(store)
         self.bind_host = bind_host
         self.routes: List[Tuple[str, "re.Pattern[str]", Callable]] = []
         self._register()
@@ -218,6 +220,10 @@ class App:
         a("POST", r"/api/remote", self.r_remote_do)
         self.auth_routes = AuthRoutes(self)
         self.auth_routes.register()
+        self.profile_routes = ProfileRoutes(self)
+        self.profile_routes.register()
+        self.memory_routes = MemoryRoutes(self)
+        self.memory_routes.register()
         self.studio_routes = StudioRoutes(self)
         self.studio_routes.register()
         self.preinstalled_routes = PreinstalledRoutes(self)
@@ -254,6 +260,10 @@ class App:
         if not isinstance(body, dict):
             raise HttpError(400, "JSON inválido")
         self.store.save_settings(body)
+        try:
+            self.store.remember("settings", "atualizar", "Configurações", "Configurações atualizadas", {"sections": sorted(k for k in body.keys() if isinstance(k, str))[:20]})
+        except Exception:
+            pass
         req.json(self.store.public_settings())
 
     def r_settings_export(self, req: "Request") -> None:
