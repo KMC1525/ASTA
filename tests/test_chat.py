@@ -148,6 +148,19 @@ class EngineTests(TmpCase):
         with self.assertRaises(ValueError):
             self.engine.send("nao-existe", "oi", [], self.events.append)
 
+    def test_link_read_failure_is_reported_and_answer_still_sent(self):
+        chat = self.engine.create()
+        prov = Prov("respondi mesmo assim")
+        with mock.patch.object(ac.websearch, "extract_urls", return_value=["https://example.com/a"]), \
+             mock.patch.object(ac.websearch, "links_context", side_effect=RuntimeError("falha de rede")):
+            self.run_send(chat["id"], "veja https://example.com/a", prov)
+        kinds = self.types()
+        self.assertIn("notice", kinds)
+        self.assertIn("message", kinds)
+        self.assertFalse(any(e["type"] == "links" for e in self.events))
+        self.assertTrue(any("Não consegui ler os links" in str(e.get("message", "")) for e in self.events if e["type"] == "notice"))
+        self.assertEqual(self.store.chats.get(chat["id"])["messages"][-1]["text"], "respondi mesmo assim")
+
 
 class ApiTests(ServerCase):
     def sse_send(self, cid, text, ids=None):

@@ -5,6 +5,12 @@ O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e 
 
 ## [Não lançado]
 
+### Corrigido — Chat
+- **Leitura de links colados na caixa de texto:** quando a leitura dos links falhava de forma inesperada, o aviso «Lendo…» podia ficar preso na tela e a falha não era explicada. Agora o Chat mostra o motivo, limpa o aviso e segue respondendo só com o texto da mensagem (os links que a leitura consegue abrir continuam indo para o contexto e para as imagens, como antes).
+
+### Melhorado — Chat
+- **Arquivos compactados (ZIP, RAR, 7z, TAR) como anexos:** ao anexar um pacote no Chat, o ASTA extrai e lê o conteúdo de dentro (textos, documentos, imagens, áudio e vídeo) com segurança para responder. ZIP e TAR não precisam de nada; RAR e 7z usam uma ferramenta do sistema (`unrar`, `unar`, `7z`/`7zz`/`7za` ou `bsdtar`) quando disponível.
+
 ## [0.20.1] — 2026-11-10
 
 ### Adicionado — todos os modos: equipe de 2 agentes em paralelo
