@@ -5,6 +5,29 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > English translation of [`CHANGELOG.md`](CHANGELOG.md) (the Portuguese original is the reference). Mentions of Portuguese UI strings keep the original text in quotes.
 
+## [0.21.1] — 2026-11-11
+
+### Improved — internal prompts (AI across every mode)
+- **Clearer core system prompts for smaller and less capable models:** the core prompts for Game Engine, Computer Use, Code, Scriber and Work were rewritten with explicit objectives, mandatory output format, data/safety rules, and untrusted-input handling to guide models step by step more reliably.
+- **Key role prompts and agent prompt builder:** clarity improvements in planning/review prompts (Game Engine, Scriber, Code, Computer Use) and in the multi-agent prompt builder (`asta/agents/prompts.py`), reinforcing complete JSON (no placeholders), user language, and using provided input without inventing.
+
+### Improved — native core (Rust) and performance on weak machines
+- **More efficient directory scanning:** the native scanner (`asta_scan_dir`) now uses a short sleep instead of a tight spin while other threads are still working, reducing unnecessary CPU use on weak machines.
+- **Audio/PCM micro-optimizations:** hot paths in tone synthesis and PCM16 conversion were tuned (reused calculations and more direct floating-point operations) while keeping the same behavior and ABI (interface 4).
+
+### Fixed
+- **Role-marker compatibility in prompts:** rewritten role prompts keep the `ROLE: ...` marker, preserving identification used by tests and internal integrations.
+
+### Changed
+- Version 0.21.1 (`asta/__init__.py`, Android/Capacitor shell). READMEs and changelogs updated (pt/en).
+
+### Honest limits (unverified)
+- **Not every prompt file** for every sub-role/app/specialist in every mode was rewritten; improvements focused on core and high-impact role prompts. Final quality still depends on the model/provider used.
+- **The full test suite and browser tests** (Node + Playwright + Chromium) were not run in this environment; `python -m unittest tests.test_team` and `python -m unittest tests.test_engine` were run and passed after these changes.
+- **The Rust core was not rebuilt** from this source change here and Rust tests (`cargo test`) were not run; changes are local and preserve the existing interface/contract, but distributed binaries only change when the core is rebuilt by installers/CI.
+- **No verification on real weak hardware, NVIDIA GPUs, mobile devices, real macOS/Windows, or long-running sessions**; performance gains were not measured.
+- **No push, merge, or release publishing was performed** by the author of this change (explicit authorization required). Installers/release artifacts were not built or tested on real devices.
+
 ## [0.21.0] — 2026-11-11
 
 ### Added — User profile

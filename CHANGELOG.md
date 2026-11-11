@@ -3,6 +3,29 @@
 Todas as mudanças relevantes do ASTA são registradas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.21.1] — 2026-11-11
+
+### Melhorado — prompts internos (IA em todos os modos)
+- **System prompts principais mais claros para modelos pequenos e menos capazes:** os prompts centrais do Game Engine, Computer Use, Code, Scriber e Work foram reescritos com objetivo explícito, formato de saída obrigatório, regras de dados/segurança e tratamento de entrada não confiável, para guiar melhor o modelo passo a passo.
+- **Prompts de papéis-chave e construtor de prompts dos agentes:** melhorias de clareza em prompts de planejamento/revisão (Game Engine, Scriber, Code, Computer Use) e no construtor de prompts do sistema multiagente (`asta/agents/prompts.py`), reforçando JSON completo, sem placeholders, idioma do usuário e uso dos dados de entrada sem inventar.
+
+### Melhorado — núcleo nativo (Rust) e desempenho em máquinas fracas
+- **Varredura de pastas mais eficiente:** o scanner do núcleo (`asta_scan_dir`) passou a usar uma pequena espera em vez de giro contínuo enquanto outras threads ainda trabalham, reduzindo uso desnecessário de CPU em máquinas fracas.
+- **Micro-otimizações em áudio/PCM:** caminhos quentes de síntese de tom e conversão PCM16 ajustados (cálculos reaproveitados e operações de ponto flutuante mais diretas), mantendo o mesmo comportamento e a mesma ABI (interface 4).
+
+### Corrigido
+- **Compatibilidade de marcadores de papel nos prompts:** prompts de papéis reescritos mantêm o marcador `ROLE: ...`, preservando a identificação usada por testes e integrações internas.
+
+### Alterado
+- Versão 0.21.1 (`asta/__init__.py`, app Android/casca Capacitor). READMEs e changelogs atualizados (pt/en).
+
+### Limites honestos (não verificado)
+- **Não foram reescritos todos os arquivos de prompt** de cada subpapel/aplicativo/especialista em todos os modos; a melhoria focou nos prompts centrais e em papéis-chave de alto impacto. A qualidade final continua dependendo do modelo/provedor usado.
+- **Não foi executada a suíte completa de testes** nem os testes de navegador (Node + Playwright + Chromium) neste ambiente; foram executados e passaram `python -m unittest tests.test_team` e `python -m unittest tests.test_engine` após as alterações.
+- **O núcleo Rust não foi recompilado** nesta alteração de código-fonte e os testes Rust (`cargo test`) não foram executados aqui; as mudanças são locais e preservam a interface/contrato existente, mas o binário distribuído só muda quando o núcleo é reconstruído pelos instaladores/CI.
+- **Sem verificação em hardware real fraco, GPUs NVIDIA, dispositivos móveis, macOS/Windows reais ou execuções longas**; ganhos de desempenho não foram medidos.
+- **Nenhum push, merge ou publicação de release foi feito** pelo autor desta mudança (requer autorização explícita). Os instaladores/artefatos de release não foram gerados nem testados em aparelhos reais.
+
 ## [0.21.0] — 2026-11-11
 
 ### Adicionado — Perfil do usuário

@@ -144,10 +144,11 @@ pub unsafe extern "C" fn asta_scan_dir(path: *const u8, path_len: usize, max_ent
                             busy.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                         }
                         None => {
-                            if busy.load(std::sync::atomic::Ordering::SeqCst) == 0 {
+                            if busy.load(std::sync::atomic::Ordering::SeqCst) == 0 && stack.lock().unwrap().is_empty() {
                                 break;
                             }
-                            std::thread::yield_now();
+                            // Short backoff instead of a tight spin: much kinder to weak CPUs while others are still scanning.
+                            std::thread::sleep(std::time::Duration::from_millis(1));
                         }
                     }
                     if local.files + local.dirs > limit {

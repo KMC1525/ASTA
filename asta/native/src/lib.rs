@@ -45,24 +45,23 @@ pub unsafe extern "C" fn asta_tone(out: *mut f64, n: usize, freq: f64, wave: u32
     let na = attack_n.max(1) as f64;
     let nr = release_n.max(1) as f64;
     let denom = (n.saturating_sub(1)).max(1) as f64;
+    let inv_sr_tau = (2.0 * PI) / sr;
+    let inv_tau = 1.0 / (2.0 * PI);
     let mut ph = 0.0f64;
     for (i, o) in buf.iter_mut().enumerate() {
-        let f = if has_sweep != 0 { freq + (sweep - freq) * (i as f64) / denom } else { freq };
-        ph += 2.0 * PI * f / sr;
+        let t = i as f64;
+        let f = if has_sweep != 0 { (sweep - freq).mul_add(t / denom, freq) } else { freq };
+        ph += f * inv_sr_tau;
+        let cyc = (ph * inv_tau).rem_euclid(1.0);
         let s = match wave {
-            1 => {
-                if ph.sin() >= 0.0 {
-                    1.0
-                } else {
-                    -1.0
-                }
-            }
-            2 => 2.0 * ((ph / (2.0 * PI)).rem_euclid(1.0)) - 1.0,
-            3 => 2.0 * (2.0 * ((ph / (2.0 * PI)).rem_euclid(1.0)) - 1.0).abs() - 1.0,
+            1 => if ph.sin() >= 0.0 { 1.0 } else { -1.0 },
+            2 => cyc.mul_add(2.0, -1.0),
+            3 => (2.0 * cyc - 1.0).abs().mul_add(-2.0, 1.0),
             _ => ph.sin(),
         };
-        let env = ((i as f64) / na).min(1.0) * (((n - i) as f64) / nr).min(1.0);
-        *o = s * vol * env;
+        let attack = (t / na).min(1.0);
+        let release = (((n - i) as f64) / nr).min(1.0);
+        *o = s * vol * attack * release;
     }
 }
 
@@ -128,10 +127,13 @@ pub unsafe extern "C" fn asta_fade_out(buf: *mut f64, n: usize, fade: usize) {
 #[no_mangle]
 pub unsafe extern "C" fn asta_pcm16(src: *const f64, n: usize, out: *mut i16, limit: f64) {
     let (Some(s), Some(o)) = (slice_ref(src, n), slice_mut(out, n)) else { return };
-    let peak = s.iter().fold(1e-6f64, |m, v| m.max(v.abs()));
+    let peak = s.iter().fold(1e-6f64, |m, &v| {
+        let a = v.abs();
+        if a > m { a } else { m }
+    });
     let k = if peak > limit { limit / peak } else { 1.0 };
-    for (dst, v) in o.iter_mut().zip(s.iter()) {
-        *dst = ((v * k).clamp(-1.0, 1.0) * 32767.0) as i16;
+    for (dst, &v) in o.iter_mut().zip(s.iter()) {
+        *dst = (v * k).clamp(-1.0, 1.0).mul_add(32767.0, 0.0) as i16;
     }
 }
 
