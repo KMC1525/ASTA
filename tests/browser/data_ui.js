@@ -22,7 +22,7 @@ run('data_ui', async ({ base, api, open, check }) => {
   // ---- criar um dataset e ver os cards (depois de criar, o item já abre: fecha-se o diálogo)
   await page.click('#dt-body .dt-actions button');            // o primeiro botão é «Novo»
   await page.waitForSelector('#dt-new-kind');
-  await page.fill('.modal input:not([type=checkbox])', 'Clientes de teste');
+  await page.fill('#dt-new-name', 'Clientes de teste');
   await page.click('.modal .foot button:last-child');        // o último botão do rodapé é o principal («Criar»)
   await until(page, () => document.querySelectorAll('.dt-card').length > 0);
   await page.waitForSelector('.modal .dt-table', { timeout: 15000 }).catch(() => {});
@@ -67,8 +67,8 @@ run('data_ui', async ({ base, api, open, check }) => {
   await page.waitForTimeout(400);
   check('sintetico:modo-duplo', (await page.locator('#dt-synth-mode option').count()) === 2);
   await page.fill('.dt-composer textarea', 'pessoas variadas');
-  await page.fill('input[type=number]', '12');
-  await page.click('#dt-body .dt-actions button');           // «Gerar dados sintéticos»
+  await page.fill('#dt-synth-count', '12');
+  await page.click('#dt-synth-run');
   await until(page, () => /Conclu|Done/i.test(document.getElementById('dt-body').textContent), null, 40000);
   const items = (await api('/api/data/items?kind=dataset')).items;
   check('sintetico:gerou-registros', items.some((i) => i.records >= 12), `registros: ${items.map((i) => i.records).join(',')}`);
@@ -80,8 +80,8 @@ run('data_ui', async ({ base, api, open, check }) => {
   const warn = (await page.textContent('#dt-body')).toLowerCase();
   check('scraping:aviso-open-source', warn.includes('open source') && warn.includes('comercial'));
   check('scraping:aceite-precisa', (await page.locator('#dt-scrape-ack').count()) === 1);
-  await page.fill('#dt-body textarea', 'https://exemplo.org/pagina');
-  await page.click('#dt-body .dt-actions button');           // «Fazer scraping»
+  await page.fill('#dt-scrape-urls', 'https://exemplo.org/pagina');
+  await page.click('#dt-scrape-run');
   await page.waitForTimeout(600);
   const aviso = (await page.textContent('#dt-body')).toLowerCase();
   check('scraping:pede-o-aceite', aviso.includes('confirme') || aviso.includes('confirm'), `aviso: ${aviso.slice(0, 120)}`);
@@ -102,7 +102,7 @@ run('data_ui', async ({ base, api, open, check }) => {
   await page.waitForTimeout(400);
   const fmts = await page.$$eval('#dt-exp-fmt option', (els) => els.map((e) => e.value));
   check('export:formatos', fmts.includes('json') && fmts.includes('csv') && fmts.includes('sqlite') && fmts.includes('xml'));
-  await page.click('#dt-body .dt-actions button');           // «Exportar»
+  await page.click('#dt-exp-run');
   await until(page, () => document.querySelector('#dt-body a[download]') !== null, null, 20000);
   check('export:gera-arquivo', (await page.locator('#dt-body a[download]').count()) >= 1);
 });

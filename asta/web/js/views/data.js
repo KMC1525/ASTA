@@ -96,7 +96,7 @@ function recordsTable(records, schema, opt = {}) {
 async function openItemDialog(kind, id, onChanged) {
   let data;
   try { data = await api(`/api/data/items/${kind}/${id}`); } catch (e) { toast(e.message, 'err'); return; }
-  const filter = h('input', { placeholder: t('Filtrar registros…'), style: { flex: '1', minWidth: '160px' } });
+  const filter = h('input', { id: 'dt-item-filter', placeholder: t('Filtrar registros…'), style: { flex: '1', minWidth: '160px' } });
   let sortKey = '';
   let sortDir = 'asc';
   const tableBox = h('div');
@@ -143,8 +143,8 @@ async function openItemDialog(kind, id, onChanged) {
 
 async function createDialog(defaultKind, onChanged) {
   const cfg = (state.settings && state.settings.data) || {};
-  const name = h('input', { placeholder: t('Nome'), maxlength: 100 });
-  const desc = h('input', { placeholder: t('Descrição (opcional)'), maxlength: 400 });
+  const name = h('input', { id: 'dt-new-name', placeholder: t('Nome'), maxlength: 100 });
+  const desc = h('input', { id: 'dt-new-desc', placeholder: t('Descrição (opcional)'), maxlength: 400 });
   const kindSel = select([['dataset', t('Dataset')], ['database', t('Database')]], defaultKind || cfg.default_kind || 'dataset', () => {}, { id: 'dt-new-kind' });
   const body = h('div', { class: 'col', style: { gap: '8px', minWidth: '420px' } },
     h('div', { class: 'field' }, h('label', { class: 'f' }, t('Tipo')), kindSel),
@@ -267,7 +267,7 @@ export default async function render(root, ctx) {
   function paintSynthetic() {
     const sel = itemSelect(items, 'dt-synth-item');
     const cmp = promptComposer(t('Descreva os dados sintéticos que deseja gerar (use prompts multimodais; anexe arquivos/imagens e cite modalidades).'), 6);
-    const count = h('input', { type: 'number', min: 1, max: MAX_SYNTH, value: cfg.synthetic_count || 20 });
+    const count = h('input', { type: 'number', id: 'dt-synth-count', min: 1, max: MAX_SYNTH, value: cfg.synthetic_count || 20 });
     const modeSel = select(SYNTH_MODES, cfg.synthetic_mode || 'single', () => {}, { id: 'dt-synth-mode' });
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-synth-team', defaultEffort: 'high' });
@@ -297,13 +297,13 @@ export default async function render(root, ctx) {
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade')), count),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
-        h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('sparkle', 14), t('Gerar dados sintéticos'))),
+        h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', id: 'dt-synth-run', onclick: run }, icon('sparkle', 14), t('Gerar dados sintéticos'))),
         status));
   }
 
   function paintScraping() {
     const sel = itemSelect(items, 'dt-scrape-item');
-    const urls = h('textarea', { placeholder: t('Um link por linha (sites ou qualquer tipo de link http/https).'), rows: 6, style: { width: '100%' } });
+    const urls = h('textarea', { id: 'dt-scrape-urls', placeholder: t('Um link por linha (sites ou qualquer tipo de link http/https).'), rows: 6, style: { width: '100%' } });
     const cmp = promptComposer(t('O que extrair/estruturar a partir das páginas (prompt multimodal de extração).'), 4);
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-scrape-team', defaultEffort: 'high' });
@@ -337,16 +337,16 @@ export default async function render(root, ctx) {
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Links (um por linha)')), urls),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt de extração')), cmp.el),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
-        h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('globe', 14), t('Fazer scraping e extrair'))),
+        h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', id: 'dt-scrape-run', onclick: run }, icon('globe', 14), t('Fazer scraping e extrair'))),
         status));
   }
 
   function paintUpgrade() {
     const sel = itemSelect(items, 'dt-up-item');
-    const fileIn = h('input', { type: 'file', accept: '.json,.jsonl,.ndjson,.csv,.tsv,.xml' });
+    const fileIn = h('input', { type: 'file', id: 'dt-up-file', accept: '.json,.jsonl,.ndjson,.csv,.tsv,.xml' });
     const kindSel = select([['dataset', t('Dataset')], ['database', t('Database')]], cfg.default_kind || 'dataset', () => {}, { id: 'dt-up-kind' });
     const cmp = promptComposer(t('Como melhorar/enriquecer? (opcional). Você pode pedir novos campos, limpeza, normalização ou mais dados.'), 4);
-    const count = h('input', { type: 'number', min: 0, max: MAX_SYNTH, value: 0 });
+    const count = h('input', { type: 'number', id: 'dt-up-count', min: 0, max: MAX_SYNTH, value: 0 });
     const modeSel = select(SYNTH_MODES, cfg.synthetic_mode || 'single', () => {}, { id: 'dt-up-mode' });
     const actionSel = select([['enrich', t('Melhorar/enriquecer registros existentes')], ['generate', t('Gerar e adicionar mais dados sintéticos')]], 'enrich', () => {}, { id: 'dt-up-action' });
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
@@ -407,7 +407,7 @@ export default async function render(root, ctx) {
           h('div', { class: 'grid2' }, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade (para gerar mais)')), count), h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt/instruções')), cmp.el),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
-          h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('sparkle', 14), t('Aplicar upgrade com IA'))),
+          h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', id: 'dt-up-run', onclick: run }, icon('sparkle', 14), t('Aplicar upgrade com IA'))),
           status)));
   }
 
@@ -450,8 +450,8 @@ export default async function render(root, ctx) {
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Item')), sel),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Formato')), fmtSel)),
         h('div', { class: 'dt-actions' },
-          h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('download', 14), t('Exportar')),
-          h('button', { class: 'btn', type: 'button', onclick: runAll }, icon('layers', 14), t('Exportar todos'))),
+          h('button', { class: 'btn primary', type: 'button', id: 'dt-exp-run', onclick: run }, icon('download', 14), t('Exportar')),
+          h('button', { class: 'btn', type: 'button', id: 'dt-exp-all', onclick: runAll }, icon('layers', 14), t('Exportar todos'))),
         status));
   }
 
