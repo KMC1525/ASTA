@@ -183,15 +183,15 @@ function jobWatcher(jobId, onDone) {
   const box = h('div', { class: 'muted small' }, t('Executando...'));
   const bar = h('div', { class: 'dt-bar' }, h('i'));
   const wrap = h('div', { class: 'col', style: { gap: '6px' } }, box, bar);
-  events(`/api/jobs/${jobId}/events`, {
-    stage: (ev) => { box.textContent = ev.message || ev.stage || t('Executando...'); },
-    progress: (ev) => {
+  // o EventSource entrega TODOS os eventos ao mesmo callback; o tipo vem em `ev.type`
+  events(`/api/jobs/${jobId}/events`, (ev) => {
+    if (ev.type === 'stage') { box.textContent = ev.message || ev.stage || t('Executando...'); }
+    else if (ev.type === 'progress') {
       if (ev.message) box.textContent = ev.message;
       if (ev.total) bar.firstChild.style.width = Math.round((ev.done / ev.total) * 100) + '%';
-    },
-    done: (ev) => { box.textContent = t('Concluído.'); bar.firstChild.style.width = '100%'; toast(t('Concluído'), 'ok'); onDone && onDone(ev); },
-    error: (ev) => { box.textContent = ev.error || t('Erro'); toast(ev.error || t('Erro'), 'err'); onDone && onDone(ev); },
-    end: () => {},
+    }
+    else if (ev.type === 'done') { box.textContent = t('Concluído.'); bar.firstChild.style.width = '100%'; toast(t('Concluído'), 'ok'); onDone && onDone(ev); }
+    else if (ev.type === 'error') { box.textContent = ev.error || t('Erro'); toast(ev.error || t('Erro'), 'err'); onDone && onDone(ev); }
   });
   return wrap;
 }

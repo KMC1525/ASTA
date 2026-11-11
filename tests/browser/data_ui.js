@@ -16,6 +16,8 @@ run('data_ui', async ({ base, api, open, check }) => {
   check('abas:ordem', tabs.join(',') === ['#/data/main', '#/data/databases', '#/data/datasets', '#/data/synthetic_data', '#/data/web_scraping', '#/data/upgrade', '#/data/export'].join(','));
   check('nav:data-na-barra', (await page.locator('#side nav a[href="#/data"]').count()) === 1);
   check('main:descricao', (await page.textContent('#dt-body')).toLowerCase().includes('sint'));
+  const headerBox = await page.locator('.page-h').boundingBox();
+  check('main:cabecalho-visivel', !!headerBox && headerBox.height > 20);
 
   // ---- criar um dataset e ver os cards (depois de criar, o item já abre: fecha-se o diálogo)
   await page.click('#dt-body .dt-actions button');            // o primeiro botão é «Novo»
@@ -44,12 +46,14 @@ run('data_ui', async ({ base, api, open, check }) => {
   await page.click('.dt-card .dt-actions button');           // o primeiro botão do cartão é «Abrir»
   await page.waitForSelector('.modal .dt-table', { timeout: 15000 });
   check('item:modal-abre', (await page.locator('.modal .dt-table').count()) === 1);
+  await page.waitForSelector('.modal .dt-history-item', { timeout: 15000 }).catch(() => {});
+  check('item:historico-listado', (await page.locator('.modal .dt-history-item').count()) >= 1);
   const cols = await page.$$eval('.modal .dt-table th', (els) => els.length);
   check('item:tabela-com-colunas', cols >= 2);
-  await page.fill('.modal input:not([type=checkbox])', 'nada-que-exista');
+  await page.fill('#dt-item-filter', 'nada-que-exista');
   await page.waitForTimeout(300);
   check('item:filtro-funciona', (await page.textContent('.modal .dt-table-wrap')).includes('0 de'));
-  await page.fill('.modal input:not([type=checkbox])', '');
+  await page.fill('#dt-item-filter', '');
   await page.waitForTimeout(300);
   await page.click('.modal .dt-th');
   await page.waitForTimeout(200);
