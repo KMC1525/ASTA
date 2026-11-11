@@ -3932,6 +3932,7 @@ export default {
   "Importar database/dataset existente": "Import existing database/dataset",
   "Arquivo": "File",
   "Importar como novo item": "Import as new item",
+  "Importar dentro do item": "Import into the item",
   "Selecione um arquivo para importar.": "Select a file to import.",
   "Importado": "Imported",
   "Falha ao importar": "Import failed",
@@ -3960,5 +3961,15 @@ export default {
   "Registros": "Records",
   "Campos": "Fields",
   "Criado": "Created",
-  "Descreva os dados sintéticos que deseja gerar (use prompts multimodais; você pode citar anexos e modalidades).": "Describe the synthetic data you want to generate (use multimodal prompts; you can mention attachments and modalities)."
+  "Descreva os dados sintéticos que deseja gerar (use prompts multimodais; você pode citar anexos e modalidades).": "Describe the synthetic data you want to generate (use multimodal prompts; you can mention attachments and modalities).",
+  "Ordenar por {c}": "Sort by {c}",
+  "Filtrar registros…": "Filter records…",
+  "{n} de {m} registro(s)": "{n} of {m} record(s)",
+  "Descreva os dados sintéticos que deseja gerar (use prompts multimodais; anexe arquivos/imagens e cite modalidades).": "Describe the synthetic data you want to generate (use multimodal prompts; attach files/images and mention modalities).",
+  "Escreva o prompt de geração.": "Write the generation prompt.",
+  "Confirme o aviso de uso open source para continuar.": "Confirm the open-source use notice to continue.",
+  "Li o aviso e vou usar apenas para fins open source e não comerciais.": "I read the notice and will use this only for open-source and non-commercial purposes.",
+  "{n} arquivo(s) exportado(s)": "{n} file(s) exported",
+  "Exportar todos": "Export all",
+  "Exporte databases e datasets em vários formatos preservando a estrutura (JSON, JSONL/NDJSON, CSV, TSV, XML, HTML, Markdown, SQLite).": "Export databases and datasets in multiple formats while preserving structure (JSON, JSONL/NDJSON, CSV, TSV, XML, HTML, Markdown, SQLite)."
 };

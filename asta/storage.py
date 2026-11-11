@@ -617,11 +617,12 @@ class Store:
         return True
 
     # ------------------------------------------------------------------ memória unificada universal
-    def remember(self, section: str, action: str, title: str = "", summary: str = "", detail: Any = None, tags: Optional[List[str]] = None) -> Optional[dict]:
+    def remember(self, section: str, action: str, title: str = "", summary: str = "", detail: Any = None,
+                 tags: Optional[List[str]] = None, ts: Optional[str] = None) -> Optional[dict]:
         """Registra um evento na memória unificada (JSON por ano/mês/semana/dia). Nunca levanta erro para não atrapalhar a ação principal."""
         try:
             from . import memory
-            return memory.record(self.memory_dir, section, action, title, summary, detail, tags)
+            return memory.record(self.memory_dir, section, action, title, summary, detail, tags, ts)
         except Exception:
             return None
 

@@ -3,6 +3,44 @@
 Todas as mudanças relevantes do ASTA são registradas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.22.0] — 2026-11-11
+
+### Adicionado — Modo Data: databases e datasets multimodais com IA
+- **Novo modo "Data"** para **criar, gerar, gerenciar, editar, visualizar, organizar e mesclar** databases e datasets com a ajuda de agentes de IA. Cada item fica numa pasta aberta no computador do usuário (`~/.asta/data/<kind>/<id>/`: `meta.json`, `schema.json`, `records.json`, `exports/`, `history/`).
+- **Sete abas:** **Main**, **Databases**, **Datasets**, **Synthetic data**, **Web scraping**, **Upgrade** e **Export** (`#/data/main`, `#/data/databases`, `#/data/datasets`, `#/data/synthetic_data`, `#/data/web_scraping`, `#/data/upgrade`, `#/data/export`).
+- **Databases e Datasets:** criar itens com nome, descrição e etiquetas; editar registros e schema em JSON; **visualizar** numa tabela com **filtro** e **ordenação por qualquer coluna**; **duplicar**; e **mesclar** dois itens (o destino mantém os dados e recebe os registros da origem, com os schemas unidos pelo nome do campo). Cada alteração vira snapshot (os últimos 30 podem ser restaurados).
+- **Synthetic data (em massa):** geração a partir de **prompts multimodais** (texto + arquivos e imagens anexados) com até **5.000 registros**, no modo **um tipo de dado** ou **vários tipos/modalidades ao mesmo tempo**. A IA trabalha em lotes (o pedido é fatiado), então quantidades grandes saem mesmo em massa; o schema proposto pela IA é guardado com o item. **Sem IA**, um gerador determinístico honesto preenche o mesmo schema com os tipos pedidos (texto, número, inteiro, booleano, data, URL, categoria, JSON, imagem, áudio, vídeo, arquivo).
+- **Web scraping (em massa):** até **500 links** por pedido (um por linha), com prompt de extração multimodal; as páginas são lidas em paralelo e os registros são extraídos pela IA. O modo **lê o `robots.txt` de cada site e não baixa o que o site proíbe**, e recusa endereços privados e locais.
+- **Aviso de uso open source (não comercial):** a aba de scraping mostra o aviso de que o uso é **somente open source e não comercial** (respeitando termos de uso, `robots.txt`, leis e direitos das fontes) e **pede a confirmação** antes do primeiro scraping — a API também exige o aceite.
+- **Upgrade:** **importar** um database/dataset existente (`.json`, `.jsonl`/`.ndjson`, `.csv`, `.tsv`, `.xml`) como item novo **ou dentro de um item que já existe** (soma os registros e acrescenta as colunas ao schema) e **melhorar** com IA: enriquecer os registros existentes (preservando os ids), **adicionar mais dados** e **gerar dados sintéticos dentro do item**, com um tipo de dado ou vários ao mesmo tempo. As colunas importadas entram no schema do item em vez de sumirem.
+- **Export:** exportação em **vários formatos preservando a estrutura** — **JSON** (com o schema), **JSONL/NDJSON**, **CSV**, **TSV**, **XML**, **HTML**, **Markdown** e **SQLite** (`.db`, com metadados e schema) — de um item ou **de todos de uma vez**, com download dos arquivos.
+- **Equipe de agentes e esforço** (1 · 4 · … · 32 agentes e oito níveis) em todas as ações com IA do modo, como em todas as seções do ASTA. Configuração dos padrões em *Configuração → Data*.
+- Endpoints: `GET /api/data/catalog`, `GET /api/data/status`, `GET/POST /api/data/items`, `GET/PUT/DELETE /api/data/items/<kind>/<id>`, `POST .../duplicate`, `POST .../records`, `POST .../merge`, `GET .../history`, `POST .../history/restore`, `POST .../import`, `POST .../export`, `GET .../exports`, `GET .../exports/<arquivo>`, `POST /api/data/upgrade/import`, `POST .../synthetic`, `POST .../scrape`, `POST .../upgrade`.
+
+### Corrigido — modo Data
+- **A IA do modo Data não estava sendo chamada:** a chamada ao provedor usava um método inexistente (`generate`), então toda geração sintética, extração e upgrade caíam no gerador determinístico, sem IA. Agora usa o mesmo `call_json` das outras seções (com `json_mode`, tentativas de reparo e a mesa de agentes).
+- **Anexos dos prompts multimodais não chegavam à IA:** a leitura dos anexos usava uma função inexistente e falhava em silêncio. Agora os anexos são lidos (`attachments.analyze`), viram resumo de texto e as imagens vão para a IA (visão) quando o provedor aceita.
+- **Colunas importadas sumiam:** ao anexar um arquivo a um item existente, o schema do item não recebia os campos do arquivo. Agora o schema é a união dos dois.
+- **Formatos de importação e exportação:** `.ndjson` e `.xml` (importação e exportação), além de HTML e Markdown na exportação.
+
+### Corrigido — a WebUI inteira não carregava
+- **Erro de sintaxe em `asta/web/js/views/config.js`:** faltava um parêntese de fechamento no final da aba de Memória, e o arquivo não era nem um módulo JavaScript válido. Como a Configuração é carregada pelo app, **isso quebrava a WebUI inteira** (nenhuma tela abria). Agora o arquivo passa na verificação de sintaxe de todos os módulos (`tests.test_runtime`).
+
+### Corrigido — dois endpoints devolviam erro 500
+- **Memória (`POST /api/memory/item`):** o servidor passava o carimbo de tempo (`ts`) para `Store.remember()`, que não aceitava o argumento — o pedido quebrava com `TypeError` e a nota nunca era salva. Agora o parâmetro existe e é repassado ao registro da memória.
+- **Perfil (`GET /api/profile/export`):** a exportação pedia cabeçalhos extras (`Content-Disposition`) que o envio de bytes do servidor não sabia responder — o pedido quebrava com `TypeError` e o download não existia. Agora o envio de bytes aceita cabeçalhos extras, como já fazia o envio de arquivos.
+
+### Alterado
+- Versão 0.22.0 (`asta/__init__.py`). READMEs e changelogs atualizados (pt/en) com a seção do modo Data.
+
+### Limites honestos (não verificado)
+- **O scraping não foi exercitado contra sites reais** nesta alteração: o `robots.txt` e a leitura de páginas foram testados com a rede simulada e com provedores falsos, não com um site de verdade em produção. O aviso de uso open source continua sendo responsabilidade do usuário.
+- **Não foram executados os testes de navegador** (Node + Playwright + Chromium) neste ambiente; foi escrito um teste de navegador para o modo Data (`tests/browser/data_ui.js`, registrado em `tests/test_browser.py`), que roda no CI e ainda **não foi executado aqui**. Também foram executados e passaram `python -m unittest tests.test_data` (42 testes), `python -m unittest tests.test_memory_profile`, `node tests/js/i18n_check.mjs` e a suíte completa (`python -m unittest discover -s tests -t .`, 1.335 testes), que fica com **4 falhas que já falhavam antes desta mudança** (canvas/GGUF, links/media, o prompt do Scriber e uma verificação de rede do hub) e sem nenhuma falha nova.
+- **A chamada real à IA do modo Data não foi exercitada contra um provedor de verdade** aqui (os testes usam um provedor falso): a qualidade dos dados depende do modelo.
+- **O núcleo Rust não foi alterado** nesta mudança (o modo Data é Python puro) e os testes Rust (`cargo test`) não foram executados aqui.
+- **Sem verificação em hardware real, macOS/Windows reais ou dispositivos móveis**; os instaladores não foram gerados nem testados em aparelhos reais.
+- **Nenhum push, merge ou publicação de release foi feito** pelo autor desta mudança (requer autorização explícita).
+
 ## [0.21.1] — 2026-11-11
 
 ### Melhorado — prompts internos (IA em todos os modos)

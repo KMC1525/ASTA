@@ -1307,7 +1307,7 @@ async function memoryTab() {
                 doc = await api('/api/memory/day?date=' + encodeURIComponent(date), { method: 'PUT', body: parsed });
                 current = doc.date || date; await reloadDays(); toast(t('Memória salva'), 'ok');
               } catch (e) { toast(e.message || t('JSON inválido'), 'err'); }
-            } }, icon('check', 14), t('Salvar dia'))))));
+            } }, icon('check', 14), t('Salvar dia')))))));
 }
 
 

@@ -184,8 +184,20 @@ class DataRoutes:
 
     def r_scrape(self, req: Any, kind: str, iid: str) -> None:
         self.m.meta(kind, iid)
+        b = self._body(req, 16 * 1024 * 1024)
+        # o aviso de uso (open source, não comercial) precisa ser aceito antes de raspar
+        if not _as_bool(b.get("ack")) and not _as_bool(req.query.get("ack", [""])[0]):
+            raise HttpError(400, dschema.catalog()["web_scraping_notice"]["text"])
         self._job(f"data_scrape_{kind}_{iid}", req, lambda job, ai: ai.scrape(kind, iid), self._opts(req))
 
     def r_upgrade_ai(self, req: Any, kind: str, iid: str) -> None:
         self.m.meta(kind, iid)
         self._job(f"data_upgrade_{kind}_{iid}", req, lambda job, ai: ai.upgrade(kind, iid), self._opts(req))
+
+
+def _as_bool(v: Any) -> bool:
+    if isinstance(v, bool):
+        return v
+    if isinstance(v, (int, float)):
+        return bool(v)
+    return str(v or "").strip().lower() in ("1", "true", "yes", "sim", "on")

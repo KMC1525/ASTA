@@ -904,8 +904,8 @@ class Request:
         if self.method != "HEAD":
             self.h.wfile.write(data)
 
-    def bytes(self, data: bytes, mime: str, status: int = 200) -> None:
-        self._head(status, mime, len(data))
+    def bytes(self, data: bytes, mime: str, status: int = 200, headers: Optional[Dict[str, str]] = None) -> None:
+        self._head(status, mime, len(data), headers)
         if self.method != "HEAD":
             self.h.wfile.write(data)
 

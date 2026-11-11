@@ -421,6 +421,9 @@ class BrowserTests(unittest.TestCase):
     def test_48_scriber_generation_and_editing_tabs_lorebooks_selection_spellcheck_docx(self):
         self.run_script("scriber_ui.js")
 
+    def test_50_data_mode_tabs_items_synthetic_scraping_upgrade_and_export(self):
+        self.run_script("data_ui.js")
+
     def test_49_scriber_with_an_ai_provider_generates_expands_the_selection_and_uses_the_lorebook(self):
         from asta.scriber import agents as sai
         calls = {"editor": [], "writer": 0}
