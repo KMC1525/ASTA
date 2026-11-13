@@ -208,7 +208,7 @@ class ManagerTests(DataCase):
     def test_export_rejects_an_unknown_format(self):
         it = self.m.create("dataset", "X")
         with self.assertRaises(DataError):
-            self.m.export("dataset", it["id"], "xlsx")
+            self.m.export("dataset", it["id"], "parquet")
 
     def test_export_path_does_not_escape_the_folder(self):
         it = self.m.create("dataset", "X")
