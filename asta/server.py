@@ -172,6 +172,7 @@ class App:
         a("DELETE", r"/api/uploads/(?P<uid>[\w-]+)", self.r_upload_delete)
         a("POST", r"/api/generate", self.r_generate)
         a("GET", r"/api/jobs/(?P<jid>[\w-]+)", self.r_job_get)
+        a("GET", r"/api/jobs", self.r_jobs)
         a("GET", r"/api/jobs/(?P<jid>[\w-]+)/events", self.r_job_events)
         a("POST", r"/api/jobs/(?P<jid>[\w-]+)/cancel", self.r_job_cancel)
 
@@ -511,7 +512,17 @@ class App:
         job = self.jobs.get(jid)
         if not job:
             raise HttpError(404, "Tarefa não encontrada")
-        req.json({"id": job.id, "kind": job.kind, "status": job.status, "events": len(job.events)})
+        req.json({"id": job.id, "kind": job.kind, "status": job.status, "events": job.total})
+
+    def r_jobs(self, req: "Request") -> None:
+        """As tarefas em segundo plano (as que rodam primeiro, depois as mais novas): ajuda a ver tudo o que os agentes estão fazendo ao mesmo tempo. `?status=running` filtra."""
+        want = (req.query.get("status", [""])[0] or "").strip()
+        with self.jobs.lock:
+            items = list(self.jobs.jobs.values())
+        items = [j for j in items if not want or j.status == want]
+        items.sort(key=lambda j: (j.status != "running", -j.created))
+        req.json({"jobs": [{"id": j.id, "kind": j.kind, "status": j.status, "events": j.total, "created": j.created} for j in items[:100]],
+                  "running": sum(1 for j in items if j.status == "running")})
 
     def r_job_cancel(self, req: "Request", jid: str) -> None:
         job = self.jobs.get(jid)
@@ -524,22 +535,24 @@ class App:
         job = self.jobs.get(jid)
         if not job:
             raise HttpError(404, "Tarefa não encontrada")
-        idx = int(req.query.get("from", ["0"])[0] or 0)
+        raw = (req.query.get("from", [""])[0] or "").strip() or str(req.h.headers.get("Last-Event-ID") or "").strip()   # o navegador reconecta sozinho mandando o último id: sem isto ele repetiria a tarefa desde o início
+        idx = int(raw) if raw.isdigit() else 0
         req.sse_start()
         while True:
             with job.cond:
-                while idx >= len(job.events) and job.status == "running":
+                idx = max(idx, job.base)   # pediu um trecho já descartado: segue do mais antigo que existe
+                while idx >= job.total and job.status == "running":
                     job.cond.wait(timeout=10)
-                    if idx >= len(job.events) and job.status == "running":
+                    if idx >= job.total and job.status == "running":
                         break
-                batch = job.events[idx:]
+                batch = job.since(idx)
                 status = job.status
             for ev in batch:
-                req.sse_send(ev)
+                req.sse_send(ev, ev.get("seq", idx) + 1)
             idx += len(batch)
             if not batch and status == "running":
                 req.sse_comment("keepalive")
-            if status != "running" and idx >= len(job.events):
+            if status != "running" and idx >= job.total:
                 req.sse_send({"type": "end", "status": status})
                 return
 
@@ -975,8 +988,9 @@ class Request:
         self.h.end_headers()
         self.h.wfile.flush()
 
-    def sse_send(self, obj: Any) -> None:
-        self.h.wfile.write(b"data: " + json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n\n")
+    def sse_send(self, obj: Any, event_id: Optional[int] = None) -> None:
+        head = b"id: %d\n" % event_id if isinstance(event_id, int) else b""   # com `id`, a reconexão automática do navegador continua de onde parou
+        self.h.wfile.write(head + b"data: " + json.dumps(obj, ensure_ascii=False).encode("utf-8") + b"\n\n")
         self.h.wfile.flush()
 
     def sse_comment(self, text_: str) -> None:

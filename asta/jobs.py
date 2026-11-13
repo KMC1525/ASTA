@@ -22,11 +22,16 @@ class HttpError(Exception):
         self.message = message
 
 
+MAX_EVENTS = 2000    # eventos guardados por tarefa; ao passar disso os mais antigos saem
+KEEP_EVENTS = 1500
+
+
 class Job:
     def __init__(self, kind: str):
         self.id = new_id("j_")
         self.kind = kind
         self.events: List[dict] = []
+        self.base = 0   # quantos eventos antigos já foram descartados: `seq` e os índices do SSE são ABSOLUTOS (não mudam quando a lista é aparada)
         self.status = "running"  # running | done | error | cancelled
         self.cond = threading.Condition()
         self._cancel = threading.Event()
@@ -36,11 +41,22 @@ class Job:
     def emit(self, ev: dict) -> None:
         with self.cond:
             ev = dict(ev)
-            ev["seq"] = len(self.events)
+            ev["seq"] = self.base + len(self.events)
             self.events.append(ev)
-            if len(self.events) > 2000:
-                del self.events[:500]
+            if len(self.events) > MAX_EVENTS:   # tarefa muito longa (equipes grandes): aparar o começo sem renumerar o resto
+                drop = len(self.events) - KEEP_EVENTS
+                del self.events[:drop]
+                self.base += drop
             self.cond.notify_all()
+
+    @property
+    def total(self) -> int:
+        """Quantos eventos a tarefa já emitiu (inclui os descartados): o próximo índice absoluto."""
+        return self.base + len(self.events)
+
+    def since(self, idx: int) -> List[dict]:
+        """Os eventos de índice absoluto >= `idx` (quem pediu um trecho já descartado recebe a partir do mais antigo que ainda existe). Chamar com `cond` segurada."""
+        return self.events[max(0, int(idx) - self.base):]
 
     def finish(self, status: str, result: Optional[dict] = None) -> None:
         with self.cond:

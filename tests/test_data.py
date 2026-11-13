@@ -399,6 +399,11 @@ class RobotsTests(DataCase):
         patcher = mock.patch("urllib.request.urlopen", opener)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # `exemplo.org` não existe: sem isto `safe_url` falha ao resolver o DNS em ambientes sem rede e o teste dependeria da internet
+        real_safe = scrapelib.websearch.safe_url
+        safe = mock.patch.object(scrapelib.websearch, "safe_url", side_effect=lambda u, *a, **k: True if "exemplo.org" in u else real_safe(u, *a, **k))
+        safe.start()
+        self.addCleanup(safe.stop)
         return opener
 
     def test_robots_that_disallows_the_path_blocks_the_download(self):

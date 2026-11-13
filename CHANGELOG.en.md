@@ -5,6 +5,41 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > English translation of [`CHANGELOG.md`](CHANGELOG.md) (the Portuguese original is the reference). Mentions of Portuguese UI strings keep the original text in quotes.
 
+## [0.23.0] — 2026-11-13
+
+### Fixed — task execution and multi-agent systems
+- **Long tasks lost events (and their result):** past 2,000 events a task dropped the oldest ones but numbered new events by list length — repeated numbers — and whoever was following (SSE) stayed stuck on an index that no longer existed, missing the last events, the result included. Big teams (up to 32 agents) emit a lot of events. Numbering is now **absolute** (`Job.base`/`Job.total`/`Job.since`) and the list is trimmed without renumbering.
+- **A browser reconnect replayed the whole task:** the server sent no `id:` on events, so `EventSource` reconnected at `?from=0` and reprocessed everything (duplicated steps on screen). SSE now sends `id:` and understands `Last-Event-ID` (and `?from=`), resuming where it stopped.
+- **Agents of a background task jumped the local model's queue:** scheduler priority is per *thread*, and the agent tables (`team.ensemble_json`, peer review, notes) and Code's workers run in new threads that went back to "interactive" — a 32-agent generation went ahead of the chat the user was waiting on. The new `scheduler.inherit()` carries the caller's priority into the agent threads.
+- **`agents: 1e999`, `inf` or a huge integer crashed the request** (`OverflowError` → HTTP 500) in any section, through the API or a hand-edited `settings.json`. It now saturates at 1 / 32.
+- **A non-list `attachment_ids`** (`5`, `{}`…) caused HTTP 500 on `/api/avatars/generate` and `/api/games/generate`; it is now ignored like in the other routes. (Found by an input *fuzz* that sent malformed bodies to ~1,800 POST/PUT/DELETE/GET route calls; no other 500 was left.)
+- **Data — history could lose versions:** the snapshot id had one-second resolution; consecutive saves in the same second with the same label (the synthetic-generation batches) **overwrote** the previous snapshot. The id now carries microseconds (and never collides).
+- **Data — the AI failed silently:** any provider error (invalid key, 401, network, rate limit) became just "the AI did not answer". The real reason now shows in the result's warnings.
+- **Data in the settings:** the Data mode was missing from the agents/effort normalization (`team.SECTIONS`) and from settings export/import/"restore defaults". It is now included (importing never turns the scraper on).
+- **Scriber:** the core prompt had lost the sentence "Never invent facts" (rewritten in 0.21.1) — restored; the test that requires it passes again.
+- **The Data robots.txt test depended on DNS** (`exemplo.org`): it failed offline. It is now hermetic.
+
+### Added
+- **Data — Data profile:** per column, how many values are filled / missing / distinct, types seen, most common values, min/max/mean and text length, plus findings (empty, constant or sparse column, mixed types, a type different from the declared one, duplicate records). `GET /api/data/items/<kind>/<id>/profile`; a **Data profile** button in the item dialog.
+- **Data — Remove duplicates:** compares the chosen fields (default: all but `id`/`_id`/`uuid`), optionally ignores case and extra spaces, keeps the **first** of each group, never removes records with no value in the key fields and **checks the count** (kept + removed = total; every removed record equals the one that stayed). Always with a **preview**; it only writes after confirmation and leaves the current state in the history. `POST /api/data/items/<kind>/<id>/dedupe` (`apply: false|true`, `keys`, `ignore_case`). Plan → compute → check design, no AI (works offline).
+- **Scriber — Text statistics** (Review tab): words, sentences, paragraphs, reading time, words per sentence, **readability (Flesch per language, an estimate)**, most repeated words and sentences over 40 words. `POST /api/scriber/stats`. Deterministic.
+- **Code — `find_todos` tool** (read-only): lists the TODO/FIXME/HACK/XXX markers left in the code; the Reviewer now uses it.
+- **API — `GET /api/jobs`** (`?status=running`): lists background tasks (running ones first) to see everything the agents are doing at the same time.
+
+### Improved
+- **Internal prompts for small models:** the shared system prompt of the pipeline agents (worlds, avatars, games, Studio, Canvas) gained a "How to work" section (read the input, fill every field, check the JSON before answering); the short roles of Work, Game Engine and Code gained a "How to work / Avoid" block with numbered steps and common mistakes. The `ROLE:` markers and output formats did not change.
+- **Rust core (same interface 4):** `asta_scan_dir` no longer builds the full path of every file (only of those that enter the 20-largest list), takes the stack lock once per folder instead of once per subfolder and no longer allocates the extension per file; the duplicate finder no longer allocates 1 MiB per file just to read 64 KiB (head+tail) and uses 256 KiB buffers for the byte-by-byte check. Fewer allocations and less CPU on weak machines; same results (Rust and parity tests pass; new Rust test for `scan_dir`).
+
+### Changed
+- Version 0.23.0 (`asta/__init__.py`, Android/Capacitor shell). READMEs and changelogs updated (pt/en).
+
+### Honest limits (unverified)
+- **No performance was measured** for the Rust core (no before/after benchmark): the changes reduce allocations and locks by construction; the real gain on weak machines was not measured here.
+- **The route fuzz** covered malformed bodies/parameters in ~1,800 calls with the Demo provider; it is not proof that bugs are absent, and it did not exercise real AI providers, Computer Use turned on, networked Work, installs/downloads or remote mode.
+- **Flesch readability is an estimate** (syllable count by vowel groups; per-language constants): good for comparing versions of the same text, not an exact number.
+- **The improved prompts were not evaluated with real models** (neither small nor large); only the automated tests with fake providers ran.
+- **Not verified on real devices, real macOS/Windows or phones;** the installers were not built or tested on real machines.
+
 ## [0.22.0] — 2026-11-11
 
 ### Added — Data mode: multimodal databases and datasets with AI

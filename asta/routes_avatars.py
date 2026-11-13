@@ -179,7 +179,7 @@ class AvatarRoutes:
         if body.get("from_images") and not body.get("attachment_ids"):
             raise HttpError(400, "Anexe pelo menos uma imagem (foto ou arte) para usá-la como base do avatar.")
         pipeline_req = {
-            "prompt": text(body.get("prompt"), "", 12000), "attachment_ids": list(body.get("attachment_ids") or [])[:40],
+            "prompt": text(body.get("prompt"), "", 12000), "attachment_ids": [x for x in (body.get("attachment_ids") if isinstance(body.get("attachment_ids"), list) else []) if isinstance(x, str)][:40],
             "from_images": bool(body.get("from_images")), "images_mode": "one" if body.get("images_mode") == "one" else "each",
             "count": int(num(body.get("count"), 0, 0, MAX_CHAT_AVATARS)), "relationship": text(body.get("relationship"), "auto", 12),
             "content": "nsfw" if body.get("content") == "nsfw" else "sfw", "language": text(body.get("language"), "", 12),

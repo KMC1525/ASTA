@@ -24,6 +24,7 @@ import traceback
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
 
+from .. import scheduler
 from ..providers import ProviderError
 from ..providers import thinking as think
 from ..util import new_id, now_iso
@@ -413,7 +414,7 @@ class Runner:
                 with self.lock:
                     st["status"] = "running"
                 pending.remove(st)
-                th = threading.Thread(target=work, args=(st, slot), daemon=True, name=f"code-{self.doc['id']}-{st['id']}")
+                th = threading.Thread(target=scheduler.inherit(work), args=(st, slot), daemon=True, name=f"code-{self.doc['id']}-{st['id']}")
                 running[st["id"]] = th
                 th.start()
                 started = True

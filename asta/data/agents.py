@@ -114,7 +114,12 @@ class DataAI:
                                       temperature=0.6, max_tokens=int(tokens * max(1, self.team.tokens_mult)),
                                       attempts=2, cancelled=self.cancelled)
                 return obj if isinstance(obj, dict) else None
-            except Exception:
+            except Exception as exc:  # noqa: BLE001  (segue com o gerador determinístico, mas o motivo real — chave inválida, rede, limite — aparece nos avisos)
+                if not self.cancelled():
+                    why = str(exc)[:160] or exc.__class__.__name__
+                    msg = f"a IA falhou: {why}"
+                    if msg not in self.warnings:
+                        self.warnings.append(msg)
                 return None
 
         if creative and self.team.multi:

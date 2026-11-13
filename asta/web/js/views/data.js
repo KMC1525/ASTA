@@ -92,6 +92,53 @@ function recordsTable(records, schema, opt = {}) {
   return h('div', { class: 'dt-table-wrap' }, h('table', { class: 'dt-table' }, h('thead', null, head), h('tbody', null, ...body)));
 }
 
+// ------------------------------------------------------------------ qualidade: perfil e duplicados (v0.23)
+const ISSUE_TEXT = {
+  empty_column: (i) => t('A coluna «{f}» está vazia em todos os registros.', { f: i.field }),
+  constant_column: (i) => t('A coluna «{f}» tem o mesmo valor em todos os registros.', { f: i.field }),
+  sparse_column: (i) => t('A coluna «{f}» está preenchida em apenas {n} de {m} registros.', { f: i.field, n: i.filled, m: i.total }),
+  mixed_types: (i) => t('A coluna «{f}» mistura tipos de valor: {x}.', { f: i.field, x: (i.types || []).join(', ') }),
+  type_mismatch: (i) => t('A coluna «{f}» foi declarada como «{d}», mas tem valores de outro tipo.', { f: i.field, d: i.declared }),
+  duplicates: (i) => t('{n} registro(s) repetido(s) — use «Remover duplicados».', { n: i.count }),
+  no_records: () => t('Ainda não há registros.'),
+};
+
+async function profileDialog(kind, id) {
+  let p;
+  try { p = await api(`/api/data/items/${kind}/${id}/profile`); } catch (e) { toast(e.message, 'err'); return; }
+  const num = (v) => (v === undefined || v === null ? '' : String(Math.round(v * 1000) / 1000));
+  const head = h('tr', null, ...[t('Campo'), t('Preenchidos'), t('Faltando'), t('Distintos'), t('Tipos'), t('Mín–Máx'), t('Mais comuns')].map((x) => h('th', null, x)));
+  const rows = (p.columns || []).map((c) => h('tr', null,
+    h('td', null, c.name), h('td', null, String(c.filled)), h('td', null, String(c.missing)), h('td', null, String(c.distinct) + (c.distinct_exact ? '' : '+')),
+    h('td', null, Object.keys(c.types || {}).join(', ')),
+    h('td', null, c.min !== undefined ? `${num(c.min)} – ${num(c.max)}` : (c.len_min !== undefined ? t('{a}–{b} caracteres', { a: c.len_min, b: c.len_max }) : '')),
+    h('td', null, (c.top || []).map((x) => `${String(x.value).slice(0, 24)} (${x.count})`).join('; '))));
+  const issues = (p.issues || []).map((i) => (ISSUE_TEXT[i.code] ? ISSUE_TEXT[i.code](i) : i.code));
+  const body = h('div', { class: 'col', style: { gap: '10px', minWidth: 'min(900px,90vw)' } },
+    h('div', { class: 'muted small' }, t('{n} registro(s) · {m} campo(s)', { n: p.records, m: (p.columns || []).length })),
+    issues.length ? h('ul', { style: { margin: 0, paddingLeft: '18px' } }, ...issues.map((x) => h('li', null, x))) : h('div', { class: 'muted' }, t('Nenhum problema encontrado.')),
+    h('div', { class: 'dt-table-wrap' }, h('table', { class: 'dt-table' }, h('thead', null, head), h('tbody', null, ...rows))));
+  await modal(t('Perfil dos dados'), body, [{ label: t('Fechar'), value: 'close', cls: 'primary' }]);
+}
+
+// devolve true se algo foi removido (o chamador recarrega)
+async function dedupeDialog(kind, id) {
+  let prev;
+  try { prev = await api(`/api/data/items/${kind}/${id}/dedupe`, { method: 'POST', body: { apply: false } }); } catch (e) { toast(e.message, 'err'); return false; }
+  if (!prev.removed) { toast(t('Nenhum registro repetido.'), 'ok'); return false; }
+  const body = h('div', { class: 'col', style: { gap: '8px' } },
+    h('div', null, t('{n} de {m} registro(s) são repetidos e serão removidos; o primeiro de cada grupo fica.', { n: prev.removed, m: prev.total })),
+    h('div', { class: 'muted small' }, t('Campos comparados: {x}', { x: (prev.keys || []).join(', ') })),
+    h('div', { class: 'muted small' }, t('O estado atual fica no histórico: dá para restaurar.')));
+  const v = await modal(t('Remover duplicados'), body, [{ label: t('Cancelar'), value: false }, { label: t('Remover duplicados'), value: true, cls: 'primary' }]);
+  if (v !== true) return false;
+  try {
+    const done = await api(`/api/data/items/${kind}/${id}/dedupe`, { method: 'POST', body: { apply: true } });
+    toast(t('{n} registro(s) removido(s)', { n: done.removed }), 'ok');
+    return !!done.applied;
+  } catch (e) { toast(e.message, 'err'); return false; }
+}
+
 // ------------------------------------------------------------------ diálogo do item (ver/editar/organizar)
 async function openItemDialog(kind, id, onChanged) {
   let data;
@@ -125,6 +172,17 @@ async function openItemDialog(kind, id, onChanged) {
 
   const body = h('div', { class: 'col', style: { gap: '10px', minWidth: 'min(900px,90vw)' } },
     h('h3', { style: { margin: 0 } }, (data.meta && data.meta.name) || id), info,
+    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } },
+      h('button', { class: 'btn', onclick: () => profileDialog(kind, id) }, t('Perfil dos dados')),
+      h('button', { class: 'btn', onclick: async () => {
+        if (!(await dedupeDialog(kind, id))) return;
+        try {
+          data = await api(`/api/data/items/${kind}/${id}`);
+          recs.value = JSON.stringify(data.records || [], null, 2);
+          info.children[3].textContent = String((data.records || []).length);
+          paint(); onChanged && onChanged();
+        } catch (e) { toast(e.message, 'err'); }
+      } }, t('Remover duplicados'))),
     h('b', null, t('Visualização (amostra)')), tableBox,
     h('b', null, t('Registros (JSON)')), recs,
     h('b', null, t('Schema (JSON)')), schemaBox);

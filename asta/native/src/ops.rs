@@ -80,8 +80,13 @@ fn ext_of(p: &Path) -> String {
     p.extension().and_then(|e| e.to_str()).map(|e| e.to_ascii_lowercase()).unwrap_or_default()
 }
 
+/// O arquivo entra na lista dos maiores? (checado ANTES de montar o texto do caminho: a maioria dos arquivos não entra e não precisa de alocação)
+fn qualifies(v: &[(u64, String)], size: u64, keep: usize) -> bool {
+    v.len() < keep || size > v.last().map(|x| x.0).unwrap_or(0)
+}
+
 fn push_largest(v: &mut Vec<(u64, String)>, size: u64, path: &str, keep: usize) {
-    if v.len() < keep || size > v.last().map(|x| x.0).unwrap_or(0) {
+    if qualifies(v, size, keep) {
         v.push((size, path.to_string()));
         v.sort_by(|a, b| b.0.cmp(&a.0));
         v.truncate(keep);
@@ -118,6 +123,7 @@ pub unsafe extern "C" fn asta_scan_dir(path: *const u8, path_len: usize, max_ent
                     };
                     match next {
                         Some(dir) => {
+                            let mut sub_dirs: Vec<PathBuf> = Vec::new();
                             if let Ok(rd) = fs::read_dir(&dir) {
                                 for e in rd.flatten() {
                                     let Ok(ft) = e.file_type() else { continue };
@@ -126,20 +132,32 @@ pub unsafe extern "C" fn asta_scan_dir(path: *const u8, path_len: usize, max_ent
                                     }
                                     if ft.is_dir() {
                                         local.dirs += 1;
-                                        stack.lock().unwrap().push(e.path());
+                                        sub_dirs.push(e.path());
                                     } else if ft.is_file() {
                                         if let Ok(m) = e.metadata() {
                                             let sz = m.len();
                                             local.files += 1;
                                             local.bytes += sz;
-                                            let ex = ext_of(&e.path());
-                                            let ent = local.by_ext.entry(ex).or_insert((0, 0));
-                                            ent.0 += 1;
-                                            ent.1 += sz;
-                                            push_largest(&mut local.largest, sz, &e.path().to_string_lossy(), 20);
+                                            let name = e.file_name();
+                                            let ex = ext_of(Path::new(&name));   // só o nome do arquivo: não monta o caminho inteiro por arquivo
+                                            match local.by_ext.get_mut(&ex) {
+                                                Some(ent) => {
+                                                    ent.0 += 1;
+                                                    ent.1 += sz;
+                                                }
+                                                None => {
+                                                    local.by_ext.insert(ex, (1, sz));
+                                                }
+                                            }
+                                            if qualifies(&local.largest, sz, 20) {
+                                                push_largest(&mut local.largest, sz, &e.path().to_string_lossy(), 20);
+                                            }
                                         }
                                     }
                                 }
+                            }
+                            if !sub_dirs.is_empty() {   // uma única trava para todas as subpastas da pasta (antes: uma trava por subpasta)
+                                stack.lock().unwrap().extend(sub_dirs);
                             }
                             busy.fetch_sub(1, std::sync::atomic::Ordering::SeqCst);
                         }
@@ -206,7 +224,7 @@ fn hash_range(path: &Path, head_tail_only: bool, size: u64) -> Option<u64> {
     let mut f = fs::File::open(path).ok()?;
     let mut h = std::collections::hash_map::DefaultHasher::new();
     h.write_u64(size);
-    let mut buf = vec![0u8; 1 << 20];
+    let mut buf = vec![0u8; if head_tail_only { 65536 } else { 1 << 20 }];   // cabeça+cauda só lê 64 KiB: não aloca 1 MiB por arquivo
     if head_tail_only {
         let k = f.read(&mut buf[..65536.min(size as usize).max(1)]).ok()?;
         h.write(&buf[..k]);
@@ -230,7 +248,7 @@ fn hash_range(path: &Path, head_tail_only: bool, size: u64) -> Option<u64> {
 
 fn same_bytes(a: &Path, b: &Path) -> bool {
     let (Ok(mut fa), Ok(mut fb)) = (fs::File::open(a), fs::File::open(b)) else { return false };
-    let (mut ba, mut bb) = (vec![0u8; 1 << 20], vec![0u8; 1 << 20]);
+    let (mut ba, mut bb) = (vec![0u8; 1 << 18], vec![0u8; 1 << 18]);
     loop {
         let (ra, rb) = match (read_full(&mut fa, &mut ba), read_full(&mut fb, &mut bb)) {
             (Some(x), Some(y)) => (x, y),
@@ -448,6 +466,27 @@ mod tests {
         let j = call_json(|o, c| unsafe { asta_scan_dir(p.as_ptr(), p.len(), 0, 4, o, c) });
         assert!(j.contains("\"files\":3") && j.contains("\"bytes\":1510"), "{j}");
         assert!(j.contains("\"ext\":\"gguf\""), "{j}");
+        let _ = fs::remove_dir_all(&d);
+    }
+
+    #[test]
+    fn scan_keeps_only_the_twenty_largest_and_counts_nested_folders() {
+        let d = tmpdir("scan-big");
+        for i in 0..5 {
+            fs::create_dir_all(d.join(format!("d{}/sub/deep", i))).unwrap();
+        }
+        let mut total = 0u64;
+        for i in 0..30u64 {
+            let sz = 100 + i * 10;
+            total += sz;
+            let dir = d.join(format!("d{}/sub/deep", i % 5));
+            fs::write(dir.join(format!("f{}.dat", i)), vec![7u8; sz as usize]).unwrap();
+        }
+        let p = d.to_string_lossy().to_string();
+        let j = call_json(|o, c| unsafe { asta_scan_dir(p.as_ptr(), p.len(), 0, 3, o, c) });
+        assert!(j.contains("\"files\":30") && j.contains(&format!("\"bytes\":{}", total)) && j.contains("\"dirs\":15"), "{j}");
+        assert_eq!(j.matches("\"path\"").count(), 20, "{j}");        // só os 20 maiores
+        assert!(j.contains("\"bytes\":390}") && !j.contains("\"bytes\":100}"), "{j}");   // o maior (390) entra, o menor (100) não
         let _ = fs::remove_dir_all(&d);
     }
 

@@ -22,7 +22,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
-from . import efforts
+from . import efforts, scheduler
 from .providers import thinking as think
 
 COUNTS: Tuple[int, ...] = (1, 2, 4, 8, 12, 16, 20, 24, 28, 32)
@@ -35,7 +35,7 @@ PEER_FROM = 20                # a partir daqui a mesa ganha o passo de revisão 
 PEER_BUDGET_CHARS = 40000     # tamanho máximo dos rascunhos que cada revisor lê
 DRAFT_BUDGET_CHARS = 60000    # tamanho máximo dos rascunhos entregues ao Sintetizador
 NOTE_BUDGET_CHARS = 9000      # idem, para as notas das conversas
-SECTIONS = ("generation", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "chat")
+SECTIONS = ("generation", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "data", "chat")
 
 #: multiplicador do tamanho da resposta por nível (nunca abaixo do configurado: um JSON cortado vale menos do que um pouco mais de tokens)
 TOKENS_MULT = {"low": 1.0, "medium": 1.0, "high": 1.0, "extra": 1.15, "mega": 1.3, "max": 1.5, "ultra": 1.75, "omni": 2.0}
@@ -84,6 +84,8 @@ def normalize_agents(value: Any, default: int = DEFAULT_AGENTS) -> int:
     """O valor aceito mais próximo de 1 · 2 · 4 · 8 · 12 · 16 · 20 · 24 · 28 · 32 (empate → o maior)."""
     try:
         n = int(float(value))
+    except OverflowError:   # «inf», «1e999» ou um inteiro gigante (API/settings.json editado à mão): satura nos extremos em vez de derrubar o pedido
+        return COUNTS[0] if str(value).strip().startswith("-") else COUNTS[-1]
     except (TypeError, ValueError):
         return default if default in COUNTS else DEFAULT_AGENTS
     best = COUNTS[0]
@@ -268,7 +270,7 @@ def ensemble_json(ask: Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]]
                 pass
 
     with ThreadPoolExecutor(max_workers=team.workers, thread_name_prefix="asta-team") as pool:
-        list(pool.map(one, range(n)))
+        list(pool.map(scheduler.inherit(one), range(n)))
     results.sort(key=lambda r: r[0])
     for _, _, _, err in results:
         if err is not None and fatal and isinstance(err, fatal):
@@ -318,7 +320,7 @@ def ensemble_json(ask: Callable[[str, Dict[str, Any]], Optional[Dict[str, Any]]]
                 peer_res.append((j, name, obj, err))
 
         with ThreadPoolExecutor(max_workers=max(1, min(m, MAX_PARALLEL)), thread_name_prefix="asta-peer") as pool:
-            list(pool.map(peer, range(m)))
+            list(pool.map(scheduler.inherit(peer), range(m)))
         peer_res.sort(key=lambda r: r[0])
         for *_, err in peer_res:
             if err is not None and fatal and isinstance(err, fatal):
@@ -382,7 +384,7 @@ def team_notes(provider: Any, messages: List[Dict[str, Any]], team: Team, *, max
                 out.append((i, name, body[:1400]))
 
     with ThreadPoolExecutor(max_workers=team.workers, thread_name_prefix="asta-notes") as pool:
-        list(pool.map(one, range(team.agents)))
+        list(pool.map(scheduler.inherit(one), range(team.agents)))
     out.sort(key=lambda r: r[0])
     parts, used = [], 0
     for i, name, body in out:

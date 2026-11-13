@@ -78,8 +78,8 @@ def normalize_ui(data: Any) -> Dict[str, Any]:
 # --------------------------------------------------------------------------- exportar / importar configurações (sem segredos)
 
 EXPORT_SCHEMA = "asta.settings.v1"
-EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "performance", "active")
-RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
+EXPORT_SECTIONS = ("language", "ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "data", "performance", "active")
+RESETTABLE = ("ui", "generation", "characters", "avatars", "games", "studio", "rebuild", "canvas", "computer", "code", "work", "engine", "scriber", "data", "performance")  # voz tem chaves de API: não entra no "restaurar padrões"
 _PROVIDER_FIELDS = ("base_url", "model", "vision", "n_ctx")  # nunca `api_key`
 
 
@@ -117,6 +117,8 @@ def import_patch(payload: Any) -> Dict[str, Any]:
         patch["code"] = c
     if isinstance(src.get("scriber"), dict):
         patch["scriber"] = {k: v for k, v in src["scriber"].items() if k in ("agents", "effort", "type", "language", "content", "web", "pages", "words_per_page", "undo_keep", "expand_words", "dialogue_words", "spellcheck", "autosave")}
+    if isinstance(src.get("data"), dict):   # o raspador (`web`) só liga por decisão de quem está na frente do computador
+        patch["data"] = {k: v for k, v in src["data"].items() if k in ("agents", "effort", "default_kind", "synthetic_count", "synthetic_mode")}
     if isinstance(src.get("engine"), dict):
         patch["engine"] = {k: v for k, v in src["engine"].items() if k in ("agents", "effort", "kind", "content", "web", "undo_keep")}
     if isinstance(src.get("work"), dict):   # idem: um arquivo importado nunca abre a máquina para a rede nem liga a sincronização

@@ -13,10 +13,12 @@ import shutil
 import sqlite3
 import threading
 import zipfile
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..util import new_id, now_iso, read_json, safe_filename, slugify, text, write_json
+from . import quality
 from .schema import EXPORT_FORMATS, IMPORT_FORMATS, KINDS, clean_schema
 
 MAX_ITEMS = 500
@@ -232,6 +234,26 @@ class DataManager:
             add = records if isinstance(records, list) else []
             return self.save_records(kind, item_id, base + add, cur.get("schema"), label)
 
+    # ------------------------------------------------------------------ qualidade (v0.23)
+    def profile(self, kind: str, item_id: str) -> Dict[str, Any]:
+        """Perfil das colunas e achados de qualidade do item (só leitura)."""
+        d = self.get(kind, item_id)
+        return quality.profile(d.get("records") or [], d.get("schema"))
+
+    def dedupe(self, kind: str, item_id: str, keys: Any = None, ignore_case: bool = True, apply: bool = False) -> Dict[str, Any]:
+        """Duplicados do item. Sem `apply` é só a **prévia** (nada muda); com `apply` grava os registros sem repetição depois de um snapshot (dá para restaurar no histórico)."""
+        with self.lock:
+            d = self.get(kind, item_id)
+            res = quality.dedupe(d.get("records") or [], d.get("schema"), keys, ignore_case)
+            out = {"total": len(d.get("records") or []), "kept": len(res["kept"]), "removed": len(res["removed"]), "groups": res["groups"][:50], "keys": res["keys"],
+                   "skipped_blank": res["skipped_blank"], "ignore_case": res["ignore_case"], "checks": res["checks"], "applied": False}
+            if apply and res["removed"]:
+                if not res["checks"]["ok"]:
+                    raise DataError("A conferência dos duplicados falhou; nada foi alterado.", 409)
+                self.save_records(kind, item_id, res["kept"], d.get("schema"), "dedupe")
+                out["applied"] = True
+            return out
+
     def merge_items(self, kind: str, target_id: str, source_kind: str, source_id: str) -> Dict[str, Any]:
         with self.lock:
             tgt = self.get(kind, target_id)
@@ -247,7 +269,13 @@ class DataManager:
 
     # ------------------------------------------------------------------ history
     def snapshot(self, kind: str, item_id: str, label: str = "snapshot") -> str:
-        hid = now_iso().replace(":", "-") + "_" + slugify(label, "snap")[:30]
+        # microssegundos no id: duas gravações no mesmo segundo (lotes da geração sintética) não podem sobrescrever o mesmo snapshot; a ordem do nome segue a do tempo
+        now = datetime.now(timezone.utc)
+        base = now.strftime("%Y-%m-%dT%H-%M-%S") + f"-{now.microsecond:06d}Z_" + slugify(label, "snap")[:30]
+        hid, n = base, 1
+        while (self._history_dir(kind, item_id) / f"{hid}.json").exists():
+            n += 1
+            hid = f"{base}-{n}"
         p = self._history_dir(kind, item_id) / f"{hid}.json"
         data = {"meta": read_json(self._meta_path(kind, item_id), {}), "schema": read_json(self._schema_path(kind, item_id), {}), "records": read_json(self._records_path(kind, item_id), [])}
         write_json(p, data)

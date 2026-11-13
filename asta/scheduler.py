@@ -23,6 +23,17 @@ def priority() -> int:
     return int(getattr(_local, "level", INTERACTIVE))
 
 
+def inherit(fn):
+    """Embrulha `fn` para rodar em OUTRA thread (pool de agentes, trabalhadores) com a prioridade da thread que a embrulhou. A prioridade é por thread: sem isto, os agentes de uma
+    tarefa em segundo plano nasceriam interativos e passariam na frente da conversa do usuário no modelo local embutido."""
+    level = priority()
+
+    def run(*args, **kwargs):
+        set_priority(level)
+        return fn(*args, **kwargs)
+    return run
+
+
 class PriorityLock:
     def __init__(self) -> None:
         self._cv = threading.Condition()

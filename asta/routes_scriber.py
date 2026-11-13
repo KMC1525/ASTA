@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict
 
 from . import team as teamlib
 from .jobs import HttpError, Job
-from .scriber import ScriberError, ScriberManager, agents as sai, lore as L, schema as S, spell
+from .scriber import ScriberError, ScriberManager, agents as sai, lore as L, schema as S, spell, stats
 from .scriber.manager import EXPORT_FORMATS, MAX_IMPORT
 from .util import text
 
@@ -80,6 +80,7 @@ class ScriberRoutes:
         a("DELETE", rf"/api/scriber/projects/{PID}/exports/(?P<fname>[\w .+@()%-]+)", w(lambda req, pid, fname: (self.m.delete_export(pid, urllib.parse.unquote(fname)), req.json({"ok": True}))))
         # ortografia (sem IA) e tipografia
         a("POST", r"/api/scriber/proofread", w(self.r_proofread))
+        a("POST", r"/api/scriber/stats", w(self.r_stats))
         a("POST", r"/api/scriber/typography", w(self.r_typography))
         # busca na web nativa
         a("POST", r"/api/scriber/web/search", w(self.r_search))
@@ -160,6 +161,13 @@ class ScriberRoutes:
             raise HttpError(400, "Envie os parágrafos em «paragraphs».")
         ignore = [x for x in (b.get("ignore") if isinstance(b.get("ignore"), list) else []) if isinstance(x, str)][:500]
         req.json(spell.proofread(ps, b.get("language"), ignore, use_dict=b.get("dictionary") is not False))
+
+    def r_stats(self, req: Any) -> None:
+        b = self._body(req, 16 * 1024 * 1024)
+        ps = b.get("paragraphs")
+        if not isinstance(ps, list):
+            raise HttpError(400, "Envie os parágrafos em «paragraphs».")
+        req.json(stats.analyze(ps, b.get("language")))
 
     def r_typography(self, req: Any) -> None:
         b = self._body(req, 16 * 1024 * 1024)
