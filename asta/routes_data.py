@@ -56,6 +56,8 @@ class DataRoutes:
         a("POST", rf"/api/data/items/{KIND}/{IID}/duplicate", w(self.r_duplicate))
         a("POST", rf"/api/data/items/{KIND}/{IID}/records", w(self.r_save_records))
         a("POST", rf"/api/data/items/{KIND}/{IID}/merge", w(self.r_merge))
+        a("GET", rf"/api/data/items/{KIND}/{IID}/profile", w(lambda req, kind, iid: req.json(self.m.profile(kind, iid))))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/dedupe", w(self.r_dedupe))
         a("GET", rf"/api/data/items/{KIND}/{IID}/history", w(lambda req, kind, iid: req.json({"items": self.m.history(kind, iid)})))
         a("POST", rf"/api/data/items/{KIND}/{IID}/history/restore", w(self.r_restore))
         a("POST", rf"/api/data/items/{KIND}/{IID}/import", w(self.r_import))
@@ -109,6 +111,10 @@ class DataRoutes:
         if not sid:
             raise HttpError(400, "Informe o item de origem para mesclar.")
         req.json(self.m.merge_items(kind, iid, sk, sid))
+
+    def r_dedupe(self, req: Any, kind: str, iid: str) -> None:
+        b = self._body(req)
+        req.json(self.m.dedupe(kind, iid, b.get("keys"), b.get("ignore_case") is not False, b.get("apply") is True))
 
     def r_restore(self, req: Any, kind: str, iid: str) -> None:
         b = self._body(req)

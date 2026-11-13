@@ -45,6 +45,7 @@ export function describeAction(tool, a) {
     case 'read_file': return t('Ler o arquivo {p}', { p: clip(a.path, 90) }) + (a.start ? ` (${a.start}–${a.end || '…'})` : '');
     case 'search_code': return t('Buscar «{q}» no código', { q: clip(a.pattern, 60) });
     case 'find_files': return t('Procurar arquivos «{q}»', { q: clip(a.pattern || '*', 50) });
+    case 'find_todos': return t('Procurar TODO e FIXME no código');
     case 'project_info': return t('Ver a visão geral do projeto');
     case 'view_image': return t('Ver a imagem {p}', { p: clip(a.path, 80) });
     case 'search_web': return t('Pesquisar na web: «{q}»', { q: clip(a.query, 80) });
@@ -81,7 +82,7 @@ export function describeAction(tool, a) {
     default: return tool;
   }
 }
-export const TOOL_ICON = { list_dir: 'folder', read_file: 'doc', search_code: 'search', find_files: 'search', project_info: 'layers', view_image: 'image', search_web: 'globe', fetch_url: 'globe', git: 'branch',
+export const TOOL_ICON = { list_dir: 'folder', read_file: 'doc', search_code: 'search', find_files: 'search', find_todos: 'check', project_info: 'layers', view_image: 'image', search_web: 'globe', fetch_url: 'globe', git: 'branch',
   write_file: 'file', edit_file: 'edit', make_dir: 'folder', move: 'arrow', copy: 'copy', use_attachment: 'clip', write_system_prompts: 'wand', hf_download: 'download', hf_search: 'search', hf_info: 'search',
   delete_path: 'trash', run_command: 'play', run_tests: 'check', install_packages: 'download', open_in_editor: 'code', commit_local: 'branch', publish_changes: 'upload', github_create_pr: 'branch',
   github_create_repo: 'github', github_comment: 'send', github_release: 'upload', github_run_workflow: 'bolt', github_info: 'github', github_issues: 'github', github_issue: 'github', github_ci: 'github', ask_user: 'warn', wait: 'pause' };

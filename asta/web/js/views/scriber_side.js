@@ -178,11 +178,30 @@ export function createSidePanel(S, X) {
       X.changed(); toast(t('{n} parágrafo(s) padronizado(s).', { n }) + (skipped ? ' ' + t('{s} com formatação foram mantidos.', { s: skipped }) : ''), 'ok');
     } catch (e) { toast(e.message, 'err'); }
   }
+  // estatísticas do texto (v0.23): números e códigos vêm do servidor; as frases são daqui (traduzidas)
+  const LEVEL_TEXT = { very_easy: 'Muito fácil de ler', easy: 'Fácil de ler', medium: 'Leitura média', hard: 'Difícil de ler', very_hard: 'Muito difícil de ler' };
+  const statsBox = h('div', { class: 'small', id: 'sc-stats' });
+  async function textStats() {
+    statsBox.replaceChildren(h('span', { class: 'muted' }, t('Calculando…')));
+    try {
+      const r = await api('/api/scriber/stats', { method: 'POST', body: { paragraphs: paraTexts(), language: X.lang() } });
+      const kv = (a, b) => h('div', { class: 'row' }, h('span', { class: 'muted' }, a), h('span', { class: 'grow' }), h('b', null, String(b)));
+      statsBox.replaceChildren(
+        kv(t('Palavras'), r.words), kv(t('Frases'), r.sentences), kv(t('Parágrafos'), r.paragraphs), kv(t('Tempo de leitura'), t('{n} min', { n: r.reading_minutes })),
+        kv(t('Palavras por frase'), r.avg_sentence_words),
+        r.readability === null ? h('div', { class: 'muted' }, t('Texto curto demais para estimar a legibilidade.')) : kv(t('Legibilidade (estimativa)'), `${r.readability} · ${t(LEVEL_TEXT[r.level] || r.level)}`),
+        r.top_words.length ? h('div', null, h('div', { class: 'muted' }, t('Palavras mais repetidas')), h('div', null, r.top_words.map((x) => `${x.word} (${x.count})`).join(' · '))) : null,
+        r.long_sentence_count ? h('div', null, h('div', { class: 'muted' }, t('{n} frase(s) com mais de 40 palavras', { n: r.long_sentence_count })),
+          ...r.long_sentences.slice(0, 3).map((x) => h('div', { class: 'small dim' }, `${x.words}: ${x.text}`))) : null);
+    } catch (e) { statsBox.replaceChildren(h('div', { class: 'sc-pnote err' }, e.message)); }
+  }
   const reviewTab = h('div', { class: 'sc-tabpane hidden', id: 'sc-pane-review' },
     h('section', { class: 'sc-sec' }, h('h4', null, t('Ortografia e gramática')), dictInfo,
       h('div', { class: 'row' }, h('button', { class: 'btn sm primary', id: 'sc-review', type: 'button', onclick: () => review(false) }, icon('check', 14), t('Revisar agora')), h('button', { class: 'btn sm', id: 'sc-review-ai', type: 'button', onclick: () => review(true), title: t('Gramática, concordância e pontuação com motivo (usa a IA)') }, icon('sparkle', 14), t('Revisar com IA'))),
       h('div', { class: 'row' }, h('button', { class: 'btn sm', id: 'sc-review-all', type: 'button', onclick: applyAll }, t('Aplicar todas')), h('button', { class: 'btn sm', id: 'sc-typo', type: 'button', onclick: typography, title: t('Aspas curvas, travessão de fala e reticências do idioma') }, t('Padronizar aspas e travessões'))),
       reviewInfo, issuesBox),
+    h('section', { class: 'sc-sec' }, h('h4', null, t('Estatísticas do texto')),
+      h('div', { class: 'row' }, h('button', { class: 'btn sm', id: 'sc-stats-go', type: 'button', onclick: textStats }, icon('check', 14), t('Calcular estatísticas'))), statsBox),
     h('section', { class: 'sc-sec' }, h('p', { class: 'hint' }, t('Enquanto você digita, o corretor do navegador sublinha erros no idioma do texto (mude o idioma na barra). «Revisar agora» usa regras e o dicionário do sistema, sem IA; «Revisar com IA» acrescenta gramática e concordância.'))));
   paintDict(!!(S.status.dictionaries || {})[X.lang()]);
 

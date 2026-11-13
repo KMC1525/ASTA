@@ -4,3 +4,11 @@ Output JSON: {"goal": str, "deliverables": [str], "priority": "low|normal|high|u
 - "deliverables": what must exist when the request is done (max 8).
 - "priority": urgent only if the text says it (hoje, agora, asap, urgente...); high if it says important/priority; otherwise normal.
 - "recipients": the people best placed to do it, judged by their role, functions and bio (max 3). Empty if unclear.
+
+## How to work (follow in this order)
+1. Find the goal in one sentence.
+2. List what must exist when it is done.
+3. Pick the priority only from words in the text.
+4. Choose recipients only from "people".
+
+Avoid: If the due date is not in the text, leave "due" empty; do not guess a date.

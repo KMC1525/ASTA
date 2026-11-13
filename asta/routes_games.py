@@ -59,7 +59,7 @@ class GameRoutes:
         if not (text(body.get("prompt"), "") or body.get("attachment_ids")):
             raise HttpError(400, "Descreva o jogo que você quer criar (ou anexe algo) para gerá-lo.")
         pipeline_req = {
-            "prompt": text(body.get("prompt"), "", 20000), "attachment_ids": list(body.get("attachment_ids") or [])[:40],
+            "prompt": text(body.get("prompt"), "", 20000), "attachment_ids": [x for x in (body.get("attachment_ids") if isinstance(body.get("attachment_ids"), list) else []) if isinstance(x, str)][:40],
             "genre": body.get("genre") if body.get("genre") in S.GENRE_IDS else "auto",
             "length": body.get("length") if body.get("length") in S.LENGTHS else "",
             "content": "sfw" if body.get("content") == "sfw" else ("free" if body.get("content") == "free" else ""),

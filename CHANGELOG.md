@@ -3,6 +3,41 @@
 Todas as mudanças relevantes do ASTA são registradas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.23.0] — 2026-11-13
+
+### Corrigido — execução de tarefas e sistemas multi-agente
+- **Tarefas longas perdiam eventos (e o resultado):** ao passar de 2.000 eventos, a tarefa apagava os mais antigos mas numerava os novos pelo tamanho da lista — números repetidos — e quem acompanhava (SSE) ficava preso num índice que já não existia, perdendo os últimos eventos, inclusive o resultado. Equipes grandes (até 32 agentes) geram muitos eventos. A numeração agora é **absoluta** (`Job.base`/`Job.total`/`Job.since`) e a lista é aparada sem renumerar.
+- **A reconexão do navegador repetia a tarefa inteira:** o servidor não mandava `id:` nos eventos, então o `EventSource` reconectava em `?from=0` e reprocessava tudo (passos duplicados na tela). O SSE agora manda `id:` e entende `Last-Event-ID` (e `?from=`), continuando de onde parou.
+- **Agentes de uma tarefa em segundo plano furavam a fila do modelo local:** a prioridade do agendador é por *thread* e as mesas de agentes (`team.ensemble_json`, revisão entre pares, notas) e os trabalhadores do Code rodam em threads novas, que voltavam a ser «interativas» — uma geração com 32 agentes passava na frente da conversa que o usuário esperava. Novo `scheduler.inherit()` leva a prioridade do chamador para as threads dos agentes.
+- **`agents: 1e999`, `inf` ou um inteiro gigante derrubavam o pedido** (`OverflowError` → HTTP 500) em qualquer seção, pela API ou por um `settings.json` editado à mão. Agora satura em 1 / 32.
+- **`attachment_ids` que não era lista** (`5`, `{}`…) dava HTTP 500 em `/api/avatars/generate` e `/api/games/generate`; agora é ignorado como nas demais rotas. (Achado por um *fuzz* de entrada que enviou corpos malformados a ~1.800 chamadas de rotas POST/PUT/DELETE/GET; nenhum outro 500 sobrou.)
+- **Data — histórico podia perder versões:** o id do snapshot tinha resolução de segundos; gravações seguidas no mesmo segundo com o mesmo rótulo (os lotes da geração sintética) **sobrescreviam** o snapshot anterior. O id agora tem microssegundos (e nunca colide).
+- **Data — a IA falhava em silêncio:** qualquer erro do provedor (chave inválida, 401, rede, limite) virava só «a IA não respondeu». O motivo real agora aparece nos avisos do resultado.
+- **Data nas configurações:** o modo Data não entrava na normalização de agentes/esforço (`team.SECTIONS`), nem na exportação/importação/«restaurar padrões» de configurações. Agora entra (a importação nunca liga o raspador).
+- **Scriber:** o prompt central tinha perdido a frase «Never invent facts» (reescrito na 0.21.1) — restaurada; o teste que a exige voltou a passar.
+- **Teste de robots.txt do Data dependia de DNS** (`exemplo.org`): sem rede ele falhava. Agora é hermético.
+
+### Adicionado
+- **Data — Perfil dos dados:** por coluna, quantos valores há/faltam/são distintos, tipos vistos, valores mais comuns, mín/máx/média e tamanho de texto, mais achados (coluna vazia, constante, esparsa, tipos misturados, tipo diferente do declarado, registros repetidos). `GET /api/data/items/<kind>/<id>/profile`; botão **Perfil dos dados** no diálogo do item.
+- **Data — Remover duplicados:** compara os campos escolhidos (padrão: todos menos `id`/`_id`/`uuid`), ignora maiúsculas e espaços sobrando (opcional), mantém o **primeiro** de cada grupo, nunca remove registros sem nenhum valor nos campos-chave e **confere a conta** (mantidos + removidos = total; todo removido é igual ao que ficou). Sempre com **prévia**; só grava com confirmação e deixa o estado atual no histórico. `POST /api/data/items/<kind>/<id>/dedupe` (`apply: false|true`, `keys`, `ignore_case`). Desenho planejar → calcular → conferir, sem IA (funciona offline).
+- **Scriber — Estatísticas do texto** (aba Revisão): palavras, frases, parágrafos, tempo de leitura, palavras por frase, **legibilidade (Flesch por idioma, estimativa)**, palavras mais repetidas e frases com mais de 40 palavras. `POST /api/scriber/stats`. Determinístico.
+- **Code — ferramenta `find_todos`** (somente leitura): lista os marcadores TODO/FIXME/HACK/XXX deixados no código; o Revisor passa a usá-la.
+- **API — `GET /api/jobs`** (`?status=running`): lista as tarefas em segundo plano (as em andamento primeiro) para ver tudo o que os agentes fazem ao mesmo tempo.
+
+### Melhorado
+- **Prompts internos para modelos pequenos:** o prompt de sistema comum dos agentes (mundos, avatars, jogos, Studio, Canvas) ganhou a seção «How to work» (ler a entrada, preencher todos os campos, conferir o JSON antes de responder); os papéis curtos do Work, do Game Engine e do Code ganharam um bloco «How to work / Avoid» com passos numerados e erros comuns a evitar. Os marcadores `ROLE:` e os formatos de saída não mudaram.
+- **Núcleo Rust (mesma interface 4):** `asta_scan_dir` deixou de montar o caminho completo de cada arquivo (só do que entra na lista dos 20 maiores), de pegar a trava da pilha uma vez por subpasta e de alocar a extensão a cada arquivo; a comparação de duplicados não aloca mais 1 MiB por arquivo só para ler 64 KiB (cabeça+cauda) e usa buffers de 256 KiB na conferência byte a byte. Menos alocações e menos CPU em máquinas fracas; mesmo resultado (testes Rust e de paridade passam; novo teste Rust do `scan_dir`).
+
+### Alterado
+- Versão 0.23.0 (`asta/__init__.py`, casca Android/Capacitor). READMEs e changelogs atualizados (pt/en).
+
+### Limites honestos (não verificado)
+- **Não houve medição de desempenho** do Rust (nem benchmark antes/depois): as mudanças reduzem alocações e travas por construção; o ganho real em máquinas fracas não foi medido aqui.
+- **O fuzz de rotas** cobriu corpos/parâmetros malformados em ~1.800 chamadas com o provedor Demo; não é uma prova de ausência de bugs, e não exercitou provedores de IA reais, o Computer Use ligado, o Work em rede, instalações/downloads nem o modo remoto.
+- **A legibilidade de Flesch é uma estimativa** (contagem de sílabas por grupos de vogais; constantes por idioma): serve para comparar versões do mesmo texto, não é um número exato.
+- **Os prompts melhorados não foram avaliados com modelos reais** (nem pequenos nem grandes); só os testes automáticos com provedores falsos rodaram.
+- **Não foi verificado em aparelhos reais, macOS/Windows reais nem celular;** os instaladores não foram construídos nem testados em máquinas reais.
+
 ## [0.22.0] — 2026-11-11
 
 ### Adicionado — Modo Data: databases e datasets multimodais com IA

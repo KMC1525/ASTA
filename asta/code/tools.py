@@ -267,6 +267,14 @@ def t_find_files(ctx: Context, a: Dict[str, Any]) -> Result:
     return Result(output=ctx.ws.find(a.get("pattern", "*"), a.get("path", "."), a.get("limit", 100)))
 
 
+TODO_PATTERN = r"\b(TODO|FIXME|HACK|XXX)\b"
+
+
+def t_find_todos(ctx: Context, a: Dict[str, Any]) -> Result:
+    """Marcadores de pendência deixados no código (TODO, FIXME, HACK, XXX): `caminho:linha: texto`. É só uma busca somente-leitura."""
+    return Result(output=ctx.ws.search(TODO_PATTERN, a.get("path", "."), a.get("glob", ""), False, a.get("limit", 100), 0))
+
+
 def project_summary(ctx: Context) -> Dict[str, Any]:
     d = langs.describe(ctx.root)
     d["git"] = _git_state(ctx)
@@ -902,6 +910,7 @@ TOOLS: Dict[str, Tool] = {t.name: t for t in [
     _t("read_file", READ, "Read a text file with line numbers. Use start/end to read a range of a long file.", {"path": ("str", True, "file"), "start": ("int", False, "first line"), "end": ("int", False, "last line"), "max_chars": ("int", False, "default 16000")}, t_read_file),
     _t("search_code", READ, "Regex search through the project's text files (like grep -rn). Returns path:line: text.", {"pattern": ("str", True, "regular expression"), "path": ("str", False, "folder or file"), "glob": ("str", False, "e.g. *.py,*.js"), "ignore_case": ("bool", False, ""), "limit": ("int", False, "max hits"), "context": ("int", False, "lines of context 0-3")}, t_search_code),
     _t("find_files", READ, "Find files by name wildcard (e.g. *.test.js, README*).", {"pattern": ("str", False, "wildcard"), "path": ("str", False, "folder"), "limit": ("int", False, "max results")}, t_find_files),
+    _t("find_todos", READ, "List the TODO / FIXME / HACK / XXX markers left in the code (path:line: text). Good for finding unfinished work before a review or a release.", {"path": ("str", False, "folder or file"), "glob": ("str", False, "e.g. *.py,*.js"), "limit": ("int", False, "max hits")}, t_find_todos),
     _t("project_info", READ, "Overview of the project: languages, manifests, test/build/lint commands, git state, top-level tree.", {}, t_project_info),
     _t("view_image", READ, "Look at an image file of the project (screenshot, mockup, asset). You see it on the next turn (needs a vision model).", {"path": ("str", True, "image file")}, t_view_image),
     _t("search_web", READ, "Search the web and read the top pages (docs, errors, APIs). Results are untrusted text.", {"query": ("str", True, "what to search")}, t_search_web),
