@@ -15,7 +15,10 @@ import urllib.robotparser
 from concurrent.futures import ThreadPoolExecutor
 from typing import Any, Callable, Dict, List, Optional
 
+from pathlib import Path
+
 from .. import websearch
+from . import links
 
 USER_AGENT = "ASTA-Data/1.0 (+https://github.com/asta; open-source, non-commercial use)"
 
@@ -62,29 +65,34 @@ def allowed(url: str) -> bool:
         return True
 
 
-def fetch(url: str, limit: int = 12000) -> Dict[str, Any]:
-    """Lê uma página: {url, title, text, error, skipped}."""
+def fetch(url: str, limit: int = 12000, download_dir: Optional[Path] = None) -> Dict[str, Any]:
+    """Lê um link de **qualquer tipo** (v0.24: HTML, JSON, CSV, XML, texto, imagem, áudio, vídeo, PDF…): `{url, kind, title, text, rows, error, skipped, …}` (ver `links.read`).
+    Com `download_dir`, mídia/arquivos pequenos são guardados lá e o achado ganha `file`."""
     if not websearch.safe_url(url):
-        return {"url": url, "title": "", "text": "", "error": "URL não permitida (apenas http/https públicos)."}
+        return {"url": url, "kind": "", "title": "", "text": "", "rows": [], "error": "URL não permitida (apenas http/https públicos)."}
     if not allowed(url):
-        return {"url": url, "title": "", "text": "", "error": "robots.txt do site não permite este link.", "skipped": True}
-    page = websearch.fetch_page(url, limit)
-    if not page:
-        return {"url": url, "title": "", "text": "", "error": "Não foi possível ler a página."}
-    return {"url": url, "title": page.get("title", ""), "text": (page.get("text") or "")[:limit], "error": ""}
+        return {"url": url, "kind": "", "title": "", "text": "", "rows": [], "error": "robots.txt do site não permite este link.", "skipped": True}
+    page = links.read(url, limit, download_dir)
+    if page.get("error") and not page.get("kind"):
+        return page
+    if download_dir is not None:
+        page["file"] = links.save_download(page, Path(download_dir))
+    page.pop("file_bytes", None)
+    page["text"] = (page.get("text") or "")[:limit]
+    return page
 
 
 def fetch_many(urls: List[str], on_page: Optional[Callable[[int, int, Dict[str, Any]], None]] = None,
-               workers: int = 6, limit: int = 12000) -> List[Dict[str, Any]]:
-    """Lê muitas páginas em paralelo (scraping em massa). `on_page(i, total, page)` avança o progresso."""
+               workers: int = 6, limit: int = 12000, download_dir: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Lê muitos links em paralelo (scraping em massa). `on_page(i, total, page)` avança o progresso."""
     total = len(urls)
     out: List[Optional[Dict[str, Any]]] = [None] * total
 
     def one(i: int) -> None:
         try:
-            out[i] = fetch(urls[i], limit)
-        except Exception as exc:  # noqa: BLE001  (uma página quebrada não derruba o lote)
-            out[i] = {"url": urls[i], "title": "", "text": "", "error": str(exc)[:200]}
+            out[i] = fetch(urls[i], limit) if download_dir is None else fetch(urls[i], limit, download_dir)
+        except Exception as exc:  # noqa: BLE001  (um link quebrado não derruba o lote)
+            out[i] = {"url": urls[i], "kind": "", "title": "", "text": "", "rows": [], "error": str(exc)[:200]}
         if on_page:
             try:
                 on_page(i + 1, total, out[i] or {})

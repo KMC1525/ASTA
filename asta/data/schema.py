@@ -7,8 +7,8 @@ from typing import Any, Dict, List
 KINDS = ("database", "dataset")
 #: as abas principais do modo, na ordem pedida
 TABS = ("main", "databases", "datasets", "synthetic_data", "web_scraping", "upgrade", "export")
-EXPORT_FORMATS = ("json", "jsonl", "ndjson", "csv", "tsv", "xml", "html", "md", "sqlite")
-IMPORT_FORMATS = ("json", "jsonl", "ndjson", "csv", "tsv", "xml")
+EXPORT_FORMATS = ("json", "jsonl", "ndjson", "csv", "tsv", "xml", "html", "md", "sqlite", "xlsx", "sql", "yaml", "zip")
+IMPORT_FORMATS = ("json", "jsonl", "ndjson", "csv", "tsv", "xml", "xlsx")
 SYNTH_MODES = ("single", "multi")
 FIELD_TYPES = ("text", "number", "integer", "boolean", "date", "json", "image", "audio", "video", "file", "url", "category")
 
@@ -31,6 +31,10 @@ EXPORT_LABELS = {
     "html": "HTML",
     "md": "Markdown",
     "sqlite": "SQLite (.db)",
+    "xlsx": "Excel (.xlsx)",
+    "sql": "SQL (CREATE + INSERT)",
+    "yaml": "YAML",
+    "zip": "Pacote ZIP (dados + mídia + README)",
 }
 
 

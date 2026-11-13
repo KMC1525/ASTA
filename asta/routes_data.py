@@ -9,6 +9,7 @@ from typing import Any, Callable, Dict
 from . import team as teamlib
 from .data import DataError, DataManager, agents as dai
 from .data import schema as dschema
+from .data.manager import MEDIA_INLINE
 from .jobs import HttpError, Job
 from .util import text
 
@@ -56,6 +57,15 @@ class DataRoutes:
         a("POST", rf"/api/data/items/{KIND}/{IID}/duplicate", w(self.r_duplicate))
         a("POST", rf"/api/data/items/{KIND}/{IID}/records", w(self.r_save_records))
         a("POST", rf"/api/data/items/{KIND}/{IID}/merge", w(self.r_merge))
+        a("GET", rf"/api/data/items/{KIND}/{IID}/rows", w(self.r_rows))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/edit", w(self.r_edit))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/columns", w(self.r_column))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/clean", w(self.r_clean))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/schema/infer", w(lambda req, kind, iid: req.json(self.m.infer_schema(kind, iid, self._body(req).get("apply") is True))))
+        a("GET", rf"/api/data/items/{KIND}/{IID}/media", w(lambda req, kind, iid: req.json({"items": self.m.list_media(kind, iid)})))
+        a("POST", rf"/api/data/items/{KIND}/{IID}/media", w(self.r_media_add))
+        a("GET", rf"/api/data/items/{KIND}/{IID}/media/(?P<fname>[\w .+@()%-]+)", w(self.r_media_get))
+        a("DELETE", rf"/api/data/items/{KIND}/{IID}/media/(?P<fname>[\w .+@()%-]+)", w(lambda req, kind, iid, fname: (self.m.delete_media(kind, iid, urllib.parse.unquote(fname)), req.json({"ok": True}))[1]))
         a("GET", rf"/api/data/items/{KIND}/{IID}/profile", w(lambda req, kind, iid: req.json(self.m.profile(kind, iid))))
         a("POST", rf"/api/data/items/{KIND}/{IID}/dedupe", w(self.r_dedupe))
         a("GET", rf"/api/data/items/{KIND}/{IID}/history", w(lambda req, kind, iid: req.json({"items": self.m.history(kind, iid)})))
@@ -110,7 +120,49 @@ class DataRoutes:
         sid = text(b.get("source_id"), "", 80)
         if not sid:
             raise HttpError(400, "Informe o item de origem para mesclar.")
-        req.json(self.m.merge_items(kind, iid, sk, sid))
+        keys = b.get("keys") if isinstance(b.get("keys"), list) else None
+        req.json(self.m.merge_items(kind, iid, sk, sid, text(b.get("strategy"), "append", 16), keys, text(b.get("conflict"), "keep_target", 16), b.get("dedupe") is True, b.get("dry_run") is True))
+
+    def r_rows(self, req: Any, kind: str, iid: str) -> None:
+        q = req.query
+        where = None
+        raw = (q.get("where", [""])[0] or "").strip()
+        if raw:
+            try:
+                where = json.loads(raw)
+            except ValueError:
+                raise HttpError(400, "Filtro inválido (esperado um JSON {campo: texto}).") from None
+
+        def num(name: str, default: int) -> int:
+            try:
+                return int(q.get(name, [str(default)])[0] or default)
+            except ValueError:
+                return default
+        req.json(self.m.query(kind, iid, q.get("q", [""])[0], q.get("sort", [""])[0], q.get("dir", ["asc"])[0], num("offset", 0), num("limit", 100), where))
+
+    def r_edit(self, req: Any, kind: str, iid: str) -> None:
+        b = self._body(req, 20 * 1024 * 1024)
+        req.json(self.m.edit_records(kind, iid, b.get("edits"), b.get("schema")))
+
+    def r_column(self, req: Any, kind: str, iid: str) -> None:
+        b = self._body(req)
+        req.json(self.m.column(kind, iid, text(b.get("op"), "", 12), text(b.get("name"), "", 80), text(b.get("new_name"), "", 80), text(b.get("type"), "text", 16), b.get("default")))
+
+    def r_clean(self, req: Any, kind: str, iid: str) -> None:
+        b = self._body(req)
+        req.json(self.m.clean(kind, iid, b.get("options"), b.get("apply") is True))
+
+    def r_media_add(self, req: Any, kind: str, iid: str) -> None:
+        name = urllib.parse.unquote(req.headers.get("X-Filename") or req.query.get("name", ["arquivo"])[0] or "arquivo")
+        raw = req.body_bytes(26 * 1024 * 1024)
+        req.json(self.m.add_media(kind, iid, name, raw), 201)
+
+    def r_media_get(self, req: Any, kind: str, iid: str, fname: str) -> None:
+        p = self.m.media_path(kind, iid, urllib.parse.unquote(fname))
+        mime = MEDIA_INLINE.get(p.suffix.lower())
+        # só tipos conhecidos aparecem dentro da página (e sempre isolados); SVG, HTML e o resto só baixam
+        req.file(p, mime or "application/octet-stream", download_name="" if mime else p.name,
+                 headers={"X-Content-Type-Options": "nosniff", "Content-Security-Policy": "sandbox; default-src 'none'; img-src 'self' data:; media-src 'self'"})
 
     def r_dedupe(self, req: Any, kind: str, iid: str) -> None:
         b = self._body(req)
@@ -150,6 +202,14 @@ class DataRoutes:
             mime = "text/tab-separated-values; charset=utf-8"
         elif p.suffix == ".db":
             mime = "application/vnd.sqlite3"
+        elif p.suffix == ".xlsx":
+            mime = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        elif p.suffix == ".sql":
+            mime = "application/sql; charset=utf-8"
+        elif p.suffix in (".yaml", ".yml"):
+            mime = "application/yaml; charset=utf-8"
+        elif p.suffix == ".zip":
+            mime = "application/zip"
         req.file(p, mime, download_name=p.name)
 
     def r_upgrade_import(self, req: Any) -> None:
@@ -178,7 +238,11 @@ class DataRoutes:
             "prompt": text(b.get("prompt"), "", 20000),
             "count": b.get("count"),
             "mode": text(b.get("mode"), "single", 16),
-            "action": text(b.get("action"), "enrich", 16),
+            "action": text(b.get("action"), "enrich", 20),
+            "fields": [x for x in b.get("fields") if isinstance(x, str)][:40] if isinstance(b.get("fields"), list) else [],
+            "language": text(b.get("language"), "", 40),
+            "download_media": b.get("download_media") is True,
+            "schema": b.get("schema") if isinstance(b.get("schema"), dict) else None,
             "urls": b.get("urls") if isinstance(b.get("urls"), list) else [],
             "attachment_ids": [x for x in b.get("attachment_ids") if isinstance(x, str)] if isinstance(b.get("attachment_ids"), list) else [],
         }

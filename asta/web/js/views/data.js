@@ -6,6 +6,7 @@ import { go, state } from '../main.js';
 import { teamPicker } from '../team_ui.js';
 import { confirmDialog, h, icon, modal, select, toast } from '../ui.js';
 import { createComposer } from './composer.js';
+import { mergeDialog, openEditor } from './data_editor.js';
 
 const TABS = [
   ['main', 'Main', 'home'],
@@ -20,7 +21,7 @@ const TAB_IDS = TABS.map((x) => x[0]);
 
 const EXPORT_FORMATS = [
   ['json', 'JSON'], ['jsonl', 'JSONL / NDJSON'], ['ndjson', 'NDJSON'], ['csv', 'CSV'], ['tsv', 'TSV'],
-  ['xml', 'XML'], ['html', 'HTML'], ['md', 'Markdown'], ['sqlite', 'SQLite (.db)'],
+  ['xml', 'XML'], ['html', 'HTML'], ['md', 'Markdown'], ['sqlite', 'SQLite (.db)'], ['xlsx', 'Excel (.xlsx)'], ['sql', 'SQL (CREATE + INSERT)'], ['yaml', 'YAML'], ['zip', 'ZIP (dados + mídia + README)'],
 ];
 const SYNTH_MODES = [['single', t('Um tipo de dado')], ['multi', t('Vários tipos/modalidades')]];
 const MAX_SYNTH = 5000;
@@ -36,6 +37,25 @@ async function loadItems(kind) {
   const q = kind ? '?kind=' + encodeURIComponent(kind) : '';
   const r = await api('/api/data/items' + q);
   return r.items || [];
+}
+
+// busca, ordenação e etiquetas da lista de itens (valem para Main, Databases e Datasets)
+const listState = { q: '', sort: 'updated', tag: '' };
+function filterItems(items) {
+  const q = listState.q.trim().toLowerCase();
+  let out = items.filter((it) => (!q || `${it.name} ${it.description || ''} ${(it.tags || []).join(' ')}`.toLowerCase().includes(q)) && (!listState.tag || (it.tags || []).includes(listState.tag)));
+  const by = { updated: (a, b) => String(b.updated || '').localeCompare(String(a.updated || '')), name: (a, b) => String(a.name || '').localeCompare(String(b.name || ''), undefined, { numeric: true }), records: (a, b) => (b.records || 0) - (a.records || 0) };
+  return out.sort(by[listState.sort] || by.updated);
+}
+function listControls(items, repaint) {
+  const tags = Array.from(new Set(items.flatMap((it) => it.tags || []))).sort();
+  const q = h('input', { id: 'dt-list-q', placeholder: t('Buscar por nome, descrição ou etiqueta…'), value: listState.q, style: { flex: '1', minWidth: '180px' } });
+  q.addEventListener('input', () => { listState.q = q.value; clearTimeout(q._t); q._t = setTimeout(repaint, 200); });
+  const sort = select([['updated', t('Mais recentes')], ['name', t('Nome')], ['records', t('Mais registros')]], listState.sort, (v) => { listState.sort = v; repaint(); }, { id: 'dt-list-sort' });
+  return h('div', { class: 'col', style: { gap: '6px' } },
+    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } }, q, sort),
+    tags.length ? h('div', { class: 'dt-tags' }, h('button', { class: 'chip' + (listState.tag ? '' : ' solid'), type: 'button', onclick: () => { listState.tag = ''; repaint(); } }, t('Todas')),
+      ...tags.map((x) => h('button', { class: 'chip' + (listState.tag === x ? ' solid' : ''), type: 'button', onclick: () => { listState.tag = listState.tag === x ? '' : x; repaint(); } }, x))) : null);
 }
 
 function itemLabel(it) {
@@ -60,145 +80,6 @@ function renderItemCard(it, onChanged) {
       } }, icon('trash', 13), t('Apagar'))));
 }
 
-// ------------------------------------------------------------------ tabela de registros (visualizar/organizar)
-function recordsTable(records, schema, opt = {}) {
-  const recs = Array.isArray(records) ? records : [];
-  const cols = [];
-  const seen = new Set();
-  const sfields = (schema && schema.fields) || [];
-  for (const f of sfields) { if (f && f.name && !seen.has(f.name)) { seen.add(f.name); cols.push(f.name); } }
-  for (const r of recs.slice(0, 50)) {
-    if (r && typeof r === 'object' && !Array.isArray(r)) for (const k of Object.keys(r)) { if (!seen.has(k)) { seen.add(k); cols.push(k); } }
-  }
-  if (!cols.length) cols.push('value');
-  const sortKey = opt.sortKey || '';
-  const dir = opt.sortDir === 'desc' ? -1 : 1;
-  const cell = (r, c) => {
-    let v = r && typeof r === 'object' && !Array.isArray(r) ? r[c] : (c === 'value' ? r : '');
-    if (v && typeof v === 'object') { try { v = JSON.stringify(v); } catch (e) { v = String(v); } }
-    return v == null ? '' : String(v);
-  };
-  const shown = [...recs].sort((a, b) => {
-    if (!sortKey) return 0;
-    const x = cell(a, sortKey), y = cell(b, sortKey);
-    const nx = Number(x), ny = Number(y);
-    if (x !== '' && y !== '' && !isNaN(nx) && !isNaN(ny)) return (nx - ny) * dir;
-    return x.localeCompare(y, undefined, { numeric: true }) * dir;
-  }).slice(0, opt.limit || 200);
-  const head = h('tr', null, ...cols.map((c) => h('th', null,
-    h('button', { class: 'dt-th', type: 'button', title: t('Ordenar por {c}', { c }), onclick: () => opt.onSort && opt.onSort(c) },
-      c, sortKey === c ? h('span', { class: 'muted' }, dir === 1 ? ' ▲' : ' ▼') : null))));
-  const body = shown.map((r) => h('tr', null, ...cols.map((c) => h('td', null, h('div', { class: 'dt-rec' }, cell(r, c))))));
-  return h('div', { class: 'dt-table-wrap' }, h('table', { class: 'dt-table' }, h('thead', null, head), h('tbody', null, ...body)));
-}
-
-// ------------------------------------------------------------------ qualidade: perfil e duplicados (v0.23)
-const ISSUE_TEXT = {
-  empty_column: (i) => t('A coluna «{f}» está vazia em todos os registros.', { f: i.field }),
-  constant_column: (i) => t('A coluna «{f}» tem o mesmo valor em todos os registros.', { f: i.field }),
-  sparse_column: (i) => t('A coluna «{f}» está preenchida em apenas {n} de {m} registros.', { f: i.field, n: i.filled, m: i.total }),
-  mixed_types: (i) => t('A coluna «{f}» mistura tipos de valor: {x}.', { f: i.field, x: (i.types || []).join(', ') }),
-  type_mismatch: (i) => t('A coluna «{f}» foi declarada como «{d}», mas tem valores de outro tipo.', { f: i.field, d: i.declared }),
-  duplicates: (i) => t('{n} registro(s) repetido(s) — use «Remover duplicados».', { n: i.count }),
-  no_records: () => t('Ainda não há registros.'),
-};
-
-async function profileDialog(kind, id) {
-  let p;
-  try { p = await api(`/api/data/items/${kind}/${id}/profile`); } catch (e) { toast(e.message, 'err'); return; }
-  const num = (v) => (v === undefined || v === null ? '' : String(Math.round(v * 1000) / 1000));
-  const head = h('tr', null, ...[t('Campo'), t('Preenchidos'), t('Faltando'), t('Distintos'), t('Tipos'), t('Mín–Máx'), t('Mais comuns')].map((x) => h('th', null, x)));
-  const rows = (p.columns || []).map((c) => h('tr', null,
-    h('td', null, c.name), h('td', null, String(c.filled)), h('td', null, String(c.missing)), h('td', null, String(c.distinct) + (c.distinct_exact ? '' : '+')),
-    h('td', null, Object.keys(c.types || {}).join(', ')),
-    h('td', null, c.min !== undefined ? `${num(c.min)} – ${num(c.max)}` : (c.len_min !== undefined ? t('{a}–{b} caracteres', { a: c.len_min, b: c.len_max }) : '')),
-    h('td', null, (c.top || []).map((x) => `${String(x.value).slice(0, 24)} (${x.count})`).join('; '))));
-  const issues = (p.issues || []).map((i) => (ISSUE_TEXT[i.code] ? ISSUE_TEXT[i.code](i) : i.code));
-  const body = h('div', { class: 'col', style: { gap: '10px', minWidth: 'min(900px,90vw)' } },
-    h('div', { class: 'muted small' }, t('{n} registro(s) · {m} campo(s)', { n: p.records, m: (p.columns || []).length })),
-    issues.length ? h('ul', { style: { margin: 0, paddingLeft: '18px' } }, ...issues.map((x) => h('li', null, x))) : h('div', { class: 'muted' }, t('Nenhum problema encontrado.')),
-    h('div', { class: 'dt-table-wrap' }, h('table', { class: 'dt-table' }, h('thead', null, head), h('tbody', null, ...rows))));
-  await modal(t('Perfil dos dados'), body, [{ label: t('Fechar'), value: 'close', cls: 'primary' }]);
-}
-
-// devolve true se algo foi removido (o chamador recarrega)
-async function dedupeDialog(kind, id) {
-  let prev;
-  try { prev = await api(`/api/data/items/${kind}/${id}/dedupe`, { method: 'POST', body: { apply: false } }); } catch (e) { toast(e.message, 'err'); return false; }
-  if (!prev.removed) { toast(t('Nenhum registro repetido.'), 'ok'); return false; }
-  const body = h('div', { class: 'col', style: { gap: '8px' } },
-    h('div', null, t('{n} de {m} registro(s) são repetidos e serão removidos; o primeiro de cada grupo fica.', { n: prev.removed, m: prev.total })),
-    h('div', { class: 'muted small' }, t('Campos comparados: {x}', { x: (prev.keys || []).join(', ') })),
-    h('div', { class: 'muted small' }, t('O estado atual fica no histórico: dá para restaurar.')));
-  const v = await modal(t('Remover duplicados'), body, [{ label: t('Cancelar'), value: false }, { label: t('Remover duplicados'), value: true, cls: 'primary' }]);
-  if (v !== true) return false;
-  try {
-    const done = await api(`/api/data/items/${kind}/${id}/dedupe`, { method: 'POST', body: { apply: true } });
-    toast(t('{n} registro(s) removido(s)', { n: done.removed }), 'ok');
-    return !!done.applied;
-  } catch (e) { toast(e.message, 'err'); return false; }
-}
-
-// ------------------------------------------------------------------ diálogo do item (ver/editar/organizar)
-async function openItemDialog(kind, id, onChanged) {
-  let data;
-  try { data = await api(`/api/data/items/${kind}/${id}`); } catch (e) { toast(e.message, 'err'); return; }
-  const filter = h('input', { placeholder: t('Filtrar registros…'), style: { flex: '1', minWidth: '160px' } });
-  let sortKey = '';
-  let sortDir = 'asc';
-  const tableBox = h('div');
-  const info = h('div', { class: 'dt-kv' },
-    h('div', { class: 'muted' }, t('Tipo')), h('div', null, kind === 'database' ? t('Database') : t('Dataset')),
-    h('div', { class: 'muted' }, t('Registros')), h('div', null, String((data.records || []).length)),
-    h('div', { class: 'muted' }, t('Campos')), h('div', null, String(((data.schema || {}).fields || []).length)));
-  const recs = h('textarea', { style: { width: '100%', minHeight: '220px', fontFamily: 'monospace', fontSize: '12px' } }, JSON.stringify(data.records || [], null, 2));
-  const schemaBox = h('textarea', { style: { width: '100%', minHeight: '120px', fontFamily: 'monospace', fontSize: '12px' } }, JSON.stringify(data.schema || { fields: [] }, null, 2));
-
-  const paint = () => {
-    const all = data.records || [];
-    const q = (filter.value || '').trim().toLowerCase();
-    const rows = q ? all.filter((r) => JSON.stringify(r).toLowerCase().includes(q)) : all;
-    tableBox.replaceChildren(
-      h('div', { class: 'row', style: { gap: '8px', alignItems: 'center', marginBottom: '6px', flexWrap: 'wrap' } },
-        filter,
-        h('span', { class: 'muted small' }, t('{n} de {m} registro(s)', { n: rows.length, m: all.length }))),
-      recordsTable(rows, data.schema || {}, {
-        sortKey, sortDir,
-        onSort: (c) => { if (sortKey === c) sortDir = sortDir === 'asc' ? 'desc' : 'asc'; else { sortKey = c; sortDir = 'asc'; } paint(); },
-      }));
-  };
-  filter.addEventListener('input', paint);
-  paint();
-
-  const body = h('div', { class: 'col', style: { gap: '10px', minWidth: 'min(900px,90vw)' } },
-    h('h3', { style: { margin: 0 } }, (data.meta && data.meta.name) || id), info,
-    h('div', { class: 'row', style: { gap: '8px', flexWrap: 'wrap' } },
-      h('button', { class: 'btn', onclick: () => profileDialog(kind, id) }, t('Perfil dos dados')),
-      h('button', { class: 'btn', onclick: async () => {
-        if (!(await dedupeDialog(kind, id))) return;
-        try {
-          data = await api(`/api/data/items/${kind}/${id}`);
-          recs.value = JSON.stringify(data.records || [], null, 2);
-          info.children[3].textContent = String((data.records || []).length);
-          paint(); onChanged && onChanged();
-        } catch (e) { toast(e.message, 'err'); }
-      } }, t('Remover duplicados'))),
-    h('b', null, t('Visualização (amostra)')), tableBox,
-    h('b', null, t('Registros (JSON)')), recs,
-    h('b', null, t('Schema (JSON)')), schemaBox);
-  const res = await modal(t('Database/Dataset'), body, [
-    { label: t('Fechar'), value: 'close' },
-    { label: t('Salvar alterações'), value: 'save', cls: 'primary' },
-  ]);
-  if (res !== 'save') return;
-  try {
-    const newRecs = JSON.parse(recs.value || '[]');
-    const newSchema = JSON.parse(schemaBox.value || '{"fields":[]}');
-    await api(`/api/data/items/${kind}/${id}/records`, { method: 'POST', body: { records: Array.isArray(newRecs) ? newRecs : [], schema: newSchema, mode: 'replace', label: 'manual' } });
-    toast(t('Salvo'), 'ok'); onChanged && onChanged();
-  } catch (e) { toast(e.message || t('JSON inválido'), 'err'); }
-}
-
 async function createDialog(defaultKind, onChanged) {
   const cfg = (state.settings && state.settings.data) || {};
   const name = h('input', { placeholder: t('Nome'), maxlength: 100 });
@@ -213,43 +94,41 @@ async function createDialog(defaultKind, onChanged) {
   try {
     const item = await api('/api/data/items', { method: 'POST', body: { kind: kindSel.value, name: name.value.trim(), description: desc.value.trim() } });
     toast(t('Criado'), 'ok'); onChanged && onChanged(item);
-    if (item && item.kind && item.id) openItemDialog(item.kind, item.id, onChanged);
+    if (item && item.kind && item.id) openEditor(item.kind, item.id, onChanged);
   } catch (e) { toast(e.message, 'err'); }
 }
 
-async function mergeDialog(onChanged) {
-  const items = await loadItems();
-  if (items.length < 2) return toast(t('Crie ao menos dois itens para mesclar.'), 'err');
-  const opts = items.map((it) => [it.kind + ':' + it.id, itemLabel(it)]);
-  const targetSel = select(opts, opts[0][0], () => {});
-  const sourceSel = select(opts, opts[1][0], () => {});
-  const body = h('div', { class: 'col', style: { gap: '8px', minWidth: '480px' } },
-    h('p', { class: 'muted small', style: { margin: 0 } }, t('Mescla os registros e campos do item de origem no item de destino (o destino é preservado e recebe os dados).')),
-    h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino')), targetSel),
-    h('div', { class: 'field' }, h('label', { class: 'f' }, t('Origem')), sourceSel));
-  if (await modal(t('Mesclar databases/datasets'), body, [{ label: t('Cancelar'), value: null }, { label: t('Mesclar'), value: 'ok', cls: 'primary' }]) !== 'ok') return;
-  const [tk, tid] = targetSel.value.split(':');
-  const [sk, sid] = sourceSel.value.split(':');
-  if (tk === sk && tid === sid) return toast(t('Escolha itens diferentes.'), 'err');
-  try {
-    await api(`/api/data/items/${tk}/${tid}/merge`, { method: 'POST', body: { source_kind: sk, source_id: sid } });
-    toast(t('Mesclado'), 'ok'); onChanged && onChanged();
-  } catch (e) { toast(e.message, 'err'); }
+const CHECK_LABEL = {
+  requested: 'pedidos', generated: 'gerados', from_ai: 'pela IA', schema_fields: 'campos', duplicates: 'repetidos descartados', dropped: 'sem campo obrigatório', extra_fields: 'valores fora do schema',
+  links: 'links', read: 'lidos', skipped_robots: 'bloqueados pelo robots.txt', failed: 'com erro', structured: 'registros prontos (JSON/CSV)', media: 'arquivos de mídia', extracted: 'extraídos pela IA', raw: 'texto cru guardado',
+  total: 'registros', changed: 'alterados', unchanged: 'sem mudança', batches: 'lotes', failed_batches: 'lotes sem resposta', rows_removed: 'linhas removidas', converted: 'valores convertidos',
+};
+
+function resultSummary(ev) {
+  const c = ev.checks || {};
+  const bits = Object.keys(CHECK_LABEL).filter((k) => typeof c[k] === 'number' && c[k] > 0).map((k) => `${c[k]} ${t(CHECK_LABEL[k])}`);
+  const warns = (ev.warnings || []).slice(0, 6);
+  if (!bits.length && !warns.length) return null;
+  return h('div', { class: 'col dt-result', style: { gap: '4px' } },
+    bits.length ? h('div', { class: 'small' }, bits.join(' · ')) : null,
+    warns.length ? h('ul', { class: 'small muted', style: { margin: 0, paddingLeft: '18px' } }, ...warns.map((w) => h('li', null, w))) : null);
 }
 
 function jobWatcher(jobId, onDone) {
   const box = h('div', { class: 'muted small' }, t('Executando...'));
   const bar = h('div', { class: 'dt-bar' }, h('i'));
-  const wrap = h('div', { class: 'col', style: { gap: '6px' } }, box, bar);
+  const sum = h('div');
+  const wrap = h('div', { class: 'col', style: { gap: '6px' } }, box, bar, sum);
   // o EventSource entrega TODOS os eventos ao mesmo callback; o tipo vem em `ev.type`
   events(`/api/jobs/${jobId}/events`, (ev) => {
     if (ev.type === 'stage') { box.textContent = ev.message || ev.stage || t('Executando...'); }
+    else if (ev.type === 'step' && ev.label) { box.textContent = ev.label + (ev.status === 'fallback' ? ' · ' + t('método automático') : ''); }
     else if (ev.type === 'progress') {
       if (ev.message) box.textContent = ev.message;
       if (ev.total) bar.firstChild.style.width = Math.round((ev.done / ev.total) * 100) + '%';
     }
-    else if (ev.type === 'done') { box.textContent = t('Concluído.'); bar.firstChild.style.width = '100%'; toast(t('Concluído'), 'ok'); onDone && onDone(ev); }
-    else if (ev.type === 'error') { box.textContent = ev.error || t('Erro'); toast(ev.error || t('Erro'), 'err'); onDone && onDone(ev); }
+    else if (ev.type === 'done') { box.textContent = t('Concluído.'); bar.firstChild.style.width = '100%'; sum.replaceChildren(resultSummary(ev) || ''); toast(t('Concluído'), 'ok'); onDone && onDone(ev); }
+    else if (ev.type === 'error') { box.textContent = ev.message || ev.error || t('Erro'); toast(ev.message || ev.error || t('Erro'), 'err'); onDone && onDone(ev); }
   });
   return wrap;
 }
@@ -274,13 +153,15 @@ export default async function render(root, ctx) {
   let items = await loadItems().catch(() => []);
 
   async function refresh() { items = await loadItems().catch(() => []); paint(); }
+  // ao terminar uma tarefa de IA só recarrega a lista (para os contadores): repintar a aba apagaria o resumo do resultado que acabou de aparecer
+  async function refreshQuiet() { items = await loadItems().catch(() => items); }
   const body = h('div', { id: 'dt-body' });
 
   async function paint() {
     // open requested item dialog
     if (ctx && ctx.open && ctx.open.kind && ctx.open.id) {
       const o = ctx.open; ctx.open = null;
-      await openItemDialog(o.kind, o.id, refresh);
+      await openEditor(o.kind, o.id, refresh, items);
     }
     if (tab === 'main') return paintMain();
     if (tab === 'databases') return paintKind('database');
@@ -292,29 +173,32 @@ export default async function render(root, ctx) {
   }
 
   function paintMain() {
-    const grid = h('div', { class: 'dt-grid' }, ...items.map((it) => renderItemCard(it, refresh)));
+    const grid = h('div', { class: 'dt-grid' }, ...filterItems(items).map((it) => renderItemCard(it, refresh)));
     body.replaceChildren(
       h('div', { class: 'dt-section' },
         h('h2', { style: { marginTop: 0 } }, t('Data')),
         h('p', { class: 'muted' }, t('Crie, gere, gerencie, edite, visualize, organize e mescle databases e datasets multimodais com ajuda de agentes de IA. Gere dados sintéticos, faça web scraping open source, importe/melhore (upgrade) e exporte em vários formatos preservando a estrutura.')),
         h('div', { class: 'dt-actions', style: { marginTop: '8px' } },
           h('button', { class: 'btn primary', type: 'button', onclick: () => createDialog(cfg.default_kind, refresh) }, icon('plus', 14), t('Novo database/dataset')),
-          h('button', { class: 'btn', type: 'button', onclick: () => mergeDialog(refresh) }, icon('layers', 14), t('Mesclar')),
+          h('button', { class: 'btn', id: 'dt-merge-open', type: 'button', onclick: () => mergeDialog(items, '', refresh) }, icon('layers', 14), t('Mesclar')),
           h('button', { class: 'btn', type: 'button', onclick: refresh }, icon('refresh', 14), t('Atualizar')))),
       h('h3', null, t('Todos os itens')),
+      items.length ? listControls(items, paintMain) : null,
       items.length ? grid : h('div', { class: 'muted' }, t('Nenhum database ou dataset ainda. Crie um novo para começar.')));
   }
 
   function paintKind(kind) {
-    const list = items.filter((it) => it.kind === kind);
+    const all = items.filter((it) => it.kind === kind);
+    const list = filterItems(all);
     const grid = h('div', { class: 'dt-grid' }, ...list.map((it) => renderItemCard(it, refresh)));
     body.replaceChildren(
       h('div', { class: 'row', style: { justifyContent: 'space-between', alignItems: 'center', gap: '8px', flexWrap: 'wrap' } },
         h('h2', { style: { margin: 0 } }, kind === 'database' ? t('Databases') : t('Datasets')),
         h('div', { class: 'dt-actions' },
           h('button', { class: 'btn primary', type: 'button', onclick: () => createDialog(kind, refresh) }, icon('plus', 14), t('Novo')),
-          h('button', { class: 'btn', type: 'button', onclick: () => mergeDialog(refresh) }, icon('layers', 14), t('Mesclar')))),
-      list.length ? grid : h('div', { class: 'muted' }, kind === 'database' ? t('Nenhum database ainda.') : t('Nenhum dataset ainda.')));
+          h('button', { class: 'btn', type: 'button', onclick: () => mergeDialog(items, '', refresh) }, icon('layers', 14), t('Mesclar')))),
+      all.length ? listControls(all, () => paintKind(kind)) : null,
+      list.length ? grid : all.length ? h('div', { class: 'muted' }, t('Nenhum item corresponde à busca.')) : h('div', { class: 'muted' }, kind === 'database' ? t('Nenhum database ainda.') : t('Nenhum dataset ainda.')));
   }
 
   function itemSelect(list, id) {
@@ -341,7 +225,7 @@ export default async function render(root, ctx) {
           method: 'POST',
           body: { prompt: cmp.text(), count: n, mode: modeSel.value, team: tm, attachment_ids: cmp.fileIds() },
         });
-        status.replaceChildren(jobWatcher(r.job_id, refresh));
+        status.replaceChildren(jobWatcher(r.job_id, refreshQuiet));
       } catch (e) { toast(e.message, 'err'); }
     };
     cmp.configure({ onSend: run });
@@ -367,6 +251,7 @@ export default async function render(root, ctx) {
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-scrape-team', defaultEffort: 'high' });
     const status = h('div');
     const ack = h('input', { type: 'checkbox', id: 'dt-scrape-ack' });
+    const media = h('input', { type: 'checkbox', id: 'dt-scrape-media' });
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset.'), 'err');
       if (!ack.checked) return toast(t('Confirme o aviso de uso open source para continuar.'), 'err');
@@ -377,9 +262,9 @@ export default async function render(root, ctx) {
       try {
         const r = await api(`/api/data/items/${k}/${id}/scrape`, {
           method: 'POST',
-          body: { urls: list, prompt: cmp.text(), team: tm, ack: true, attachment_ids: cmp.fileIds() },
+          body: { urls: list, prompt: cmp.text(), team: tm, ack: true, download_media: media.checked, attachment_ids: cmp.fileIds() },
         });
-        status.replaceChildren(jobWatcher(r.job_id, refresh));
+        status.replaceChildren(jobWatcher(r.job_id, refreshQuiet));
       } catch (e) { toast(e.message, 'err'); }
     };
     cmp.configure({ onSend: run });
@@ -392,7 +277,9 @@ export default async function render(root, ctx) {
           h('label', { class: 'row small', style: { marginTop: '8px', gap: '6px', cursor: 'pointer' } },
             ack, h('span', null, t('Li o aviso e vou usar apenas para fins open source e não comerciais.')))),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino (database/dataset)')), sel),
+        h('p', { class: 'muted small', style: { margin: 0 } }, t('Aceita qualquer tipo de link: páginas, JSON, CSV, XML/RSS, texto, imagens, áudio, vídeo e PDFs. JSON e CSV viram registros direto; páginas passam pela IA; arquivos de mídia viram registros com o endereço, o tipo e o tamanho.')),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Links (um por linha)')), urls),
+        h('label', { class: 'row small', style: { gap: '6px', cursor: 'pointer' } }, media, h('span', null, t('Guardar no item os arquivos de mídia dos links (até 20 MB cada)'))),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt de extração')), cmp.el),
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
         h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('globe', 14), t('Fazer scraping e extrair'))),
@@ -401,25 +288,49 @@ export default async function render(root, ctx) {
 
   function paintUpgrade() {
     const sel = itemSelect(items, 'dt-up-item');
-    const fileIn = h('input', { type: 'file', accept: '.json,.jsonl,.ndjson,.csv,.tsv,.xml' });
+    const fileIn = h('input', { type: 'file', id: 'dt-up-file', accept: '.json,.jsonl,.ndjson,.csv,.tsv,.xml,.xlsx' });
     const kindSel = select([['dataset', t('Dataset')], ['database', t('Database')]], cfg.default_kind || 'dataset', () => {}, { id: 'dt-up-kind' });
     const cmp = promptComposer(t('Como melhorar/enriquecer? (opcional). Você pode pedir novos campos, limpeza, normalização ou mais dados.'), 4);
-    const count = h('input', { type: 'number', min: 0, max: MAX_SYNTH, value: 0 });
+    const count = h('input', { type: 'number', min: 0, max: MAX_SYNTH, value: 20, id: 'dt-up-count' });
     const modeSel = select(SYNTH_MODES, cfg.synthetic_mode || 'single', () => {}, { id: 'dt-up-mode' });
-    const actionSel = select([['enrich', t('Melhorar/enriquecer registros existentes')], ['generate', t('Gerar e adicionar mais dados sintéticos')]], 'enrich', () => {}, { id: 'dt-up-action' });
+    const fieldsIn = h('input', { id: 'dt-up-fields', placeholder: t('campo1, campo2') });
+    const langIn = h('input', { id: 'dt-up-lang', placeholder: t('Idioma de destino (ex.: inglês)') });
+    const ACTIONS = [
+      ['enrich', t('Melhorar/enriquecer os registros (a base inteira, em lotes)')],
+      ['fill_missing', t('Preencher valores vazios')],
+      ['classify', t('Classificar (criar uma coluna com um rótulo)')],
+      ['translate', t('Traduzir campos de texto')],
+      ['clean', t('Limpar e padronizar (sem IA)')],
+      ['generate', t('Gerar e adicionar mais dados sintéticos')],
+    ];
+    const HINT = { enrich: '', fill_missing: t('Sem IA, preenche com a mediana (números) ou o valor mais comum de cada coluna.'), classify: t('Escreva em «Campos» o nome da nova coluna (ex.: sentimento) e, no prompt, o critério.'),
+      translate: t('Escreva em «Campos» as colunas a traduzir e o idioma de destino.'), clean: t('Tira espaços, converte tipos pelo schema e remove linhas vazias. Funciona offline.'), generate: t('Acrescenta registros novos, sem repetir os que já existem.') };
+    const hint = h('div', { class: 'muted small', id: 'dt-up-hint' });
+    const fieldsBox = h('div', { class: 'field' }, h('label', { class: 'f' }, t('Campos')), fieldsIn);
+    const langBox = h('div', { class: 'field' }, h('label', { class: 'f' }, t('Idioma')), langIn);
+    const countBox = h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade (para gerar mais)')), count);
+    const sync = () => {
+      const a = actionSel.value;
+      hint.textContent = HINT[a] || '';
+      fieldsBox.style.display = ['fill_missing', 'classify', 'translate'].includes(a) ? '' : 'none';
+      langBox.style.display = a === 'translate' ? '' : 'none';
+      countBox.style.display = a === 'generate' ? '' : 'none';
+    };
+    const actionSel = select(ACTIONS, 'enrich', sync, { id: 'dt-up-action' });
     const teamCfg = { agents: cfg.agents || 1, effort: cfg.effort || 'high' };
     const picker = teamPicker(teamCfg, () => {}, { id: 'dt-up-team', defaultEffort: 'high' });
     const status = h('div');
+    const send = async (url, f) => {
+      const raw = await f.arrayBuffer();
+      const r = await fetch(url, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name) }, body: raw });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error || t('Falha ao importar'));
+      return j;
+    };
     const importNew = async () => {
       const f = fileIn.files && fileIn.files[0];
       if (!f) return toast(t('Selecione um arquivo para importar.'), 'err');
-      try {
-        const raw = await f.arrayBuffer();
-        const r = await fetch(`/api/data/upgrade/import?kind=${encodeURIComponent(kindSel.value)}&item_name=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ''))}&name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name) }, body: raw });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || t('Falha ao importar'));
-        toast(t('Importado'), 'ok'); await refresh();
-      } catch (e) { toast(e.message, 'err'); }
+      try { await send(`/api/data/upgrade/import?kind=${encodeURIComponent(kindSel.value)}&item_name=${encodeURIComponent(f.name.replace(/\.[^.]+$/, ''))}&name=${encodeURIComponent(f.name)}`, f); toast(t('Importado'), 'ok'); await refresh(); } catch (e) { toast(e.message, 'err'); }
     };
     // importa dentro de um item que já existe (soma os registros e acrescenta as colunas ao schema)
     const importInto = async () => {
@@ -427,13 +338,7 @@ export default async function render(root, ctx) {
       if (!f) return toast(t('Selecione um arquivo para importar.'), 'err');
       if (!sel.value) return toast(t('Selecione um database/dataset para melhorar.'), 'err');
       const [k, id] = sel.value.split(':');
-      try {
-        const raw = await f.arrayBuffer();
-        const r = await fetch(`/api/data/items/${k}/${id}/import?mode=append&name=${encodeURIComponent(f.name)}`, { method: 'POST', headers: { 'X-Filename': encodeURIComponent(f.name) }, body: raw });
-        const j = await r.json();
-        if (!r.ok) throw new Error(j.error || t('Falha ao importar'));
-        toast(t('Importado'), 'ok'); await refresh();
-      } catch (e) { toast(e.message, 'err'); }
+      try { await send(`/api/data/items/${k}/${id}/import?mode=append&name=${encodeURIComponent(f.name)}`, f); toast(t('Importado'), 'ok'); await refresh(); } catch (e) { toast(e.message, 'err'); }
     };
     const run = async () => {
       if (!sel.value) return toast(t('Selecione um database/dataset para melhorar.'), 'err');
@@ -442,12 +347,13 @@ export default async function render(root, ctx) {
       try {
         const r = await api(`/api/data/items/${k}/${id}/upgrade`, {
           method: 'POST',
-          body: { prompt: cmp.text(), count: parseInt(count.value || '0', 10), mode: modeSel.value, action: actionSel.value, team: tm, attachment_ids: cmp.fileIds() },
+          body: { prompt: cmp.text(), count: parseInt(count.value || '0', 10), mode: modeSel.value, action: actionSel.value, fields: fieldsIn.value.split(',').map((x) => x.trim()).filter(Boolean), language: langIn.value.trim(), team: tm, attachment_ids: cmp.fileIds() },
         });
-        status.replaceChildren(jobWatcher(r.job_id, refresh));
+        status.replaceChildren(jobWatcher(r.job_id, refreshQuiet));
       } catch (e) { toast(e.message, 'err'); }
     };
     cmp.configure({ onSend: run });
+    sync();
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Upgrade')),
@@ -455,17 +361,19 @@ export default async function render(root, ctx) {
         h('div', { class: 'field' }, h('label', { class: 'f' }, t('Destino (database/dataset)')), sel),
         h('div', { class: 'dt-section col', style: { gap: '8px' } },
           h('b', null, t('Importar database/dataset existente')),
+          h('div', { class: 'muted small' }, t('Formatos: JSON, JSONL/NDJSON, CSV, TSV, XML e Excel (.xlsx).')),
           h('div', { class: 'grid2' }, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Tipo')), kindSel), h('div', { class: 'field' }, h('label', { class: 'f' }, t('Arquivo')), fileIn)),
           h('div', { class: 'dt-actions' },
-            h('button', { class: 'btn', type: 'button', onclick: importNew }, icon('upload', 14), t('Importar como novo item')),
-            h('button', { class: 'btn', type: 'button', onclick: importInto }, icon('layers', 14), t('Importar dentro do item')))),
+            h('button', { class: 'btn', id: 'dt-up-import-new', type: 'button', onclick: importNew }, icon('upload', 14), t('Importar como novo item')),
+            h('button', { class: 'btn', id: 'dt-up-import-into', type: 'button', onclick: importInto }, icon('layers', 14), t('Importar dentro do item')))),
         h('div', { class: 'dt-section col', style: { gap: '8px' } },
-          h('b', null, t('Melhorar com IA')),
-          h('div', { class: 'field' }, h('label', { class: 'f' }, t('Ação')), actionSel),
-          h('div', { class: 'grid2' }, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Quantidade (para gerar mais)')), count), h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
+          h('b', null, t('Melhorar')),
+          h('div', { class: 'field' }, h('label', { class: 'f' }, t('Ação')), actionSel), hint,
+          h('div', { class: 'grid2' }, countBox, h('div', { class: 'field' }, h('label', { class: 'f' }, t('Modo')), modeSel)),
+          fieldsBox, langBox,
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Prompt/instruções')), cmp.el),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Equipe de agentes')), picker.el),
-          h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', type: 'button', onclick: run }, icon('sparkle', 14), t('Aplicar upgrade com IA'))),
+          h('div', { class: 'dt-actions' }, h('button', { class: 'btn primary', id: 'dt-up-run', type: 'button', onclick: run }, icon('sparkle', 14), t('Aplicar upgrade'))),
           status)));
   }
 
@@ -482,7 +390,7 @@ export default async function render(root, ctx) {
         status.replaceChildren(h('div', { class: 'row', style: { gap: '8px', alignItems: 'center', flexWrap: 'wrap' } },
           h('span', { class: 'small' }, t('Arquivo: {n} ({r} registros)', { n: r.name, r: r.records })),
           h('a', { class: 'btn sm primary', href: `/api/data/items/${k}/${id}/exports/${encodeURIComponent(r.name)}`, download: r.name }, icon('download', 13), t('Baixar'))));
-        await refresh();
+        await refreshQuiet();
       } catch (e) { toast(e.message, 'err'); }
     };
     const runAll = async () => {
@@ -498,12 +406,12 @@ export default async function render(root, ctx) {
       status.replaceChildren(h('div', { class: 'col', style: { gap: '4px' } }, ...done.map((d) => h('div', { class: 'row', style: { gap: '8px', alignItems: 'center' } },
         h('span', { class: 'small' }, d.name + ' (' + d.records + ')'),
         h('a', { class: 'btn sm', href: `/api/data/items/${d.kind}/${d.id}/exports/${encodeURIComponent(d.name)}`, download: d.name }, icon('download', 13), t('Baixar'))))));
-      await refresh();
+      await refreshQuiet();
     };
     body.replaceChildren(
       h('div', { class: 'dt-section col', style: { gap: '10px' } },
         h('h2', { style: { margin: 0 } }, t('Export')),
-        h('p', { class: 'muted small', style: { margin: 0 } }, t('Exporte databases e datasets em vários formatos preservando a estrutura (JSON, JSONL/NDJSON, CSV, TSV, XML, HTML, Markdown, SQLite).')),
+        h('p', { class: 'muted small', style: { margin: 0 } }, t('Exporte databases e datasets em vários formatos preservando a estrutura (JSON, JSONL/NDJSON, CSV, TSV, XML, HTML, Markdown, SQLite, Excel, SQL, YAML e pacote ZIP com a mídia).')),
         h('div', { class: 'grid2' },
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Item')), sel),
           h('div', { class: 'field' }, h('label', { class: 'f' }, t('Formato')), fmtSel)),

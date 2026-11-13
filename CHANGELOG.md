@@ -3,6 +3,39 @@
 Todas as mudanças relevantes do ASTA são registradas aqui.
 O formato segue o [Keep a Changelog](https://keepachangelog.com/pt-BR/1.1.0/) e o projeto usa [Versionamento Semântico](https://semver.org/lang/pt-BR/).
 
+## [0.24.0] — 2026-11-13
+
+### Alterado — modo Data refeito e melhorado
+- **Editor em grade (novo):** abrir um item agora abre uma grade parecida com planilha. As páginas vêm do **servidor** (busca, ordenação por coluna e paginação; bases grandes continuam leves); **duplo clique numa célula edita** (com o tipo do campo); linhas podem ser adicionadas e apagadas (seleção múltipla); colunas podem ser **adicionadas, renomeadas, ter o tipo mudado e removidas**; **imagens, áudios e vídeos aparecem nas células**; nome, descrição e etiquetas se editam no próprio editor. Antes a tela só mostrava uma tabela de leitura e duas caixas de JSON.
+- **Mídia no item (multimodal de verdade):** arquivos (imagem, áudio, vídeo, PDF…) ficam em `attachments/` do item (até 25 MB cada, 500 por item) e os registros os citam como `attachments/nome`. Só tipos conhecidos aparecem dentro da página (sempre isolados, com `nosniff` e `Content-Security-Policy: sandbox`); SVG, HTML e o resto só baixam. Duplicar e mesclar levam a mídia junto; o pacote ZIP leva a que os registros usam.
+- **Mesclagem:** além de «juntar tudo», agora **combina por chave** (`upsert`), com política de conflito (o destino só preenche vazios, ou a origem vence), remoção opcional de repetidos e **prévia** (`dry_run`) com as contagens.
+- **Sintético em massa refeito (planejar → fazer → conferir):** um Planejador define campos e eixos de variedade; os lotes usam **um schema estável** (antes o schema da última resposta «derivava» entre lotes); a conferência converte tipos, descarta repetidos entre lotes, mantém ids únicos, repesca até a quantidade pedida e só então completa com o gerador determinístico — dizendo quanto veio da IA. Se cancelar, guarda o que já estava pronto.
+- **Upgrade refeito:** antes só os **40 primeiros registros** eram melhorados e o resto ficava sem mudança (e sem IA ele sujava os registros com um campo `_upgrade_note`). Agora a IA percorre a **base inteira em lotes**, cada registro volta com o seu `_i`, **ids e campos fora do pedido são protegidos** e o que a IA não devolver (ou devolver inválido) **fica como estava**. Ações: **melhorar/enriquecer**, **preencher vazios**, **classificar** (coluna nova com rótulo), **traduzir**, **limpar e padronizar** (sem IA) e **gerar mais dados**. Sem IA, «preencher vazios» usa a mediana/valor mais comum; as demais avisam que precisam de IA e não alteram nada.
+- **Scraping de qualquer tipo de link:** antes só páginas HTML/texto eram lidas (JSON, PDF, imagens etc. eram descartados em silêncio). Agora: HTML, **JSON, CSV, XML/RSS, texto, imagem, áudio, vídeo, PDF** e outros. JSON/CSV viram registros **direto, sem IA**; páginas passam pelo extrator; mídia vira registro (endereço, tipo, tamanho) e, opcionalmente, o arquivo é guardado no item (até 20 MB). Cada registro tem `source_url`; links repetidos entram uma vez; o relatório diz quantos links foram lidos, bloqueados pelo `robots.txt` ou falharam, e por tipo.
+- **Prompts do Data:** novos papéis `planner`, `generator`, `transformer` e `extractor` (com marcador `ROLE:`, passos e «Avoid») e `core.md` mais claro para modelos pequenos.
+- **Formatos:** novos **Excel (.xlsx)** (importar e exportar; dados + aba de schema), **SQL** (`CREATE TABLE` + `INSERT`), **YAML** e **pacote ZIP**; SQLite e SQL passam a usar **colunas tipadas** (do schema e, para colunas que só existem nos dados, deduzidas deles). Tudo só com a biblioteca padrão.
+- **Resultado visível:** ao terminar uma tarefa de IA a aba antes se repintava e apagava o resumo (e, no Export, o link de download). Agora o resumo (contagens e avisos) permanece.
+
+### Adicionado
+- **Operações sem IA** (`asta/data/ops.py`): inferir schema, converter tipos, limpar (com prévia), preencher vazios, operações de coluna, edição de células/linhas, consulta paginada e estratégias de mesclagem. Rotas: `GET .../rows`, `POST .../edit`, `.../columns`, `.../clean`, `.../schema/infer`, `.../media` (POST/GET/DELETE), `.../merge` (estratégia, chaves, conflito, `dry_run`).
+- **Lista de itens:** busca, ordenação (mais recentes, nome, mais registros) e filtro por etiqueta.
+- **Tela:** diálogos de limpeza, histórico (restaurar), schema (com «deduzir dos dados») e mídia; o teste de navegador do Data foi reescrito (≈60 verificações).
+
+### Corrigido
+- **Listar itens lia todos os registros de todos os itens** só para contar. As contagens agora ficam no `meta.json` (itens antigos são contados uma vez e guardados).
+- **Importação de XML** aceitava `DOCTYPE`/`ENTITY` (bomba de expansão de entidades): passa a ser recusada, em XML e em XLSX.
+- **Exportação XML** gerava nomes de tag inválidos para campos como «1 campo» ou «a<b»; agora saem nomes válidos (o original vai no atributo `field`).
+- **Exportação SQLite** dava HTTP 500 com um inteiro acima de 64 bits (achado pelo fuzz); vazio agora vira `NULL` e não texto vazio.
+- **JSON inválido na importação** dava mensagem técnica em inglês; agora «JSON inválido: …».
+- **Duplicar um item** não levava a mídia.
+
+### Limites honestos (não verificado)
+- **Scraping não foi exercitado contra sites reais:** `robots.txt`, leitura de JSON/CSV/HTML/mídia e o download foram testados com rede simulada e provedores falsos.
+- **A IA real não foi exercitada** (os testes usam provedores falsos): a qualidade dos lotes, da classificação e da tradução depende do modelo. O tamanho dos lotes do Upgrade é uma estimativa por tamanho de texto.
+- **O `.xlsx` não foi aberto no Microsoft Excel**: foi validado relendo-o com o leitor do ASTA e conferindo que o XML é bem formado.
+- **O Rust não foi alterado** nesta versão e `cargo test` não foi reexecutado.
+- **Não foi verificado em aparelhos reais, macOS/Windows reais nem celular;** os instaladores não foram construídos nem testados em máquinas reais.
+
 ## [0.23.0] — 2026-11-13
 
 ### Corrigido — execução de tarefas e sistemas multi-agente

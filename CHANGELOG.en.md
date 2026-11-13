@@ -5,6 +5,39 @@ The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and 
 
 > English translation of [`CHANGELOG.md`](CHANGELOG.md) (the Portuguese original is the reference). Mentions of Portuguese UI strings keep the original text in quotes.
 
+## [0.24.0] — 2026-11-13
+
+### Changed — Data mode rebuilt and improved
+- **Grid editor (new):** opening an item now opens a spreadsheet-like grid. Pages are served by the **server** (search, per-column sorting and paging; big bases stay light); **double-clicking a cell edits it** (typed by the field); rows can be added and deleted (multi-select); columns can be **added, renamed, retyped and removed**; **images, audio and video show up in the cells**; name, description and tags are edited in the editor itself. Before, the screen only showed a read-only table and two JSON boxes.
+- **Media inside the item (really multimodal):** files (image, audio, video, PDF…) live in the item's `attachments/` (up to 25 MB each, 500 per item) and records cite them as `attachments/name`. Only known types appear inside the page (always isolated, with `nosniff` and `Content-Security-Policy: sandbox`); SVG, HTML and the rest only download. Duplicating and merging carry the media along; the ZIP bundle carries what the records use.
+- **Merging:** besides "join everything", it now **combines by key** (`upsert`), with a conflict policy (the target only fills empty values, or the source wins), optional removal of duplicates and a **preview** (`dry_run`) with the counts.
+- **Bulk synthetic data rebuilt (plan → do → check):** a Planner defines fields and axes of variety; batches use **one stable schema** (before, the schema of the last answer "drifted" between batches); the check converts types, drops duplicates across batches, keeps ids unique, tops up to the requested number and only then completes with the deterministic generator — saying how much came from the AI. If cancelled, it keeps what was ready.
+- **Upgrade rebuilt:** before, only the **first 40 records** were improved and the rest stayed untouched (and without an AI it polluted records with an `_upgrade_note` field). Now the AI goes through the **whole base in batches**, each record comes back with its `_i`, **ids and fields outside the request are protected** and what the AI does not return (or returns invalid) **stays as it was**. Actions: **improve/enrich**, **fill empty values**, **classify** (a new column with a label), **translate**, **clean and standardize** (no AI) and **generate more data**. Without an AI, "fill empty values" uses the median/most common value; the others warn that they need an AI and change nothing.
+- **Scraping any kind of link:** before, only HTML/text pages were read (JSON, PDF, images etc. were silently dropped). Now: HTML, **JSON, CSV, XML/RSS, text, image, audio, video, PDF** and others. JSON/CSV become records **directly, without an AI**; pages go through the extractor; media becomes a record (address, type, size) and, optionally, the file is saved in the item (up to 20 MB). Each record has `source_url`; repeated links are read once; the report says how many links were read, blocked by `robots.txt` or failed, and by type.
+- **Data prompts:** new `planner`, `generator`, `transformer` and `extractor` roles (with the `ROLE:` marker, steps and "Avoid") and a clearer `core.md` for small models.
+- **Formats:** new **Excel (.xlsx)** (import and export; data + a schema sheet), **SQL** (`CREATE TABLE` + `INSERT`), **YAML** and a **ZIP bundle**; SQLite and SQL now use **typed columns** (from the schema and, for columns that only exist in the data, inferred from it). Standard library only.
+- **Visible result:** when an AI task finished, the tab used to repaint and wipe the summary (and, in Export, the download link). The summary (counts and warnings) now stays.
+
+### Added
+- **Operations without AI** (`asta/data/ops.py`): infer schema, convert types, clean (with preview), fill empty values, column operations, cell/row edits, paged query and merge strategies. Routes: `GET .../rows`, `POST .../edit`, `.../columns`, `.../clean`, `.../schema/infer`, `.../media` (POST/GET/DELETE), `.../merge` (strategy, keys, conflict, `dry_run`).
+- **Item list:** search, sorting (most recent, name, most records) and tag filter.
+- **Screen:** dialogs for cleaning, history (restore), schema (with "infer from the data") and media; the Data browser test was rewritten (≈60 checks).
+
+### Fixed
+- **Listing items read every record of every item** just to count them. Counts now live in `meta.json` (old items are counted once and stored).
+- **XML import** accepted `DOCTYPE`/`ENTITY` (entity-expansion bomb): it is now refused, in XML and in XLSX.
+- **XML export** produced invalid tag names for fields like "1 field" or "a<b"; valid names are now written (the original goes in the `field` attribute).
+- **SQLite export** gave HTTP 500 with an integer above 64 bits (found by the fuzz); empty now becomes `NULL` rather than empty text.
+- **Invalid JSON on import** gave a technical English message; it is now "JSON inválido: …".
+- **Duplicating an item** did not carry the media.
+
+### Honest limits (unverified)
+- **Scraping was not exercised against real sites:** `robots.txt`, JSON/CSV/HTML/media reading and the download were tested with a simulated network and fake providers.
+- **The real AI was not exercised** (the tests use fake providers): the quality of batches, classification and translation depends on the model. The Upgrade batch size is an estimate based on text size.
+- **The `.xlsx` was not opened in Microsoft Excel**: it was validated by reading it back with ASTA's reader and checking that the XML is well-formed.
+- **Rust was not changed** in this version and `cargo test` was not re-run.
+- **Not verified on real devices, real macOS/Windows or phones;** the installers were not built or tested on real machines.
+
 ## [0.23.0] — 2026-11-13
 
 ### Fixed — task execution and multi-agent systems

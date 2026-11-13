@@ -9,6 +9,7 @@ from __future__ import annotations
 import csv
 import io
 import json
+import re
 import shutil
 import sqlite3
 import threading
@@ -18,13 +19,22 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..util import new_id, now_iso, read_json, safe_filename, slugify, text, write_json
-from . import quality
+from . import formats, ops, quality
 from .schema import EXPORT_FORMATS, IMPORT_FORMATS, KINDS, clean_schema
 
 MAX_ITEMS = 500
 MAX_RECORDS = 200000
 MAX_IMPORT_BYTES = 50 * 1024 * 1024
 MAX_EXPORT_ROWS = 200000
+#: mídia guardada no item (imagens, áudios, vídeos, PDFs, qualquer arquivo que os registros citem como `attachments/<nome>`)
+MEDIA_MAX_FILE = 25 * 1024 * 1024
+MEDIA_MAX_FILES = 500
+MEDIA_MAX_TOTAL = 1024 * 1024 * 1024
+#: tipos que o navegador pode mostrar dentro da página (sempre com `sandbox`); o resto — inclusive SVG e HTML — só baixa
+MEDIA_INLINE = {".png": "image/png", ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".gif": "image/gif", ".webp": "image/webp", ".bmp": "image/bmp", ".avif": "image/avif",
+                ".mp3": "audio/mpeg", ".wav": "audio/wav", ".ogg": "audio/ogg", ".m4a": "audio/mp4", ".flac": "audio/flac", ".opus": "audio/ogg",
+                ".mp4": "video/mp4", ".webm": "video/webm", ".mov": "video/quicktime", ".m4v": "video/mp4",
+                ".txt": "text/plain; charset=utf-8", ".json": "application/json; charset=utf-8", ".csv": "text/csv; charset=utf-8"}
 
 
 class DataError(Exception):
@@ -97,17 +107,26 @@ class DataManager:
         out.sort(key=lambda x: x.get("updated", ""), reverse=True)
         return out[:MAX_ITEMS]
 
-    def _summary(self, meta: Dict[str, Any], kind: str) -> Dict[str, Any]:
-        rid = meta.get("id", "")
-        recs = []
-        try:
-            recs = read_json(self._records_path(kind, rid), []) or []
-            if not isinstance(recs, list):
-                recs = []
-        except Exception:
-            recs = []
+    def _counts(self, kind: str, rid: str) -> Tuple[int, int]:
+        recs = read_json(self._records_path(kind, rid), []) or []
         schema = read_json(self._schema_path(kind, rid), {"fields": []}) or {"fields": []}
         fields = schema.get("fields") if isinstance(schema, dict) and isinstance(schema.get("fields"), list) else []
+        return (len(recs) if isinstance(recs, list) else 0), len(fields)
+
+    def _sync_counts(self, kind: str, rid: str) -> Dict[str, Any]:
+        """Guarda a contagem de registros/campos no `meta.json`: as listagens leem só os metadados, não a base inteira."""
+        m = read_json(self._meta_path(kind, rid), {}) or {}
+        m["records_n"], m["fields_n"] = self._counts(kind, rid)
+        write_json(self._meta_path(kind, rid), m)
+        return m
+
+    def _summary(self, meta: Dict[str, Any], kind: str) -> Dict[str, Any]:
+        rid = meta.get("id", "")
+        if "records_n" not in meta or "fields_n" not in meta:   # item criado antes da v0.24: conta uma vez e guarda
+            try:
+                meta = self._sync_counts(kind, rid)
+            except Exception:  # noqa: BLE001
+                meta = {**meta, "records_n": 0, "fields_n": 0}
         return {
             "id": rid,
             "kind": kind,
@@ -116,8 +135,8 @@ class DataManager:
             "tags": meta.get("tags", []),
             "created": meta.get("created", ""),
             "updated": meta.get("updated", ""),
-            "records": len(recs),
-            "fields": len(fields),
+            "records": meta.get("records_n", 0),
+            "fields": meta.get("fields_n", 0),
             "modalities": meta.get("modalities", []),
         }
 
@@ -160,6 +179,7 @@ class DataManager:
             write_json(self._schema_path(k, item_id), clean_schema(schema))
             recs = records if isinstance(records, list) else []
             write_json(self._records_path(k, item_id), recs[:MAX_RECORDS])
+            meta = self._sync_counts(k, item_id)
             self.snapshot(k, item_id, "create")
             return self._summary(meta, k)
 
@@ -191,7 +211,9 @@ class DataManager:
             src = self.get(kind, item_id)
             m = src["meta"]
             nm = text(name, m.get("name", "") + " (cópia)", 100)
-            return self.create(kind, nm, m.get("description", ""), src.get("schema"), src.get("records"), m.get("tags"), m.get("modalities"))
+            new = self.create(kind, nm, m.get("description", ""), src.get("schema"), src.get("records"), m.get("tags"), m.get("modalities"))
+            self._copy_media(kind, item_id, new["kind"], new["id"])   # a cópia também mostra as imagens/áudios/vídeos do original
+            return new
 
     # ------------------------------------------------------------------ records/schema
     def save_records(self, kind: str, item_id: str, records: Any, schema: Any = None, label: str = "edit") -> Dict[str, Any]:
@@ -208,6 +230,7 @@ class DataManager:
             write_json(self._records_path(kind, item_id), clean)
             if schema is not None:
                 write_json(self._schema_path(kind, item_id), clean_schema(schema))
+            self._sync_counts(kind, item_id)
             self.snapshot(kind, item_id, label or "edit")
             self._touch(kind, item_id)
             return self.get(kind, item_id)
@@ -254,18 +277,156 @@ class DataManager:
                 out["applied"] = True
             return out
 
-    def merge_items(self, kind: str, target_id: str, source_kind: str, source_id: str) -> Dict[str, Any]:
+    def merge_items(self, kind: str, target_id: str, source_kind: str, source_id: str, strategy: str = "append", keys: Any = None,
+                    conflict: str = "keep_target", dedupe: bool = False, dry_run: bool = False) -> Dict[str, Any]:
+        """Mescla o item de origem no de destino. `strategy`: `append` (junta) ou `upsert` (combina por chave; `conflict`: `keep_target` | `prefer_source`). `dry_run` só mostra a conta.
+        O schema é a união pelo nome do campo e a mídia da origem vem junto (o destino não perde nenhum arquivo)."""
         with self.lock:
             tgt = self.get(kind, target_id)
             src = self.get(source_kind, source_id)
-            # merge schemas (union by name)
-            tf = {f["name"]: f for f in (tgt.get("schema", {}).get("fields") or []) if isinstance(f, dict)}
-            for f in (src.get("schema", {}).get("fields") or []):
-                if isinstance(f, dict) and f.get("name") and f["name"] not in tf:
-                    tf[f["name"]] = f
-            schema = {"fields": list(tf.values())[:120]}
-            recs = (tgt.get("records") or []) + (src.get("records") or [])
-            return self.save_records(kind, target_id, recs, schema, "merge")
+            try:
+                res = ops.merge(tgt.get("records") or [], src.get("records") or [], tgt.get("schema"), src.get("schema"),
+                                "upsert" if strategy == "upsert" else "append", keys, "prefer_source" if conflict == "prefer_source" else "keep_target", bool(dedupe))
+            except ValueError as exc:
+                raise DataError(str(exc)) from None
+            stats = {k: res[k] for k in ("added", "updated", "skipped", "duplicates_removed", "total")}
+            if dry_run:
+                return {"dry_run": True, **stats, "before": len(tgt.get("records") or []), "schema_fields": len(res["schema"]["fields"]), "preview": res["records"][:5]}
+            copied = self._copy_media(source_kind, source_id, kind, target_id)
+            out = self.save_records(kind, target_id, res["records"], res["schema"], "merge")
+            out["merge"] = {**stats, "media_copied": copied}
+            return out
+
+    # ------------------------------------------------------------------ consulta, edição, colunas e limpeza (v0.24)
+    def _load(self, kind: str, item_id: str) -> Tuple[Dict[str, Any], Dict[str, Any], List[Any]]:
+        m = self.meta(kind, item_id)
+        schema = clean_schema(read_json(self._schema_path(kind, item_id), {"fields": []}) or {"fields": []})
+        records = read_json(self._records_path(kind, item_id), []) or []
+        return m, schema, records if isinstance(records, list) else []
+
+    def query(self, kind: str, item_id: str, q: str = "", sort: str = "", direction: str = "asc", offset: int = 0, limit: int = 100, where: Any = None) -> Dict[str, Any]:
+        """Uma página dos registros (busca, filtro por campo, ordenação) — a tela não precisa carregar a base inteira. Cada linha traz `i`, a posição original usada nas edições."""
+        with self.lock:
+            m, schema, records = self._load(kind, item_id)
+        out = ops.query(records, text(q, "", 500), text(sort, "", 80), direction, offset, limit, where if isinstance(where, dict) else None)
+        out["columns"] = quality.columns(records[:300], schema)
+        out["schema"] = schema
+        out["meta"] = self._summary(m, valid_kind(kind))
+        return out
+
+    def edit_records(self, kind: str, item_id: str, edits: Any, schema: Any = None) -> Dict[str, Any]:
+        """Edições da grade (`set` célula · `delete` linhas · `insert` linha). Grava com snapshot; devolve as contagens e o total."""
+        with self.lock:
+            _m, cur_schema, records = self._load(kind, item_id)
+            try:
+                new, st = ops.apply_edits(records, edits)
+            except ValueError as exc:
+                raise DataError(str(exc)) from None
+            sch = clean_schema(schema) if isinstance(schema, dict) else ops.infer_schema(new, cur_schema)
+            self.save_records(kind, item_id, new, sch, "grid")
+            return {**st, "total": len(new)}
+
+    def column(self, kind: str, item_id: str, op: str, name: str, new_name: str = "", ftype: str = "text", default: Any = None) -> Dict[str, Any]:
+        """Adiciona, renomeia, remove ou muda o tipo de uma coluna (schema e registros juntos)."""
+        with self.lock:
+            _m, schema, records = self._load(kind, item_id)
+            try:
+                new, info = ops.column_op(records, schema, op, name, new_name, ftype, default)
+            except ValueError as exc:
+                raise DataError(str(exc)) from None
+            self.save_records(kind, item_id, new, info["schema"], "column_" + op)
+            return {"schema": info["schema"], **{k: v for k, v in info.items() if k != "schema"}}
+
+    def clean(self, kind: str, item_id: str, options: Any = None, apply: bool = False) -> Dict[str, Any]:
+        """Limpeza segura (espaços, tipos pelo schema, linhas vazias, opcionalmente colunas vazias e preenchimento de vazios). Sem `apply` é só a **prévia** com as contagens."""
+        o = options if isinstance(options, dict) else {}
+        with self.lock:
+            _m, schema, records = self._load(kind, item_id)
+            sch = schema if (o.get("infer") is False) else ops.infer_schema(records, schema)
+            rows, sch2, st = ops.clean(records, sch, trim=o.get("trim") is not False, coerce=o.get("coerce") is not False,
+                                       drop_empty_rows=o.get("drop_empty_rows") is not False, drop_empty_columns=o.get("drop_empty_columns") is True)
+            fill = None
+            if o.get("fill_missing"):
+                rows, fill = ops.fill_missing(rows, sch2, str(o.get("fill_strategy") or "auto"), o.get("fill_fields") if isinstance(o.get("fill_fields"), list) else None, o.get("fill_constant"))
+            changed = rows != records or sch2 != schema
+            out = {"before": len(records), "after": len(rows), **st, "fill": fill, "changed": bool(changed), "applied": False}
+            if apply and changed:
+                self.save_records(kind, item_id, rows, sch2, "clean")
+                out["applied"] = True
+            return out
+
+    def infer_schema(self, kind: str, item_id: str, apply: bool = False) -> Dict[str, Any]:
+        """Schema deduzido dos dados (a partir do que o item já declara, só acrescenta o que falta)."""
+        with self.lock:
+            _m, schema, records = self._load(kind, item_id)
+            new = ops.infer_schema(records, schema)
+            if apply and new != schema:
+                self.save_records(kind, item_id, records, new, "schema")
+            return {"schema": new, "added": len(new["fields"]) - len(schema["fields"]), "applied": bool(apply and new != schema)}
+
+    # ------------------------------------------------------------------ mídia do item (v0.24)
+    def _media_dir(self, kind: str, item_id: str) -> Path:
+        d = self._dir(kind, item_id) / "attachments"
+        d.mkdir(parents=True, exist_ok=True)
+        return d
+
+    def list_media(self, kind: str, item_id: str) -> List[Dict[str, Any]]:
+        self.meta(kind, item_id)
+        out = []
+        for p in sorted(self._media_dir(kind, item_id).iterdir(), key=lambda x: x.name.lower()):
+            if p.is_file():
+                out.append({"name": p.name, "size": p.stat().st_size, "ref": "attachments/" + p.name, "kind": ops.media_kind(p.name) or "file", "inline": p.suffix.lower() in MEDIA_INLINE})
+        return out[:MEDIA_MAX_FILES]
+
+    def add_media(self, kind: str, item_id: str, filename: str, raw: bytes) -> Dict[str, Any]:
+        """Guarda um arquivo no item (imagem, áudio, vídeo, PDF…) e devolve a referência `attachments/<nome>` para usar num campo do registro."""
+        if not raw:
+            raise DataError("Arquivo vazio.")
+        if len(raw) > MEDIA_MAX_FILE:
+            raise DataError("Arquivo grande demais (máx. 25 MB).", 413)
+        with self.lock:
+            d = self._media_dir(kind, item_id)
+            files = [p for p in d.iterdir() if p.is_file()]
+            if len(files) >= MEDIA_MAX_FILES or sum(p.stat().st_size for p in files) + len(raw) > MEDIA_MAX_TOTAL:
+                raise DataError("Limite de mídia do item atingido (500 arquivos / 1 GB).", 409)
+            name = safe_filename(Path(str(filename or "arquivo").replace("\\", "/")).name, "arquivo")
+            stem, ext = Path(name).stem or "arquivo", Path(name).suffix.lower()[:10]
+            name, n = stem + ext, 2
+            while (d / name).exists():
+                name = f"{stem}-{n}{ext}"
+                n += 1
+            (d / name).write_bytes(raw)
+            self._touch(kind, item_id)
+            return {"name": name, "ref": "attachments/" + name, "size": len(raw), "kind": ops.media_kind(name) or "file"}
+
+    def media_path(self, kind: str, item_id: str, name: str) -> Path:
+        d = self._media_dir(kind, item_id).resolve()
+        p = (d / safe_filename(name, "arquivo")).resolve()
+        if p.parent != d or not p.is_file():
+            raise DataError("Arquivo não encontrado.", 404)
+        return p
+
+    def delete_media(self, kind: str, item_id: str, name: str) -> bool:
+        with self.lock:
+            self.media_path(kind, item_id, name).unlink()
+            self._touch(kind, item_id)
+            return True
+
+    def _copy_media(self, src_kind: str, src_id: str, dst_kind: str, dst_id: str) -> int:
+        """Ao mesclar, a mídia citada pela origem viaja junto (mesmo nome → mantém o do destino)."""
+        try:
+            sd, dd = self._media_dir(src_kind, src_id), self._media_dir(dst_kind, dst_id)
+        except OSError:
+            return 0
+        n = 0
+        for p in sd.iterdir():
+            if p.is_file() and not (dd / p.name).exists():
+                try:
+                    shutil.copy2(p, dd / p.name)
+                    n += 1
+                except OSError:
+                    continue
+        return n
 
     # ------------------------------------------------------------------ history
     def snapshot(self, kind: str, item_id: str, label: str = "snapshot") -> str:
@@ -301,6 +462,7 @@ class DataManager:
                 raise DataError("Snapshot não encontrado.", 404)
             write_json(self._schema_path(kind, item_id), clean_schema(data.get("schema")))
             write_json(self._records_path(kind, item_id), data.get("records") if isinstance(data.get("records"), list) else [])
+            self._sync_counts(kind, item_id)
             self._touch(kind, item_id)
             return self.get(kind, item_id)
 
@@ -345,9 +507,17 @@ class DataManager:
         return "json"
 
     def _parse_import(self, fmt: str, raw: bytes) -> Tuple[List[Any], Optional[Dict[str, Any]]]:
+        if fmt == "xlsx":
+            try:
+                return formats.read_xlsx(raw)
+            except formats.FormatError as exc:
+                raise DataError(str(exc)) from None
         text_data = raw.decode("utf-8-sig", errors="replace")
         if fmt == "json":
-            obj = json.loads(text_data or "null")
+            try:
+                obj = json.loads(text_data or "null")
+            except ValueError as exc:
+                raise DataError(f"JSON inválido: {str(exc)[:100]}") from None
             if isinstance(obj, list):
                 recs = obj
             elif isinstance(obj, dict):
@@ -386,11 +556,9 @@ class DataManager:
     def _parse_xml(self, text_data: str) -> Tuple[List[Any], List[Dict[str, Any]]]:
         """XML genérico: cada elemento repetido vira um registro; os atributos e os filhos viram campos."""
         try:
-            import xml.etree.ElementTree as ET
-
-            root = ET.fromstring(text_data or "<root/>")
-        except Exception:
-            raise DataError("XML inválido.") from None
+            root = formats.safe_xml((text_data or "<root/>").encode("utf-8"))   # recusa DOCTYPE/ENTITY: bomba de expansão de entidades
+        except formats.FormatError as exc:
+            raise DataError(str(exc)) from None
 
         def tag_of(el: Any) -> str:
             return el.tag.split("}")[-1] if isinstance(el.tag, str) else "item"
@@ -455,6 +623,8 @@ class DataManager:
             base = safe_filename(slugify(meta.get("name") or item_id, item_id), item_id)
             ext = "db" if fmt == "sqlite" else fmt
             out_path = self._exports_dir(kind, item_id) / f"{base}.{ext}"
+            cols_all = self._columns(schema, records)
+            typed = ops.infer_schema(records, schema)   # SQLite/SQL/XLSX usam os tipos do schema e, para colunas que só existem nos dados, os tipos deduzidos deles
             if fmt == "json":
                 payload = {"kind": kind, "meta": meta, "schema": schema, "records": records}
                 out_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -472,15 +642,46 @@ class DataManager:
                         row = r if isinstance(r, dict) else {"value": r}
                         w.writerow({c: self._cell(row.get(c)) for c in cols})
             elif fmt == "sqlite":
-                self._export_sqlite(out_path, kind, meta, schema, records)
+                self._export_sqlite(out_path, kind, meta, typed, records)
             elif fmt == "xml":
                 self._export_xml(out_path, kind, meta, schema, records)
             elif fmt == "html":
                 self._export_html(out_path, meta, schema, records)
             elif fmt == "md":
                 self._export_markdown(out_path, meta, schema, records)
+            elif fmt == "xlsx":
+                out_path.write_bytes(formats.write_xlsx(cols_all, records, typed.get("fields") or [], meta.get("name") or "data"))
+            elif fmt == "sql":
+                table = re.sub(r"[^A-Za-z0-9_]+", "_", slugify(meta.get("name") or "records", "records")).strip("_") or "records"
+                out_path.write_text(formats.to_sql(table, typed.get("fields") or [], cols_all, records), encoding="utf-8")
+            elif fmt == "yaml":
+                out_path.write_text(formats.to_yaml(kind, {k: meta.get(k) for k in ("id", "name", "description", "tags", "modalities", "created", "updated")}, schema, records), encoding="utf-8")
+            elif fmt == "zip":
+                self._export_bundle(out_path, kind, item_id, meta, schema, records, cols_all)
             self._touch(kind, item_id)
             return {"name": out_path.name, "path": str(out_path), "format": fmt, "records": len(records)}
+
+    def _export_bundle(self, path: Path, kind: str, item_id: str, meta: Dict[str, Any], schema: Dict[str, Any], records: List[Any], cols: List[str]) -> None:
+        """Pacote ZIP para levar o item inteiro: `data.json` (com schema), `records.csv`, `README.md` (ficha dos dados) e a **mídia** que os registros citam (`attachments/…`)."""
+        used = {v for r in records if isinstance(r, dict) for v in r.values() if isinstance(v, str) and v.startswith("attachments/")}
+        media = [p for p in self._media_dir(kind, item_id).iterdir() if p.is_file() and "attachments/" + p.name in used]
+        csv_buf = io.StringIO()
+        w = csv.DictWriter(csv_buf, fieldnames=cols, extrasaction="ignore")
+        w.writeheader()
+        for r in records:
+            row = r if isinstance(r, dict) else {"value": r}
+            w.writerow({c: self._cell(row.get(c)) for c in cols})
+        fields = schema.get("fields") or []
+        readme = [f"# {meta.get('name') or 'ASTA Data'}", "", meta.get("description") or "", "", f"- Tipo: {kind}", f"- Registros: {len(records)}", f"- Campos: {len(fields)}",
+                  f"- Arquivos de mídia: {len(media)}", f"- Criado: {meta.get('created', '')} · atualizado: {meta.get('updated', '')}", "", "## Campos", "", "| campo | tipo | descrição |", "|---|---|---|"]
+        readme += [f"| {self._md(f.get('name'))} | {self._md(f.get('type'))} | {self._md(f.get('description'))} |" for f in fields]
+        readme += ["", "Gerado pelo ASTA Data. Campos de mídia apontam para a pasta `attachments/` deste pacote.", ""]
+        with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as z:
+            z.writestr("data.json", json.dumps({"kind": kind, "meta": meta, "schema": schema, "records": records}, ensure_ascii=False, indent=2))
+            z.writestr("records.csv", csv_buf.getvalue())
+            z.writestr("README.md", "\n".join(readme))
+            for p in media:
+                z.write(p, "attachments/" + p.name)
 
     # ------------------------------------------------------------------ exportadores de texto
     def _rows(self, schema: Dict[str, Any], records: List[Any]) -> List[Dict[str, Any]]:
@@ -499,8 +700,12 @@ class DataManager:
         for row in self._rows(schema, records):
             el = ET.SubElement(items, "record")
             for key, val in list(row.items())[:200]:
-                name = str(key)
-                child = ET.SubElement(el, name.replace(" ", "_"))
+                name = re.sub(r"[^\w.\-]", "_", str(key))[:80] or "campo"   # nome de tag XML válido (não começa com número/ponto/hífen)
+                if not (name[0].isalpha() or name[0] == "_"):
+                    name = "f_" + name
+                child = ET.SubElement(el, name)
+                if name != str(key):
+                    child.set("field", str(key))
                 if isinstance(val, (dict, list)):
                     child.text = json.dumps(val, ensure_ascii=False)
                     child.set("type", "json")
@@ -569,6 +774,16 @@ class DataManager:
             return json.dumps(v, ensure_ascii=False)
         return v
 
+    def _sqlite_value(self, v: Any) -> Any:
+        """Vazio vira NULL (não texto vazio numa coluna numérica); inteiro maior que 64 bits vira texto (o SQLite não o guarda como número)."""
+        if v is None:
+            return None
+        if isinstance(v, bool):
+            return int(v)
+        if isinstance(v, int) and not (-(2 ** 63) <= v < 2 ** 63):
+            return str(v)
+        return self._cell(v)
+
     def _export_sqlite(self, path: Path, kind: str, meta: Dict[str, Any], schema: Dict[str, Any], records: List[Any]) -> None:
         if path.exists():
             path.unlink()
@@ -580,13 +795,14 @@ class DataManager:
             cur.execute("INSERT INTO meta(key,value) VALUES(?,?)", ("name", str(meta.get("name", ""))))
             cur.execute("INSERT INTO meta(key,value) VALUES(?,?)", ("schema", json.dumps(schema, ensure_ascii=False)))
             cols = self._columns(schema, records)
-            coldefs = ", ".join([f'"{c.replace(chr(34), chr(34)+chr(34))}" TEXT' for c in cols])
+            sqltypes = {f.get("name"): {"integer": "INTEGER", "number": "REAL", "boolean": "INTEGER"}.get(f.get("type"), "TEXT") for f in (schema.get("fields") or []) if isinstance(f, dict)}
+            coldefs = ", ".join([f'"{c.replace(chr(34), chr(34)+chr(34))}" {sqltypes.get(c, "TEXT")}' for c in cols])
             cur.execute(f'CREATE TABLE records ({coldefs})' if coldefs else 'CREATE TABLE records (value TEXT)')
             placeholders = ",".join(["?"] * len(cols))
             colnames = ",".join([f'"{c.replace(chr(34), chr(34)+chr(34))}"' for c in cols])
             for r in records:
                 row = r if isinstance(r, dict) else {"value": r}
-                vals = [self._cell(row.get(c)) for c in cols]
+                vals = [self._sqlite_value(row.get(c)) for c in cols]
                 cur.execute(f'INSERT INTO records ({colnames}) VALUES ({placeholders})', vals)
             con.commit()
         finally:
